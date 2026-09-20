@@ -2,14 +2,9 @@
   "ai-log": {
     "PreInvocation": [
       {
-        "hooks": [
-          {
-            "name": "log-prompt",
-            "type": "command",
-            "command": "bash scripts/_pyrun.sh scripts/log_antigravity.py --hook",
-            "timeout": 15
-          }
-        ]
+        "type": "command",
+        "command": "python -u ../scripts/log_antigravity.py --hook 2>nul || python -u scripts/log_antigravity.py --hook 2>/dev/null || true",
+        "timeout": 15
       }
     ]
   }

@@ -6,7 +6,7 @@ set -e
 HOOK_FILE=".git/hooks/pre-push"
 
 cat > "$HOOK_FILE" <<'EOF'
-#!/usr/bin/env bash
+#!/bin/sh
 # Pre-push: sweep recent Antigravity / Gemini prompts, then submit AI logs.
 # Uses the cross-platform Python launcher so it works whether the user
 # has python3, python, or only the `py` launcher (Windows).
