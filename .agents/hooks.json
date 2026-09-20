@@ -3,10 +3,11 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "python scripts/log_antigravity.py --hook || py -3 scripts/log_antigravity.py --hook || python3 scripts/log_antigravity.py --hook",
+        "command": "python ../scripts/log_antigravity.py --hook || python scripts/log_antigravity.py --hook || py -3 ../scripts/log_antigravity.py --hook || py -3 scripts/log_antigravity.py --hook || python3 ../scripts/log_antigravity.py --hook || python3 scripts/log_antigravity.py --hook",
         "timeout": 15
       }
     ]
   }
 }
+
 
