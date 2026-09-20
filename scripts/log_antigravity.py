@@ -122,7 +122,16 @@ def get_brain_dirs() -> list[Path]:
     if env:
         p = Path(env)
         return [p] if p.exists() else []
-    return [p for p in BRAIN_CANDIDATES if p.exists()]
+    dirs = [p for p in BRAIN_CANDIDATES if p.exists()]
+    if not dirs and sys.platform.startswith("linux"):
+        # WSL fallback: check mounted Windows user profiles
+        for wsl_user in Path("/mnt/c/Users").glob("*"):
+            for sub in ("antigravity-ide/brain", "antigravity/brain"):
+                p = wsl_user / ".gemini" / sub
+                if p.exists():
+                    dirs.append(p)
+    return dirs
+
 
 
 # ---------------------------------------------------------------------------
