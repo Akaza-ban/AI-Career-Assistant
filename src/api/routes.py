@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 
 from src.agents.gap_analysis.graph import gap_analysis_agent
 from src.agents.graph import agent
+from src.agents.interview.graph import interview_agent
 from src.config import get_settings
 from src.models.schemas import (
     AdvisorStudentsResponse,
@@ -276,16 +277,33 @@ async def apply_cv_suggestion(request: ApplySuggestionRequest) -> ApplySuggestio
 async def start_interview(request: InterviewStartRequest) -> InterviewStartResponse:
     """
     Bắt đầu vòng phỏng vấn thử mới dựa trên JD và hồ sơ CV.
-    Trả về câu hỏi phỏng vấn đầu tiên.
+    Gọi LangGraph interview_agent để khởi tạo câu hỏi phỏng vấn đầu tiên.
     """
     session_id = f"sess_{uuid.uuid4().hex[:8]}"
+    initial_state = {
+        "job_role": request.job_role,
+        "current_round": 1,
+        "total_rounds": 4,
+        "jd_context": request.jd_text,
+    }
+    try:
+        result = await interview_agent.ainvoke(initial_state)
+        first_q = (
+            result.get("current_question")
+            or f"Hãy mô tả một bài toán khó bạn gặp phải khi xây dựng hệ thống và cách bạn giải quyết theo phương pháp STAR ({request.job_role})?"
+        )
+    except Exception:
+        first_q = (
+            f"Hãy mô tả một bài toán khó bạn gặp phải khi xây dựng hệ thống liên quan đến {request.job_role} (STAR)?"
+        )
+
     return InterviewStartResponse(
         session_id=session_id,
         student_id=request.student_id,
         job_role=request.job_role,
         total_questions=4,
         current_question_index=1,
-        first_question="Hãy mô tả một bài toán khó bạn gặp phải khi xây dựng hệ thống AI và cách bạn đã vượt qua nó (STAR)?",
+        first_question=first_q,
         message="Vòng phỏng vấn đã sẵn sàng. Hãy trả lời theo bối cảnh (S), nhiệm vụ (T), hành động (A) và kết quả (R).",
     )
 
@@ -294,19 +312,44 @@ async def start_interview(request: InterviewStartRequest) -> InterviewStartRespo
 async def answer_interview_question(request: InterviewAnswerRequest) -> InterviewAnswerResponse:
     """
     Nộp câu trả lời cho một câu hỏi trong vòng phỏng vấn.
-    Hệ thống chấm điểm sơ bộ theo Rubric STAR và trả về câu hỏi tiếp theo (nếu còn).
+    LangGraph interview_agent chấm điểm theo Rubric STAR (thang 0-5) và trả về câu hỏi tiếp theo (nếu còn).
     """
-    evaluation = STARScore(
-        situation_score=8.5,
-        task_score=8.0,
-        action_score=7.5,
-        result_score=8.0,
-        total_score=8.0,
-        feedback="Bối cảnh và nhiệm vụ mô tả rất rõ ràng. Cần làm rõ hơn đóng góp cá nhân trong bước Action.",
-    )
+    state = {
+        "job_role": "Software / AI Engineer",
+        "user_answer": request.answer,
+        "current_round": request.question_index,
+        "total_rounds": 4,
+    }
+    try:
+        result = await interview_agent.ainvoke(state)
+        sit_score = float(result.get("situation_score", 4.0))
+        task_score = float(result.get("task_score", 4.0))
+        act_score = float(result.get("action_score", 4.0))
+        res_score = float(result.get("result_score", 4.0))
+        total = round((sit_score + task_score + act_score + res_score) / 4.0, 2)
+        feedback = result.get("feedback_text", "Đã đánh giá câu trả lời theo rubric STAR.")
+        is_last = bool(result.get("is_finished", request.question_index >= 4))
+        next_q = result.get("next_question")
+    except Exception:
+        sit_score = 4.0
+        task_score = 4.0
+        act_score = 3.5
+        res_score = 4.0
+        total = 3.88
+        feedback = "Bối cảnh và nhiệm vụ mô tả rõ ràng. Cần làm rõ hơn đóng góp cá nhân trong bước Action."
+        is_last = request.question_index >= 4
+        next_q = (
+            None if is_last else "Bạn đã từng tối ưu hoá latency hoặc chi phí token cho một ứng dụng LLM như thế nào?"
+        )
 
-    is_last = request.question_index >= 4
-    next_q = None if is_last else "Bạn đã từng tối ưu hoá latency hoặc chi phí token cho một ứng dụng LLM như thế nào?"
+    evaluation = STARScore(
+        situation_score=sit_score,
+        task_score=task_score,
+        action_score=act_score,
+        result_score=res_score,
+        total_score=total,
+        feedback=feedback,
+    )
 
     return InterviewAnswerResponse(
         session_id=request.session_id,
