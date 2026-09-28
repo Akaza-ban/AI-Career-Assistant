@@ -23,6 +23,7 @@ Technical Guidebook: <https://phoenix.note.transformerlabs.ai/technical-book>
 
 ## Yêu cầu
 
+
 - Python 3.11 (phiên bản CI đang dùng)
 - Git
 - Docker — tuỳ chọn, chỉ cần nếu chạy `docker compose`
