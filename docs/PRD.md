@@ -200,7 +200,6 @@ Năm cuối Trường X, chuẩn bị ứng tuyển, CV chưa chắc khớp vị
 - **Then** hệ thống chặn thao tác và hiển thị thông báo đã đạt giới hạn tuần, kèm hướng dẫn liên hệ cố vấn/admin để xin cấp thêm lượt
 
 ### Notes
-- ⚠️ Estimable cần Spike: cấu trúc rubric STAR (bao nhiêu tiêu chí, thang điểm) chưa được PRD mô tả chi tiết — đề xuất làm rõ với PO trước khi dev estimate
 - Dependencies: US-SV-02
 
 ---
@@ -296,7 +295,7 @@ Năm cuối Trường X, chuẩn bị ứng tuyển, CV chưa chắc khớp vị
 - **Then** hệ thống không cho gửi đánh giá lần 2 cho cùng 1 lượt hoạt động, chỉ hiển thị lại mức sao đã chọn trước đó (nếu có)
 
 ### Notes
-- Metric liên quan: CSAT ≥ 4/5 (KPI, PRD mục 6)
+- Metric liên quan: CSAT ≥ 4/5 (KPI, PRD mục 9)
 - Dependencies: US-SV-02, US-SV-04
 
 ---
@@ -449,7 +448,7 @@ Hỗ trợ nhiều SV cùng lúc, không đủ thời gian tư vấn 1-1 sâu ch
 ## 2. Functional Requirements
 - Upload/parse CV (PDF, DOCX)
 - Nhập/chọn JD mục tiêu (paste text hoặc chọn từ danh sách mẫu)
-- Gap analysis: so sánh CV vs JD, output phân loại rõ 2 nhóm:
+- Gap analysis: so sánh CV vs JD, output phân loại rõ 2 nhóm + CV–JD Matching Score (%) hiển thị kèm gap analysis:
   - **Presentation gap** → gợi ý diễn đạt lại (agent xử lý được)
   - **Capability gap** → flag cho SV + cố vấn, không tự "sửa" (agent không xử lý)
 - Lưu CV theo phiên bản (versioned), không ghi đè — mỗi lần tối ưu tạo bản mới, giữ lịch sử
@@ -462,7 +461,7 @@ Hỗ trợ nhiều SV cùng lúc, không đủ thời gian tư vấn 1-1 sâu ch
 - **Bảo mật**: CV là dữ liệu cá nhân, mã hoá lưu trữ, RBAC ở tầng query (không chỉ ẩn ở UI)
 - **Fairness**: rubric chấm điểm và gợi ý tối ưu áp dụng nhất quán, không thiên vị theo ngành/hồ sơ
 - **Minh bạch giới hạn**: hệ thống nêu rõ "không đảm bảo trúng tuyển", "không xác minh được tính xác thực của kinh nghiệm tự khai"
-- **Kiểm soát chi phí**: giới hạn 3 vòng phỏng vấn có chấm điểm/SV/vị trí/tuần (admin/cố vấn có thể cấp thêm)
+- **Kiểm soát chi phí**: giới hạn 3 vòng phỏng vấn có chấm điểm/SV/vị trí/tuần (admin/cố vấn có thể cấp thêm). Gap analysis (bao gồm CV–JD Matching Score) giới hạn tối đa 2 lệnh gọi LLM/phiên (xem mục 5.2).
 - **Hiệu năng**: phản hồi gap analysis trong thời gian chấp nhận được cho một phiên tương tác (không yêu cầu real-time streaming bắt buộc ở Basic)
 
 ## 4. Kiến trúc kỹ thuật (đề xuất)
@@ -474,18 +473,178 @@ Hỗ trợ nhiều SV cùng lúc, không đủ thời gian tư vấn 1-1 sâu ch
 - Lưu trữ CV: versioned records (không phải single-row overwrite)
 - Triển khai: Docker + cloud
 
-## 5. Guardrails
-- **Chống bịa kinh nghiệm**: agent chỉ phát hiện *sự không nhất quán nội bộ* trong văn bản CV (số liệu không có ngữ cảnh hỗ trợ, giọng văn/từ vựng không khớp cấp bậc, cụm từ ấn tượng nhưng mơ hồ). Khi phát hiện, agent yêu cầu SV bổ sung chứng cứ/ngữ cảnh — **không tự chặn, không tự kết luận SV nói dối**. Giới hạn nêu rõ trong hệ thống: agent không xác minh được sự thật của kinh nghiệm tự khai.
-- **HITL**: mọi gợi ý tối ưu CV là đề xuất; SV là người quyết định áp dụng hay không và chịu trách nhiệm với bản CV cuối cùng nộp đi.
-- **RBAC**: cố vấn chỉ truy vấn được dữ liệu của SV nằm trong danh sách được phân công, enforce ở tầng backend/query, không chỉ ẩn trên UI.
-- **Cost control**: giới hạn số vòng mock interview có chấm điểm/tuần như trên.
+## 5. Rubrics & Công thức chấm điểm
 
-## 6. KPI & cách đo
+### 5.1 STAR Rubric (Mock Interview)
+
+STAR đánh giá câu trả lời phỏng vấn hành vi theo 4 tiêu chí: **S**ituation (bối cảnh), **T**ask (nhiệm vụ), **A**ction (hành động), **R**esult (kết quả). Áp dụng vào đề tài:
+
+| Tiêu chí | Câu hỏi hệ thống trả lời |
+|---|---|
+| S | Ứng viên có mô tả đủ rõ bối cảnh/vấn đề không? |
+| T | Có nói rõ nhiệm vụ, trách nhiệm cá nhân cần hoàn thành không? |
+| A | Có giải thích cụ thể đã làm gì, cách xử lý, kỹ năng đã dùng không? |
+| R | Có trình bày kết quả, tác động, hoặc bằng chứng/số liệu không? |
+
+**Thang điểm** (0-5 mỗi tiêu chí):
+
+| Điểm | Mức đánh giá |
+|---|---|
+| 0 | Không đề cập / không có thông tin |
+| 1 | Rất yếu, thông tin mơ hồ |
+| 2 | Có đề cập nhưng thiếu nhiều |
+| 3 | Đạt yêu cầu cơ bản |
+| 4 | Tốt, rõ ràng và cụ thể |
+| 5 | Rất tốt, đầy đủ và thuyết phục |
+
+**Công thức — điểm 1 câu trả lời:**
+```
+STAR Score = (S + T + A + R) / 4        (0–5)
+```
+V1 dùng trọng số bằng nhau (wS=wT=wA=wR=0.25) vì STAR không quy định trọng số chuẩn giữa 4 thành phần; có thể điều chỉnh sau khi có dữ liệu thực nghiệm.
+
+**Điểm 1 buổi phỏng vấn (n câu hỏi):**
+```
+Interview Score = (STAR₁ + STAR₂ + ... + STARₙ) / n
+```
+
+**Theo dõi tiến bộ — công thức + cách hiển thị (bổ sung phần còn thiếu trong bản gốc):**
+```
+Progress = Interview Score (vòng sau) − Interview Score (vòng trước)
+```
+Hiển thị cho SV **2 lớp**, không chỉ 1 con số tổng:
+1. **Delta tổng** của Interview Score, kèm nhãn trực quan: `≥ +0.3` → "Cải thiện rõ rệt" (mũi tên xanh); `-0.3 đến +0.3` → "Chưa thay đổi đáng kể" (mũi tên xám); `≤ -0.3` → "Giảm, cần chú ý" (mũi tên đỏ). Ngưỡng 0.3 là đề xuất mặc định — **cần Hoàng (PO) xác nhận** trước khi hardcode.
+2. **Breakdown theo từng tiêu chí S/T/A/R** giữa vòng trước và vòng sau (bar nhỏ hoặc số cạnh nhau), để SV biết chính xác mình yếu ở đâu, không chỉ biết tổng điểm tăng/giảm.
+
+---
+
+### 5.2 CV–JD Matching Score (ATS-style)
+
+Dùng **Weighted Keyword Matching**: agent trích xuất yêu cầu/từ khóa từ JD, gán trọng số theo mức độ quan trọng, rồi đối chiếu với bằng chứng trong CV — không chỉ kiểm tra từ khóa có xuất hiện hay không.
+
+**Bước 1 — Trọng số từ khóa theo mức độ trong JD:**
+
+| Mức độ | Ý nghĩa | Trọng số |
+|---|---|---|
+| Required | Yêu cầu bắt buộc/chính | 3 |
+| Preferred | Ưu tiên | 2 |
+| Additional | Có lợi, không bắt buộc | 1 |
+
+*(3-2-1 là quy ước hệ thống đề xuất, không phải chuẩn ATS thị trường — điều chỉnh được sau khi có dữ liệu thực nghiệm.)*
+
+**Bước 2 — Bảng anchor chấm Match (bổ sung — bản gốc chỉ có ví dụ, chưa có bảng chính thức để prompt LLM bám theo, dễ gây chấm không nhất quán giữa các lần chạy):**
+
+| Match | Điều kiện |
+|---|---|
+| **0** | Từ khóa/yêu cầu không xuất hiện ở bất kỳ đâu trong CV |
+| **0.5** | Từ khóa chỉ xuất hiện dạng liệt kê (VD trong mục Skills), **không có** project/experience/mô tả hành động đi kèm để làm bằng chứng sử dụng |
+| **1** | Từ khóa xuất hiện **kèm bằng chứng cụ thể** — mô tả đã dùng để làm gì, trong bối cảnh/dự án nào (trong Projects, Experience, hoặc Education có mô tả) |
+
+**Công thức:**
+```
+CV–JD Matching Score = [ Σ(wᵢ × Matchᵢ) / Σwᵢ ] × 100%
+```
+Kết quả 0%–100%. Ví dụ: JD có SQL/Python/Excel (Required, w=3), Power BI/Tableau (Preferred, w=2), Git (Additional, w=1) — tổng trọng số 14. CV khớp đầy đủ SQL, Python (Match=1), Excel chỉ liệt kê trong Skills (Match=0.5), thiếu Power BI/Tableau (Match=0), có Git (Match=1) → điểm = (3+3+1.5+0+0+1)/14 × 100% = **60.7%**.
+
+**Hiển thị kết quả (không chỉ 1 con số) — theo bảng, kèm giải thích:**
+
+| Requirement | Importance | Match | Evidence |
+|---|---|---|---|
+| SQL | Required | ✓ Matched | SQL project |
+| Python | Required | ✓ Matched | Data Analysis Project |
+| Excel | Required | △ Partial | Chỉ có trong Skills |
+| Power BI | Preferred | ✗ Missing | Không tìm thấy |
+
+Agent **không** khuyên SV thêm trực tiếp từ khóa còn thiếu vào CV để tăng điểm. Nếu SV thực sự chưa có kỹ năng đó, agent gợi ý đó là "skill gap cần học thêm", không phải "thêm từ vào CV" (liên kết Guardrails mục 6.1).
+
+**Diễn giải điểm số (bắt buộc, liên kết mục 8 — Giới hạn & Cảnh báo):**
+Không được diễn giải là *"X% khả năng qua ATS"* hay *"X% khả năng được tuyển"*. Chỉ được nói: *"CV hiện đáp ứng X% tổng trọng số các yêu cầu được hệ thống trích xuất từ JD."*
+
+**Kiểm soát chi phí (bổ sung — bản gốc chưa đề cập, trong khi Brief liệt kê "kiểm soát chi phí AI" là ràng buộc bắt buộc):**
+Để tránh gọi LLM riêng lẻ cho từng từ khóa, một lượt gap analysis (bao gồm CV–JD Matching) giới hạn **tối đa 2 lệnh gọi LLM**:
+1. Trích xuất + gán trọng số từ khóa từ JD (1 lệnh).
+2. Chấm Match (0/0.5/1) cho **toàn bộ danh sách từ khóa trong 1 batch request**, dựa theo bảng anchor ở Bước 2 (1 lệnh) — không chấm từng từ khóa riêng lẻ.
+
+Cần Trí (backend/AI) xác nhận batch-scoring 1 lệnh là khả thi về context length trước khi chốt vào NFR mục 3.
+
+---
+
+## 6. Guardrails & Integrity
+
+Agent hỗ trợ phân tích và đề xuất; **sinh viên chịu trách nhiệm cuối cùng** với nội dung CV nộp.
+
+**1. Không tạo/bổ sung thông tin không có trong CV gốc.** Agent không tự suy diễn kinh nghiệm, project, kỹ năng, chứng chỉ, số liệu định lượng, hay quy mô không có căn cứ. Nếu bổ sung số liệu giúp câu mô tả rõ hơn, agent chỉ được **hỏi** SV cung cấp, không tự điền.
+
+**2. Mọi gợi ý phải có căn cứ từ CV gốc (source-grounded).** Mỗi đề xuất lưu lại `Evidence` trỏ về đúng vị trí trong CV gốc. Nếu không tìm thấy bằng chứng, agent không được trình bày thông tin đó như sự thật — chỉ được đặt câu hỏi cho SV xác nhận.
+
+**3. Phân biệt Rewrite vs New Information:**
+- *Rewrite* (được phép): đổi cách diễn đạt, giữ nguyên thông tin thực tế — VD "Worked with Python to analyze sales data" → "Analyzed sales data using Python".
+- *New Information* (không được phép nếu chưa xác nhận): thêm factual claim mới — VD thêm "50,000 records", "20% accuracy" khi SV chưa cung cấp số này.
+
+**4. Sinh viên có toàn quyền Accept / Reject / Edit** mọi đề xuất trước khi áp dụng vào CV cuối. Hệ thống hiển thị rõ: *"Các nội dung do AI đề xuất cần được kiểm tra trước khi sử dụng. Bạn chịu trách nhiệm đảm bảo thông tin phản ánh chính xác kinh nghiệm, kỹ năng và thành tích thực tế của mình."*
+
+**5. Audit Trail** — lưu tối thiểu mỗi đề xuất quan trọng:
+
+| Thuộc tính | Nội dung |
+|---|---|
+| Original Content | Nội dung CV trước khi sửa |
+| AI Suggestion | Nội dung agent đề xuất |
+| Evidence | Vị trí trong CV dùng làm căn cứ |
+| Reason | Lý do đề xuất |
+| Student Action | Accept / Reject / Edit |
+| Final Content | Nội dung sau quyết định của SV |
+| Timestamp | Thời điểm |
+
+**6. Quyền giám sát của cố vấn:** cố vấn được cấp quyền có thể xem Audit Trail (CV gốc, gợi ý, evidence, lý do, quyết định SV, nội dung cuối) — chỉ với SV nằm trong danh sách được phân công, enforce RBAC ở tầng backend/query (liên kết NFR mục 3), không thay đổi nguyên tắc SV là người quyết định nội dung cuối.
+
+**7. Khi thiếu thông tin:** *Thiếu thông tin → không tự suy đoán → hỏi SV → SV xác nhận/cung cấp → agent mới dùng thông tin đó.*
+
+**Nguyên tắc cốt lõi:** Grounded — No Fabrication — User Control — Traceability.
+
+---
+
+## 7. Fairness & Bias
+
+> **Trạng thái ở Gate 1: đây là kế hoạch kiểm thử (Plan), chưa phải kết quả đã chạy.** Mốc thực thi (Gate 2 hay trước khi mở rộng người dùng thật) cần Hoàng (PO) xác nhận — không đưa vào PRD như một cam kết đã hoàn thành trong 3 tuần Gate 1.
+
+**Nguyên tắc:** Agent không mặc định ngành học hoặc loại hồ sơ nào có chất lượng cao hơn (VD: không mặc định CV CNTT tốt hơn CV Kinh tế/Ngôn ngữ, không mặc định có internship tốt hơn không có). Đánh giá dựa trên: `CV + Target Job/JD + Evaluation Rubric → Evaluation`, không dựa trên `Ngành học → giả định chất lượng`.
+
+**Kế hoạch kiểm thử trước khi mở rộng:**
+- **Test A (ảnh hưởng ngành học):** 2 CV chất lượng tương đương, khác ngành (CNTT vs Kinh tế) → không được lệch điểm lớn.
+- **Test B (loại kinh nghiệm):** CV có internship vs CV có project tương đương năng lực nhưng không có internship → đánh giá theo bằng chứng, không tự động hạ điểm CV không-internship.
+- **Test C (tính nhất quán):** chấm cùng 1 CV nhiều lần, cùng điều kiện → điểm và nhận xét không được dao động đáng kể (liên kết trực tiếp bảng anchor Match ở mục 5.2 — anchor rõ ràng giúp giảm dao động này).
+- Bộ test cần trải nhiều ngành (CNTT, Kinh tế, Ngôn ngữ, Kỹ thuật, Marketing) và nhiều loại hồ sơ (chưa có kinh nghiệm, có internship, chủ yếu academic project, nhiều hoạt động ngoại khóa).
+- **Human review**: trường hợp điểm/nhận xét bất thường → cố vấn/team kiểm tra thủ công qua Audit Trail (mục 6.5) → cập nhật rubric/prompt nếu cần → re-test.
+
+**Nguyên tắc cốt lõi:** Context-aware — Consistent Evaluation — Evidence-based — Continuous Testing.
+
+---
+
+## 8. Giới hạn & Cảnh báo (Limitations & Disclaimer)
+
+**Cảnh báo bắt buộc hiển thị cho SV** (nguyên văn, hiển thị tại các điểm chạm quan trọng):
+
+> *"Các đánh giá, điểm số và gợi ý được tạo bởi AI chỉ mang tính tham khảo và hỗ trợ bạn cải thiện CV/kỹ năng phỏng vấn. Hệ thống không đảm bảo bạn sẽ vượt qua ATS, được mời phỏng vấn hoặc trúng tuyển vào bất kỳ vị trí nào. Quyết định tuyển dụng phụ thuộc vào nhà tuyển dụng và nhiều yếu tố nằm ngoài phạm vi đánh giá của hệ thống. Bạn chịu trách nhiệm cuối cùng đối với nội dung CV được nộp."*
+
+**Bắt buộc hiển thị tại:** nhận điểm CV → xem CV–JD Matching Score → nhận kết quả Mock Interview → áp dụng gợi ý AI → xuất CV cuối cùng.
+
+**Cấm dùng các cách diễn đạt sau:**
+- ❌ "Bạn có 85% khả năng được tuyển dụng."
+- ❌ "CV này chắc chắn sẽ vượt qua ATS."
+- ❌ "Sau khi sửa theo đề xuất, bạn sẽ được mời phỏng vấn."
+
+**Thay bằng:**
+- ✅ "CV hiện đạt 85% mức độ khớp theo CV–JD Matching Rubric của hệ thống."
+- ✅ "Kết quả này hỗ trợ bạn xác định nội dung cần cải thiện, không đảm bảo kết quả tuyển dụng thực tế."
+
+**Giới hạn hệ thống cần nêu rõ:** STAR Score và CV–JD Matching Score là chỉ số nội bộ theo rubric hệ thống, không phải điểm chính thức của ATS/nhà tuyển dụng thực tế; agent không xác minh được tính xác thực của kinh nghiệm tự khai.
+
+## 9. KPI & cách đo
 - **Usage rate** = (số SV active trong giai đoạn thử nghiệm) / (tổng số SV trong giai đoạn thử nghiệm) × 100%. "Active" = có ít nhất 1 lượt gap-analysis hoặc 1 vòng mock interview hoàn thành trong giai đoạn đo.
 - **CSAT** = điểm trung bình khảo sát thang 1-5, thu ngay sau mỗi lượt dùng (mỗi lần hoàn thành gap analysis hoặc 1 vòng phỏng vấn), tính trung bình cộng toàn bộ khảo sát trong giai đoạn.
 - **Metric chính (value, không phải adoption)**: Interview score delta = điểm trung bình rubric STAR của (N vòng cuối) − điểm trung bình của (N vòng đầu), tính theo từng SV rồi lấy trung bình toàn nhóm thử nghiệm. Đây là bằng chứng công cụ có tác dụng thật, mạnh hơn CSAT/usage.
 
-## 7. Nguồn dữ liệu dự kiến cho RAG (Gate 1: chỉ liệt kê, chưa build pipeline thật)
+## 10. Nguồn dữ liệu dự kiến cho RAG (Gate 1: chỉ liệt kê, chưa build pipeline thật)
 
 **JD mẫu:** thu thập thủ công/crawl có kiểm soát từ các nền tảng tuyển dụng phổ biến tại Việt Nam — TopCV, VietnamWorks, ITviec (nhóm ngành CNTT), LinkedIn Jobs VN — để có JD sát thực tế thị trường theo từng ngành.
 
@@ -493,7 +652,7 @@ Hỗ trợ nhiều SV cùng lúc, không đủ thời gian tư vấn 1-1 sâu ch
 
 **Giới hạn đã biết:** khối lượng dữ liệu thực tế curate được trong 3 tuần là **open question** — cần team thử nghiệm và báo cáo số liệu thật trước khi khẳng định đây là differentiator trong PRD chính thức.
 
-## 8. Roadmap sau Gate 1 (Advanced)
+## 11. Roadmap sau Gate 1 (Advanced)
 - Multi-position ATS optimization (một CV tối ưu cho nhiều vị trí song song)
 - Multi-round mock interview nâng cao với feedback chi tiết hơn theo từng câu hỏi
 - Đo lường chất lượng phản hồi ở quy mô lớn hơn (LLM-as-Judge mở rộng) + đánh giá đạt KPI (usage ≥60%, CSAT ≥4/5)
