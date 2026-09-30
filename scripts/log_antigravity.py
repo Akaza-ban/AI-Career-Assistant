@@ -97,7 +97,16 @@ def get_brain_dirs() -> list[Path]:
     if env:
         p = Path(env)
         return [p] if p.exists() else []
-    return [p for p in BRAIN_CANDIDATES if p.exists()]
+    dirs = [p for p in BRAIN_CANDIDATES if p.exists()]
+    if not dirs and sys.platform.startswith("linux"):
+        # WSL fallback: check mounted Windows user profiles
+        for wsl_user in Path("/mnt/c/Users").glob("*"):
+            for sub in ("antigravity-ide/brain", "antigravity/brain"):
+                p = wsl_user / ".gemini" / sub
+                if p.exists():
+                    dirs.append(p)
+    return dirs
+
 
 
 def _normalize(p: str) -> str:
@@ -331,7 +340,62 @@ def _conv_matches_repo(cwds: set[str], repo_root_n: str) -> bool:
     return False
 
 
-def iter_transcript_inputs(transcript: Path, conv_id: str, cutoff: datetime | None):
+# ---------------------------------------------------------------------------
+# Prompt extraction
+# ---------------------------------------------------------------------------
+
+def extract_user_prompt(content: str) -> str:
+    """Pull the text between <USER_REQUEST>...</USER_REQUEST>. Fall back to
+    stripping known auxiliary blocks if no wrapper is present."""
+    if not isinstance(content, str):
+        return ""
+    m = USER_REQUEST_RE.search(content)
+    if m:
+        return m.group(1).strip()
+    cleaned = AUX_BLOCK_RE.sub("", content)
+    return cleaned.strip()
+
+
+# ---------------------------------------------------------------------------
+# Reading existing log to avoid duplicates
+# ---------------------------------------------------------------------------
+
+def get_logged_entry_ids(log_file: Path) -> set[str]:
+    logged: set[str] = set()
+    files_to_check = []
+    if log_file.exists():
+        files_to_check.append(log_file)
+    archive_dir = log_file.parent / "archive"
+    if archive_dir.exists():
+        files_to_check.extend(archive_dir.glob("*.jsonl"))
+
+    for p in files_to_check:
+        try:
+            with open(p, encoding="utf-8-sig") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    eid = entry.get("entry_id", "")
+                    if eid:
+                        logged.add(eid)
+        except OSError:
+            pass
+    return logged
+
+
+
+# ---------------------------------------------------------------------------
+# Iterating user inputs
+# ---------------------------------------------------------------------------
+
+def iter_transcript_inputs(transcript: Path, conv_id: str,
+                           cutoff: datetime | None):
+    """Yield the user-typed prompts recorded in one transcript.jsonl."""
     with open(transcript, encoding="utf-8") as f:
         for line in f:
             line = line.strip()

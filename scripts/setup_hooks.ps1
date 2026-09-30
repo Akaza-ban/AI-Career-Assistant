@@ -9,8 +9,8 @@ $HookFile = '.git/hooks/pre-push'
 $HookBody = @'
 #!/bin/sh
 # Pre-push: sweep recent Antigravity / Gemini prompts, then submit AI logs.
-bash scripts/_pyrun.sh scripts/log_antigravity.py --auto || true
-bash scripts/_pyrun.sh scripts/submit_log.py || true
+python scripts/log_antigravity.py --auto 2>/dev/null || py -3 scripts/log_antigravity.py --auto 2>/dev/null || python3 scripts/log_antigravity.py --auto 2>/dev/null || true
+python scripts/submit_log.py || py -3 scripts/submit_log.py || python3 scripts/submit_log.py || true
 exit 0
 '@
 $HookBody = ($HookBody -replace "`r`n", "`n") + "`n"
@@ -21,3 +21,4 @@ if (-not (Test-Path .ai-log)) { New-Item -ItemType Directory -Path .ai-log | Out
 if (-not (Test-Path .ai-log/.gitkeep)) { New-Item -ItemType File -Path .ai-log/.gitkeep | Out-Null }
 
 Write-Host "[ai-log] Setup complete. Configure AI_LOG_SERVER in your .env file."
+
