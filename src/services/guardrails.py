@@ -183,9 +183,17 @@ def check_output_grounding(
     # Điều kiện passed:
     # - Nếu có evidence_span: Bắt buộc evidence_span phải có mặt trong CV gốc (100% trích xuất từ CV).
     # - Điểm bám sát từ vựng gợi ý phải đạt ngưỡng threshold.
+    # Số liệu trong gợi ý mà CV gốc không có = thêm thông tin mới (PRD mục 6.3 "New Information")
+    new_numbers = sorted(
+        set(re.findall(r"\d+(?:[.,]\d+)?", suggested_text)) - set(re.findall(r"\d+(?:[.,]\d+)?", clean_cv))
+    )
+
     if evidence_span and not span_found:
         passed = False
         reason = f"evidence_span '{evidence_span[:50]}...' không tìm thấy trong CV gốc."
+    elif new_numbers:
+        passed = False
+        reason = f"Gợi ý thêm số liệu không có trong CV gốc: {', '.join(new_numbers)}."
     elif grounding_score < threshold:
         passed = False
         reason = f"Độ bám sát từ ngữ CV thấp ({grounding_score} < {threshold})."

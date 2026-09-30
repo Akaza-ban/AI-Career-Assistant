@@ -11,8 +11,8 @@ import {
   GraduationCap,
   History,
   IdCard,
-  Lock,
   Mail,
+  MessageCircle,
   MessagesSquare,
   NotebookPen,
   ShieldAlert,
@@ -22,28 +22,30 @@ import {
 import { ProfileCvTab } from "@/components/advisor/profile/profile-cv-tab"
 import { ProfileInterviewTab } from "@/components/advisor/profile/profile-interview-tab"
 import { ProfileNotesTab } from "@/components/advisor/profile/profile-notes-tab"
-import { FlagDetail, StudentStatusBadge } from "@/components/advisor/student-status"
+import { FlagDetail, SharingBadge, StudentStatusBadge } from "@/components/advisor/student-status"
+import { useChat } from "@/components/chat/chat-context"
 import { Panel } from "@/components/common/panel"
 import { UserAvatar } from "@/components/shell/user-avatar"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { formatPercent } from "@/lib/analysis"
 import { api, ApiError } from "@/lib/api"
 import { formatRelativeTime } from "@/lib/format"
-import type { AdvisorInterviewItem, AdvisorNote, AdvisorStudentDetail } from "@/lib/types"
+import { formatScore } from "@/lib/interview"
+import type { AdvisorNote, AdvisorReviewInfo, AdvisorStudentDetail } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
 export type ProfileTab = "cv" | "interviews" | "notes"
 
 // Figma: frame "Hồ sơ sinh viên - Phỏng vấn & STAR" (18:6025) và "Hồ sơ sinh viên - Ghi chú & CV" (18:6676).
-// PRD US-ADV-01 AC3 (403), US-ADV-03.
+// PRD US-ADV-01 AC3 (403), US-ADV-03. Số liệu luôn xem được; nội dung theo từng tài liệu SV chia sẻ.
 export function StudentProfile({ studentId, initialTab }: { studentId: string; initialTab: ProfileTab }) {
   const fetchDetail = useCallback(() => api.getAdvisorStudent(studentId), [studentId])
   const { data: detail, error, reload } = useApi(fetchDetail)
   const [tab, setTab] = useState<ProfileTab>(initialTab)
   // Thay đổi cục bộ sau khi nhận xét / sửa ghi chú; null = dùng dữ liệu vừa tải.
-  const [reviewed, setReviewed] = useState<Record<string, AdvisorInterviewItem>>({})
+  const [reviewed, setReviewed] = useState<Record<string, AdvisorReviewInfo>>({})
   const [notes, setNotes] = useState<AdvisorNote[] | null>(null)
   const noteInput = useRef<HTMLTextAreaElement>(null)
 
@@ -74,10 +76,9 @@ export function StudentProfile({ studentId, initialTab }: { studentId: string; i
   }
   if (!detail) return <ProfileSkeleton />
 
-  const interviews = detail.interviews.map((i) => reviewed[i.id] ?? i)
+  const interviews = detail.interviews.map((i) => (reviewed[i.id] ? { ...i, review: reviewed[i.id] } : i))
   const pending = interviews.filter((i) => i.shared && !i.review).length
   const noteList = notes ?? detail.notes
-  const hidden = detail.student.shared_items === 0
 
   const tabs: { value: ProfileTab; label: string; icon: LucideIcon; count?: number; badge?: number }[] = [
     { value: "cv", label: "CV & JD mục tiêu", icon: FileText, count: detail.cvs.length },
@@ -100,7 +101,7 @@ export function StudentProfile({ studentId, initialTab }: { studentId: string; i
         }}
       />
 
-      <ProfileStats detail={detail} interviewCount={interviews.length} />
+      <ProfileStats detail={detail} pending={pending} />
 
       <div role="tablist" aria-label="Hồ sơ sinh viên" className="flex flex-wrap gap-1 rounded-2xl bg-card p-1.5 shadow-card ring-1 ring-line">
         {tabs.map((t) => {
@@ -134,27 +135,13 @@ export function StudentProfile({ studentId, initialTab }: { studentId: string; i
       </div>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {hidden && tab !== "notes" ? (
-          <Panel className="grid justify-items-center gap-3 py-14 text-center">
-            <span className="grid size-12 place-items-center rounded-full bg-surface text-ink-3">
-              <Lock className="size-6" aria-hidden />
-            </span>
-            <p className="font-heading text-lg font-bold">Sinh viên chưa chia sẻ dữ liệu</p>
-            <p className="max-w-md text-sm text-ink-2">
-              Bạn chỉ xem được CV và báo cáo phỏng vấn khi sinh viên bật chia sẻ. Ghi chú nội bộ của bạn vẫn dùng được bình thường.
-            </p>
-            <Button variant="soft" nativeButton={false} render={<a href={`mailto:${detail.student.email}`} />}>
-              <Mail aria-hidden />
-              Gửi email mời sinh viên chia sẻ
-            </Button>
-          </Panel>
-        ) : tab === "cv" ? (
+        {tab === "cv" ? (
           <ProfileCvTab detail={detail} />
         ) : tab === "interviews" ? (
           <ProfileInterviewTab
             detail={detail}
             interviews={interviews}
-            onReviewed={(item) => setReviewed((r) => ({ ...r, [item.id]: item }))}
+            onReviewed={(sessionId, review) => setReviewed((r) => ({ ...r, [sessionId]: review }))}
           />
         ) : (
           <ProfileNotesTab
@@ -162,7 +149,7 @@ export function StudentProfile({ studentId, initialTab }: { studentId: string; i
             studentId={detail.student.id}
             studentName={detail.student.full_name}
             notes={noteList}
-            suggestions={detail.session_suggestions}
+            suggestions={detail.suggestions}
             onNotesChange={setNotes}
           />
         )}
@@ -173,6 +160,7 @@ export function StudentProfile({ studentId, initialTab }: { studentId: string; i
 
 function ProfileHeader({ detail, onAddNote }: { detail: AdvisorStudentDetail; onAddNote: () => void }) {
   const s = detail.student
+  const { openChat } = useChat()
   return (
     <Panel className="flex flex-wrap items-center justify-between gap-5">
       <div className="flex min-w-0 items-center gap-5">
@@ -184,25 +172,28 @@ function ProfileHeader({ detail, onAddNote }: { detail: AdvisorStudentDetail; on
           </h1>
           <FlagDetail student={s} />
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-2">
-            <span className="flex items-center gap-1.5">
-              <IdCard className="size-4" aria-hidden />
-              MSSV: <strong className="text-ink">{s.student_code}</strong>
-            </span>
+            {s.student_code && (
+              <span className="flex items-center gap-1.5">
+                <IdCard className="size-4" aria-hidden />
+                MSSV: <strong className="text-ink">{s.student_code}</strong>
+              </span>
+            )}
             <span className="flex items-center gap-1.5">
               <GraduationCap className="size-4" aria-hidden />
-              {s.major} · Khoá {s.cohort}
+              {s.major && s.cohort ? `${s.major} · Khoá ${s.cohort}` : s.subtitle}
             </span>
-            <Badge variant={s.shared_items > 0 ? "violet" : "neutral"} className="h-auto px-2 py-0.5">
-              <Lock aria-hidden />
-              Đã chia sẻ {s.shared_items}/{s.total_items} mục dữ liệu
-            </Badge>
+            <a href={`mailto:${s.email}`} className="flex items-center gap-1.5 hover:text-blue">
+              <Mail className="size-4" aria-hidden />
+              {s.email}
+            </a>
+            <SharingBadge student={s} />
           </p>
           <p className="flex items-center gap-1.5 text-sm">
             <Briefcase className="size-4 text-blue" aria-hidden />
-            {s.target_title ? (
+            {s.target ? (
               <span className="font-medium text-blue">
-                Mục tiêu: {s.target_title}
-                {s.target_company && ` (${s.target_company})`}
+                Đang luyện: {s.target.title}
+                {s.target.company && ` (${s.target.company})`}
               </span>
             ) : (
               <span className="text-ink-2">Chưa chọn vị trí ứng tuyển</span>
@@ -211,9 +202,9 @@ function ProfileHeader({ detail, onAddNote }: { detail: AdvisorStudentDetail; on
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button variant="soft" className="h-11 px-4" nativeButton={false} render={<a href={`mailto:${s.email}`} />}>
-          <Mail aria-hidden />
-          Gửi email
+        <Button variant="soft" className="h-11 px-4" onClick={() => openChat(s.id)}>
+          <MessageCircle aria-hidden />
+          Nhắn tin
         </Button>
         <Button className="h-11 px-4" onClick={onAddNote}>
           <NotebookPen aria-hidden />
@@ -238,22 +229,29 @@ function Stat({ label, icon: Icon, iconClass, children }: { label: string; icon:
   )
 }
 
-function ProfileStats({ detail, interviewCount }: { detail: AdvisorStudentDetail; interviewCount: number }) {
+function ProfileStats({ detail, pending }: { detail: AdvisorStudentDetail; pending: number }) {
   const s = detail.student
-  const lastActivity = detail.recent_activity[0]
   const minutes = detail.interviews.reduce((sum, i) => sum + i.duration_seconds, 0) / 60
+  const latestCv = detail.cvs[0]
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Stat label="Điểm gần nhất" icon={Award} iconClass="bg-blue-soft text-blue">
+      <Stat label="Điểm STAR gần nhất" icon={Award} iconClass="bg-blue-soft text-blue">
         <p className="flex items-baseline gap-1.5">
-          <span className="font-heading text-[32px] leading-9 font-bold">{s.latest_score ?? "—"}</span>
-          <span className="text-sm text-ink-2">/100</span>
+          <span className="font-heading text-[32px] leading-9 font-bold">
+            {s.latest_score !== null ? formatScore(s.latest_score) : "—"}
+          </span>
+          <span className="text-sm text-ink-2">/5</span>
         </p>
         <p className="text-xs">
           {s.score_delta !== null ? (
-            <span className={cn("font-semibold", s.score_delta >= 0 ? "text-good" : "text-bad")}>
-              {s.score_delta >= 0 ? "+" : ""}
-              {s.score_delta} so với vòng đầu ({s.first_score})
+            <span
+              className={cn(
+                "font-semibold",
+                s.trend === "improving" ? "text-good" : s.trend === "declining" ? "text-bad" : "text-ink-2",
+              )}
+            >
+              {s.score_delta > 0 ? "+" : ""}
+              {formatScore(s.score_delta)} so với buổi đầu ({formatScore(s.first_score!)})
             </span>
           ) : (
             <span className="text-ink-2">Chưa đủ dữ liệu để so sánh</span>
@@ -262,23 +260,35 @@ function ProfileStats({ detail, interviewCount }: { detail: AdvisorStudentDetail
       </Stat>
       <Stat label="Số buổi đã luyện" icon={MessagesSquare} iconClass="bg-violet-soft text-violet">
         <p className="flex items-baseline gap-1.5">
-          <span className="font-heading text-[32px] leading-9 font-bold">{interviewCount}</span>
+          <span className="font-heading text-[32px] leading-9 font-bold">{s.interview_count}</span>
           <span className="text-sm text-ink-2">buổi</span>
         </p>
-        {minutes > 0 && <p className="text-xs text-ink-2">Tổng {Math.round(minutes)} phút thực hành</p>}
-      </Stat>
-      <Stat label="ATS CV mới nhất" icon={FileText} iconClass="bg-blue-soft text-blue">
-        <p className="flex items-baseline gap-1.5">
-          <span className="font-heading text-[32px] leading-9 font-bold text-blue">{s.latest_ats ?? "—"}</span>
-          <span className="text-sm text-ink-2">/100</span>
-        </p>
         <p className="text-xs text-ink-2">
-          {detail.latest_gap ? `Khớp ${detail.latest_gap.match_score}% với JD mục tiêu` : "Chưa có phân tích được chia sẻ"}
+          {s.interview_count > 0
+            ? `${s.focus_session_count} buổi ở vị trí đang luyện · ${Math.round(minutes)} phút`
+            : "Chưa luyện phỏng vấn"}
+        </p>
+      </Stat>
+      <Stat label="Độ khớp CV gần nhất" icon={FileText} iconClass="bg-blue-soft text-blue">
+        <p className="flex items-baseline gap-1.5">
+          <span className="font-heading text-[32px] leading-9 font-bold text-blue">
+            {s.latest_match !== null ? formatPercent(s.latest_match) : "—"}
+          </span>
+          <span className="text-sm text-ink-2">%</span>
+        </p>
+        <p className="line-clamp-2 text-xs text-ink-2">
+          {detail.latest_gap
+            ? `CV ${detail.latest_gap.cv_label} · ${detail.latest_gap.jd.title}`
+            : latestCv
+              ? "Chưa phân tích CV với JD nào"
+              : "Chưa tải lên CV"}
         </p>
       </Stat>
       <Stat label="Hoạt động cuối" icon={History} iconClass="bg-surface text-ink-2">
         <p className="font-heading text-xl font-bold">{s.last_active_at ? formatRelativeTime(s.last_active_at) : "—"}</p>
-        {lastActivity && <p className="line-clamp-2 text-xs text-ink-2">{lastActivity.title}</p>}
+        <p className="text-xs text-ink-2">
+          {pending > 0 ? `${pending} báo cáo chờ bạn nhận xét` : "Không có báo cáo chờ nhận xét"}
+        </p>
       </Stat>
     </div>
   )

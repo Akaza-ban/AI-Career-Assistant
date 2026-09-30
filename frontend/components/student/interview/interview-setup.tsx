@@ -2,22 +2,22 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useMemo, useState, type ReactNode } from "react"
+import { useCallback, useMemo, useState, type ReactNode } from "react"
 import {
   AlertCircle,
   ArrowRight,
   BatteryCharging,
   Briefcase,
-  CircleCheck,
   Clock,
   FileText,
   History,
   Info,
-  Lightbulb,
+  ListChecks,
   Loader2,
-  MessageSquareText,
-  Mic,
+  Pause,
+  ShieldCheck,
   Sparkles,
+  Timer,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -27,73 +27,53 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, ApiError } from "@/lib/api"
-import { features } from "@/lib/features"
-import { formatRelativeTime } from "@/lib/format"
-import type { InterviewDifficulty, JobLevel } from "@/lib/types"
+import { formatDate, formatRelativeTime } from "@/lib/format"
+import {
+  LABEL_META,
+  MIN_ANSWER_CHARS,
+  PAUSE_MAX_SECONDS,
+  QUESTION_COUNT,
+  QUESTION_THEMES,
+  RUBRIC_SCALE,
+  SECONDS_PER_QUESTION,
+  STAR_META,
+  STAR_ORDER,
+  formatScore,
+  labelOf,
+} from "@/lib/interview"
 import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
-const LEVELS: { value: JobLevel; title: string; description: string }[] = [
-  { value: "intern", title: "Thực tập (Intern)", description: "Sinh viên năm 3–4 mới làm quen nghiệp vụ thực tế." },
-  { value: "fresher", title: "Fresher", description: "Dưới 1 năm kinh nghiệm, đã nắm vững khung phân tích." },
-  { value: "junior", title: "Junior", description: "1–2 năm kinh nghiệm độc lập, dẫn dắt tài liệu dự án." },
-]
+const MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
 
-const DIFFICULTIES: { value: InterviewDifficulty; title: string; description: string }[] = [
-  { value: "gentle", title: "Nhẹ nhàng", description: "Khởi động, AI gợi ý cấu trúc nếu bạn bế tắc." },
-  { value: "realistic", title: "Thực tế doanh nghiệp", description: "Đặt câu hỏi xoáy sâu hành vi và số liệu." },
-  { value: "stress", title: "Áp lực cao", description: "Thách thức giả định, giới hạn thời gian trả lời." },
-]
-
-// Figma: frame "Thiết lập phỏng vấn" (18:3078). PRD US-SV-04.
+// Figma: frame "Thiết lập phỏng vấn" (18:3078). PRD US-SV-04, S5.
 export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) {
   const router = useRouter()
-  const { data: library } = useApi(api.listJdLibrary)
+  const { data: jds } = useApi(api.listInterviewJds)
   const { data: cvs } = useApi(api.listCvVersions)
-  const { data: rounds } = useApi(api.listInterviewRounds)
-  const { data: quota } = useApi(api.getQuota)
   const { data: recent } = useApi(api.listRecentInterviews)
 
   const [jdId, setJdId] = useState<string | null>(initialJdId)
   const [cvId, setCvId] = useState<string | null>(null)
-  const [level, setLevel] = useState<JobLevel>("intern")
-  const [roundIds, setRoundIds] = useState<string[]>(["round-hr", "round-domain"])
-  const [difficulty, setDifficulty] = useState<InterviewDifficulty>("realistic")
   const [starting, setStarting] = useState(false)
 
   const activeCv = cvs?.find((cv) => cv.id === cvId) ?? cvs?.find((cv) => cv.is_active) ?? cvs?.[0]
+  // Vị trí điền sẵn từ trang kết quả phân tích (?jd=), nếu không thì vị trí đang gắn với CV, cuối cùng là mục đầu.
   const jd = useMemo(() => {
-    if (!library?.length) return undefined
-    return (
-      library.find((j) => j.id === jdId) ??
-      library.find((j) => j.title === activeCv?.target_title) ??
-      library[0]
-    )
-  }, [library, jdId, activeCv])
+    if (!jds?.length) return undefined
+    return jds.find((j) => j.id === jdId) ?? jds.find((j) => j.title === activeCv?.target_title) ?? jds[0]
+  }, [jds, jdId, activeCv])
 
-  const chosenRounds = (rounds ?? []).filter((r) => roundIds.includes(r.id))
-  const minutes = chosenRounds.reduce((sum, r) => sum + r.minutes, 0)
-  const questions = chosenRounds.reduce((sum, r) => sum + r.question_count, 0)
-  const remaining = quota ? Math.max(0, quota.limit - quota.used) : 0
-  const overQuota = quota ? chosenRounds.length > remaining : false
-
-  function toggleRound(id: string) {
-    setRoundIds((prev) => (prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]))
-  }
+  const jdKey = jd?.id ?? ""
+  const fetchQuota = useCallback(() => api.getQuota(jdKey), [jdKey])
+  const { data: quota } = useApi(fetchQuota)
+  const exhausted = quota !== undefined && quota.remaining === 0
 
   async function start() {
-    if (!jd || !activeCv || chosenRounds.length === 0 || overQuota) return
+    if (!jd || !activeCv || exhausted) return
     setStarting(true)
     try {
-      const session = await api.createInterview({
-        jd_id: jd.id,
-        cv_version_id: activeCv.id,
-        level,
-        round_ids: chosenRounds.map((r) => r.id),
-        difficulty,
-        mode: "text",
-        question_count: questions,
-      })
+      const session = await api.createInterview({ jd_id: jd.id, cv_version_id: activeCv.id })
       router.push(`/student/interview/${encodeURIComponent(session.id)}`)
     } catch (err) {
       toast.error(err instanceof ApiError || err instanceof Error ? err.message : "Không bắt đầu được phỏng vấn.")
@@ -101,12 +81,12 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
     }
   }
 
-  if (!library || !cvs || !rounds || !quota) {
+  if (!jds || !cvs) {
     return (
       <div className="grid gap-6" aria-busy="true" aria-label="Đang tải">
         <Skeleton className="h-24 rounded-[20px]" />
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <Skeleton className="h-[900px] rounded-[20px]" />
+          <Skeleton className="h-[720px] rounded-[20px]" />
           <Skeleton className="h-[480px] rounded-[20px]" />
         </div>
       </div>
@@ -118,7 +98,7 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
       <Panel className="grid justify-items-center gap-3 py-12 text-center">
         <FileText className="size-8 text-ink-3" aria-hidden />
         <p className="font-heading font-bold">Bạn cần tải CV lên trước khi luyện phỏng vấn</p>
-        <p className="max-w-md text-sm text-ink-2">AI dựa vào kinh nghiệm trong CV để đặt câu hỏi sát với bạn.</p>
+        <p className="max-w-md text-sm text-ink-2">AI dựa vào vị trí ứng tuyển và kinh nghiệm trong CV để đánh giá câu trả lời.</p>
         <Button nativeButton={false} render={<Link href="/student/cv" />}>
           Đến CV của tôi
         </Button>
@@ -126,7 +106,10 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
     )
   }
 
-  const jdItems = library.map((j) => ({ value: j.id, label: `${j.title}${j.company ? ` – ${j.company}` : ""}` }))
+  const jdItems = jds.map((j) => ({
+    value: j.id,
+    label: `${j.title}${j.company ? ` – ${j.company}` : ""}${j.source === "pasted" ? " (JD tự dán)" : ""}`,
+  }))
   const cvItems = cvs.map((cv) => ({ value: cv.id, label: `${cv.file_name} (${cv.label})` }))
 
   return (
@@ -134,18 +117,18 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
       <div className="grid gap-2">
         <Badge variant="violet" className="h-auto px-2.5 py-1">
           <Sparkles aria-hidden />
-          Mô phỏng AI STAR • 3 vòng phỏng vấn
+          Mô phỏng AI STAR • {QUESTION_COUNT} câu hỏi
         </Badge>
         <h1 className="font-heading text-[32px] leading-10 font-extrabold">Thiết lập phiên phỏng vấn thử</h1>
         <p className="max-w-2xl text-ink-2">
-          Chọn bối cảnh và các vòng phỏng vấn theo JD mục tiêu để AI Career Coach cá nhân hoá bộ câu hỏi và chấm điểm theo
-          chuẩn STAR.
+          Chọn vị trí và CV, rồi trả lời {QUESTION_COUNT} câu hỏi hành vi như một buổi phỏng vấn thật. Mỗi câu trả lời được
+          chấm theo khung STAR, thang 0–5.
         </p>
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid min-w-0 gap-5">
-          <Step n={1} title="Chọn vị trí & CV đối soát">
+          <Step n={1} title="Chọn vị trí & CV">
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Vị trí ứng tuyển" icon={Briefcase}>
                 <Select items={jdItems} value={jd?.id ?? null} onValueChange={(v) => setJdId(String(v))}>
@@ -161,9 +144,9 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
                   </SelectContent>
                 </Select>
               </Field>
-              <Field label="Tệp CV đối soát" icon={FileText}>
+              <Field label="CV dùng làm bối cảnh" icon={FileText}>
                 <Select items={cvItems} value={activeCv?.id ?? null} onValueChange={(v) => setCvId(String(v))}>
-                  <SelectTrigger className="h-10 w-full min-w-0 bg-surface" aria-label="Tệp CV đối soát">
+                  <SelectTrigger className="h-10 w-full min-w-0 bg-surface" aria-label="CV dùng làm bối cảnh">
                     <SelectValue className="min-w-0 truncate" />
                   </SelectTrigger>
                   <SelectContent>
@@ -176,185 +159,121 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
                 </Select>
               </Field>
             </div>
-            {jd && (
+            {jd && jd.skills.length > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {jd.skills.map((s) => (
-                  <span key={s} className="rounded-md bg-surface px-2 py-0.5 text-xs text-ink-2 ring-1 ring-line">
-                    {s}
+                  <span key={s.name} className="rounded-md bg-surface px-2 py-0.5 text-xs text-ink-2 ring-1 ring-line">
+                    {s.name}
                   </span>
                 ))}
               </div>
             )}
           </Step>
 
-          <Step n={2} title="Cấp độ ứng tuyển">
-            <div role="radiogroup" aria-label="Cấp độ ứng tuyển" className="grid gap-3 sm:grid-cols-3">
-              {LEVELS.map((l) => (
-                <ChoiceCard key={l.value} selected={level === l.value} onClick={() => setLevel(l.value)} title={l.title}>
-                  {l.description}
-                </ChoiceCard>
+          <Step n={2} title="Buổi phỏng vấn diễn ra thế nào" aside={`${QUESTION_COUNT} câu · khoảng ${MINUTES} phút`}>
+            <ol className="grid gap-2 sm:grid-cols-2">
+              {QUESTION_THEMES.map((theme, i) => (
+                <li key={theme} className="flex items-center gap-3 rounded-xl bg-surface p-3">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-soft text-xs font-bold text-violet">
+                    {i + 1}
+                  </span>
+                  <span className="text-sm font-medium text-ink">{theme}</span>
+                </li>
+              ))}
+            </ol>
+            <ul className="grid gap-2 text-sm text-ink">
+              <Rule icon={Timer}>
+                Mỗi câu có <strong>{SECONDS_PER_QUESTION / 60} phút</strong> đếm ngược, như người phỏng vấn không chờ mãi. Hết
+                giờ, phần bạn đang gõ được tự nộp; nếu chưa đủ {MIN_ANSWER_CHARS} ký tự thì câu đó được 0 điểm.
+              </Rule>
+              <Rule icon={Pause}>Được tạm dừng 1 lần, tối đa {PAUSE_MAX_SECONDS} giây, sau đó đồng hồ tự chạy lại.</Rule>
+              <Rule icon={ListChecks}>
+                Sau mỗi câu, bạn thấy ngay điểm 4 tiêu chí S/T/A/R và nhận xét ngắn. Báo cáo đầy đủ có sau câu cuối.
+              </Rule>
+              <Rule icon={AlertCircle}>
+                Kết thúc sớm hoặc rời phòng giữa chừng thì buổi <strong>không được lưu</strong> và không tính lượt.
+              </Rule>
+            </ul>
+          </Step>
+
+          <Step n={3} title="Khung STAR & thang điểm 0–5">
+            <div className="grid gap-2 sm:grid-cols-2">
+              {STAR_ORDER.map((key) => (
+                <div key={key} className="flex gap-3 rounded-xl border border-line p-3">
+                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-blue-soft font-heading font-bold text-blue">
+                    {STAR_META[key].letter}
+                  </span>
+                  <span className="grid gap-0.5">
+                    <span className="text-sm font-semibold text-ink">{STAR_META[key].label}</span>
+                    <span className="text-xs leading-5 text-ink-2">{STAR_META[key].hint}</span>
+                  </span>
+                </div>
               ))}
             </div>
-            <p className="flex items-center gap-1.5 text-xs text-ink-2">
-              <Info className="size-3.5" aria-hidden />
-              Độ phức tạp câu hỏi và kỳ vọng số liệu định lượng (Result) được điều chỉnh theo cấp độ.
-            </p>
-          </Step>
-
-          <Step n={3} title="Chọn vòng phỏng vấn (tuần tự)" aside="Chọn 1 hoặc nhiều vòng">
-            <div className="grid gap-3" role="group" aria-label="Vòng phỏng vấn">
-              {rounds.map((r) => {
-                const checked = roundIds.includes(r.id)
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    role="checkbox"
-                    aria-checked={checked}
-                    onClick={() => toggleRound(r.id)}
-                    className={cn(
-                      "flex items-start gap-3 rounded-xl border p-4 text-left transition-colors",
-                      checked ? "border-violet bg-violet-soft/40 ring-2 ring-violet/15" : "border-line hover:border-violet/40",
-                    )}
-                  >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "mt-0.5 grid size-5 shrink-0 place-items-center rounded-md border-2",
-                        checked ? "border-violet bg-violet text-white" : "border-ink-3",
-                      )}
-                    >
-                      {checked && <CircleCheck className="size-3.5" />}
-                    </span>
-                    <span className="grid min-w-0 flex-1 gap-1">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-heading font-bold text-ink">{r.title}</span>
-                        {r.focus_jd && <Badge variant="violet">Trọng tâm JD</Badge>}
-                      </span>
-                      <span className="text-[13px] text-ink-2">{r.description}</span>
-                    </span>
-                    <span className="flex shrink-0 flex-col items-end gap-1 text-xs text-ink-2">
-                      <span className="flex items-center gap-1 rounded-full bg-surface px-2 py-0.5">
-                        <Clock className="size-3" aria-hidden />
-                        {r.minutes} phút
-                      </span>
-                      <span className="rounded-full bg-surface px-2 py-0.5">{r.question_count} câu hỏi</span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-            <p className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-blue-soft/50 px-4 py-2.5 text-sm text-ink">
-              <span>
-                {chosenRounds.length > 0
-                  ? `Chạy tuần tự ${chosenRounds.length} vòng đã chọn (ước tính ~${minutes} phút, ${questions} câu hỏi)`
-                  : "Hãy chọn ít nhất một vòng phỏng vấn"}
-              </span>
-              <span className="text-xs text-ink-2">Mỗi vòng có chấm điểm dùng 1 lượt trong tuần</span>
-            </p>
-          </Step>
-
-          <Step n={4} title="Cấu hình tương tác & độ khó">
             <div className="grid gap-1.5">
-              <p className="text-sm font-medium text-ink">Hình thức tương tác với AI</p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ChoiceCard selected onClick={() => {}} title="Chat văn bản" icon={MessageSquareText}>
-                  Gõ câu trả lời, phù hợp mọi môi trường.
-                </ChoiceCard>
-                <ChoiceCard
-                  selected={false}
-                  disabled={!features.voiceInterview}
-                  onClick={() => {}}
-                  title="Nói trực tiếp (micro)"
-                  icon={Mic}
-                  badge={!features.voiceInterview ? "Sắp có" : undefined}
-                >
-                  Mô phỏng cuộc gọi phỏng vấn bằng giọng nói.
-                </ChoiceCard>
-              </div>
-            </div>
-            <div className="grid gap-1.5">
-              <p className="text-sm font-medium text-ink">Mức độ áp lực & phản hồi đào sâu</p>
-              <div role="radiogroup" aria-label="Mức độ áp lực" className="grid gap-3 sm:grid-cols-3">
-                {DIFFICULTIES.map((d) => (
-                  <ChoiceCard
-                    key={d.value}
-                    selected={difficulty === d.value}
-                    onClick={() => setDifficulty(d.value)}
-                    title={d.title}
-                  >
-                    {d.description}
-                  </ChoiceCard>
+              <p className="text-xs font-semibold text-ink-2">Mỗi tiêu chí chấm từ 0 đến 5:</p>
+              <ul className="grid gap-1 text-xs sm:grid-cols-2">
+                {RUBRIC_SCALE.map((r) => (
+                  <li key={r.score} className="flex items-center gap-2 text-ink">
+                    <span className="grid size-5 shrink-0 place-items-center rounded bg-surface font-semibold">{r.score}</span>
+                    {r.label}
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </Step>
-
-          <p className="flex items-start gap-2 rounded-xl bg-violet-soft/50 p-4 text-xs leading-5 text-ink">
-            <Info className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
-            AI chấm 4 thành phần (Tình huống, Nhiệm vụ, Hành động, Kết quả) cho từng câu trả lời và gửi báo cáo chi tiết
-            sau khi bạn hoàn thành đủ các câu hỏi.
-          </p>
         </div>
 
         <aside className="grid min-w-0 gap-4 lg:sticky lg:top-24">
           <Panel className="grid gap-4 p-5">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="font-heading text-lg font-bold">Tóm tắt cấu hình</h2>
-              <Badge variant="violet">Sẵn sàng</Badge>
-            </div>
+            <h2 className="font-heading text-lg font-bold">Tóm tắt buổi phỏng vấn</h2>
             <dl className="grid gap-2 text-sm">
-              <SummaryRow label="Vị trí mục tiêu" value={jd?.title ?? "—"} />
-              <SummaryRow label="Cấp độ" value={LEVELS.find((l) => l.value === level)!.title} />
-              <SummaryRow label="Số vòng" value={`${chosenRounds.length} vòng`} highlight />
-              <SummaryRow label="Ước tính thời lượng" value={`~${minutes} phút (${questions} câu)`} />
-              <SummaryRow label="Chế độ tương tác" value="Chat văn bản" />
+              <SummaryRow label="Vị trí" value={jd?.title ?? "—"} />
+              <SummaryRow label="CV" value={activeCv ? `${activeCv.label}` : "—"} />
+              <SummaryRow label="Số câu hỏi" value={`${QUESTION_COUNT} câu`} highlight />
+              <SummaryRow label="Thời lượng" value={`Khoảng ${MINUTES} phút`} />
             </dl>
-            <div
-              className={cn(
-                "flex items-start gap-2 rounded-xl p-3 text-xs",
-                overQuota || remaining === 0 ? "bg-warn-soft text-warn" : "bg-violet-soft/60 text-violet",
-              )}
-            >
-              <BatteryCharging className="mt-0.5 size-4 shrink-0" aria-hidden />
-              <span className="grid gap-0.5">
-                <span className="font-semibold">
-                  Hạn ngạch tuần này: đã dùng {quota.used}/{quota.limit} lượt
+
+            {!quota ? (
+              <Skeleton className="h-16 rounded-xl" />
+            ) : (
+              <div
+                className={cn(
+                  "flex items-start gap-2 rounded-xl p-3 text-xs",
+                  exhausted ? "bg-warn-soft text-warn" : "bg-violet-soft/60 text-violet",
+                )}
+              >
+                <BatteryCharging className="mt-0.5 size-4 shrink-0" aria-hidden />
+                <span className="grid gap-0.5">
+                  <span className="font-semibold">
+                    Còn {quota.remaining}/{quota.limit} buổi cho vị trí này trong tuần
+                  </span>
+                  <span className="text-ink-2">Chỉ buổi hoàn thành đủ {QUESTION_COUNT} câu mới tính lượt.</span>
+                  <span className="text-ink-2">Làm mới ngày {formatDate(quota.resets_at)}</span>
                 </span>
-                <span>
-                  {overQuota
-                    ? `Chỉ còn ${remaining} lượt, hãy bớt số vòng hoặc xin cố vấn thêm lượt.`
-                    : `Còn ${remaining} lượt phỏng vấn có chấm điểm`}
-                </span>
-                <span className="text-ink-2">Làm mới {formatRelativeTime(quota.resets_at).toLowerCase()}</span>
-              </span>
-            </div>
-            <Button
-              variant="violet"
-              size="brand"
-              disabled={starting || chosenRounds.length === 0 || overQuota || remaining === 0}
-              onClick={start}
-            >
+              </div>
+            )}
+
+            <Button variant="violet" size="brand" disabled={starting || !jd || !activeCv || !quota || exhausted} onClick={start}>
               {starting ? <Loader2 className="animate-spin" aria-hidden /> : null}
-              Bắt đầu phỏng vấn ngay
+              Bắt đầu phỏng vấn
               {!starting && <ArrowRight aria-hidden />}
             </Button>
-            {remaining === 0 && (
+            {exhausted && (
               <p className="flex items-start gap-1.5 text-xs text-warn" role="alert">
                 <AlertCircle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                Bạn đã dùng hết lượt tuần này. Hãy liên hệ cố vấn hoặc quản trị viên để được cấp thêm lượt.
+                Bạn đã dùng hết lượt cho vị trí này trong tuần. Hãy chọn vị trí khác hoặc quay lại sau ngày làm mới.
               </p>
             )}
             <p className="flex gap-2 rounded-xl bg-blue-soft/50 p-3 text-xs leading-5 text-ink">
-              <Lightbulb className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
-              Trước khi bắt đầu: chọn nơi yên tĩnh và trình bày theo cấu trúc S-T-A-R (Tình huống → Nhiệm vụ → Hành động →
-              Kết quả) để tối ưu điểm số.
+              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
+              Đây là luyện tập, không tính điểm chính thức. Hãy trả lời bằng trải nghiệm thật của bạn.
             </p>
           </Panel>
 
           <Panel className="grid gap-3 p-5">
             <div className="flex items-center justify-between">
-              <h2 className="font-heading text-base font-bold">Điểm các buổi gần nhất</h2>
+              <h2 className="font-heading text-base font-bold">Các buổi gần nhất</h2>
               <History className="size-4 text-ink-3" aria-hidden />
             </div>
             {!recent ? (
@@ -364,31 +283,33 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
             ) : (
               <ul className="grid gap-2">
                 {recent.map((r) => (
-                  <li key={r.id} className="flex items-center justify-between gap-3 rounded-xl bg-surface p-3">
-                    <span className="grid min-w-0">
-                      <span className="truncate text-sm font-semibold text-ink">{r.title}</span>
-                      <span className="truncate text-xs text-ink-2">
-                        {formatRelativeTime(r.completed_at)}
-                        {r.note && ` · ${r.note}`}
-                      </span>
-                    </span>
-                    <span
-                      className={cn(
-                        "font-heading text-xl font-extrabold",
-                        r.total_score >= 80 ? "text-good" : r.total_score >= 70 ? "text-blue" : "text-violet",
-                      )}
+                  <li key={r.id}>
+                    <Link
+                      href={`/student/interview/${encodeURIComponent(r.id)}/report`}
+                      className="flex items-center justify-between gap-3 rounded-xl bg-surface p-3 hover:bg-blue-soft/50"
                     >
-                      {r.total_score}
-                      <span className="text-xs font-medium text-ink-3">/100</span>
-                    </span>
+                      <span className="grid min-w-0">
+                        <span className="truncate text-sm font-semibold text-ink">{r.jd.title}</span>
+                        <span className="flex items-center gap-1 truncate text-xs text-ink-2">
+                          <Clock className="size-3 shrink-0" aria-hidden />
+                          {formatRelativeTime(r.completed_at)}
+                        </span>
+                      </span>
+                      <span className={cn("font-heading text-xl font-extrabold", LABEL_META[labelOf(r.overall_score)].className)}>
+                        {formatScore(r.overall_score)}
+                        <span className="text-xs font-medium text-ink-3">/5</span>
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>
             )}
-            <Link href="/student/history" className="text-center text-xs font-medium text-violet hover:underline">
-              Xem toàn bộ lịch sử & biểu đồ tiến bộ STAR →
-            </Link>
           </Panel>
+
+          <p className="flex items-start gap-2 px-1 text-xs leading-5 text-ink-2">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            Hạn mức: {quota?.limit ?? 3} buổi có chấm điểm cho mỗi vị trí mỗi tuần (tính từ thứ Hai).
+          </p>
         </aside>
       </div>
     </div>
@@ -422,56 +343,12 @@ function Field({ label, icon: Icon, children }: { label: string; icon: typeof Br
   )
 }
 
-function ChoiceCard({
-  selected,
-  onClick,
-  title,
-  icon: Icon,
-  badge,
-  disabled,
-  children,
-}: {
-  selected: boolean
-  onClick: () => void
-  title: string
-  icon?: typeof Mic
-  badge?: string
-  disabled?: boolean
-  children: ReactNode
-}) {
+function Rule({ icon: Icon, children }: { icon: typeof Timer; children: ReactNode }) {
   return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      disabled={disabled}
-      onClick={onClick}
-      className={cn(
-        "grid gap-1 rounded-xl border p-3.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60",
-        selected ? "border-violet bg-violet-soft/40 ring-2 ring-violet/15" : "border-line enabled:hover:border-violet/40",
-      )}
-    >
-      <span className="flex items-center justify-between gap-2">
-        <span className="flex items-center gap-2 font-heading text-sm font-bold text-ink">
-          {Icon && <Icon className="size-4 text-violet" aria-hidden />}
-          {title}
-        </span>
-        {badge ? (
-          <Badge variant="neutral">{badge}</Badge>
-        ) : (
-          <span
-            aria-hidden
-            className={cn(
-              "grid size-4 place-items-center rounded-full border-2",
-              selected ? "border-violet" : "border-ink-3",
-            )}
-          >
-            {selected && <span className="size-2 rounded-full bg-violet" />}
-          </span>
-        )}
-      </span>
-      <span className="text-xs leading-5 text-ink-2">{children}</span>
-    </button>
+    <li className="flex items-start gap-2.5 leading-6">
+      <Icon className="mt-1 size-4 shrink-0 text-violet" aria-hidden />
+      <span>{children}</span>
+    </li>
   )
 }
 
@@ -479,7 +356,7 @@ function SummaryRow({ label, value, highlight }: { label: string; value: string;
   return (
     <div className="flex items-center justify-between gap-3">
       <dt className="text-ink-2">{label}</dt>
-      <dd className={cn("text-right font-semibold", highlight ? "text-violet" : "text-ink")}>{value}</dd>
+      <dd className={cn("truncate text-right font-semibold", highlight ? "text-violet" : "text-ink")}>{value}</dd>
     </div>
   )
 }

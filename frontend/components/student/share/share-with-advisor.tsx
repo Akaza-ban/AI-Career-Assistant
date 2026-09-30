@@ -6,12 +6,10 @@ import { toast } from "sonner"
 
 import { Panel } from "@/components/common/panel"
 import {
-  AccessLogPanel,
   AdvisorCard,
   AdvisorFeedbackPanel,
   PrivacyStrip,
   SharedItemsPanel,
-  ViewersPanel,
 } from "@/components/student/share/share-sections"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -19,7 +17,7 @@ import { api } from "@/lib/api"
 import type { AdvisorFeedback, SharedItem } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-// Figma: frame "Chia sẻ với Cố vấn" (18:4399). PRD US-ADV-01 AC3: cố vấn chỉ xem được dữ liệu SV đã chia sẻ.
+// Figma: frame "Chia sẻ với Cố vấn" (18:4399). Cố vấn luôn thấy số liệu tổng hợp; nội dung chỉ thấy khi SV bật chia sẻ.
 export function ShareWithAdvisor() {
   const { data, error, reload } = useApi(api.getSharing)
   // Danh sách sau lần cập nhật gần nhất; null = dùng dữ liệu vừa tải.
@@ -64,8 +62,6 @@ export function ShareWithAdvisor() {
     )
   }
 
-  const sharedIds = items.filter((i) => i.shared).map((i) => i.id)
-
   return (
     <div className="grid gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -85,23 +81,11 @@ export function ShareWithAdvisor() {
         <ShareSkeleton />
       ) : (
         <>
-          <PrivacyStrip advisorAccess={data.advisor_access} />
           <AdvisorCard advisor={data.advisor} />
+          <PrivacyStrip />
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-            <div className="grid min-w-0 gap-6">
-              <SharedItemsPanel items={items} pendingIds={pending} onChange={changeSharing} />
-              <AccessLogPanel entries={data.access_log} />
-            </div>
-            <div className="grid min-w-0 gap-6">
-              {data.viewers.length > 0 && (
-                <ViewersPanel
-                  viewers={data.viewers}
-                  sharedCount={sharedIds.length}
-                  onRevokeAdvisor={() => changeSharing(sharedIds, false)}
-                />
-              )}
-              <AdvisorFeedbackPanel feedback={feedback} advisorName={data.advisor?.full_name ?? null} onOpen={openFeedback} />
-            </div>
+            <SharedItemsPanel items={items} pendingIds={pending} onChange={changeSharing} />
+            <AdvisorFeedbackPanel feedback={feedback} onOpen={openFeedback} />
           </div>
         </>
       )}
@@ -112,11 +96,11 @@ export function ShareWithAdvisor() {
 function ShareSkeleton() {
   return (
     <div className="grid gap-6" aria-busy="true" aria-label="Đang tải thông tin chia sẻ">
-      <Skeleton className="h-20 rounded-[20px]" />
       <Skeleton className="h-32 rounded-[20px]" />
+      <Skeleton className="h-24 rounded-[20px]" />
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <Skeleton className="h-[640px] rounded-[20px]" />
-        <Skeleton className="h-[520px] rounded-[20px]" />
+        <Skeleton className="h-[560px] rounded-[20px]" />
+        <Skeleton className="h-[360px] rounded-[20px]" />
       </div>
     </div>
   )

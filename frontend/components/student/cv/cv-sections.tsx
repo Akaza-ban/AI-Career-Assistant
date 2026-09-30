@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState, type DragEvent } from "react"
+import { useEffect, useState, type DragEvent } from "react"
 import {
   AlertCircle,
   CircleCheck,
@@ -9,7 +9,7 @@ import {
   CloudUpload,
   Eye,
   FilePen,
-  Gauge,
+  GitCompare,
   Lightbulb,
   Loader2,
   MoreVertical,
@@ -25,7 +25,7 @@ import { toast } from "sonner"
 
 import { Panel } from "@/components/common/panel"
 import { ScoreRing } from "@/components/common/score-ring"
-import type { UploadState } from "@/components/student/cv/use-cv-upload"
+import { CV_MAX_MB, type UploadState } from "@/components/student/cv/use-cv-upload"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,6 +36,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { OPTIMIZER_AVAILABLE } from "@/lib/config"
 import { features } from "@/lib/features"
 import { formatBytes, formatRelativeTime } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
@@ -93,84 +95,48 @@ export function UploadStatusBanner({ state, onDismiss }: { state: UploadState; o
   )
 }
 
-// ---------- Thanh tìm kiếm / lọc / sắp xếp ----------
+// ---------- Thanh tìm kiếm / sắp xếp ----------
 
-export type CvSort = "recent" | "ats" | "name"
+export type CvSort = "recent" | "match" | "name"
 
 const sortItems = [
   { value: "recent", label: "Cập nhật gần nhất" },
-  { value: "ats", label: "Điểm ATS cao nhất" },
+  { value: "match", label: "Độ khớp cao nhất" },
   { value: "name", label: "Tên file A–Z" },
 ]
 
 interface CvToolbarProps {
   query: string
   onQueryChange: (value: string) => void
-  target: string
-  onTargetChange: (value: string) => void
-  targets: string[]
   sort: CvSort
   onSortChange: (value: CvSort) => void
-  total: number
-  averageAts: number | null
 }
 
-export function CvToolbar(props: CvToolbarProps) {
-  const { query, onQueryChange, target, onTargetChange, targets, sort, onSortChange, total, averageAts } = props
-  const targetItems = [
-    { value: "all", label: `Tất cả vị trí (${targets.length})` },
-    ...targets.map((t) => ({ value: t, label: t })),
-  ]
+export function CvToolbar({ query, onQueryChange, sort, onSortChange }: CvToolbarProps) {
   return (
-    <Panel className="flex flex-wrap items-center justify-between gap-3 p-2">
-      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-        <div className="relative min-w-60 flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
-          <Input
-            value={query}
-            onChange={(e) => onQueryChange(e.target.value)}
-            placeholder="Tìm kiếm theo tên file, vị trí..."
-            aria-label="Tìm kiếm CV"
-            className="h-9 border-transparent bg-surface pl-9"
-          />
-        </div>
-        <Select items={targetItems} value={target} onValueChange={(v) => onTargetChange(String(v))}>
-          <SelectTrigger className="h-9 min-w-48 border-transparent bg-surface" aria-label="Lọc theo vị trí">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {targetItems.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select items={sortItems} value={sort} onValueChange={(v) => onSortChange(v as CvSort)}>
-          <SelectTrigger className="h-9 min-w-44 border-transparent bg-surface" aria-label="Sắp xếp">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {sortItems.map((item) => (
-              <SelectItem key={item.value} value={item.value}>
-                {item.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+    <Panel className="flex flex-wrap items-center gap-2 p-2">
+      <div className="relative min-w-60 flex-1">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
+        <Input
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Tìm theo tên file…"
+          aria-label="Tìm kiếm CV theo tên file"
+          className="h-9 border-transparent bg-surface pl-9"
+        />
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        <span className="flex items-center gap-1.5 rounded-lg bg-blue-soft/70 px-3 py-1.5 text-xs font-medium text-ink">
-          <span className="size-2 rounded-full bg-good" aria-hidden />
-          Đang lưu {total} phiên bản
-        </span>
-        {averageAts !== null && (
-          <span className="flex items-center gap-1.5 rounded-lg bg-blue-soft px-3 py-1.5 text-xs font-semibold text-blue">
-            <Gauge className="size-3.5" aria-hidden />
-            Điểm ATS TB: {averageAts}/100
-          </span>
-        )}
-      </div>
+      <Select items={sortItems} value={sort} onValueChange={(v) => onSortChange(v as CvSort)}>
+        <SelectTrigger className="h-9 min-w-44 border-transparent bg-surface" aria-label="Sắp xếp">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {sortItems.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </Panel>
   )
 }
@@ -191,7 +157,7 @@ const previewLines = [
   ["w-1/2", "w-1/3", "w-4/5", "w-2/3"],
 ]
 
-function CvPreview({ cv, index }: { cv: CvVersion; index: number }) {
+function CvPreview({ cv, index, onPreview }: { cv: CvVersion; index: number; onPreview: (cv: CvVersion) => void }) {
   const lines = previewLines[index % previewLines.length]
   return (
     <div className="flex h-44 flex-col justify-between rounded-lg bg-surface p-3.5 shadow-[inset_0_2px_4px_rgb(11_27_58/0.05)]">
@@ -215,7 +181,7 @@ function CvPreview({ cv, index }: { cv: CvVersion; index: number }) {
       <div className="flex items-center justify-between text-xs">
         <button
           type="button"
-          onClick={() => toast.info("Xem trước file sẽ hoạt động khi kết nối backend.")}
+          onClick={() => onPreview(cv)}
           className={cn("inline-flex items-center gap-1 font-medium hover:underline", cv.is_active ? "text-blue" : "text-ink")}
         >
           <Eye className="size-3.5" aria-hidden />
@@ -230,19 +196,49 @@ function CvPreview({ cv, index }: { cv: CvVersion; index: number }) {
   )
 }
 
+/** Tối ưu dựa trên lần phân tích gần nhất; chưa phân tích (hoặc trình tối ưu chưa sẵn sàng) thì làm mờ nút và giải thích lý do. */
+function OptimizeButton({ cv }: { cv: CvVersion }) {
+  const variant = cv.is_active ? "default" : "secondary"
+  const className = cn("h-9 w-full", !cv.is_active && "bg-blue-soft")
+  if (cv.latest_analysis_id && OPTIMIZER_AVAILABLE) {
+    return (
+      <Button
+        variant={variant}
+        className={className}
+        nativeButton={false}
+        render={<Link href={`/student/analysis/${encodeURIComponent(cv.latest_analysis_id)}/optimize`} />}
+      >
+        <Wand2 aria-hidden />
+        Tối ưu
+      </Button>
+    )
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span tabIndex={0} className="grid rounded-lg" />}>
+        <Button variant={variant} className={className} disabled>
+          <Wand2 aria-hidden />
+          Tối ưu
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {OPTIMIZER_AVAILABLE ? "Cần phân tích CV với một JD trước khi tối ưu" : "Trình tối ưu CV sắp có"}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 interface CvCardProps {
   cv: CvVersion
   index: number
   onSetActive: (cv: CvVersion) => void
+  onPreview: (cv: CvVersion) => void
 }
 
-export function CvCard({ cv, index, onSetActive }: CvCardProps) {
+export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
   const badge = statusBadge(cv)
   const BadgeIcon = badge.icon
   const analyzeHref = `/student/analysis/new?cv=${encodeURIComponent(cv.id)}`
-  const optimizeHref = cv.latest_analysis_id
-    ? `/student/analysis/${encodeURIComponent(cv.latest_analysis_id)}/optimize`
-    : analyzeHref
   const meta = [`Cập nhật ${formatRelativeTime(cv.uploaded_at).toLowerCase()}`, formatBytes(cv.size_bytes)]
   if (cv.page_count) meta.push(`${cv.page_count} trang`)
 
@@ -280,12 +276,20 @@ export function CvCard({ cv, index, onSetActive }: CvCardProps) {
                 <ScanText aria-hidden />
                 Phân tích với JD mới
               </DropdownMenuItem>
+              {cv.source_analysis_id && (
+                <DropdownMenuItem
+                  render={<Link href={`/student/analysis/${encodeURIComponent(cv.source_analysis_id)}/export`} />}
+                >
+                  <GitCompare aria-hidden />
+                  Xem thay đổi & xuất CV
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      <CvPreview cv={cv} index={index} />
+      <CvPreview cv={cv} index={index} onPreview={onPreview} />
 
       <div className="grid gap-1">
         <h2 className="truncate font-heading text-base font-bold" title={cv.file_name}>
@@ -303,12 +307,14 @@ export function CvCard({ cv, index, onSetActive }: CvCardProps) {
       </div>
 
       <div className="flex items-center gap-2.5 rounded-lg bg-surface p-2.5">
-        {cv.ats_score !== null ? (
+        {cv.match_score !== null ? (
           <>
-            <ScoreRing score={cv.ats_score} />
-            <div className="grid">
-              <span className="text-xs font-semibold text-ink">Điểm ATS</span>
-              <span className="text-xs text-ink-2">{cv.ats_note ?? "Đã chấm theo JD gần nhất"}</span>
+            <ScoreRing score={cv.match_score} />
+            <div className="grid min-w-0">
+              <span className="text-xs font-semibold text-ink">Độ khớp JD gần nhất</span>
+              <span className="truncate text-xs text-ink-2" title={cv.target_title ?? undefined}>
+                {cv.target_title ?? "Theo lần phân tích gần nhất"}
+              </span>
             </div>
           </>
         ) : (
@@ -317,8 +323,8 @@ export function CvCard({ cv, index, onSetActive }: CvCardProps) {
               —
             </span>
             <div className="grid">
-              <span className="text-xs font-semibold text-ink">Chưa chấm ATS</span>
-              <span className="text-xs text-ink-2">Phân tích với một JD để xem điểm</span>
+              <span className="text-xs font-semibold text-ink">Chưa phân tích</span>
+              <span className="text-xs text-ink-2">Phân tích với một JD để xem độ khớp</span>
             </div>
           </>
         )}
@@ -334,15 +340,7 @@ export function CvCard({ cv, index, onSetActive }: CvCardProps) {
           <ScanText aria-hidden />
           Phân tích
         </Button>
-        <Button
-          variant={cv.is_active ? "default" : "secondary"}
-          className={cn("h-9", !cv.is_active && "bg-blue-soft")}
-          nativeButton={false}
-          render={<Link href={optimizeHref} />}
-        >
-          <Wand2 aria-hidden />
-          {cv.origin === "optimized" && !cv.is_active ? "Tối ưu tiếp" : "Tối ưu"}
-        </Button>
+        <OptimizeButton cv={cv} />
       </div>
     </Panel>
   )
@@ -354,53 +352,105 @@ interface CvDropzoneProps {
   onFile: (file: File) => void
   onBrowse: () => void
   disabled: boolean
-  /** Hiển thị lớn hơn khi chưa có CV nào. */
+  /** Dạng lớn khi chưa có CV nào; ngược lại là dạng gọn một dòng phía trên danh sách. */
   prominent?: boolean
 }
+
+const hasFiles = (e: globalThis.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files")
 
 export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzoneProps) {
   const [dragging, setDragging] = useState(false)
 
+  // Thả file lệch ra ngoài vùng thì trình duyệt sẽ mở file và rời trang; chặn lại khi đang ở trang này.
+  useEffect(() => {
+    const block = (e: globalThis.DragEvent) => {
+      if (hasFiles(e)) e.preventDefault()
+    }
+    window.addEventListener("dragover", block)
+    window.addEventListener("drop", block)
+    return () => {
+      window.removeEventListener("dragover", block)
+      window.removeEventListener("drop", block)
+    }
+  }, [])
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = disabled ? "none" : "copy"
+    if (!disabled) setDragging(true)
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    // Bỏ qua khi con trỏ chỉ đi qua phần tử con bên trong vùng thả.
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false)
+  }
+
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
     setDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file && !disabled) onFile(file)
+    if (disabled) return
+    const files = Array.from(e.dataTransfer.files)
+    if (files.length === 0) {
+      toast.info("Hãy kéo thả file PDF hoặc DOCX (ví dụ từ thư mục trên máy), không phải liên kết hay đoạn văn bản.")
+      return
+    }
+    if (files.length > 1) toast.info(`Mỗi lần chỉ tải lên một file. Đã chọn ${files[0].name}.`)
+    onFile(files[0])
+  }
+
+  const dropHandlers = { onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }
+  const limitNote = `PDF hoặc DOCX, tối đa ${CV_MAX_MB}MB mỗi file`
+  const heading = dragging ? "Thả file vào đây để tải lên" : null
+  const browseButton = (
+    <Button
+      variant="secondary"
+      className="h-9 bg-blue-soft px-4 font-semibold text-blue"
+      onClick={onBrowse}
+      disabled={disabled}
+    >
+      Chọn file từ máy tính
+    </Button>
+  )
+
+  if (!prominent) {
+    return (
+      <div
+        {...dropHandlers}
+        className={cn(
+          "flex flex-wrap items-center gap-4 rounded-[20px] border-2 border-dashed bg-card px-5 py-4 shadow-card transition-colors",
+          dragging ? "border-blue bg-blue-soft/40" : "border-line",
+        )}
+      >
+        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-blue-soft text-blue">
+          <CloudUpload className="size-5" aria-hidden />
+        </span>
+        <div className="grid min-w-0 flex-1 gap-0.5">
+          <h2 className="font-heading text-[15px] font-bold">{heading ?? "Kéo thả CV vào đây để tạo phiên bản mới"}</h2>
+          <p className="text-[13px] text-ink-2">{limitNote}</p>
+        </div>
+        {browseButton}
+      </div>
+    )
   }
 
   return (
     <div
-      onDragOver={(e) => {
-        e.preventDefault()
-        if (!disabled) setDragging(true)
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={handleDrop}
+      {...dropHandlers}
       className={cn(
-        "grid justify-items-center gap-1 rounded-[20px] border-2 border-dashed bg-card px-6 text-center shadow-card transition-colors",
-        prominent ? "py-16" : "py-8",
+        "grid justify-items-center gap-1 rounded-[20px] border-2 border-dashed bg-card px-6 py-16 text-center shadow-card transition-colors",
         dragging ? "border-blue bg-blue-soft/40" : "border-line",
       )}
     >
       <span className="mb-2 grid size-16 place-items-center rounded-full bg-blue-soft text-blue">
         <CloudUpload className="size-7" aria-hidden />
       </span>
-      <h2 className="font-heading text-base font-bold">
-        {prominent ? "Tải CV đầu tiên của bạn lên" : "Kéo thả file PDF hoặc DOCX vào đây để phân tích"}
-      </h2>
+      <h2 className="font-heading text-base font-bold">{heading ?? "Tải CV đầu tiên của bạn lên"}</h2>
       <p className="max-w-md text-[13px] leading-[18px] text-ink-2">
-        {prominent && "Kéo thả file PDF hoặc DOCX vào đây. "}
-        Hỗ trợ tài liệu tối đa 10MB mỗi file. Khuyến khích cấu trúc đề mục rõ ràng để AI trích xuất tốt nhất.
+        Kéo thả file vào đây hoặc chọn từ máy tính. {limitNote}. Khuyến khích cấu trúc đề mục rõ ràng để AI trích xuất
+        tốt nhất.
       </p>
       <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
-        <Button
-          variant="secondary"
-          className="h-9 bg-blue-soft px-4 font-semibold text-blue"
-          onClick={onBrowse}
-          disabled={disabled}
-        >
-          Chọn file từ máy tính
-        </Button>
+        {browseButton}
         {features.driveImport && <span className="text-xs text-ink-3">hoặc nhập từ Google Drive</span>}
       </div>
     </div>
@@ -423,9 +473,9 @@ export function CvTipCard() {
           </Badge>
         </h2>
         <p className="text-[13px] leading-[21px] text-ink-2">
-          Nên giữ mỗi vị trí mục tiêu một phiên bản CV riêng để đối chiếu chính xác với từ khoá kỹ năng trong JD. Điểm
-          ATS cao giúp CV dễ vượt qua vòng lọc hồ sơ tự động, nhưng nội dung vẫn phải phản ánh đúng kinh nghiệm thật của
-          bạn.
+          Nên giữ mỗi vị trí mục tiêu một phiên bản CV riêng để đối chiếu chính xác với kỹ năng trong JD. Độ khớp JD cao cho
+          thấy CV đã thể hiện rõ các yêu cầu của vị trí, nhưng không đảm bảo vượt qua vòng lọc hồ sơ; nội dung vẫn phải
+          phản ánh đúng kinh nghiệm thật của bạn.
         </p>
       </div>
     </Panel>

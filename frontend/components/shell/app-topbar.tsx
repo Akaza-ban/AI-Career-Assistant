@@ -6,10 +6,10 @@ import { useState } from "react"
 import { ChevronRight, CircleHelp, LogOut, Menu, Settings } from "lucide-react"
 import { toast } from "sonner"
 
+import { ChatLauncher } from "@/components/chat/chat-launcher"
 import { advisorShell, getBreadcrumb, studentShell } from "@/components/shell/nav-config"
 import { NotificationMenu } from "@/components/shell/notification-menu"
 import { useProfile } from "@/components/shell/profile-context"
-import { QuotaPill } from "@/components/shell/quota-pill"
 import { SidebarNav } from "@/components/shell/sidebar-nav"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Button } from "@/components/ui/button"
@@ -57,7 +57,12 @@ export function AppTopbar({ role }: { role: Role }) {
               {crumbs.map((crumb, index) => (
                 <li
                   key={crumb.label}
-                  className={cn("flex items-center gap-1", crumb.href ? "shrink-0" : "min-w-0")}
+                  className={cn(
+                    "flex items-center gap-1",
+                    crumb.href ? "shrink-0" : "min-w-0",
+                    // Màn hình hẹp: chỉ giữ mục cha gần nhất và trang hiện tại
+                    crumb.href && index < crumbs.length - 2 && "hidden sm:flex",
+                  )}
                 >
                   {(index > 0 || crumbs.length === 1) && (
                     <ChevronRight className="size-3.5 shrink-0 text-ink-3" aria-hidden />
@@ -78,9 +83,8 @@ export function AppTopbar({ role }: { role: Role }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          {role === "student" && <QuotaPill className="hidden md:inline-flex" />}
-
           <div className="flex items-center gap-1">
+            <ChatLauncher />
             <NotificationMenu role={role} />
             <Tooltip>
               <TooltipTrigger

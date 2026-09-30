@@ -7,7 +7,9 @@ import { api, ApiError } from "@/lib/api"
 import { formatTime } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
 
-export const CV_MAX_BYTES = 10 * 1024 * 1024
+// Khớp CV_MAX_BYTES ở backend (src/services/cv_files.py).
+export const CV_MAX_MB = 5
+export const CV_MAX_BYTES = CV_MAX_MB * 1024 * 1024
 export const CV_ACCEPT = ".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 export type UploadState =
@@ -15,11 +17,11 @@ export type UploadState =
   | { status: "uploading"; fileName: string; size: number }
   | { status: "error"; fileName: string; size: number; message: string }
 
-/** US-SV-01 AC3: chỉ nhận PDF/DOCX ≤ 10MB; từ chối ngay phía client, không gọi API. */
+/** US-SV-01 AC3: chỉ nhận PDF/DOCX ≤ CV_MAX_MB; từ chối ngay phía client, không gọi API. */
 export function validateCvFile(file: File): string | null {
   const ext = file.name.split(".").pop()?.toLowerCase()
   if (ext !== "pdf" && ext !== "docx") return "Chỉ hỗ trợ file PDF hoặc DOCX."
-  if (file.size > CV_MAX_BYTES) return "File vượt quá dung lượng cho phép (tối đa 10MB)."
+  if (file.size > CV_MAX_BYTES) return `File vượt quá dung lượng cho phép (tối đa ${CV_MAX_MB}MB).`
   return null
 }
 

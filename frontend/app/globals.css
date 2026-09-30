@@ -230,3 +230,24 @@ html[data-notice-dismissed-advisor] [data-notice="advisor"] {
     transition: none !important;
   }
 }
+
+/* In / Lưu PDF ở trang Xuất CV: chỉ in bản CV (phần tử có data-print-root), ẩn thanh điều hướng và các khối khác */
+@media print {
+  body:has([data-print-root]) * {
+    visibility: hidden;
+  }
+  body:has([data-print-root]) [data-print-root],
+  body:has([data-print-root]) [data-print-root] * {
+    visibility: visible;
+  }
+  [data-print-root] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    border: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+}

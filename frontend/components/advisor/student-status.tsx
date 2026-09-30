@@ -1,39 +1,33 @@
-import { ArrowRight, Flag, Lock, TrendingDown, TrendingUp, Minus, Hourglass } from "lucide-react"
+import { ArrowRight, Flag, Hourglass, Lock, Minus, TrendingDown, TrendingUp } from "lucide-react"
 
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { formatRelativeTime } from "@/lib/format"
-import type { AssignedStudent } from "@/lib/types"
+import { formatScore } from "@/lib/interview"
+import type { AssignedStudent, StudentStatus } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-export type StudentStatus = "not_shared" | "flagged" | "insufficient" | "improving" | "stable" | "declining"
+export type { StudentStatus }
 
-/** Trạng thái hiển thị của SV. Thứ tự ưu tiên: chưa chia sẻ → cần chú ý → chưa đủ dữ liệu → xu hướng điểm. */
+/** Trạng thái hiển thị: cờ "Cần chú ý" trước, sau đó là xu hướng điểm ở vị trí đang luyện. */
 export function studentStatus(s: AssignedStudent): StudentStatus {
-  if (s.shared_items === 0) return "not_shared"
-  if (s.flagged) return "flagged"
-  if (s.score_delta === null) return "insufficient"
-  if (s.score_delta >= 5) return "improving"
-  if (s.score_delta < 0) return "declining"
-  return "stable"
+  return s.flag ? "flagged" : s.trend
 }
 
 export const STATUS_META: Record<StudentStatus, { label: string; className: string; icon: typeof Flag }> = {
   flagged: { label: "Cần chú ý", className: "bg-bad-soft text-bad", icon: Flag },
-  not_shared: { label: "Chưa chia sẻ", className: "bg-surface text-ink-2", icon: Lock },
-  insufficient: { label: "Chưa đủ dữ liệu", className: "bg-surface text-ink-2", icon: Hourglass },
-  improving: { label: "Đang tiến bộ", className: "bg-good-soft text-good", icon: TrendingUp },
-  stable: { label: "Ổn định", className: "bg-blue-soft text-blue", icon: Minus },
   declining: { label: "Đang giảm", className: "bg-warn-soft text-warn", icon: TrendingDown },
+  insufficient: { label: "Chưa đủ dữ liệu", className: "bg-surface text-ink-2", icon: Hourglass },
+  stable: { label: "Ổn định", className: "bg-blue-soft text-blue", icon: Minus },
+  improving: { label: "Đang tiến bộ", className: "bg-good-soft text-good", icon: TrendingUp },
 }
 
-/** Sắp xếp mặc định: SV cần chú ý và có báo cáo chờ nhận xét lên trước. */
+/** Sắp xếp mặc định: SV cần chú ý, đang giảm lên trước. */
 export const STATUS_PRIORITY: Record<StudentStatus, number> = {
   flagged: 0,
   declining: 1,
   insufficient: 2,
   stable: 3,
   improving: 4,
-  not_shared: 5,
 }
 
 export function StudentStatusBadge({ student, className }: { student: AssignedStudent; className?: string }) {
@@ -47,26 +41,24 @@ export function StudentStatusBadge({ student, className }: { student: AssignedSt
   )
 }
 
-/** Chi tiết cờ theo US-ADV-02 AC1: thời điểm phát sinh và các vòng liên quan. */
+/** Chi tiết cờ theo US-ADV-02 AC1: các buổi liên quan và thời điểm phát sinh. */
 export function FlagDetail({ student }: { student: AssignedStudent }) {
-  if (!student.flagged || !student.flag_rounds) return null
+  if (!student.flag) return null
   return (
     <span className="text-xs text-bad">
-      Vòng {student.flag_rounds.join(", ")} không tăng điểm
-      {student.flagged_at && ` · ${formatRelativeTime(student.flagged_at).toLowerCase()}`}
+      Buổi {student.flag.rounds.join(", ")} không tăng điểm · {formatRelativeTime(student.flag.flagged_at).toLowerCase()}
     </span>
   )
 }
 
-/** Điểm vòng đầu → gần nhất và delta (US-ADV-01 AC1/AC2). */
+/** Điểm buổi đầu → gần nhất ở vị trí đang luyện (US-ADV-01 AC1/AC2), thang 0–5. */
 export function ScoreDelta({ student, size = "sm" }: { student: AssignedStudent; size?: "sm" | "md" }) {
-  if (student.shared_items === 0) return <span className="text-xs text-ink-3">Chưa chia sẻ dữ liệu</span>
   if (student.score_delta === null) {
     return (
       <span className="grid text-xs text-ink-2">
         <span className="font-medium">Chưa đủ dữ liệu</span>
         <span className="text-ink-3">
-          {student.interview_count === 0 ? "Chưa có vòng nào" : `Mới có 1 vòng (${student.latest_score} điểm)`}
+          {student.latest_score === null ? "Chưa có buổi nào" : `Mới có 1 buổi (${formatScore(student.latest_score)}/5)`}
         </span>
       </span>
     )
@@ -74,30 +66,47 @@ export function ScoreDelta({ student, size = "sm" }: { student: AssignedStudent;
   const d = student.score_delta
   return (
     <span className={cn("flex items-center gap-1.5 whitespace-nowrap", size === "md" ? "text-sm" : "text-xs")}>
-      <span className="text-ink-2">{student.first_score}</span>
+      <span className="text-ink-2">{formatScore(student.first_score!)}</span>
       <ArrowRight className="size-3 text-ink-3" aria-hidden />
-      <strong className="font-heading text-ink">{student.latest_score}</strong>
+      <strong className="font-heading text-ink">{formatScore(student.latest_score!)}</strong>
       <span
         className={cn(
           "rounded-md px-1.5 py-0.5 font-semibold",
-          d >= 5 ? "bg-good-soft text-good" : d < 0 ? "bg-bad-soft text-bad" : "bg-surface text-ink-2",
+          student.trend === "improving" ? "bg-good-soft text-good" : student.trend === "declining" ? "bg-bad-soft text-bad" : "bg-surface text-ink-2",
         )}
       >
         {d > 0 ? "+" : ""}
-        {d}
+        {formatScore(d)}
       </span>
     </span>
   )
 }
 
-export function StudentIdentity({ student, muted = false, showEmail = true }: { student: AssignedStudent; muted?: boolean; showEmail?: boolean }) {
+/** Số tài liệu SV đang chia sẻ; SV chưa chia sẻ gì thì chỉ có số liệu tổng hợp. */
+export function SharingBadge({ student }: { student: AssignedStudent }) {
+  if (student.shared_items === 0) {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs whitespace-nowrap text-ink-3">
+        <Lock className="size-3.5" aria-hidden />
+        Chưa chia sẻ tài liệu
+      </span>
+    )
+  }
+  return (
+    <span className="text-xs text-ink-2">
+      Chia sẻ {student.shared_items}/{student.total_items} tài liệu
+    </span>
+  )
+}
+
+export function StudentIdentity({ student, showEmail = true }: { student: AssignedStudent; showEmail?: boolean }) {
   return (
     <span className="flex min-w-0 items-center gap-3">
-      <UserAvatar name={student.full_name} src={student.avatar_url} className={cn("size-10", muted && "opacity-60")} />
+      <UserAvatar name={student.full_name} src={student.avatar_url} className="size-10" />
       <span className="grid min-w-0">
-        <span className={cn("truncate font-heading font-bold", muted ? "text-ink-2" : "text-ink")}>{student.full_name}</span>
+        <span className="truncate font-heading font-bold text-ink">{student.full_name}</span>
         <span className="truncate text-xs text-ink-2">
-          MSSV {student.student_code}
+          {student.student_code ? `MSSV ${student.student_code}` : student.subtitle}
           {showEmail && ` · ${student.email}`}
         </span>
       </span>

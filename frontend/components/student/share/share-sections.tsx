@@ -3,46 +3,38 @@
 import Link from "next/link"
 import { useState } from "react"
 import {
-  Building2,
+  BarChart3,
   Clock,
   Eye,
   FileText,
   FileX2,
-  History,
   Lock,
   Mail,
   MapPin,
+  MessageCircle,
   MessageSquareText,
   Mic,
   MicOff,
-  SendHorizontal,
-  ShieldCheck,
   SquareArrowOutUpRight,
   UserRoundCheck,
 } from "lucide-react"
 
-import { ConfirmDialog } from "@/components/common/confirm-dialog"
+import { useChat } from "@/components/chat/chat-context"
 import { Panel } from "@/components/common/panel"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { features } from "@/lib/features"
+import { formatPercent } from "@/lib/analysis"
 import { formatDate, formatWhen } from "@/lib/format"
-import type {
-  AccessLogEntry,
-  AdvisorContact,
-  AdvisorFeedback,
-  DataViewer,
-  SharedItem,
-  SharedItemKind,
-} from "@/lib/types"
+import { formatScore } from "@/lib/interview"
+import type { AdvisorContact, AdvisorFeedback, SharedItem, SharedItemKind } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 // ---------- Thẻ cố vấn phụ trách ----------
 
 export function AdvisorCard({ advisor }: { advisor: AdvisorContact | null }) {
+  const { openChat } = useChat()
   if (!advisor) {
     return (
       <Panel className="flex items-center gap-4">
@@ -94,9 +86,9 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorContact | null }) {
           </p>
         </div>
       </div>
-      <Button size="brand" nativeButton={false} render={<a href={`mailto:${advisor.email}`} />}>
-        <Mail aria-hidden />
-        Gửi email cho cố vấn
+      <Button size="brand" onClick={() => openChat()}>
+        <MessageCircle aria-hidden />
+        Nhắn tin cho cố vấn
       </Button>
     </Panel>
   )
@@ -106,9 +98,12 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorContact | null }) {
 
 type ShareTab = "all" | SharedItemKind
 
-const KIND_META: Record<SharedItemKind, { on: typeof FileText; off: typeof FileText; scoreLabel: string; dateLabel: string }> = {
-  cv: { on: FileText, off: FileX2, scoreLabel: "Điểm ATS", dateLabel: "Tải lên" },
-  interview_report: { on: Mic, off: MicOff, scoreLabel: "Điểm STAR", dateLabel: "Ngày" },
+const KIND_META: Record<
+  SharedItemKind,
+  { on: typeof FileText; off: typeof FileText; dateLabel: string; score: (value: number) => string }
+> = {
+  cv: { on: FileText, off: FileX2, dateLabel: "Tải lên", score: (v) => `Độ khớp JD gần nhất: ${formatPercent(v)}%` },
+  interview_report: { on: Mic, off: MicOff, dateLabel: "Hoàn thành", score: (v) => `Điểm STAR: ${formatScore(v)}/5` },
 }
 
 function ItemStatus({ item }: { item: SharedItem }) {
@@ -182,6 +177,12 @@ function SharedItemRow({
           {!isCv && <Badge variant="violet">Phỏng vấn thử</Badge>}
         </p>
         <p className="flex flex-wrap items-center gap-x-2 text-sm text-ink-2">
+          {item.subtitle && (
+            <>
+              <span>{item.subtitle}</span>
+              <span aria-hidden>•</span>
+            </>
+          )}
           <span>
             {meta.dateLabel} {formatDate(item.created_at)}
           </span>
@@ -189,7 +190,7 @@ function SharedItemRow({
             <>
               <span aria-hidden>•</span>
               <span className={cn("font-medium", !item.shared ? "text-ink-2" : isCv ? "text-blue" : "text-violet")}>
-                {meta.scoreLabel}: {item.score}/100
+                {meta.score(item.score)}
               </span>
             </>
           )}
@@ -301,143 +302,9 @@ export function SharedItemsPanel({ items, pendingIds, onChange }: SharedItemsPan
   )
 }
 
-// ---------- Nhật ký truy cập ----------
-
-const ACTION_LABEL: Record<AccessLogEntry["action"], { verb: string; dot: string }> = {
-  viewed: { verb: "đã xem", dot: "bg-good" },
-  downloaded: { verb: "đã tải về", dot: "bg-blue" },
-  commented: { verb: "đã để lại nhận xét tại", dot: "bg-violet" },
-}
-
-export function AccessLogPanel({ entries }: { entries: AccessLogEntry[] }) {
-  return (
-    <Panel className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-          <History className="size-[18px] text-blue" aria-hidden />
-          Nhật ký truy cập dữ liệu
-        </h2>
-        <span className="text-xs text-ink-2">Lưu vết trong 30 ngày gần nhất</span>
-      </div>
-      {entries.length === 0 ? (
-        <p className="rounded-xl bg-surface p-4 text-center text-sm text-ink-2">Chưa có ai truy cập dữ liệu của bạn.</p>
-      ) : (
-        <ul className="grid gap-2">
-          {entries.map((e) => {
-            const a = ACTION_LABEL[e.action]
-            return (
-              <li key={e.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl bg-surface px-4 py-3 text-sm">
-                <span className="flex min-w-0 items-center gap-3">
-                  <span className={cn("size-2 shrink-0 rounded-full", a.dot)} aria-hidden />
-                  <span className="text-ink">
-                    {e.actor} {a.verb} <span className="font-medium">{e.target}</span>
-                  </span>
-                </span>
-                <time dateTime={e.occurred_at} className="text-xs text-ink-2">
-                  {formatWhen(e.occurred_at)}
-                </time>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </Panel>
-  )
-}
-
-// ---------- Ai đang xem được dữ liệu ----------
-
-interface ViewersPanelProps {
-  viewers: DataViewer[]
-  /** Số tài liệu đang chia sẻ; thu hồi quyền cố vấn = tắt toàn bộ. */
-  sharedCount: number
-  onRevokeAdvisor: () => Promise<void>
-}
-
-export function ViewersPanel({ viewers, sharedCount, onRevokeAdvisor }: ViewersPanelProps) {
-  const [confirm, setConfirm] = useState<DataViewer | null>(null)
-
-  return (
-    <Panel className="grid gap-4">
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="font-heading text-lg font-bold">Ai đang xem được dữ liệu</h2>
-        <Badge variant="blue" className="h-auto shrink-0 px-2.5 py-0.5">
-          {viewers.length} đối tượng
-        </Badge>
-      </div>
-      <ul className="grid gap-3">
-        {viewers.map((v) => (
-          <li key={v.id} className="grid gap-3 rounded-2xl bg-surface p-4">
-            <div className="flex items-start gap-3">
-              {v.kind === "advisor" ? (
-                <UserAvatar name={v.name} src={null} className="size-10" />
-              ) : (
-                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-blue-soft text-blue">
-                  <Building2 className="size-5" aria-hidden />
-                </span>
-              )}
-              <div className="grid min-w-0 flex-1">
-                <p className="font-heading text-sm font-bold text-ink">{v.name}</p>
-                <p className="text-xs text-ink-2">{v.description}</p>
-              </div>
-              {v.kind === "advisor" ? (
-                <button
-                  type="button"
-                  disabled={sharedCount === 0}
-                  onClick={() => setConfirm(v)}
-                  className="shrink-0 text-xs font-semibold text-bad hover:underline disabled:cursor-not-allowed disabled:text-ink-3 disabled:no-underline"
-                >
-                  Thu hồi quyền
-                </button>
-              ) : (
-                <Link href="/student/settings#privacy" className="shrink-0 text-xs font-semibold text-blue hover:underline">
-                  Điều chỉnh
-                </Link>
-              )}
-            </div>
-            <dl className="grid grid-cols-2 gap-3 text-xs">
-              <div>
-                <dt className="text-ink-2">Quyền</dt>
-                <dd className="font-medium text-ink">{v.permission}</dd>
-              </div>
-              <div>
-                <dt className="text-ink-2">Lần xem gần nhất</dt>
-                <dd className="font-medium text-ink">{v.last_viewed_at ? formatWhen(v.last_viewed_at) : "Chưa xem"}</dd>
-              </div>
-            </dl>
-          </li>
-        ))}
-      </ul>
-
-      <ConfirmDialog
-        open={confirm !== null}
-        onOpenChange={(open) => !open && setConfirm(null)}
-        title={`Thu hồi quyền xem của ${confirm?.name ?? "cố vấn"}?`}
-        description={`Toàn bộ ${sharedCount} tài liệu đang chia sẻ sẽ chuyển về chế độ riêng tư. Cố vấn không xem được nữa, nhưng các nhận xét đã gửi vẫn được giữ lại. Bạn có thể bật chia sẻ lại bất cứ lúc nào.`}
-        cancelLabel="Giữ nguyên"
-        confirmLabel="Thu hồi quyền"
-        destructive
-        onConfirm={onRevokeAdvisor}
-      />
-    </Panel>
-  )
-}
-
 // ---------- Phản hồi từ cố vấn ----------
 
-function feedbackHref(target: AdvisorFeedback["target"]): string {
-  return target.kind === "cv" ? "/student/cv" : `/student/interview/${encodeURIComponent(target.id)}/report`
-}
-
-export function AdvisorFeedbackPanel({
-  feedback,
-  advisorName,
-  onOpen,
-}: {
-  feedback: AdvisorFeedback[]
-  advisorName: string | null
-  onOpen: (id: string) => void
-}) {
+export function AdvisorFeedbackPanel({ feedback, onOpen }: { feedback: AdvisorFeedback[]; onOpen: (id: string) => void }) {
   const unread = feedback.filter((f) => !f.read).length
   return (
     <Panel className="grid gap-4">
@@ -454,7 +321,7 @@ export function AdvisorFeedbackPanel({
       </div>
       {feedback.length === 0 ? (
         <p className="rounded-xl bg-surface p-4 text-center text-sm text-ink-2">
-          Chưa có nhận xét nào. Bật chia sẻ một báo cáo hoặc CV để cố vấn góp ý.
+          Chưa có nhận xét nào. Bật chia sẻ một báo cáo phỏng vấn để cố vấn góp ý.
         </p>
       ) : (
         <ul className="grid gap-3">
@@ -471,7 +338,7 @@ export function AdvisorFeedbackPanel({
               </p>
               <blockquote className="text-sm leading-6 text-ink">“{f.comment}”</blockquote>
               <Link
-                href={feedbackHref(f.target)}
+                href={`/student/interview/${encodeURIComponent(f.target.id)}/report`}
                 onClick={() => onOpen(f.id)}
                 className="flex w-fit items-center gap-1 text-sm font-medium text-blue hover:underline"
               >
@@ -482,47 +349,34 @@ export function AdvisorFeedbackPanel({
           ))}
         </ul>
       )}
-      {features.advisorChat && advisorName && (
-        <form className="grid gap-2 border-t border-line pt-4" onSubmit={(e) => e.preventDefault()}>
-          <label htmlFor="quick-chat" className="text-sm font-medium text-ink">
-            Trao đổi nhanh
-          </label>
-          <div className="flex gap-2">
-            <Input id="quick-chat" placeholder={`Gửi câu hỏi cho ${advisorName}…`} className="h-10 bg-surface" />
-            <Button type="submit" size="icon" className="size-10" aria-label="Gửi">
-              <SendHorizontal aria-hidden />
-            </Button>
-          </div>
-        </form>
-      )}
     </Panel>
   )
 }
 
 // ---------- Dải nguyên tắc riêng tư ----------
 
-export function PrivacyStrip({ advisorAccess }: { advisorAccess: boolean }) {
+/** Theo lựa chọn (a): cố vấn luôn thấy số liệu tổng hợp; nội dung chỉ thấy khi SV bật chia sẻ. */
+export function PrivacyStrip() {
   return (
-    <div className="grid gap-3">
-      <p className="flex items-start gap-3 rounded-[20px] bg-blue-soft/50 px-5 py-4 text-sm leading-6 text-ink">
+    <div className="grid gap-3 rounded-[20px] bg-blue-soft/50 px-5 py-4 text-sm leading-6 text-ink sm:grid-cols-2">
+      <p className="flex items-start gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-card text-blue">
           <Lock className="size-4" aria-hidden />
         </span>
         <span>
-          <strong className="text-blue">Nguyên tắc riêng tư:</strong> Cố vấn chỉ xem được những tài liệu bạn{" "}
-          <strong className="text-blue">bật công tắc chia sẻ</strong>. Bạn có thể thu hồi quyền truy cập bất cứ lúc nào mà
-          không ảnh hưởng đến lịch sử luyện tập.
+          <strong className="text-blue">Nội dung chỉ thấy khi bạn bật chia sẻ:</strong> file CV, câu trả lời và nhận xét
+          AI trong báo cáo phỏng vấn, chi tiết kỹ năng trong phân tích. Tắt lúc nào cũng được.
         </span>
       </p>
-      {!advisorAccess && (
-        <p role="status" className="flex flex-wrap items-center gap-2 rounded-2xl border border-warn/30 bg-warn-soft/60 px-5 py-3 text-sm text-ink">
-          <ShieldCheck className="size-4 shrink-0 text-warn" aria-hidden />
-          Bạn đang tắt quyền xem của cố vấn trong Cài đặt, nên cố vấn không thấy tài liệu nào kể cả khi công tắc đang bật.
-          <Link href="/student/settings#privacy" className="font-medium text-blue hover:underline">
-            Mở Cài đặt
-          </Link>
-        </p>
-      )}
+      <p className="flex items-start gap-3">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-card text-blue">
+          <BarChart3 className="size-4" aria-hidden />
+        </span>
+        <span>
+          <strong className="text-blue">Cố vấn phụ trách luôn thấy số liệu tổng hợp:</strong> điểm STAR từng buổi, mức
+          tiến bộ, độ khớp CV và ngày hoạt động, để kịp thời hỗ trợ khi bạn gặp khó khăn.
+        </span>
+      </p>
     </div>
   )
 }

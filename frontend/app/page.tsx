@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { GraduationCap, UserRoundCheck } from "lucide-react"
 
-import { USE_MOCK } from "@/lib/config"
+import { ALL_LIVE } from "@/lib/config"
 
 // Màn chọn vai trò tạm thời, thay cho đăng nhập cho tới khi có auth thật.
 const roles = [
@@ -24,7 +24,7 @@ export default function Home() {
     <main className="mx-auto flex min-h-screen w-full max-w-[1180px] flex-col justify-center gap-10 px-4 py-16 sm:px-10">
       <div className="grid justify-items-start gap-4">
         <span className="rounded-full bg-blue-soft px-3 py-1 font-heading text-[13px] font-semibold text-blue">
-          CareerX {USE_MOCK && "· dữ liệu minh hoạ"}
+          CareerX {!ALL_LIVE && "· dữ liệu minh hoạ"}
         </span>
         <h1 className="font-heading text-4xl font-extrabold leading-tight sm:text-5xl">
           Chọn vai trò để <span className="text-grad">bắt đầu</span>

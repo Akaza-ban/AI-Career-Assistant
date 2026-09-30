@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { useId, useState, type FormEvent, type ReactNode } from "react"
 import {
   BadgeCheck,
@@ -41,6 +42,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { api, ApiError } from "@/lib/api"
+import { downloadCv } from "@/lib/download"
 import { features } from "@/lib/features"
 import { formatBytes, formatDate, formatRelativeTime, formatTime } from "@/lib/format"
 import { isStrongPassword, PASSWORD_RULES } from "@/lib/password"
@@ -181,12 +183,6 @@ function cvTag(cv: CvVersion) {
   return <Badge variant="neutral">Bản lưu {cv.label}</Badge>
 }
 
-function downloadCv(cv: CvVersion) {
-  const url = api.cvDownloadUrl(cv.id)
-  if (url) window.open(url, "_blank", "noopener")
-  else toast.info(`Bản demo chưa có file thật để tải: ${cv.file_name}`)
-}
-
 interface CvFilesCardProps {
   cvs: CvVersion[]
   onDelete: (cv: CvVersion) => Promise<void>
@@ -247,10 +243,10 @@ export function CvFilesCard({ cvs, onDelete }: CvFilesCardProps) {
                   <span aria-hidden>•</span>
                   <span>Tải lên {formatDate(cv.uploaded_at)}</span>
                   <span aria-hidden>•</span>
-                  {cv.ats_score !== null ? (
+                  {cv.match_score !== null ? (
                     <span className="flex items-center gap-1 font-medium text-good">
                       <BadgeCheck className="size-3.5" aria-hidden />
-                      ATS {cv.ats_score}/100
+                      Độ khớp JD {cv.match_score}%
                     </span>
                   ) : (
                     <span>Chưa phân tích</span>
@@ -314,7 +310,7 @@ const CONSENT_TERMS = [
   "AI chỉ gợi ý dựa trên kinh nghiệm có thật do bạn cung cấp, không tự thêm kỹ năng hay thành tích bạn chưa có.",
   "Bạn tự kiểm tra và chịu trách nhiệm về tính trung thực của nội dung CV cuối cùng.",
   "Điểm số và nhận xét chỉ mang tính tham khảo, không đảm bảo kết quả tuyển dụng.",
-  "Cố vấn chỉ xem được tài liệu bạn bật chia sẻ; bạn có thể thu hồi quyền bất cứ lúc nào.",
+  "Cố vấn phụ trách thấy số liệu tổng hợp (điểm, mức tiến bộ); nội dung chỉ thấy khi bạn bật chia sẻ và thu hồi được bất cứ lúc nào.",
 ]
 
 export function ConsentCard({
@@ -462,19 +458,18 @@ export function PrivacyCard({
         description="Chủ động quyết định ai được xem dữ liệu hướng nghiệp của bạn."
       />
       <ul className="grid gap-3">
-        <ToggleRow
-          id="advisor-access"
-          title="Cho phép cố vấn xem các tài liệu đang bật chia sẻ"
-          tag="Học thuật"
-          description={
-            <>
-              {advisorName ? `Người phụ trách: ${advisorName}. ` : ""}Khi tắt, cố vấn không xem được tài liệu nào, kể cả tài
-              liệu đang bật ở mục Chia sẻ với Cố vấn.
-            </>
-          }
-          checked={settings.privacy.advisor_access}
-          onChange={(v) => onChange({ privacy: { advisor_access: v } })}
-        />
+        <li className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface p-4">
+          <div className="grid min-w-0 gap-1">
+            <p className="font-heading text-sm font-bold text-ink">Chia sẻ tài liệu với cố vấn</p>
+            <p className="text-xs leading-5 text-ink-2">
+              {advisorName ? `Người phụ trách: ${advisorName}. ` : ""}Bạn bật / tắt chia sẻ từng CV và báo cáo phỏng vấn ở trang
+              Chia sẻ với cố vấn. Mặc định mọi tài liệu là riêng tư.
+            </p>
+          </div>
+          <Link href="/student/share" className="shrink-0 text-sm font-medium text-blue hover:underline">
+            Mở trang Chia sẻ
+          </Link>
+        </li>
         <ToggleRow
           id="anonymous-contribution"
           title="Đóng góp dữ liệu ẩn danh để cải thiện gợi ý"

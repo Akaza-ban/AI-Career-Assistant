@@ -17,13 +17,6 @@ export interface UserProfile {
   avatar_url: string | null
 }
 
-/** Hạn mức phỏng vấn có chấm điểm trong tuần (NFR: 3 vòng/SV/vị trí/tuần). */
-export interface InterviewQuota {
-  used: number
-  limit: number
-  resets_at: ISODateString
-}
-
 // ---------- CV (US-SV-01) ----------
 
 export type CvFileType = "pdf" | "docx"
@@ -42,14 +35,16 @@ export interface CvVersion {
   status: CvStatus
   /** Lý do khi status = "failed", ví dụ file scan không có lớp văn bản (US-SV-01 AC2). */
   error_message: string | null
+  /** Vị trí (JD) của lần phân tích gần nhất. */
   target_title: string | null
-  ats_score: number | null
-  /** Ghi chú ngắn cạnh điểm ATS, ví dụ "Khớp 11/14 từ khoá", "Thiếu chỉ số định lượng". */
-  ats_note: string | null
-  /** "upload": SV tự tải lên; "optimized": tạo ra khi áp dụng gợi ý (US-SV-03). */
+  /** CV–JD Matching Score (0–100) của lần phân tích gần nhất; không phải điểm ATS (PRD mục 8). */
+  match_score: number | null
+  /** "upload": SV tự tải lên; "optimized": tạo ra khi "Hoàn tất" trong Trình tối ưu (US-SV-03). */
   origin: "upload" | "optimized"
   /** Lần phân tích gần nhất của phiên bản này; dùng cho nút "Tối ưu". */
   latest_analysis_id: string | null
+  /** Lượt phân tích đã dùng để tối ưu ra phiên bản này (origin = "optimized"); dùng cho "Xem thay đổi". */
+  source_analysis_id: string | null
   is_active: boolean
   is_draft: boolean
 }
@@ -58,15 +53,24 @@ export interface CvVersion {
 
 export type JobLevel = "intern" | "fresher" | "junior"
 
+/** Mức độ yêu cầu trong JD; trọng số Required 3 / Preferred 2 / Additional 1 (PRD mục 5.2). */
+export type RequirementImportance = "required" | "preferred" | "additional"
+
+export interface JdSkill {
+  name: string
+  importance: RequirementImportance
+}
+
 export interface JobDescription {
   id: string
   title: string
   company: string | null
   industry: string | null
-  level: JobLevel
-  skills: string[]
-  /** Toàn văn JD; thư viện có thể trả null ở danh sách và chỉ trả đầy đủ khi xem chi tiết. */
-  content: string | null
+  /** null với JD sinh viên tự dán. */
+  level: JobLevel | null
+  skills: JdSkill[]
+  /** Toàn văn JD. */
+  content: string
   source: "library" | "pasted"
 }
 
@@ -83,36 +87,84 @@ export interface CreateGapAnalysisRequest {
   jd_company?: string
 }
 
-// ---------- Phân tích khoảng cách (US-SV-02, US-SV-05) ----------
+// ---------- Phân tích khoảng cách (US-SV-02, US-SV-05, PRD mục 5.2) ----------
+
+export type AnalysisStatus = "processing" | "completed" | "failed"
+
+/** Các bước thật của pipeline phân tích, theo thứ tự chạy. */
+export type AnalysisStep = "parse" | "retrieve" | "compare" | "generate" | "verify_grounding"
 
 /**
- * matched  → "Đạt yêu cầu" (xanh)
- * weak     → "Mức độ yếu" (vàng) — khoảng cách trình bày, có gợi ý diễn đạt lại
- * missing  → "Thiếu trong CV" (đỏ) — khoảng cách năng lực, không tự sửa bằng câu chữ
- * unclear  → "Cần SV xem xét thủ công" (xám) — không đủ tin cậy để phân loại (US-SV-05 AC3)
+ * matched → "Khớp" (Match = 1): có bằng chứng cụ thể trong Kinh nghiệm / Dự án / Học vấn / Hoạt động
+ * partial → "Một phần" (Match = 0.5): chỉ được liệt kê, chưa có mô tả sử dụng
+ * missing → "Thiếu" (Match = 0): không xuất hiện trong CV — không tự điền bằng chứng
  */
-export type SkillStatus = "matched" | "weak" | "missing" | "unclear"
+export type MatchStatus = "matched" | "partial" | "missing"
 
-/** Đoạn trích từ CV làm bằng chứng cho một đánh giá. */
+/** Câu trích nguyên văn từ CV làm bằng chứng. */
+export interface CvEvidence {
+  line_no: number
+  text: string
+  section: string | null
+  /** Ví dụ "Kinh nghiệm", "Dự án", "Kỹ năng". */
+  section_label: string
+}
+
+/** Một dòng bảng Evidence: yêu cầu của JD và mức đáp ứng trong CV. */
+export interface RequirementAssessment {
+  id: string
+  skill: string
+  importance: RequirementImportance
+  /** Trọng số 3 / 2 / 1. */
+  weight: number
+  /** 0, 0.5 hoặc 1. */
+  match: number
+  status: MatchStatus
+  evidence: CvEvidence | null
+  /** Ví dụ "FastAPI → tính là Python (taxonomy)". */
+  note: string | null
+}
+
+/** Phân rã điểm theo mức độ yêu cầu (hiển thị khi bấm "Xem thêm"). */
+export interface ScoreBreakdown {
+  importance: RequirementImportance
+  label: string
+  weight: number
+  total: number
+  matched: number
+  partial: number
+  missing: number
+  /** Σ(w × Match) của nhóm. */
+  earned: number
+  /** Σw của nhóm. */
+  possible: number
+}
+
+/** Gợi ý diễn đạt lại một dòng CV, đã qua kiểm tra grounding. */
+export interface AnalysisSuggestion {
+  /** Dùng làm response_id cho like/dislike. */
+  id: string
+  skill: string
+  /** Dòng CV được thay; null với lượt phân tích cũ. */
+  line_no?: number | null
+  section_label: string | null
+  original_text: string
+  suggested_text: string
+  reason: string
+}
+
+// ---------- Trình tối ưu CV (US-SV-03) ----------
+
+/** Vị trí trong CV gốc làm căn cứ cho một gợi ý. */
 export interface EvidenceSpan {
   text: string
   line_start: number
   line_end: number
 }
 
-export interface SkillAssessment {
-  skill: string
-  /** Mô tả ngắn từ JD, ví dụ "Bắt buộc · Mức độ cơ bản". */
-  requirement_note: string | null
-  status: SkillStatus
-  /** null khi không tìm thấy bằng chứng trong CV. */
-  evidence_span: EvidenceSpan | null
-  /** Nhận xét / đề xuất ngắn của AI cho kỹ năng này. */
-  advice: string | null
-}
-
 export type SuggestionStatus = "pending" | "accepted" | "edited" | "rejected"
 
+/** ats_keyword: câu mới dùng đúng tên kỹ năng trong JD mà câu gốc chưa có; star_quantify: cần số liệu (AC2, chưa làm). */
 export type SuggestionKind = "rephrase" | "star_quantify" | "ats_keyword"
 
 export interface Suggestion {
@@ -122,12 +174,15 @@ export interface Suggestion {
   /** Dòng trong CvDocument mà gợi ý này thay thế. */
   line_id: string
   original_text: string
+  /** Nội dung AI đề xuất. */
   proposed_text: string
+  /** Nội dung sẽ vào CV sau quyết định (câu AI hoặc bản SV sửa); null khi chưa quyết định hoặc đã bỏ qua. */
+  final_text: string | null
   /** Lý do AI đề xuất (hiển thị trên thẻ gợi ý). */
   rationale: string
   evidence_span: EvidenceSpan
   status: SuggestionStatus
-  /** true khi AI cần SV bổ sung ngữ cảnh/chứng cứ trước khi gợi ý (US-SV-03 AC2). */
+  /** true khi AI cần SV bổ sung ngữ cảnh/chứng cứ trước khi gợi ý (US-SV-03 AC2, backend chưa làm). */
   needs_context: boolean
   context_question: string | null
 }
@@ -135,249 +190,276 @@ export interface Suggestion {
 // ---------- Nội dung CV (hiển thị ở Trình tối ưu và Xuất CV) ----------
 
 export interface CvDocLine {
+  /** Dạng "l{line_no}". */
   id: string
-  /** Số dòng trong CV gốc, khớp với EvidenceSpan.line_start. */
+  /** Số dòng trong CV gốc (đếm các dòng có nội dung), khớp với EvidenceSpan.line_start. */
   line_no: number
   text: string
 }
 
-export interface CvDocEntry {
+export interface CvDocSection {
   id: string
-  title: string | null
-  /** Ví dụ "Đồ án môn Phân tích thiết kế hệ thống · 09/2023 – 12/2023" */
-  meta: string | null
+  /** Tiêu đề mục như trong CV, ví dụ "KINH NGHIỆM LÀM VIỆC". */
+  title: string
   lines: CvDocLine[]
 }
 
-export interface CvDocSection {
-  id: string
-  title: string
-  entries: CvDocEntry[]
-}
-
+/** Nội dung CV tách theo mục từ văn bản đã trích (không giữ được thiết kế của file gốc). */
 export interface CvDocument {
-  full_name: string
-  headline: string
-  email: string
-  phone: string | null
-  location: string | null
+  /** Các dòng trước mục đầu tiên: họ tên, liên hệ... */
+  header: CvDocLine[]
   sections: CvDocSection[]
-  skills: {
-    confirmed: string[]
-    /** Kỹ năng SV xác nhận đang học (không ghi là thành thạo). */
-    developing: { name: string; note: string }[]
-  }
+  /** Kỹ năng SV tự ghi là đang học; không bao giờ ghi là thành thạo và không tính điểm khi phân tích lại. */
+  developing_skills: { name: string; note: string }[]
 }
 
 // ---------- Trình tối ưu CV (US-SV-03) & Xuất CV ----------
 
-/** Khoảng cách năng lực cần SV tự xác nhận; AI không tự thêm kỹ năng vào CV. */
+/** Kỹ năng JD yêu cầu mà CV chưa có; SV tự xác nhận, AI không tự thêm kỹ năng vào CV (US-SV-05). */
 export interface CapabilityCheck {
+  /** Mã yêu cầu JD trong lượt phân tích. */
   id: string
   skill: string
+  importance: RequirementImportance
   jd_requirement: string
   status: "pending" | "has_experience" | "no_experience"
-  /** Ngữ cảnh SV cung cấp khi chọn "đã có kinh nghiệm". */
+  /** Mô tả SV cung cấp khi chọn "đã có kinh nghiệm". */
   context: string | null
+  /** Ghi chú đang học khi chọn "chưa có kinh nghiệm". */
+  learning_note: string | null
 }
 
-export interface AtsCheck {
-  label: string
-  passed: boolean
-}
-
+/**
+ * Trình tối ưu của một lượt phân tích. Quyết định của SV nằm trong bản nháp; "Hoàn tất" tạo đúng một phiên bản CV
+ * mới (result_cv) rồi khoá phiên (status = "finalized").
+ */
 export interface OptimizerSession {
   analysis_id: string
-  jd: Pick<JobDescription, "id" | "title" | "company">
-  /** Phiên bản CV mới nhất trong phiên tối ưu (tăng mỗi lần áp dụng gợi ý). */
+  status: "draft" | "finalized"
+  jd: Pick<JobDescription, "id" | "title" | "company" | "industry" | "level" | "source">
+  /** CV–JD Matching Score của lượt phân tích. */
+  match_score: number | null
+  match_label: MatchLabel | null
+  /** false: lượt phân tích chấm bằng quy tắc dự phòng nên không có gợi ý diễn đạt lại. */
+  llm_used: boolean
+  /** Gợi ý không qua guardrail, đang chờ cố vấn xem lại. */
+  pending_review_count: number
+  /** Phiên bản CV được tối ưu. */
   cv: CvVersion
+  /** Phiên bản tạo ra khi "Hoàn tất"; null khi chưa hoàn tất hoặc SV đã xoá phiên bản đó. */
+  result_cv: CvVersion | null
+  /** Nội dung phiên bản được tối ưu (chưa áp gợi ý). */
   document: CvDocument
+  /** Nội dung phiên bản tạo ra khi "Hoàn tất" (đúng như file DOCX). */
+  result_document: CvDocument | null
   suggestions: Suggestion[]
   capability_checks: CapabilityCheck[]
-  ats_score: number | null
-  ats_checks: AtsCheck[]
-}
-
-export interface CapabilityAnswerRequest {
-  has_experience: boolean
-  context?: string
-  /**
-   * Chỉ khi has_experience = false: SV tự ghi mình đang học kỹ năng này (ví dụ "Đang học chứng chỉ PL-300").
-   * Khi có, kỹ năng được thêm vào mục "Kỹ năng đang phát triển", không bao giờ ghi là thành thạo.
-   */
-  learning_note?: string
-}
-
-export interface ExportCvRequest {
-  format: "pdf" | "docx"
-  /** SV đã tick cam kết liêm chính học thuật. */
-  integrity_confirmed: true
-}
-
-export interface ExportCvResponse {
-  /** null ở chế độ mock. */
-  download_url: string | null
-  confirmed_at: ISODateString
-}
-
-export interface GapAnalysis {
-  id: string
-  /** Dùng cho FeedbackWidget. */
-  response_id: string
-  cv_version_id: string
-  cv_file_name: string
-  jd: Pick<JobDescription, "id" | "title" | "company" | "level">
-  created_at: ISODateString
-  /** Độ khớp tổng thể 0–100, backend tính. */
-  match_score: number
-  ats_score: number | null
-  matched_skills: SkillAssessment[]
-  weak_skills: SkillAssessment[]
-  missing_skills: SkillAssessment[]
-  unclear_skills: SkillAssessment[]
-  suggestions: Suggestion[]
-  summary: string | null
-  /** Nhận xét ngắn về định dạng CV với trình đọc ATS, ví dụ "Bố cục 1 cột, không có bảng phức tạp". */
-  ats_feedback: string | null
-  /** Việc nên làm tiếp theo, hiển thị ở thẻ "Lời khuyên từ Cố vấn AI". */
-  next_steps: { title: string; description: string }[]
+  finalized_at: ISODateString | null
 }
 
 export interface SuggestionDecisionRequest {
-  decision: "accept" | "edit" | "reject"
+  /** undo: đưa gợi ý về chờ duyệt (chỉ khi chưa "Hoàn tất"). */
+  decision: "accept" | "edit" | "reject" | "undo"
   /** Bắt buộc khi decision = "edit". */
   edited_text?: string
 }
 
-export interface SuggestionDecisionResponse {
-  suggestion: Suggestion
-  /** Có khi chấp nhận/sửa tạo ra version CV mới (US-SV-03 AC1). */
-  new_cv_version: CvVersion | null
+export interface CapabilityAnswerRequest {
+  has_experience: boolean
+  /** Bắt buộc khi has_experience = true. */
+  context?: string
+  /**
+   * Chỉ khi has_experience = false: SV tự ghi mình đang học kỹ năng này (ví dụ "Đang học chứng chỉ PL-300").
+   * Khi có, kỹ năng vào mục "Kỹ năng đang phát triển" của phiên bản mới, không bao giờ ghi là thành thạo.
+   */
+  learning_note?: string
 }
 
-// ---------- Phỏng vấn thử (US-SV-04) ----------
+/** docx: tải file; print: in / lưu PDF từ trình duyệt; text: sao chép các câu đã sửa để tự dán vào CV gốc. */
+export type ExportFormat = "docx" | "print" | "text"
 
-export interface InterviewRoundOption {
+export interface ExportCvRequest {
+  format: ExportFormat
+  /** SV đã tick cam kết liêm chính học thuật. */
+  integrity_confirmed: boolean
+}
+
+export interface ExportCvResponse {
+  id: string
+  format: ExportFormat
+  confirmed_at: ISODateString
+}
+
+/**
+ * Một lượt phân tích CV–JD. Backend chạy nền: frontend hỏi lại getGapAnalysis cho tới khi status khác "processing"
+ * (current_step cho biết bước đang chạy); các trường kết quả chỉ có ý nghĩa khi status = "completed".
+ */
+export interface GapAnalysis {
+  id: string
+  /** Dùng cho khảo sát CSAT. */
+  response_id: string
+  status: AnalysisStatus
+  current_step: AnalysisStep | null
+  error_message: string | null
+  cv_version_id: string
+  cv_file_name: string
+  /** Ví dụ "v2.0". */
+  cv_label: string
+  jd: Pick<JobDescription, "id" | "title" | "company" | "industry" | "level" | "source">
+  created_at: ISODateString
+  completed_at: ISODateString | null
+  /** CV–JD Matching Score 0–100 = Σ(w × Match) / Σw × 100 (PRD mục 5.2). */
+  match_score: number | null
+  /** Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75). */
+  match_label: "low" | "medium" | "high" | null
+  counts: Record<MatchStatus, number>
+  breakdown: ScoreBreakdown[]
+  requirements: RequirementAssessment[]
+  suggestions: AnalysisSuggestion[]
+  /** Số gợi ý không qua guardrail, đang chờ cố vấn xem lại. */
+  pending_review_count: number
+  summary: string | null
+  /** false khi AI không khả dụng và điểm được chấm bằng quy tắc dự phòng. */
+  llm_used: boolean
+}
+
+// ---------- Phỏng vấn thử (US-SV-04, thang STAR 0–5 theo PRD mục 5.1) ----------
+
+export type StarCriterion = "situation" | "task" | "action" | "result"
+
+/** Điểm 4 tiêu chí STAR, thang 0–5. */
+export type StarScores = Record<StarCriterion, number>
+
+export interface InterviewJdRef {
   id: string
   title: string
-  description: string
-  minutes: number
-  question_count: number
-  focus_jd: boolean
+  company: string | null
+  source: "library" | "pasted"
 }
 
-export type InterviewDifficulty = "gentle" | "realistic" | "stress"
-export type InterviewMode = "text" | "voice"
+/** Câu hỏi đang chờ trả lời. */
+export interface InterviewQuestion {
+  /** Bắt đầu từ 1. */
+  index: number
+  /** Ví dụ "Làm việc nhóm". */
+  theme: string
+  text: string
+}
+
+/** Một câu đã trả lời (hoặc hết giờ) kèm điểm S/T/A/R. */
+export interface InterviewTurn {
+  /** Dùng làm response_id cho like/dislike nhận xét. */
+  id: string
+  index: number
+  theme: string
+  question: string
+  /** null khi hết giờ mà chưa có câu trả lời. */
+  answer: string | null
+  timed_out: boolean
+  star: StarScores | null
+  /** Trung bình 4 tiêu chí (0–5). */
+  score: number | null
+  feedback: string | null
+}
+
+/**
+ * Trạng thái buổi phỏng vấn. Mỗi buổi 4 câu, mỗi câu có hạn chót do backend giữ (seconds_left);
+ * tạm dừng được 1 lần, tối đa 1 phút. Buổi bỏ dở bị xoá và không tính lượt.
+ */
+export interface InterviewSession {
+  id: string
+  status: "in_progress" | "completed"
+  jd: InterviewJdRef
+  cv_version_id: string
+  cv_file_name: string
+  question_count: number
+  seconds_per_question: number
+  /** null khi đã hoàn thành. */
+  current_question: InterviewQuestion | null
+  seconds_left: number | null
+  paused: boolean
+  pause_used: boolean
+  pause_seconds_left: number | null
+  /** Các câu đã trả lời, theo thứ tự. */
+  turns: InterviewTurn[]
+  created_at: ISODateString
+}
 
 export interface CreateInterviewRequest {
   jd_id: string
   cv_version_id: string
-  level: JobLevel
-  round_ids: string[]
-  difficulty: InterviewDifficulty
-  mode: InterviewMode
-  question_count: number
-}
-
-export interface InterviewQuestion {
-  id: string
-  index: number
-  text: string
-  /** Kỹ năng/mục JD mà câu hỏi dựa trên. */
-  based_on: string | null
-}
-
-export type InterviewStatus = "in_progress" | "completed" | "abandoned"
-
-export interface InterviewSession {
-  id: string
-  jd: Pick<JobDescription, "id" | "title" | "company">
-  level: JobLevel
-  difficulty: InterviewDifficulty
-  round_title: string
-  status: InterviewStatus
-  started_at: ISODateString
-  time_limit_seconds_per_question: number | null
-  questions: InterviewQuestion[]
-  current_index: number
 }
 
 export interface SubmitAnswerRequest {
-  question_id: string
+  question_index: number
   text: string
+  /** true khi hết giờ và frontend tự nộp phần đang gõ. */
+  timed_out?: boolean
 }
 
-/** Kết quả guardrail đầu vào (B2): câu trả lời bị từ chối thì không tính lượt. */
-export type SubmitAnswerResponse =
-  | {
-      allowed: true
-      response_id: string
-      /** Nhận xét ngắn ngay sau câu trả lời (có thể null). */
-      feedback: string | null
-      next_question: InterviewQuestion | null
-    }
-  | {
-      allowed: false
-      /** Câu thông báo hiển thị trực tiếp cho SV. */
-      reason: string
-    }
-
-export interface StarScore {
-  situation: number
-  task: number
-  action: number
-  result: number
+/**
+ * allowed = false: bị guardrail chặn (lạc đề, quá ngắn...), không tính câu, đồng hồ vẫn chạy.
+ * allowed = true: câu đã chấm; next_question là câu tiếp theo hoặc null khi buổi đã xong (finished).
+ */
+export interface SubmitAnswerResponse {
+  allowed: boolean
+  reason: string | null
+  turn: InterviewTurn | null
+  next_question: InterviewQuestion | null
+  seconds_left: number | null
+  finished: boolean
 }
 
-export interface QuestionEvaluation {
-  question_id: string
-  index: number
-  skill: string
-  question: string
-  answer_excerpt: string
-  answer_seconds: number | null
-  score: number
-  /** Nhãn ngắn cho câu điểm thấp, ví dụ "Thiếu yếu tố Hành động (Action)". */
-  gap_label: string | null
-  strengths: string[]
-  improvements: string[]
-  /** Chẩn đoán STAR và câu trả lời mẫu, có ở câu điểm thấp. */
-  diagnosis: string | null
-  sample_answer: string | null
-}
+/** Cần luyện thêm (< 2) · Đạt cơ bản (< 3) · Khá (< 4) · Tốt (≥ 4). */
+export type InterviewLabel = "weak" | "basic" | "fair" | "good"
 
 export interface InterviewReport {
   id: string
+  /** Dùng cho khảo sát CSAT. */
   response_id: string
-  session_id: string
-  jd: Pick<JobDescription, "id" | "title" | "company">
-  round_title: string
+  jd: InterviewJdRef
+  cv_file_name: string
+  created_at: ISODateString
   completed_at: ISODateString
   duration_seconds: number
-  total_score: number
-  star: StarScore
-  /** Nhận xét ngắn cho từng tiêu chí STAR. */
-  star_notes: Partial<Record<keyof StarScore, string>>
-  summary: string
-  questions: QuestionEvaluation[]
-  advisor_review: AdvisorReview | null
+  overall_score: number
+  label: InterviewLabel
+  star: StarScores
+  weakest: StarCriterion
+  turns: InterviewTurn[]
+  timed_out_count: number
+  /** Chỉ gợi ý khung trả lời, không viết sẵn câu trả lời chứa thành tích SV chưa nêu. */
+  guidance: string[]
+  /** So sánh với buổi đầu tiên của cùng vị trí (từ buổi thứ 2). */
+  comparison: { first_session_id: string; first_score: number; first_completed_at: ISODateString; delta: number } | null
+  /** Nhận xét của cố vấn phụ trách (khi SV đã chia sẻ báo cáo và cố vấn đã viết). */
+  advisor_review: ReportAdvisorReview | null
 }
 
-/** Một buổi phỏng vấn đã chấm, dùng cho danh sách "Điểm các buổi gần nhất". */
+export interface ReportAdvisorReview {
+  id: string
+  advisor_name: string
+  comment: string
+  updated_at: ISODateString
+  read: boolean
+}
+
+/** Một buổi đã hoàn thành trong danh sách gần đây. */
 export interface InterviewSummary {
   id: string
-  title: string
+  jd: InterviewJdRef
   completed_at: ISODateString
-  total_score: number
-  /** Ví dụ "A: 85 • R: 72" hoặc "Cần bổ sung chỉ số định lượng". */
-  note: string | null
+  overall_score: number
+  star: StarScores
 }
 
-export interface AdvisorReview {
-  advisor_name: string
-  score: number | null
-  comment: string
-  reviewed_at: ISODateString
+/** Hạn mức buổi có chấm điểm theo vị trí trong tuần (PRD: 3 buổi / vị trí / tuần). */
+export interface InterviewQuota {
+  jd_id: string
+  used: number
+  limit: number
+  remaining: number
+  resets_at: ISODateString
 }
 
 // ---------- Phản hồi (B3, US-SV-06) ----------
@@ -397,6 +479,8 @@ export type FeedbackRequest =
       value: 1 | 2 | 3 | 4 | 5
       activity: "gap_analysis" | "interview"
       comment?: string
+      /** "Bạn có dùng lại không?" (tuỳ chọn). */
+      would_reuse?: boolean
     }
 
 export interface FeedbackResponse {
@@ -413,108 +497,193 @@ export interface FeedbackStatus {
   value: number | null
 }
 
-// ---------- Tổng quan & tiến bộ ----------
+// ---------- Tổng quan (S1) & Lịch sử – Tiến bộ (S8) của SV ----------
 
-export interface ActivityItem {
+/** Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75). */
+export type MatchLabel = "low" | "medium" | "high"
+
+/** Một lượt phân tích trong danh sách (mọi trạng thái). */
+export interface AnalysisRow {
   id: string
-  kind: "interview" | "cv_optimized" | "advisor_comment" | "gap_analysis"
-  title: string
-  description: string
-  occurred_at: ISODateString
+  jd: InterviewJdRef
+  cv_version_id: string
+  cv_label: string
+  cv_file_name: string
+  status: AnalysisStatus
+  current_step: AnalysisStep | null
+  /** CV–JD Matching Score 0–100; null khi chưa xong hoặc lỗi. */
+  match_score: number | null
+  match_label: MatchLabel | null
+  created_at: ISODateString
+  completed_at: ISODateString | null
+}
+
+/** Một buổi phỏng vấn đã hoàn thành trong danh sách. */
+export interface InterviewRow {
+  id: string
+  jd: InterviewJdRef
+  completed_at: ISODateString
+  duration_seconds: number
+  /** 0–5. */
+  overall_score: number
+  label: InterviewLabel
+  star: StarScores
+  timed_out_count: number
+}
+
+/** Điểm tổng (0–5) của một buổi, dùng để vẽ biểu đồ. */
+export interface SessionScore {
+  /** id buổi phỏng vấn. */
+  id: string
+  completed_at: ISODateString
+  score: number
+}
+
+type QuotaInfo = {
+  /** Số buổi còn lại của vị trí trong tuần. */
+  quota_remaining: number
+  quota_resets_at: ISODateString
+}
+
+/**
+ * Việc nên làm tiếp theo, theo thứ tự: tải CV → phân tích với một JD → luyện phỏng vấn vị trí vừa phân tích
+ * → luyện tiếp để cải thiện tiêu chí yếu nhất của buổi gần nhất.
+ */
+export type NextStep =
+  | { kind: "upload_cv" }
+  | { kind: "analyze"; cv_version_id: string; cv_label: string }
+  | ({ kind: "interview"; jd: InterviewJdRef; analysis_id: string; match_score: number | null } & QuotaInfo)
+  | ({
+      kind: "improve"
+      jd: InterviewJdRef
+      session_id: string
+      criterion: StarCriterion
+      criterion_score: number
+      guidance: string
+    } & QuotaInfo)
+
+/** Điểm trung bình S/T/A/R của các buổi gần nhất (tối đa 5 buổi) và tiêu chí yếu nhất. */
+export interface StarSummary {
+  average: StarScores
+  weakest: StarCriterion
+  session_count: number
 }
 
 export interface StudentOverview {
-  cv_version_count: number
-  /** Thời điểm tải/tạo phiên bản CV gần nhất. */
+  cv_count: number
   cv_latest_at: ISODateString | null
+  /** Số buổi đã hoàn thành. */
   interview_count: number
-  /** Số ngày liên tiếp có luyện tập; 0 khi không có chuỗi. */
-  streak_days: number
-  latest_score: number | null
-  /** latest_score − điểm vòng đầu; null khi chưa đủ 2 vòng. */
-  score_delta: number | null
-  target: Pick<JobDescription, "title" | "company"> | null
-  current_match_score: number | null
-  /** Điểm trung bình từng tiêu chí STAR (0–100); null khi chưa có buổi phỏng vấn nào. */
-  star_average: StarScore | null
-  /** Ghi chú ngắn cho tiêu chí còn yếu, ví dụ { result: "Bổ sung % chỉ số" }. */
-  star_notes: Partial<Record<keyof StarScore, string>>
-  recent_activity: ActivityItem[]
-  advisor_tip: { advisor_name: string; text: string } | null
+  /** Số buổi hoàn thành trong tuần này (mọi vị trí). */
+  interview_week_count: number
+  /** Lượt phân tích hoàn thành gần nhất. */
+  latest_match: {
+    analysis_id: string
+    jd: InterviewJdRef
+    cv_label: string
+    score: number | null
+    label: MatchLabel | null
+    completed_at: ISODateString
+  } | null
+  /** Buổi gần nhất, so với buổi đầu tiên của cùng vị trí (điểm 0–5 chỉ so được trong cùng vị trí). */
+  latest_interview: {
+    id: string
+    jd: InterviewJdRef
+    completed_at: ISODateString
+    score: number
+    label: InterviewLabel
+    /** null khi đây là buổi đầu tiên của vị trí. */
+    first_score: number | null
+    delta: number | null
+    session_count: number
+    /** Tối đa 5 buổi gần nhất của vị trí, cũ → mới. */
+    trend: SessionScore[]
+  } | null
+  /** Trung bình S/T/A/R của tối đa 5 buổi gần nhất (mọi vị trí). */
+  star: StarSummary | null
+  in_progress: {
+    /** Lượt phân tích đang chạy. */
+    analyses: AnalysisRow[]
+    /** Buổi phỏng vấn đang dở và còn quay lại phòng được. */
+    interview: {
+      id: string
+      jd: InterviewJdRef
+      /** Câu đang làm, bắt đầu từ 1. */
+      current_index: number
+      question_count: number
+      seconds_left: number | null
+      paused: boolean
+    } | null
+  }
+  next_step: NextStep
+  /** Kỹ năng "Thiếu" trong lần phân tích gần nhất, nhóm Bắt buộc trước (tối đa 6). */
+  skills_to_learn: { analysis_id: string; jd: InterviewJdRef; skills: JdSkill[]; total_missing: number } | null
+  /** Tối đa 5, mới nhất trước. */
+  recent_analyses: AnalysisRow[]
+  /** Tối đa 5, mới nhất trước. */
+  recent_interviews: InterviewRow[]
 }
-
-// ---------- Lịch sử & Tiến bộ ----------
 
 export type ProgressRange = "30d" | "90d" | "all"
 
-/** Một buổi phỏng vấn đã chấm trong nhật ký. */
-export interface InterviewHistoryItem {
-  /** id phiên phỏng vấn, dùng cho link báo cáo. */
-  id: string
-  completed_at: ISODateString
-  duration_seconds: number
-  jd: Pick<JobDescription, "id" | "title" | "company">
-  round_title: string
-  question_count: number
-  total_score: number
-  /** Điểm từng câu theo thứ tự, vẽ đường xu hướng trong buổi. */
-  question_scores: number[]
+/** Một vị trí SV đã luyện phỏng vấn hoặc phân tích (dùng cho bộ lọc). */
+export interface PositionOption {
+  jd: InterviewJdRef
+  interview_count: number
+  analysis_count: number
+  last_activity_at: ISODateString
 }
 
-type CvRef = Pick<CvVersion, "id" | "version" | "file_name">
-
-/** So sánh bản CV đầu tiên và bản tối ưu gần nhất với cùng một JD. */
-export interface CvComparison {
-  from: CvRef
-  to: CvRef
-  jd_title: string
-  /** Lần phân tích của bản mới nhất, dùng cho link "Xem chi tiết". */
-  analysis_id: string | null
-  ats_before: number
-  ats_after: number
-  match_before: number
-  match_after: number
-  keywords_before: number
-  keywords_after: number
-  /** Từ khoá chuyên môn được bổ sung (có bằng chứng trong CV). */
-  keywords_added: string[]
+/**
+ * Tiến bộ phỏng vấn của một vị trí (PRD mục 5.1): lớp 1 là điểm tổng qua các buổi,
+ * lớp 2 là S/T/A/R của buổi trước so với buổi gần nhất.
+ */
+export interface InterviewProgress {
+  jd: InterviewJdRef
+  session_count: number
+  /** Các buổi trong khoảng thời gian, cũ → mới. */
+  points: SessionScore[]
+  first_score: number
+  latest_score: number
+  /** null khi mới có 1 buổi. */
+  delta_from_first: number | null
+  delta_from_previous: number | null
+  latest_session_id: string
+  previous_session_id: string | null
+  star_latest: StarScores
+  star_previous: StarScores | null
 }
 
-export interface ProgressMilestone {
-  id: string
-  kind: "interview" | "advisor_comment" | "cv_export" | "start"
-  title: string
-  description: string
-  occurred_at: ISODateString
+/** Độ khớp với một JD qua các phiên bản CV (mỗi phiên bản lấy lần phân tích gần nhất), theo số phiên bản. */
+export interface CvProgress {
+  jd: InterviewJdRef
+  points: { analysis_id: string; cv_version_id: string; cv_label: string; match_score: number; completed_at: ISODateString }[]
+  /** Phiên bản mới nhất − phiên bản đầu; null nếu mới có 1 phiên bản. */
+  delta: number | null
 }
 
 export interface StudentProgress {
   range: ProgressRange
-  updated_at: ISODateString
-  /** Buổi chấm điểm đầu tiên trong khoảng thời gian; null khi chưa có buổi nào. */
-  first_session: { score: number; completed_at: ISODateString } | null
-  latest_score: number | null
-  session_count: number
-  streak_days: number
-  /** Điểm tham chiếu vẽ trên biểu đồ (ví dụ mức cố vấn đặt cho vị trí mục tiêu); null nếu không có. */
-  target_score: number | null
-  target_label: string | null
-  star_first: StarScore | null
-  star_latest: StarScore | null
-  /** Nhận xét ngắn của AI về thay đổi STAR giữa buổi đầu và buổi gần nhất. */
-  star_insight: string | null
-  cv_comparison: CvComparison | null
-  milestones: ProgressMilestone[]
+  jd_id: string | null
+  last_activity_at: ISODateString | null
+  /** Mọi vị trí đã có hoạt động (không phụ thuộc bộ lọc). */
+  positions: PositionOption[]
+  /** Hoạt động gần nhất trước. */
+  interview_progress: InterviewProgress[]
+  cv_progress: CvProgress[]
   /** Mới nhất trước. */
-  interviews: InterviewHistoryItem[]
+  interviews: InterviewRow[]
+  analyses: AnalysisRow[]
 }
 
 // ---------- Chia sẻ với Cố vấn ----------
+// Mặc định mọi tài liệu là riêng tư. Không chia sẻ thì cố vấn chỉ thấy số liệu tổng hợp (điểm từng buổi, chênh lệch,
+// cờ "Cần chú ý", ngày hoạt động); nội dung CV, câu trả lời phỏng vấn và chi tiết phân tích cần SV bật chia sẻ.
 
 export interface AdvisorContact {
   id: string
   full_name: string
-  /** Ví dụ "Cố vấn Nghề nghiệp Khoa Hệ thống Thông tin Kinh tế & Quản lý" */
+  /** Ví dụ "Cố vấn nghề nghiệp Khoa Hệ thống thông tin" */
   title: string
   email: string
   office: string | null
@@ -525,16 +694,18 @@ export interface AdvisorContact {
 
 export type SharedItemKind = "cv" | "interview_report"
 
-/** Một tài liệu SV có thể bật/tắt chia sẻ. Mặc định mọi tài liệu là riêng tư. */
+/** Một tài liệu SV có thể bật/tắt chia sẻ. */
 export interface SharedItem {
-  /** id của CV version hoặc phiên phỏng vấn. */
+  /** id của phiên bản CV hoặc buổi phỏng vấn. */
   id: string
   kind: SharedItemKind
   title: string
+  /** CV: "Phiên bản v2.0"; báo cáo: tên công ty. */
+  subtitle: string | null
   /** "primary": CV đang dùng; "draft": bản nháp. */
   tag: "primary" | "draft" | null
   created_at: ISODateString
-  /** Điểm ATS (CV) hoặc điểm STAR (báo cáo phỏng vấn). */
+  /** CV: độ khớp JD gần nhất (0–100); báo cáo phỏng vấn: điểm STAR (0–5). */
   score: number | null
   shared: boolean
   /** Lần gần nhất cố vấn mở tài liệu; null nếu chưa xem. */
@@ -542,43 +713,21 @@ export interface SharedItem {
   has_advisor_comment: boolean
 }
 
-/** Người/đơn vị đang có quyền xem dữ liệu của SV. */
-export interface DataViewer {
-  id: string
-  kind: "advisor" | "department"
-  name: string
-  description: string
-  /** Ví dụ "Xem & nhận xét", "Chỉ số liệu tổng hợp, ẩn danh". */
-  permission: string
-  last_viewed_at: ISODateString | null
-}
-
-export interface AccessLogEntry {
-  id: string
-  actor: string
-  action: "viewed" | "downloaded" | "commented"
-  target: string
-  occurred_at: ISODateString
-}
-
+/** Nhận xét của cố vấn cho một báo cáo phỏng vấn của SV. */
 export interface AdvisorFeedback {
   id: string
   advisor_name: string
   comment: string
+  /** Lần cập nhật gần nhất của nhận xét. */
   created_at: ISODateString
   read: boolean
-  target: { kind: SharedItemKind; id: string; label: string }
+  target: { kind: "interview_report"; id: string; label: string }
 }
 
 export interface SharingOverview {
   /** null khi SV chưa được phân công cố vấn. */
   advisor: AdvisorContact | null
-  /** Công tắc tổng ở Cài đặt; false thì cố vấn không xem được gì dù từng mục đang bật. */
-  advisor_access: boolean
   items: SharedItem[]
-  viewers: DataViewer[]
-  /** 30 ngày gần nhất, mới nhất trước. */
-  access_log: AccessLogEntry[]
   feedback: AdvisorFeedback[]
 }
 
@@ -599,8 +748,6 @@ export interface StudentSettings {
   consent_accepted_at: ISODateString | null
   storage: { used_bytes: number; limit_bytes: number; allocated_by: string }
   privacy: {
-    /** Công tắc tổng cho phép cố vấn xem các tài liệu đang bật chia sẻ. */
-    advisor_access: boolean
     /** Đóng góp dữ liệu đã ẩn danh để cải thiện chất lượng gợi ý. */
     anonymous_contribution: boolean
   }
@@ -628,65 +775,107 @@ export interface UpdateSettingsRequest {
 }
 
 // ---------- Cố vấn (US-ADV-01..03) ----------
-// RBAC: mọi endpoint /advisor/* chỉ trả dữ liệu SV thuộc danh sách phân công của cố vấn đang đăng nhập
-// (lỗi 403 "forbidden" nếu không), và chỉ những tài liệu SV đã bật chia sẻ.
+// Phân quyền: mọi endpoint /advisor/* chỉ trả dữ liệu SV thuộc danh sách phụ trách (403 "forbidden" nếu không).
+// Số liệu luôn xem được; nội dung (CV, báo cáo phỏng vấn, chi tiết kỹ năng) cần SV bật chia sẻ (403 "not_shared").
+// Điểm STAR 0–5 chỉ so sánh trong cùng vị trí: chênh lệch và cờ tính trên vị trí của buổi gần nhất.
+
+/** Tiến bộ ở vị trí đang luyện: ≥ +0,3 tiến bộ, ≤ −0,3 giảm (PRD mục 5.1); < 2 buổi là chưa đủ dữ liệu. */
+export type StudentTrend = "improving" | "stable" | "declining" | "insufficient"
+
+/** Cờ "Cần chú ý": 2 vòng liên tiếp không tăng điểm (US-ADV-02 AC1). */
+export interface StudentFlag {
+  jd: InterviewJdRef
+  /** Số thứ tự các buổi liên quan trong vị trí, ví dụ [2, 3, 4]. */
+  rounds: number[]
+  scores: number[]
+  flagged_at: ISODateString
+}
 
 export interface AssignedStudent {
   id: string
   full_name: string
   /** Ví dụ "KDQT - K2021" */
   subtitle: string
-  student_code: string
+  student_code: string | null
   email: string
-  major: string
-  cohort: string
+  major: string | null
+  cohort: string | null
   avatar_url: string | null
-  target_title: string | null
-  target_company: string | null
+  /** Vị trí của buổi phỏng vấn gần nhất (hoặc lượt phân tích gần nhất). */
+  target: InterviewJdRef | null
+  interview_count: number
+  /** Số buổi ở vị trí đang luyện. */
+  focus_session_count: number
   first_score: number | null
   latest_score: number | null
-  /** null khi chưa đủ 2 vòng → hiển thị "Chưa đủ dữ liệu" (US-ADV-01 AC2). */
+  /** null khi vị trí đang luyện mới có < 2 buổi → "Chưa đủ dữ liệu" (US-ADV-01 AC2). */
   score_delta: number | null
-  interview_count: number
-  /** Cờ "Cần chú ý" khi 2 vòng liên tiếp không tăng (US-ADV-02). */
-  flagged: boolean
-  flagged_at: ISODateString | null
-  /** Số thứ tự các vòng liên quan tới cờ, ví dụ [3, 4, 5] (US-ADV-02 AC1). */
-  flag_rounds: number[] | null
-  capability_gaps: string[]
+  trend: StudentTrend
+  flag: StudentFlag | null
+  /** Độ khớp CV–JD (0–100) của lượt phân tích gần nhất. */
+  latest_match: number | null
+  /** Kỹ năng bắt buộc còn thiếu; rỗng khi SV chưa chia sẻ CV của lượt phân tích đó. */
+  missing_required: string[]
   last_active_at: ISODateString | null
-  latest_ats: number | null
-  /** Điểm STAR trung bình (0–100) trên các buổi đã chia sẻ. */
-  star_average: StarScore | null
-  /** Số tài liệu đang chia sẻ / tổng số tài liệu của SV. 0 = SV chưa chia sẻ gì. */
   shared_items: number
   total_items: number
-  /** Số buổi phỏng vấn đã chia sẻ nhưng cố vấn chưa nhận xét. */
+  /** Báo cáo SV đã chia sẻ mà bạn chưa nhận xét. */
   pending_reviews: number
 }
 
-/** Nhận xét của cố vấn cho một buổi phỏng vấn (human-in-the-loop). */
-export interface ReviewInterviewRequest {
-  comment: string
-  /** Điểm cố vấn chốt (0–100); bỏ trống = giữ điểm AI. */
-  score?: number
+/** Dòng mở rộng ở danh sách SV phụ trách (chỉ số liệu). */
+export interface AdvisorStudentProgress {
+  interview_progress: InterviewProgress[]
+  cv_progress: CvProgress[]
+  star: StarSummary | null
+  /** Câu nhận xét ghép từ tiêu chí yếu nhất (theo quy tắc, không gọi AI). */
+  insight: string | null
+  /** Gợi ý cho buổi tư vấn tới, sinh từ tình trạng của SV. */
+  suggestions: string[]
 }
 
-export interface AdvisorInterviewItem extends InterviewHistoryItem {
+export interface AdvisorCv extends CvVersion {
+  /** Mở được nội dung / file khi SV đã chia sẻ. */
   shared: boolean
-  /** Tóm tắt ngắn của AI về buổi phỏng vấn. */
-  summary: string | null
-  review: AdvisorReview | null
-  /** Lúc SV mở xem nhận xét; null nếu chưa xem. */
-  review_seen_at: ISODateString | null
+}
+
+/** Kết quả phân tích gần nhất (US-ADV-03 AC1); danh sách kỹ năng rỗng khi SV chưa chia sẻ CV của lần đó. */
+export interface AdvisorGap {
+  analysis_id: string
+  created_at: ISODateString
+  cv_version_id: string
+  cv_label: string
+  jd: InterviewJdRef
+  match_score: number | null
+  match_label: MatchLabel | null
+  shared: boolean
+  matched: string[]
+  partial: string[]
+  missing: string[]
+}
+
+/** Nhận xét của bạn cho một báo cáo SV đã chia sẻ. Không thay đổi điểm AI. */
+export interface AdvisorReviewInfo {
+  id: string
+  comment: string
+  created_at: ISODateString
+  updated_at: ISODateString
+  /** Lúc SV xem bản nhận xét hiện tại; null nếu chưa xem. */
+  seen_at: ISODateString | null
+}
+
+export interface AdvisorInterviewRow extends InterviewRow {
+  shared: boolean
+  /** Ví dụ "3,4/5 (Khá) · Mạnh nhất: Bối cảnh 4 · Yếu nhất: Kết quả 2,6 · 1 câu hết giờ". */
+  summary: string
+  review: AdvisorReviewInfo | null
 }
 
 export type AdvisorNoteTag = "behavior" | "soft_skill" | "technical" | "watch"
 
-/** Ghi chú nội bộ: chỉ cố vấn thấy, SV không bao giờ thấy. */
+/** Ghi chú nội bộ: chỉ cố vấn viết ra mới thấy, SV không bao giờ thấy. */
 export interface AdvisorNote {
   id: string
-  author_name: string
   body: string
   tags: AdvisorNoteTag[]
   pinned: boolean
@@ -699,96 +888,131 @@ export interface AdvisorNoteRequest {
   tags: AdvisorNoteTag[]
 }
 
-/** Kết quả phân tích khoảng cách gần nhất, rút gọn cho cố vấn (US-ADV-03 AC1). */
-export interface AdvisorGapSummary {
-  analysis_id: string
-  created_at: ISODateString
-  match_score: number
-  matched: string[]
-  /** Khoảng cách trình bày (weak). */
-  presentation_gaps: string[]
-  /** Khoảng cách năng lực (missing). */
-  capability_gaps: string[]
-  unclear: string[]
+export interface AdvisorNoteUpdate {
+  body?: string
+  tags?: AdvisorNoteTag[]
+  pinned?: boolean
 }
 
-export interface AdvisorStudentDetail {
+export interface AdvisorStudentDetail extends AdvisorStudentProgress {
   student: AssignedStudent
-  /** Các phiên bản CV SV đã chia sẻ, mới nhất trước (US-ADV-03 AC2). */
-  cvs: CvVersion[]
-  /** Số phiên bản CV SV chưa chia sẻ. */
-  hidden_cv_count: number
+  /** Mọi phiên bản CV, mới nhất trước (US-ADV-03 AC2). */
+  cvs: AdvisorCv[]
   /** null → "SV chưa chọn vị trí ứng tuyển" (US-ADV-03 AC3). */
   target_jd: JobDescription | null
-  latest_gap: AdvisorGapSummary | null
-  cv_comparison: CvComparison | null
-  interviews: AdvisorInterviewItem[]
-  /** Nhận xét ngắn của AI về tiêu chí STAR yếu nhất. */
-  star_insight: string | null
-  recent_activity: ActivityItem[]
+  latest_gap: AdvisorGap | null
+  /** Mới nhất trước. */
+  interviews: AdvisorInterviewRow[]
   notes: AdvisorNote[]
-  /** Gợi ý của AI cho buổi tư vấn tiếp theo. */
-  session_suggestions: string[]
 }
 
-export interface ScoreBand {
-  label: string
-  min: number
-  max: number
-  count: number
+/** Báo cáo đầy đủ của buổi SV đã chia sẻ, kèm nhận xét của bạn. */
+export type AdvisorInterviewReport = Omit<InterviewReport, "advisor_review"> & { review: AdvisorReviewInfo | null }
+
+export interface ReviewInterviewRequest {
+  comment: string
 }
 
+/** Trạng thái như nhãn ở danh sách SV: cờ "Cần chú ý" trước, sau đó là xu hướng điểm. */
+export type StudentStatus = "flagged" | StudentTrend
+
+export interface WeeklyScore {
+  /** Thứ Hai 00:00 giờ Việt Nam. */
+  week_start: ISODateString
+  /** TB điểm buổi gần nhất của mỗi SV tính đến cuối tuần, thang 0–5. */
+  average: number
+  student_count: number
+}
+
+/** S/T/A/R trung bình của nhóm (mỗi SV lấy TB tối đa 5 buổi gần nhất). */
+export interface CohortStar {
+  average: StarScores
+  weakest: StarCriterion
+  /** Số SV có tiêu chí yếu nhất trùng với tiêu chí yếu nhất của nhóm. */
+  weakest_count: number
+  student_count: number
+}
+
+export interface RecentReview extends AdvisorReviewInfo {
+  student_id: string
+  student_name: string
+  avatar_url: string | null
+  session_id: string
+  jd: InterviewJdRef
+}
+
+/** Tổng quan cả nhóm SV phụ trách (chỉ số liệu tổng hợp). Mục tiêu theo PRD mục 9. */
 export interface AdvisorOverview {
   advisor_name: string
   student_count: number
+  /** Số SV đang chia sẻ ít nhất một tài liệu. */
+  sharing_count: number
   pending_reviews: number
-  flagged_count: number
-  average_score: number | null
-  average_score_delta: number | null
-  /** Tỷ lệ SV có ít nhất 1 hoạt động trong 30 ngày (0–100). */
-  active_rate: number
-  active_target: number
-  weekly_scores: { label: string; value: number }[]
-  score_bands: ScoreBand[]
-  csat: number | null
-  flagged_students: AssignedStudent[]
-  recent_feedback: {
-    id: string
-    student_id: string
-    student_name: string
-    excerpt: string
-    sent_at: ISODateString
-    seen_at: ISODateString | null
-  }[]
-}
-
-export type CohortRange = "30d" | "90d" | "term"
-
-export interface CohortProgressQuery {
-  range: CohortRange
-  cohort: string | "all"
-  major: string | "all"
-}
-
-export interface CohortProgress {
-  student_count: number
+  /** Số SV có lượt phân tích / buổi phỏng vấn hoàn thành trong active_days ngày. */
   active_count: number
+  active_days: number
+  /** Mục tiêu tỷ lệ SV hoạt động (%). */
   active_target: number
-  first_average: number | null
-  latest_average: number | null
+  /** TB điểm buổi gần nhất của các SV đã phỏng vấn. */
+  average_score: number | null
+  scored_count: number
+  /** TB chênh lệch (gần nhất − buổi đầu) ở vị trí đang luyện của từng SV có ≥ 2 buổi. */
+  average_delta: number | null
+  delta_count: number
   csat: number | null
+  csat_count: number
   csat_target: number
-  ats_before: number | null
-  ats_after: number | null
-  weekly_scores: { label: string; value: number }[]
-  star_average: StarScore | null
-  /** Tiêu chí yếu nhất và ghi chú ngắn. */
-  star_weakest: { key: keyof StarScore; note: string } | null
-  by_major: { major: string; student_count: number; average: number; delta: number }[]
-  /** Tiến bộ nhiều (≥15), ổn định (5–14), cần can thiệp (<5 hoặc giảm), chưa đủ dữ liệu. */
-  distribution: { high: number; stable: number; low: number; insufficient: number }
+  weekly_scores: WeeklyScore[]
+  status_counts: Record<StudentStatus, number>
+  star: CohortStar | null
+  /** Câu nhận xét ghép theo quy tắc từ tiêu chí yếu nhất của nhóm. */
+  insight: string | null
+  flagged_students: AssignedStudent[]
+  /** Tối đa 5 SV có chênh lệch dương lớn nhất. */
   top_improvers: AssignedStudent[]
-  needs_support: { student: AssignedStudent; issue: string; kind: "flagged" | "inactive" | "low_score" | "not_shared" }[]
+  /** Tối đa 5 nhận xét bạn gửi gần đây, bản mới nhất trước. */
+  recent_reviews: RecentReview[]
+}
+
+// ---------- Tin nhắn SV ↔ cố vấn phụ trách ----------
+// Hội thoại xác định bằng mã SV. Chỉ SV và cố vấn đang phụ trách SV đó đọc / gửi được (403 "forbidden");
+// SV chưa được phân công cố vấn: 404 "no_advisor".
+
+/** Người ở phía bên kia hội thoại. */
+export interface ChatParticipant {
+  id: string
+  full_name: string
+  role: Role
+  /** SV: ngành - khoá; cố vấn: chức danh. */
+  subtitle: string
+  avatar_url: string | null
+  /** Giờ tư vấn (chỉ với cố vấn). */
+  office_hours: string | null
+}
+
+export interface ChatMessage {
+  id: string
+  body: string
+  created_at: ISODateString
+  /** Tin do người đang xem gửi. */
+  mine: boolean
+  /** Lúc người nhận đọc; null nếu chưa đọc. */
+  read_at: ISODateString | null
+}
+
+export interface ConversationSummary {
+  /** Mã hội thoại (mã SV). */
+  student_id: string
+  counterpart: ChatParticipant
+  last_message: ChatMessage | null
+  unread_count: number
+}
+
+export interface Conversation {
+  student_id: string
+  counterpart: ChatParticipant
+  /** Tối đa 200 tin gần nhất, cũ → mới. */
+  messages: ChatMessage[]
 }
 
 // ---------- Thông báo (chuông trên topbar) ----------

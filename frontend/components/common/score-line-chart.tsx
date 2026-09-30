@@ -34,19 +34,29 @@ interface ScoreLineChartProps {
   highlight?: boolean
   /** Hậu tố trong tooltip, ví dụ "điểm STAR", "điểm TB". */
   unit?: string
+  /** Điểm tối đa của thang: 100 (mặc định) hoặc 5 (STAR theo PRD mục 5.1). */
+  max?: number
+  /** Màn hẹp (< 640px) chỉ hiện nhãn trục X xen kẽ, luôn giữ nhãn cuối (khi có nhiều điểm). */
+  sparseTicksOnMobile?: boolean
   className?: string
 }
 
-/** Biểu đồ vùng cho điểm 0–100 theo thời gian. Màu lấy từ token CSS. */
-export function ScoreLineChart({ points, target, highlight = false, unit = "điểm", className = "h-64" }: ScoreLineChartProps) {
+/** Biểu đồ vùng cho điểm theo thời gian (thang 0–100 hoặc 0–5). Màu lấy từ token CSS. */
+export function ScoreLineChart({
+  points,
+  target,
+  highlight = false,
+  unit = "điểm",
+  max = 100,
+  sparseTicksOnMobile = false,
+  className = "h-64",
+}: ScoreLineChartProps) {
   const gradientId = `score-fill-${useId().replace(/:/g, "")}`
   const last = points.length - 1
   const peak = points.reduce((best, p, i) => (p.value > points[best].value ? i : best), 0)
-  const minScore = Math.min(...points.map((p) => p.value), target?.value ?? 100)
-  const yMin = Math.max(0, Math.floor((minScore - 10) / 10) * 10)
-  const yStep = 100 - yMin > 50 ? 20 : 10
-  const yTicks = Array.from({ length: Math.floor((100 - yMin) / yStep) + 1 }, (_, i) => 100 - i * yStep).reverse()
+  const yTicks = max <= 10 ? Array.from({ length: max + 1 }, (_, i) => i) : percentTicks(points, target)
   const data = points.map((p, index) => ({ ...p, index }))
+  const format = (value: number) => value.toLocaleString("vi-VN", { maximumFractionDigits: 1 })
 
   function renderTooltip({ active, payload }: TooltipContentProps<TooltipValueType, string | number>) {
     const point = payload?.[0]?.payload as (ScorePoint & { index: number }) | undefined
@@ -59,7 +69,7 @@ export function ScoreLineChart({ points, target, highlight = false, unit = "đi�
         </p>
         {point.detail && <p className="text-ink-2">{point.detail}</p>}
         <p className="font-semibold text-blue">
-          {point.value}/100 {unit}
+          {format(point.value)}/{max} {unit}
         </p>
       </div>
     )
@@ -69,7 +79,7 @@ export function ScoreLineChart({ points, target, highlight = false, unit = "đi�
     <div
       className={cn("w-full", className)}
       role="img"
-      aria-label={points.map((p) => `${p.label} ${p.value}`).join(", ")}
+      aria-label={points.map((p) => `${p.label} ${format(p.value)}/${max}`).join(", ")}
     >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={data} margin={{ top: 12, right: 12, bottom: 4, left: -16 }}>
@@ -91,8 +101,9 @@ export function ScoreLineChart({ points, target, highlight = false, unit = "đi�
               const p = points[payload.value as number]
               if (!p) return <g />
               const isLast = payload.value === last
+              const hideOnMobile = sparseTicksOnMobile && (last - (payload.value as number)) % 2 === 1
               return (
-                <g transform={`translate(${x},${y})`}>
+                <g transform={`translate(${x},${y})`} className={hideOnMobile ? "max-sm:hidden" : undefined}>
                   <text textAnchor="middle" dy={14} fontSize={12} fontWeight={isLast ? 700 : 500} fill={isLast ? "var(--ink)" : "var(--ink-2)"}>
                     {p.label}
                   </text>
@@ -105,7 +116,7 @@ export function ScoreLineChart({ points, target, highlight = false, unit = "đi�
               )
             }}
           />
-          <YAxis domain={[yTicks[0], 100]} ticks={yTicks} axisLine={false} tickLine={false} tick={{ fill: "var(--ink-3)", fontSize: 12 }} />
+          <YAxis domain={[yTicks[0], max]} ticks={yTicks} axisLine={false} tickLine={false} tick={{ fill: "var(--ink-3)", fontSize: 12 }} />
           {target && <ReferenceLine y={target.value} stroke="var(--ink-3)" strokeDasharray="5 4" />}
           <Tooltip content={renderTooltip} cursor={{ stroke: "var(--line)" }} />
           <Area
@@ -141,6 +152,14 @@ export function ScoreLineChart({ points, target, highlight = false, unit = "đi�
       </ResponsiveContainer>
     </div>
   )
+}
+
+/** Thang 100: bắt đầu trục Y gần điểm thấp nhất để thấy rõ chênh lệch. */
+function percentTicks(points: ScorePoint[], target?: { value: number } | null): number[] {
+  const minScore = Math.min(...points.map((p) => p.value), target?.value ?? 100)
+  const yMin = Math.max(0, Math.floor((minScore - 10) / 10) * 10)
+  const yStep = 100 - yMin > 50 ? 20 : 10
+  return Array.from({ length: Math.floor((100 - yMin) / yStep) + 1 }, (_, i) => 100 - i * yStep).reverse()
 }
 
 /** Chỉ số của điểm cao nhất (dùng cho chú thích "Cao nhất: ..."). */

@@ -1,0 +1,151 @@
+[
+  {
+    "id": "jd-ba-intern",
+    "title": "Business Analyst Intern",
+    "company": "Công ty Công nghệ A",
+    "industry": "Công nghệ & phần mềm",
+    "level": "intern",
+    "content": "Công ty Công nghệ A phát triển nền tảng quản lý bán hàng cho doanh nghiệp vừa và nhỏ, tuyển Thực tập sinh Phân tích nghiệp vụ (Business Analyst Intern) làm việc cùng đội sản phẩm.\n\nMô tả công việc:\n- Tham gia thu thập và phân tích yêu cầu từ khách hàng và các phòng ban nội bộ.\n- Viết tài liệu yêu cầu nghiệp vụ (BRD/SRS) và user story cho đội phát triển.\n- Vẽ sơ đồ quy trình nghiệp vụ hiện tại và quy trình đề xuất bằng BPMN.\n- Truy vấn dữ liệu bằng SQL để kiểm tra giả thuyết nghiệp vụ và hỗ trợ kiểm thử.\n- Tham gia các buổi họp Sprint theo mô hình Agile/Scrum.\n\nYêu cầu bắt buộc:\n- Sinh viên năm 3, năm 4 các ngành Hệ thống thông tin, Kinh tế, Quản trị kinh doanh hoặc liên quan.\n- Biết viết truy vấn SQL cơ bản (SELECT, JOIN, GROUP BY).\n- Có khả năng phân tích yêu cầu và trình bày tài liệu rõ ràng, mạch lạc.\n\nƯu tiên:\n- Đã từng vẽ sơ đồ quy trình (BPMN, flowchart).\n- Hiểu mô hình Agile/Scrum.\n- Sử dụng thành thạo Excel.\n\nĐiểm cộng:\n- Đã dùng Jira hoặc công cụ quản lý công việc tương tự.\n- Biết vẽ wireframe bằng Figma.\n- Tiếng Anh đọc hiểu tài liệu tốt.\n\nQuyền lợi: phụ cấp thực tập, có người hướng dẫn 1-1, cơ hội trở thành nhân viên chính thức sau 3 tháng.",
+    "skills": [
+      { "name": "SQL", "importance": "required", "aliases": [] },
+      { "name": "Phân tích yêu cầu", "importance": "required", "aliases": ["phân tích nghiệp vụ", "thu thập yêu cầu", "requirement analysis", "requirements gathering"] },
+      { "name": "Viết tài liệu BRD/SRS", "importance": "required", "aliases": ["BRD", "SRS", "tài liệu nghiệp vụ", "tài liệu yêu cầu"] },
+      { "name": "BPMN", "importance": "preferred", "aliases": ["BPMN 2.0", "sơ đồ quy trình", "flowchart", "process flow"] },
+      { "name": "Agile/Scrum", "importance": "preferred", "aliases": ["Agile", "Scrum", "Sprint"] },
+      { "name": "Excel", "importance": "preferred", "aliases": ["Microsoft Excel"] },
+      { "name": "Jira", "importance": "additional", "aliases": [] },
+      { "name": "Figma", "importance": "additional", "aliases": ["wireframe", "Balsamiq"] },
+      { "name": "Tiếng Anh", "importance": "additional", "aliases": ["IELTS", "TOEIC", "English"] }
+    ]
+  },
+  {
+    "id": "jd-da-intern",
+    "title": "Data Analyst Intern",
+    "company": "Công ty Thương mại điện tử B",
+    "industry": "Thương mại điện tử",
+    "level": "intern",
+    "content": "Công ty Thương mại điện tử B vận hành sàn bán lẻ trực tuyến với hàng trăm nghìn đơn hàng mỗi tháng, tuyển Thực tập sinh Phân tích dữ liệu cho phòng Business Intelligence.\n\nMô tả công việc:\n- Truy vấn và làm sạch dữ liệu đơn hàng, khách hàng, tồn kho bằng SQL.\n- Xây dựng và duy trì dashboard báo cáo doanh số trên Power BI.\n- Tổng hợp số liệu bằng Excel (Pivot Table, hàm tra cứu) phục vụ báo cáo tuần.\n- Phân tích xu hướng mua sắm, đề xuất insight cho đội kinh doanh và marketing.\n\nYêu cầu bắt buộc:\n- Sinh viên năm cuối các ngành Kinh tế, Thống kê, Hệ thống thông tin, Khoa học dữ liệu.\n- Sử dụng được SQL để truy vấn dữ liệu.\n- Thành thạo Excel (Pivot Table, VLOOKUP/XLOOKUP).\n- Đã từng xây dựng báo cáo hoặc dashboard bằng Power BI.\n\nƯu tiên:\n- Biết Python (Pandas) để xử lý dữ liệu.\n- Có kinh nghiệm trực quan hoá dữ liệu và kể chuyện bằng số liệu.\n- Có kiến thức thống kê cơ bản.\n\nĐiểm cộng:\n- Đã dùng Tableau hoặc Google Analytics.\n- Tiếng Anh đọc hiểu tốt.\n\nQuyền lợi: phụ cấp cạnh tranh, được làm việc với dữ liệu thật quy mô lớn, lộ trình lên Data Analyst chính thức.",
+    "skills": [
+      { "name": "SQL", "importance": "required", "aliases": [] },
+      { "name": "Excel", "importance": "required", "aliases": ["Excel nâng cao", "Microsoft Excel", "Pivot Table", "VLOOKUP", "XLOOKUP"] },
+      { "name": "Power BI", "importance": "required", "aliases": ["PowerBI", "DAX"] },
+      { "name": "Python", "importance": "preferred", "aliases": ["Pandas"] },
+      { "name": "Trực quan hoá dữ liệu", "importance": "preferred", "aliases": ["trực quan hóa dữ liệu", "data visualization", "dashboard"] },
+      { "name": "Thống kê", "importance": "preferred", "aliases": ["statistics", "xác suất thống kê"] },
+      { "name": "Tableau", "importance": "additional", "aliases": [] },
+      { "name": "Google Analytics", "importance": "additional", "aliases": ["GA4"] },
+      { "name": "Tiếng Anh", "importance": "additional", "aliases": ["IELTS", "TOEIC", "English"] }
+    ]
+  },
+  {
+    "id": "jd-po-assistant",
+    "title": "Product Owner Assistant",
+    "company": "Ngân hàng C",
+    "industry": "Fintech & ngân hàng",
+    "level": "fresher",
+    "content": "Ngân hàng C đang chuyển đổi số mạnh mẽ các sản phẩm ngân hàng trên ứng dụng di động, tuyển Trợ lý Product Owner cho đội sản phẩm thanh toán.\n\nMô tả công việc:\n- Hỗ trợ Product Owner viết user story và tiêu chí nghiệm thu (acceptance criteria).\n- Quản lý và sắp xếp độ ưu tiên product backlog trên Jira.\n- Tham gia các nghi thức Scrum: Sprint Planning, Daily, Review, Retrospective.\n- Phối hợp với đội UX vẽ user flow và rà soát wireframe.\n- Theo dõi số liệu sử dụng tính năng để đề xuất cải tiến.\n\nYêu cầu bắt buộc:\n- Tốt nghiệp các ngành Kinh tế, Tài chính – Ngân hàng, Hệ thống thông tin hoặc liên quan.\n- Biết viết user story rõ ràng, có tiêu chí nghiệm thu.\n- Hiểu quy trình Scrum.\n- Có khả năng quản lý và sắp xếp ưu tiên backlog.\n\nƯu tiên:\n- Biết vẽ user flow hoặc wireframe (Figma).\n- Có kỹ năng phân tích dữ liệu cơ bản bằng Excel hoặc SQL.\n- Đã sử dụng Jira.\n\nĐiểm cộng:\n- Có hiểu biết về ngân hàng số, thanh toán điện tử.\n- Tiếng Anh giao tiếp tốt.\n\nQuyền lợi: lương tháng 13, bảo hiểm sức khoẻ, được đào tạo chứng chỉ Scrum.",
+    "skills": [
+      { "name": "User Story", "importance": "required", "aliases": ["user stories", "acceptance criteria", "tiêu chí nghiệm thu"] },
+      { "name": "Scrum", "importance": "required", "aliases": ["Agile", "Sprint"] },
+      { "name": "Quản lý Backlog", "importance": "required", "aliases": ["backlog", "product backlog"] },
+      { "name": "UX Flow", "importance": "preferred", "aliases": ["user flow", "wireframe", "Figma"] },
+      { "name": "Phân tích dữ liệu", "importance": "preferred", "aliases": ["data analysis", "phân tích số liệu"] },
+      { "name": "Jira", "importance": "preferred", "aliases": [] },
+      { "name": "Kiến thức ngân hàng số", "importance": "additional", "aliases": ["ngân hàng số", "fintech", "banking", "thanh toán điện tử"] },
+      { "name": "Tiếng Anh", "importance": "additional", "aliases": ["IELTS", "TOEIC", "English"] }
+    ]
+  },
+  {
+    "id": "jd-mkt-analyst",
+    "title": "Marketing Analyst",
+    "company": "Công ty Truyền thông D",
+    "industry": "Truyền thông số",
+    "level": "fresher",
+    "content": "Công ty Truyền thông D là agency quảng cáo số phục vụ các nhãn hàng tiêu dùng, tuyển Chuyên viên Phân tích Marketing (Fresher).\n\nMô tả công việc:\n- Theo dõi và phân tích hiệu quả chiến dịch quảng cáo trên Google Analytics (GA4).\n- Lập báo cáo hiệu quả chiến dịch theo KPI (CTR, CPA, ROI) hằng tuần cho khách hàng.\n- Thiết kế và đánh giá các thử nghiệm A/B cho landing page và nội dung quảng cáo.\n- Xây dựng dashboard trực quan hoá số liệu trên Looker Studio.\n- Phối hợp với đội chạy quảng cáo Facebook Ads, Google Ads để tối ưu ngân sách.\n\nYêu cầu bắt buộc:\n- Tốt nghiệp ngành Marketing, Kinh tế, Thương mại điện tử hoặc liên quan.\n- Đã sử dụng Google Analytics để đọc số liệu website.\n- Thành thạo Excel để tổng hợp và phân tích số liệu.\n- Biết lập báo cáo hiệu quả chiến dịch dựa trên KPI.\n\nƯu tiên:\n- Hiểu và từng thực hiện A/B testing.\n- Có kinh nghiệm trực quan hoá dữ liệu (Looker Studio, Power BI).\n- Đã từng chạy hoặc theo dõi quảng cáo Facebook Ads/Google Ads.\n\nĐiểm cộng:\n- Biết SQL cơ bản.\n- Hiểu biết về SEO.\n- Sử dụng Canva để trình bày báo cáo.\n\nQuyền lợi: thưởng theo dự án, môi trường sáng tạo, được đào tạo chứng chỉ Google.",
+    "skills": [
+      { "name": "Google Analytics", "importance": "required", "aliases": ["GA4", "Google Analytics 4"] },
+      { "name": "Excel", "importance": "required", "aliases": ["Microsoft Excel", "Google Sheets"] },
+      { "name": "Báo cáo hiệu quả chiến dịch", "importance": "required", "aliases": ["báo cáo chiến dịch", "campaign report", "KPI", "ROI"] },
+      { "name": "A/B Testing", "importance": "preferred", "aliases": ["A/B test", "thử nghiệm A/B"] },
+      { "name": "Trực quan hoá dữ liệu", "importance": "preferred", "aliases": ["trực quan hóa dữ liệu", "Data Viz", "dashboard", "Looker Studio", "Data Studio"] },
+      { "name": "Quảng cáo trả phí", "importance": "preferred", "aliases": ["Facebook Ads", "Meta Ads", "Google Ads", "quảng cáo Facebook"] },
+      { "name": "SQL", "importance": "additional", "aliases": [] },
+      { "name": "SEO", "importance": "additional", "aliases": [] },
+      { "name": "Canva", "importance": "additional", "aliases": [] }
+    ]
+  },
+  {
+    "id": "jd-xnk-fresher",
+    "title": "Nhân viên Xuất nhập khẩu",
+    "company": "Công ty Logistics E",
+    "industry": "Logistics & chuỗi cung ứng",
+    "level": "fresher",
+    "content": "Công ty Logistics E cung cấp dịch vụ giao nhận và khai báo hải quan cho doanh nghiệp xuất nhập khẩu, tuyển Nhân viên Xuất nhập khẩu (Fresher).\n\nMô tả công việc:\n- Soạn thảo và kiểm tra bộ chứng từ xuất nhập khẩu: hợp đồng, invoice, packing list, bill of lading, C/O.\n- Theo dõi lịch tàu, phối hợp với hãng tàu và forwarder để giao nhận hàng đúng hạn.\n- Hỗ trợ khai báo hải quan trên phần mềm ECUS và làm thủ tục thông quan.\n- Trao đổi email bằng tiếng Anh với khách hàng và đối tác nước ngoài.\n- Cập nhật tình trạng lô hàng trên file Excel theo dõi.\n\nYêu cầu bắt buộc:\n- Tốt nghiệp các ngành Kinh doanh quốc tế, Ngoại thương, Logistics.\n- Nắm vững bộ chứng từ xuất nhập khẩu và điều kiện Incoterms.\n- Tiếng Anh thương mại đọc, viết email tốt (tương đương TOEIC 600 hoặc IELTS 5.5 trở lên).\n\nƯu tiên:\n- Hiểu thủ tục hải quan, đã từng dùng ECUS.\n- Sử dụng Excel thành thạo.\n- Có kỹ năng đàm phán, giao tiếp với đối tác.\n\nĐiểm cộng:\n- Có kiến thức thanh toán quốc tế (L/C, T/T).\n- Từng thực tập tại công ty logistics hoặc forwarder.\n\nQuyền lợi: lương cứng và thưởng theo lô hàng, được đào tạo nghiệp vụ hải quan thực tế.",
+    "skills": [
+      { "name": "Chứng từ xuất nhập khẩu", "importance": "required", "aliases": ["chứng từ", "bill of lading", "B/L", "packing list", "commercial invoice", "C/O"] },
+      { "name": "Incoterms", "importance": "required", "aliases": ["Incoterms 2020", "FOB", "CIF"] },
+      { "name": "Tiếng Anh thương mại", "importance": "required", "aliases": ["tiếng Anh", "IELTS", "TOEIC", "English"] },
+      { "name": "Thủ tục hải quan", "importance": "preferred", "aliases": ["hải quan", "khai báo hải quan", "ECUS", "thông quan", "customs"] },
+      { "name": "Excel", "importance": "preferred", "aliases": ["Microsoft Excel"] },
+      { "name": "Đàm phán", "importance": "preferred", "aliases": ["negotiation", "thương lượng"] },
+      { "name": "Thanh toán quốc tế", "importance": "additional", "aliases": ["L/C", "T/T", "tín dụng chứng từ"] },
+      { "name": "Logistics", "importance": "additional", "aliases": ["giao nhận", "forwarder", "chuỗi cung ứng", "supply chain", "vận tải"] }
+    ]
+  },
+  {
+    "id": "jd-fa-fresher",
+    "title": "Financial Analyst",
+    "company": "Công ty Đầu tư F",
+    "industry": "Tài chính – đầu tư",
+    "level": "fresher",
+    "content": "Công ty Đầu tư F quản lý danh mục đầu tư vào các doanh nghiệp niêm yết, tuyển Chuyên viên Phân tích Tài chính (Fresher) cho phòng Nghiên cứu.\n\nMô tả công việc:\n- Thu thập và phân tích báo cáo tài chính của doanh nghiệp niêm yết.\n- Xây dựng mô hình tài chính trên Excel để dự phóng doanh thu, lợi nhuận.\n- Định giá doanh nghiệp bằng các phương pháp DCF, P/E, P/B.\n- Viết báo cáo phân tích và trình bày kết quả bằng PowerPoint cho hội đồng đầu tư.\n\nYêu cầu bắt buộc:\n- Tốt nghiệp các ngành Tài chính, Ngân hàng, Kế toán, Kinh tế.\n- Đọc hiểu và phân tích báo cáo tài chính (bảng cân đối, kết quả kinh doanh, lưu chuyển tiền tệ).\n- Thành thạo Excel.\n- Nắm được các phương pháp định giá doanh nghiệp cơ bản.\n\nƯu tiên:\n- Đã từng xây dựng mô hình tài chính (financial modeling).\n- Trình bày báo cáo, slide bằng PowerPoint tốt.\n- Đang theo học CFA hoặc ACCA.\n\nĐiểm cộng:\n- Biết Power BI để trực quan hoá số liệu.\n- Tiếng Anh đọc hiểu báo cáo quốc tế.\n\nQuyền lợi: thưởng hiệu quả, hỗ trợ học phí chứng chỉ CFA, lộ trình lên Chuyên viên cao cấp.",
+    "skills": [
+      { "name": "Phân tích báo cáo tài chính", "importance": "required", "aliases": ["báo cáo tài chính", "phân tích tài chính", "financial statement"] },
+      { "name": "Excel", "importance": "required", "aliases": ["Microsoft Excel"] },
+      { "name": "Định giá doanh nghiệp", "importance": "required", "aliases": ["định giá", "valuation", "DCF", "P/E"] },
+      { "name": "Mô hình tài chính", "importance": "preferred", "aliases": ["financial modeling", "financial model", "dự phóng"] },
+      { "name": "PowerPoint", "importance": "preferred", "aliases": ["thuyết trình", "slide"] },
+      { "name": "CFA", "importance": "preferred", "aliases": ["ACCA", "CFA Level 1"] },
+      { "name": "Power BI", "importance": "additional", "aliases": ["PowerBI"] },
+      { "name": "Tiếng Anh", "importance": "additional", "aliases": ["IELTS", "TOEIC", "English"] }
+    ]
+  },
+  {
+    "id": "jd-be-intern",
+    "title": "Backend Developer Intern (Python)",
+    "company": "Công ty Phần mềm G",
+    "industry": "Công nghệ & phần mềm",
+    "level": "intern",
+    "content": "Công ty Phần mềm G xây dựng hệ thống quản lý đơn hàng cho chuỗi bán lẻ, tuyển Thực tập sinh Backend (Python).\n\nMô tả công việc:\n- Phát triển REST API bằng Python (FastAPI) cho các dịch vụ đơn hàng, kho.\n- Thiết kế bảng và viết truy vấn SQL trên PostgreSQL.\n- Viết unit test cho các API đã phát triển.\n- Đóng gói dịch vụ bằng Docker và quản lý mã nguồn bằng Git.\n\nYêu cầu bắt buộc:\n- Sinh viên năm 3, năm 4 ngành Công nghệ thông tin, Khoa học máy tính hoặc liên quan.\n- Nắm vững Python và lập trình hướng đối tượng.\n- Hiểu nguyên tắc thiết kế REST API.\n- Biết SQL và cơ sở dữ liệu quan hệ.\n\nƯu tiên:\n- Đã làm dự án với FastAPI.\n- Sử dụng Git trong làm việc nhóm.\n- Biết Docker cơ bản.\n\nĐiểm cộng:\n- Đã dùng Redis.\n- Có thói quen viết unit test (pytest).\n- Quen làm việc trên Linux.\n\nQuyền lợi: phụ cấp thực tập, được review code bởi kỹ sư senior, cơ hội lên nhân viên chính thức.",
+    "skills": [
+      { "name": "Python", "importance": "required", "aliases": [] },
+      { "name": "REST API", "importance": "required", "aliases": ["RESTful", "RESTful API", "API"] },
+      { "name": "SQL", "importance": "required", "aliases": ["PostgreSQL", "MySQL", "SQLite"] },
+      { "name": "FastAPI", "importance": "preferred", "aliases": [] },
+      { "name": "Git", "importance": "preferred", "aliases": ["GitHub", "GitLab"] },
+      { "name": "Docker", "importance": "preferred", "aliases": [] },
+      { "name": "Redis", "importance": "additional", "aliases": [] },
+      { "name": "Unit test", "importance": "additional", "aliases": ["pytest", "unit testing", "kiểm thử đơn vị"] },
+      { "name": "Linux", "importance": "additional", "aliases": ["Ubuntu"] }
+    ]
+  },
+  {
+    "id": "jd-fe-junior",
+    "title": "Frontend Developer (React)",
+    "company": "Công ty Công nghệ H",
+    "industry": "Công nghệ & phần mềm",
+    "level": "junior",
+    "content": "Công ty Công nghệ H phát triển nền tảng học trực tuyến với hơn 200.000 người dùng, tuyển Lập trình viên Frontend (Junior) chuyên React.\n\nMô tả công việc:\n- Xây dựng giao diện web bằng React và Next.js từ thiết kế Figma.\n- Viết mã TypeScript rõ ràng, tái sử dụng được; tạo component theo design system.\n- Tối ưu hiệu năng tải trang và trải nghiệm trên thiết bị di động.\n- Viết unit test cho component với Jest và Testing Library.\n- Phối hợp với đội backend tích hợp API.\n\nYêu cầu bắt buộc:\n- Có ít nhất 1 năm kinh nghiệm (tính cả dự án cá nhân hoặc thực tập) với JavaScript.\n- Thành thạo React (hooks, state management).\n- Nắm vững HTML/CSS và responsive design.\n\nƯu tiên:\n- Đã dùng TypeScript.\n- Có kinh nghiệm với Next.js.\n- Sử dụng Tailwind CSS.\n\nĐiểm cộng:\n- Sử dụng Git thành thạo.\n- Đọc được thiết kế Figma.\n- Có thói quen viết unit test.\n\nQuyền lợi: lương cạnh tranh, làm việc hybrid, ngân sách học tập hằng năm.",
+    "skills": [
+      { "name": "JavaScript", "importance": "required", "aliases": ["JS", "ES6"] },
+      { "name": "React", "importance": "required", "aliases": ["React.js", "ReactJS"] },
+      { "name": "HTML/CSS", "importance": "required", "aliases": ["HTML", "CSS", "HTML5", "CSS3", "responsive"] },
+      { "name": "TypeScript", "importance": "preferred", "aliases": [] },
+      { "name": "Next.js", "importance": "preferred", "aliases": ["NextJS"] },
+      { "name": "Tailwind CSS", "importance": "preferred", "aliases": ["Tailwind"] },
+      { "name": "Git", "importance": "additional", "aliases": ["GitHub", "GitLab"] },
+      { "name": "Figma", "importance": "additional", "aliases": [] },
+      { "name": "Unit test", "importance": "additional", "aliases": ["Jest", "Testing Library", "unit testing"] }
+    ]
+  }
+]

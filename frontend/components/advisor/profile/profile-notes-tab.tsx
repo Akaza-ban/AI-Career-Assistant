@@ -4,9 +4,9 @@ import { useState, type Ref } from "react"
 import { Lightbulb, Loader2, Lock, NotebookPen, Pencil, Pin, PinOff, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { SuggestionList } from "@/components/advisor/progress-blocks"
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { Panel, PanelHeader } from "@/components/common/panel"
-import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -180,12 +180,10 @@ export function ProfileNotesTab({ studentId, studentName, notes, suggestions, on
 
       <Panel className="grid gap-3 bg-blue-soft/40 shadow-none">
         <PanelHeader icon={Lightbulb} title="Gợi ý cho buổi tư vấn tiếp theo" />
-        <p className="-mt-1 text-xs text-ink-2">AI tổng hợp từ báo cáo sinh viên đã chia sẻ. Bạn quyết định có dùng hay không.</p>
-        <ol className="grid list-decimal gap-2 pl-5 text-sm leading-6 text-ink">
-          {suggestions.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ol>
+        <p className="-mt-1 text-xs text-ink-2">
+          Tổng hợp theo quy tắc từ số liệu tiến bộ và tài liệu sinh viên đã chia sẻ. Bạn quyết định có dùng hay không.
+        </p>
+        <SuggestionList items={suggestions} />
       </Panel>
 
       <ConfirmDialog
@@ -226,9 +224,11 @@ function NoteCard({
     <Panel className={cn("grid gap-3 p-5", note.pinned && "ring-1 ring-blue/25")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
-          <UserAvatar name={note.author_name} src={null} className="size-9" />
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-soft text-blue">
+            <NotebookPen className="size-4" aria-hidden />
+          </span>
           <div className="grid">
-            <p className="font-heading text-sm font-bold text-ink">{note.author_name}</p>
+            <p className="font-heading text-sm font-bold text-ink">Ghi chú của bạn</p>
             <p className="text-xs text-ink-2">
               {formatWhen(note.created_at)}
               {!formatWhen(note.created_at).startsWith("Hôm nay") && ` · ${formatDate(note.created_at)} ${formatTime(note.created_at)}`}

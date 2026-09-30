@@ -5,7 +5,6 @@ import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -14,55 +13,71 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { api } from "@/lib/api"
-import type { AdvisorInterviewItem } from "@/lib/types"
+import { formatDate } from "@/lib/format"
+import { formatScore } from "@/lib/interview"
+import type { AdvisorInterviewRow, AdvisorReviewInfo } from "@/lib/types"
 
 const MIN_COMMENT = 10
+const MAX_COMMENT = 2000
 
 interface ReviewDialogProps {
   studentId: string
   studentName: string
-  item: AdvisorInterviewItem | null
+  /** Buổi đang nhận xét; null = đóng. */
+  item: AdvisorInterviewRow | null
   onClose: () => void
-  onReviewed: (item: AdvisorInterviewItem) => void
+  onReviewed: (sessionId: string, review: AdvisorReviewInfo) => void
 }
 
-/** Cố vấn nhận xét một buổi phỏng vấn; có thể chốt điểm khác điểm AI (human-in-the-loop). */
+/** Cố vấn viết hoặc sửa nhận xét cho một báo cáo SV đã chia sẻ. Điểm AI giữ nguyên. */
 export function ReviewDialog({ studentId, studentName, item, onClose, onReviewed }: ReviewDialogProps) {
   return (
     <Dialog open={item !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-lg">
-        {item && <ReviewForm key={item.id} studentId={studentId} studentName={studentName} item={item} onClose={onClose} onReviewed={onReviewed} />}
+        {item && (
+          <ReviewForm
+            key={item.id}
+            studentId={studentId}
+            studentName={studentName}
+            item={item}
+            onClose={onClose}
+            onReviewed={onReviewed}
+          />
+        )}
       </DialogContent>
     </Dialog>
   )
 }
 
-function ReviewForm({ studentId, studentName, item, onClose, onReviewed }: Omit<ReviewDialogProps, "item"> & { item: AdvisorInterviewItem }) {
-  const [comment, setComment] = useState("")
-  const [adjust, setAdjust] = useState(false)
-  const [score, setScore] = useState(String(item.total_score))
+function ReviewForm({ studentId, studentName, item, onClose, onReviewed }: Omit<ReviewDialogProps, "item"> & { item: AdvisorInterviewRow }) {
+  const editing = item.review !== null
+  const [comment, setComment] = useState(item.review?.comment ?? "")
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const scoreNumber = Number(score)
-  const commentError = comment.trim().length < MIN_COMMENT ? `Nhận xét cần ít nhất ${MIN_COMMENT} ký tự.` : null
-  const scoreError =
-    adjust && (!/^\d{1,3}$/.test(score) || scoreNumber < 0 || scoreNumber > 100) ? "Điểm phải là số nguyên từ 0 đến 100." : null
+  const length = comment.trim().length
+  const error =
+    length < MIN_COMMENT
+      ? `Nhận xét cần ít nhất ${MIN_COMMENT} ký tự.`
+      : length > MAX_COMMENT
+        ? `Nhận xét tối đa ${MAX_COMMENT} ký tự.`
+        : null
+  const unchanged = editing && comment.trim() === item.review!.comment
 
   async function submit() {
     setSubmitted(true)
-    if (commentError || scoreError) return
+    if (error) return
+    if (unchanged) {
+      onClose()
+      return
+    }
     setSaving(true)
     try {
-      const updated = await api.reviewInterview(studentId, item.id, {
-        comment,
-        ...(adjust && scoreNumber !== item.total_score ? { score: scoreNumber } : {}),
-      })
-      onReviewed(updated)
-      toast.success(`Đã gửi nhận xét cho ${studentName}.`)
+      const review = await api.reviewInterview(studentId, item.id, { comment })
+      onReviewed(item.id, review)
+      toast.success(editing ? `Đã cập nhật nhận xét cho ${studentName}.` : `Đã gửi nhận xét cho ${studentName}.`)
       onClose()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không gửi được nhận xét.")
@@ -74,52 +89,33 @@ function ReviewForm({ studentId, studentName, item, onClose, onReviewed }: Omit<
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Nhận xét {item.round_title}</DialogTitle>
+        <DialogTitle>{editing ? "Sửa nhận xét" : "Nhận xét buổi phỏng vấn"}</DialogTitle>
         <DialogDescription>
-          Điểm AI chấm: {item.total_score}/100. Nhận xét sẽ được gửi tới {studentName} và hiện trong mục Phản hồi từ cố vấn.
+          {item.jd.title} · {formatDate(item.completed_at)} · Điểm AI {formatScore(item.overall_score)}/5 (giữ nguyên). Nhận xét
+          hiện trong báo cáo của {studentName} và mục Phản hồi từ cố vấn.
+          {editing && " Sau khi sửa, sinh viên sẽ thấy nhận xét như bản mới chưa đọc."}
         </DialogDescription>
       </DialogHeader>
-      <div className="grid gap-4">
-        <div className="grid gap-1.5">
-          <label htmlFor="review-comment" className="text-sm font-medium text-ink">
-            Nhận xét của bạn
-          </label>
-          <Textarea
-            id="review-comment"
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            placeholder="Điểm mạnh, điểm cần cải thiện và gợi ý cụ thể cho buổi luyện tiếp theo…"
-            aria-invalid={submitted && commentError ? true : undefined}
-            className="min-h-32 bg-surface"
-          />
-          {submitted && commentError && <p className="text-xs text-bad">{commentError}</p>}
-        </div>
-        <div className="grid gap-2 rounded-xl bg-surface p-3">
-          <label className="flex items-center gap-2 text-sm font-medium text-ink">
-            <Checkbox checked={adjust} onCheckedChange={(v) => setAdjust(v === true)} />
-            Chốt điểm khác điểm AI
-          </label>
-          {adjust && (
-            <div className="grid gap-1 pl-6">
-              <div className="flex items-center gap-2">
-                <Input
-                  value={score}
-                  onChange={(e) => setScore(e.target.value)}
-                  inputMode="numeric"
-                  aria-label="Điểm cố vấn chốt"
-                  aria-invalid={scoreError ? true : undefined}
-                  className="h-9 w-20 bg-card"
-                />
-                <span className="text-sm text-ink-2">/100</span>
-              </div>
-              {scoreError ? (
-                <p className="text-xs text-bad">{scoreError}</p>
-              ) : (
-                <p className="text-xs text-ink-2">Hãy nêu lý do điều chỉnh trong nhận xét để sinh viên hiểu.</p>
-              )}
-            </div>
-          )}
-        </div>
+      <div className="grid gap-1.5">
+        <label htmlFor="review-comment" className="text-sm font-medium text-ink">
+          Nhận xét của bạn
+        </label>
+        <Textarea
+          id="review-comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Điểm mạnh, điểm cần cải thiện và gợi ý cụ thể cho buổi luyện tiếp theo…"
+          aria-invalid={submitted && error ? true : undefined}
+          aria-describedby="review-comment-hint"
+          maxLength={MAX_COMMENT + 200}
+          className="min-h-36 bg-surface"
+        />
+        <p id="review-comment-hint" className="flex justify-between gap-3 text-xs">
+          {submitted && error ? <span className="text-bad">{error}</span> : <span className="text-ink-2">Tối thiểu {MIN_COMMENT} ký tự.</span>}
+          <span className={length > MAX_COMMENT ? "text-bad" : "text-ink-3"}>
+            {length}/{MAX_COMMENT}
+          </span>
+        </p>
       </div>
       <DialogFooter>
         <Button variant="soft" onClick={onClose} disabled={saving}>
@@ -127,7 +123,7 @@ function ReviewForm({ studentId, studentName, item, onClose, onReviewed }: Omit<
         </Button>
         <Button onClick={submit} disabled={saving}>
           {saving && <Loader2 className="animate-spin" aria-hidden />}
-          Gửi nhận xét
+          {editing ? "Lưu nhận xét" : "Gửi nhận xét"}
         </Button>
       </DialogFooter>
     </>

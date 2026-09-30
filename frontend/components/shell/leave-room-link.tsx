@@ -14,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { setLeaveGuard, useLeaveGuard } from "@/lib/leave-guard"
+import { runLeaveAction, useLeaveGuard } from "@/lib/leave-guard"
 
 /** Nút "Rời phòng" ở header khung tập trung; hỏi xác nhận nếu phòng phỏng vấn đang làm dở. */
 export function LeaveRoomLink({ href = "/student" }: { href?: string }) {
@@ -49,9 +49,9 @@ export function LeaveRoomLink({ href = "/student" }: { href?: string }) {
             </Button>
             <Button
               variant="destructive"
-              onClick={() => {
-                setLeaveGuard(null)
+              onClick={async () => {
                 setOpen(false)
+                await runLeaveAction()
                 router.push(href)
               }}
             >

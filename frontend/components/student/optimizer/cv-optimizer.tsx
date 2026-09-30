@@ -1,39 +1,54 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback } from "react"
-import { AlertCircle, ArrowLeft, ArrowRight, Bot, MessageSquareQuote, ShieldCheck, Sparkles } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useCallback, useState } from "react"
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Bot,
+  CircleCheck,
+  Clock,
+  FileCheck2,
+  Info,
+  Lock,
+  MessageSquareQuote,
+  ShieldCheck,
+  Sparkles,
+} from "lucide-react"
 import { toast } from "sonner"
 
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { Panel } from "@/components/common/panel"
-import { ScoreRing } from "@/components/common/score-ring"
 import { CvDocumentView } from "@/components/student/cv-document-view"
 import { CapabilityCheckCard } from "@/components/student/optimizer/capability-check-card"
 import { SuggestionCard } from "@/components/student/optimizer/suggestion-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api } from "@/lib/api"
-import { suggestionCounts } from "@/lib/cv-document"
-import type { CapabilityAnswerRequest, CvDocLine, OptimizerSession, Suggestion } from "@/lib/types"
+import { MATCH_LABEL_META, formatPercent } from "@/lib/analysis"
+import { ApiError, api } from "@/lib/api"
+import { draftDocument, learningSkills, suggestionCounts } from "@/lib/cv-document"
+import { formatWhen } from "@/lib/format"
+import type { CapabilityAnswerRequest, CvDocLine, OptimizerSession, Suggestion, SuggestionDecisionRequest } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-// Figma: frame "Trình tối ưu CV" (18:903). PRD US-SV-03.
+// Figma: frame "Trình tối ưu CV" (18:903). PRD US-SV-03, US-SV-05, mục 6.
 export function CvOptimizer({ analysisId }: { analysisId: string }) {
+  const router = useRouter()
   const fetchSession = useCallback(() => api.getOptimizerSession(analysisId), [analysisId])
-  const { data: session, error, reload } = useApi(fetchSession)
+  const { data, error, reload } = useApi(fetchSession)
+  // Mỗi thao tác trả về trạng thái mới của trình tối ưu: dùng luôn, không tải lại cả trang.
+  const [updated, setUpdated] = useState<OptimizerSession>()
+  const session = updated ?? data
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const analysisHref = `/student/analysis/${encodeURIComponent(analysisId)}`
+  const exportHref = `${analysisHref}/export`
 
-  async function decide(s: Suggestion, decision: "accept" | "edit" | "reject", editedText?: string) {
+  async function decide(s: Suggestion, decision: SuggestionDecisionRequest["decision"], editedText?: string) {
     try {
-      const res = await api.decideSuggestion(s.id, { decision, edited_text: editedText })
-      if (res.new_cv_version) {
-        toast.success(`Đã tạo phiên bản CV ${res.new_cv_version.label}`, {
-          description: "Bản trước vẫn được giữ nguyên trong CV của tôi.",
-        })
-      } else {
-        toast.info("Đã bỏ qua gợi ý. CV giữ nguyên.")
-      }
-      reload()
+      setUpdated(await api.decideSuggestion(analysisId, s.id, { decision, edited_text: editedText }))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không lưu được lựa chọn.")
     }
@@ -41,33 +56,54 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
 
   async function provideContext(s: Suggestion, answer: string) {
     try {
-      await api.provideSuggestionContext(s.id, answer)
+      setUpdated(await api.provideSuggestionContext(analysisId, s.id, answer))
       toast.success("Đã nhận ngữ cảnh. Hãy xem lại gợi ý mới.")
-      reload()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không gửi được ngữ cảnh.")
     }
   }
 
+  /** Báo lỗi rồi ném lại để thẻ giữ nguyên nội dung SV đang nhập. */
   async function answerCheck(id: string, body: CapabilityAnswerRequest) {
     try {
-      await api.answerCapabilityCheck(id, body)
-      toast.success(body.learning_note ? "Đã thêm vào mục Kỹ năng đang phát triển" : "Đã ghi nhận câu trả lời")
-      reload()
+      setUpdated(await api.answerCapabilityCheck(analysisId, id, body))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không lưu được câu trả lời.")
+      throw err
+    }
+  }
+
+  async function finalize() {
+    try {
+      const result = await api.finalizeOptimization(analysisId)
+      setUpdated(result)
+      toast.success(`Đã tạo phiên bản CV ${result.result_cv?.label ?? "mới"}`, {
+        description: "Bản trước vẫn được giữ nguyên trong CV của tôi.",
+      })
+      router.push(exportHref)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tạo được phiên bản mới.")
+      throw err
     }
   }
 
   if (error) {
+    const blocked = error instanceof ApiError && error.status === 409
     return (
       <Panel className="grid justify-items-center gap-3 py-12 text-center">
         <AlertCircle className="size-8 text-bad" aria-hidden />
         <p className="font-heading font-bold">Không mở được trình tối ưu</p>
-        <p className="text-sm text-ink-2">{error.message}</p>
-        <Button variant="soft" onClick={reload}>
-          Thử lại
-        </Button>
+        <p className="max-w-md text-sm text-ink-2">{error.message}</p>
+        {blocked ? (
+          <Button variant="soft" nativeButton={false} render={<Link href={analysisHref} />}>
+            <ArrowLeft aria-hidden />
+            Quay lại kết quả phân tích
+          </Button>
+        ) : (
+          <Button variant="soft" onClick={reload}>
+            Thử lại
+          </Button>
+        )}
       </Panel>
     )
   }
@@ -84,50 +120,56 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
     )
   }
 
+  const editable = session.status === "draft"
   const bySuggestionLine = new Map(session.suggestions.map((s) => [s.line_id, s]))
   const counts = suggestionCounts(session.suggestions)
-  const reviewed = session.suggestions.length - counts.pending
-  const pendingChecks = session.capability_checks.filter((c) => c.status === "pending")
-  const answeredChecks = session.capability_checks.filter((c) => c.status !== "pending")
+  const learning = learningSkills(session)
+  const changeCount = counts.accepted + counts.edited + learning.length
   const pendingSuggestions = session.suggestions.filter((s) => s.status === "pending")
   const doneSuggestions = session.suggestions.filter((s) => s.status !== "pending")
-  const exportHref = `/student/analysis/${encodeURIComponent(analysisId)}/export`
+  const pendingChecks = session.capability_checks.filter((c) => c.status === "pending")
+  const answeredChecks = session.capability_checks.filter((c) => c.status !== "pending")
+  // Kỹ năng đang học hiện ngay trong bản xem trước để SV thấy đúng nội dung sẽ vào phiên bản mới.
+  const preview = { ...session.document, developing_skills: draftDocument(session).developing_skills }
 
   function renderLine(line: CvDocLine) {
     const s = bySuggestionLine.get(line.id)
-    if (!s) return undefined
-    return <AnnotatedLine line={line} suggestion={s} />
+    return s ? <AnnotatedLine line={line} suggestion={s} /> : undefined
   }
 
   return (
     <div className="grid gap-6">
-      <Link
-        href={`/student/analysis/${encodeURIComponent(analysisId)}`}
-        className="inline-flex items-center gap-1.5 justify-self-start text-sm font-medium text-blue hover:underline"
-      >
+      <Link href={analysisHref} className="inline-flex items-center gap-1.5 justify-self-start text-sm font-medium text-blue hover:underline">
         <ArrowLeft className="size-4" aria-hidden />
         Quay lại kết quả phân tích
       </Link>
 
-      <OptimizerHeader session={session} reviewed={reviewed} total={session.suggestions.length} exportHref={exportHref} />
+      <OptimizerHeader
+        session={session}
+        reviewed={session.suggestions.length - counts.pending}
+        changeCount={changeCount}
+        exportHref={exportHref}
+        onFinalize={() => setConfirmOpen(true)}
+      />
+
+      {!editable && <FinalizedBanner session={session} exportHref={exportHref} />}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
         <Panel className="min-w-0">
           <CvDocumentView
-            doc={session.document}
+            doc={preview}
             renderLine={renderLine}
             sectionAside={(sectionId) => {
               const n = session.document.sections
                 .find((sec) => sec.id === sectionId)
-                ?.entries.flatMap((e) => e.lines)
-                .filter((l) => bySuggestionLine.get(l.id)?.status === "pending").length
+                ?.lines.filter((l) => bySuggestionLine.get(l.id)?.status === "pending").length
               return n ? <Badge variant="warn">Có {n} đề xuất tối ưu</Badge> : null
             }}
           />
         </Panel>
 
         <aside className="grid min-w-0 gap-4 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
-          <Panel className="flex items-center justify-between gap-3 p-4">
+          <Panel className="grid gap-3 p-4">
             <div className="flex items-center gap-3">
               <span className="grid size-10 place-items-center rounded-xl bg-violet-soft text-violet">
                 <Bot className="size-5" aria-hidden />
@@ -135,42 +177,87 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
               <div className="grid">
                 <p className="font-heading font-bold">Cố vấn AI Career Coach</p>
                 <p className="text-xs text-ink-2">
-                  {pendingSuggestions.length + pendingChecks.length > 0
-                    ? `${pendingSuggestions.length + pendingChecks.length} mục chờ bạn duyệt`
-                    : "Bạn đã duyệt hết các gợi ý"}
+                  {!editable
+                    ? "Phiên tối ưu đã hoàn tất"
+                    : pendingSuggestions.length + pendingChecks.length > 0
+                      ? `${pendingSuggestions.length + pendingChecks.length} mục chờ bạn xem`
+                      : "Bạn đã xem hết các mục"}
                 </p>
               </div>
             </div>
-            <span className="size-2.5 rounded-full bg-good" aria-hidden />
+            {/* PRD mục 6.4: giữ nguyên văn */}
+            <p className="flex items-start gap-2 rounded-xl bg-surface p-3 text-xs leading-5 text-ink-2">
+              <Info className="mt-0.5 size-3.5 shrink-0 text-blue" aria-hidden />
+              Các nội dung do AI đề xuất cần được kiểm tra trước khi sử dụng. Bạn chịu trách nhiệm đảm bảo thông tin phản ánh
+              chính xác kinh nghiệm, kỹ năng và thành tích thực tế của mình.
+            </p>
           </Panel>
+
+          {session.suggestions.length === 0 && <NoSuggestions session={session} />}
+          {session.pending_review_count > 0 && (
+            <p className="flex items-start gap-2 rounded-xl border border-line bg-card p-3 text-xs leading-5 text-ink-2">
+              <Clock className="mt-0.5 size-3.5 shrink-0 text-warn" aria-hidden />
+              {session.pending_review_count} gợi ý chưa đủ căn cứ trong CV nên đang chờ cố vấn xem lại, chưa hiển thị ở đây.
+            </p>
+          )}
 
           {pendingSuggestions.map((s) => (
             <SuggestionCard
               key={`${s.id}-${s.status}-${s.proposed_text}`}
               suggestion={s}
+              editable={editable}
               onDecide={(d, text) => decide(s, d, text)}
               onProvideContext={(answer) => provideContext(s, answer)}
             />
           ))}
+
+          {session.capability_checks.length > 0 && (
+            <p className="pt-2 text-xs font-semibold tracking-[0.06em] text-ink-3 uppercase">
+              Kỹ năng JD yêu cầu mà CV chưa thể hiện
+            </p>
+          )}
           {pendingChecks.map((c) => (
-            <CapabilityCheckCard key={c.id} check={c} onAnswer={(body) => answerCheck(c.id, body)} />
+            <CapabilityCheckCard key={c.id} check={c} editable={editable} onAnswer={(body) => answerCheck(c.id, body)} />
           ))}
-          {(doneSuggestions.length > 0 || answeredChecks.length > 0) && (
-            <p className="pt-2 text-xs font-semibold tracking-[0.06em] text-ink-3 uppercase">Đã xử lý</p>
+          {answeredChecks.map((c) => (
+            <CapabilityCheckCard
+              key={`${c.id}-${c.status}-${c.learning_note ?? ""}-${c.context ?? ""}`}
+              check={c}
+              editable={editable}
+              onAnswer={(body) => answerCheck(c.id, body)}
+            />
+          ))}
+
+          {doneSuggestions.length > 0 && (
+            <p className="pt-2 text-xs font-semibold tracking-[0.06em] text-ink-3 uppercase">Gợi ý đã xử lý</p>
           )}
           {doneSuggestions.map((s) => (
             <SuggestionCard
               key={`${s.id}-${s.status}`}
               suggestion={s}
+              editable={editable}
               onDecide={(d, text) => decide(s, d, text)}
               onProvideContext={(answer) => provideContext(s, answer)}
             />
           ))}
-          {answeredChecks.map((c) => (
-            <CapabilityCheckCard key={`${c.id}-${c.status}`} check={c} onAnswer={(body) => answerCheck(c.id, body)} />
-          ))}
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Hoàn tất và tạo phiên bản CV mới?"
+        description={
+          <>
+            Phiên bản mới gồm {counts.accepted} gợi ý đã chấp nhận, {counts.edited} câu bạn sửa tay
+            {learning.length > 0 && ` và ${learning.length} kỹ năng đang học`}.
+            {counts.pending > 0 && ` ${counts.pending} gợi ý chưa xem sẽ giữ nguyên câu gốc.`} Phiên bản {session.cv.label} vẫn
+            được giữ nguyên. Sau khi hoàn tất, bạn không đổi được các lựa chọn trong lượt tối ưu này nữa.
+          </>
+        }
+        confirmLabel="Hoàn tất & tạo phiên bản"
+        onConfirm={finalize}
+      />
     </div>
   )
 }
@@ -178,14 +265,17 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
 function OptimizerHeader({
   session,
   reviewed,
-  total,
+  changeCount,
   exportHref,
+  onFinalize,
 }: {
   session: OptimizerSession
   reviewed: number
-  total: number
+  changeCount: number
   exportHref: string
+  onFinalize: () => void
 }) {
+  const label = session.match_label ? MATCH_LABEL_META[session.match_label] : null
   return (
     <Panel className="flex flex-wrap items-center justify-between gap-4">
       <div className="grid min-w-0 gap-2">
@@ -198,16 +288,17 @@ function OptimizerHeader({
           </Badge>
           <span className="text-ink-2">
             Tối ưu cho: <strong className="font-semibold text-ink">{session.jd.title}</strong>
+            {session.jd.company && ` · ${session.jd.company}`}
           </span>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        {session.ats_score !== null && (
-          <span className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2">
-            <ScoreRing score={session.ats_score} size={36} strokeWidth={3.5} labelClassName="text-xs" />
-            <span className="text-xs">
-              <span className="block font-semibold text-ink">Điểm ATS: {session.ats_score}/100</span>
-              <span className="text-ink-2">Tính lại sau khi xuất CV</span>
+        {session.match_score !== null && (
+          <span className="grid rounded-xl bg-surface px-3 py-2 text-xs">
+            <span className="text-ink-2">Độ khớp với JD lúc phân tích</span>
+            <span className="flex items-center gap-1.5">
+              <strong className="font-heading text-base text-ink">{formatPercent(session.match_score)}%</strong>
+              {label && <Badge variant={label.badge}>{label.text}</Badge>}
             </span>
           </span>
         )}
@@ -215,29 +306,84 @@ function OptimizerHeader({
           <ShieldCheck className="size-4" aria-hidden />
           Không bịa kinh nghiệm
         </span>
-        <span className="rounded-xl bg-surface px-3 py-2 text-xs text-ink-2">
-          Đã duyệt <strong className="text-ink">{reviewed}/{total}</strong> gợi ý
-        </span>
-        <Button size="brand" nativeButton={false} render={<Link href={exportHref} />}>
-          Xuất CV hoàn thiện
-          <ArrowRight aria-hidden />
-        </Button>
+        {session.suggestions.length > 0 && (
+          <span className="rounded-xl bg-surface px-3 py-2 text-xs text-ink-2">
+            Đã xem <strong className="text-ink">{reviewed}/{session.suggestions.length}</strong> gợi ý
+          </span>
+        )}
+        {session.status === "draft" ? (
+          <span className="grid justify-items-end gap-1">
+            <Button size="brand" onClick={onFinalize} disabled={changeCount === 0}>
+              <FileCheck2 aria-hidden />
+              Hoàn tất & tạo phiên bản mới
+            </Button>
+            {changeCount === 0 && (
+              <span className="text-[11px] text-ink-3">Áp dụng ít nhất một gợi ý hoặc ghi kỹ năng đang học</span>
+            )}
+          </span>
+        ) : (
+          <Button size="brand" nativeButton={false} render={<Link href={exportHref} />}>
+            Xem & xuất CV
+            <ArrowRight aria-hidden />
+          </Button>
+        )}
       </div>
+    </Panel>
+  )
+}
+
+function FinalizedBanner({ session, exportHref }: { session: OptimizerSession; exportHref: string }) {
+  return (
+    <p className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] border border-good/30 bg-good-soft/50 px-5 py-3 text-sm text-ink">
+      <span className="flex items-start gap-2">
+        <Lock className="mt-0.5 size-4 shrink-0 text-good" aria-hidden />
+        <span>
+          Bạn đã hoàn tất{session.finalized_at && ` ${formatWhen(session.finalized_at).toLowerCase()}`}
+          {session.result_cv
+            ? `, tạo phiên bản ${session.result_cv.label}. `
+            : ". Phiên bản tạo ra đã bị xoá khỏi CV của tôi. "}
+          Muốn tối ưu tiếp, hãy phân tích lại phiên bản mới với JD này.
+        </span>
+      </span>
+      {session.result_cv && (
+        <Link href={exportHref} className="font-medium text-blue hover:underline">
+          Xem phiên bản mới
+        </Link>
+      )}
+    </p>
+  )
+}
+
+function NoSuggestions({ session }: { session: OptimizerSession }) {
+  return (
+    <Panel className="grid gap-2 p-4 text-sm">
+      <p className="flex items-center gap-2 font-heading font-bold text-ink">
+        <Sparkles className="size-4 text-violet" aria-hidden />
+        Chưa có gợi ý diễn đạt lại
+      </p>
+      <p className="text-[13px] leading-5 text-ink-2">
+        {session.llm_used
+          ? "AI chưa tìm thấy câu nào trong CV có thể diễn đạt rõ hơn cho vị trí này mà vẫn giữ đúng thông tin bạn đã viết."
+          : "Lượt phân tích này được chấm bằng quy tắc dự phòng vì AI chưa sẵn sàng, nên chưa có gợi ý viết lại. Hãy phân tích lại khi AI hoạt động."}
+      </p>
+      {session.capability_checks.length > 0 && (
+        <p className="text-[13px] leading-5 text-ink-2">Bạn vẫn có thể xác nhận các kỹ năng còn thiếu bên dưới.</p>
+      )}
     </Panel>
   )
 }
 
 /** Dòng CV có gợi ý: chờ duyệt / cần ngữ cảnh / đã áp dụng (so sánh trước–sau) / đã bỏ qua. */
 function AnnotatedLine({ line, suggestion: s }: { line: CvDocLine; suggestion: Suggestion }) {
-  if (s.status === "accepted" || s.status === "edited") {
+  if (s.final_text !== null) {
     return (
       <div className="grid gap-2 rounded-xl border border-line p-3">
         <p className="flex flex-wrap items-center justify-between gap-2 text-xs">
           <span className="flex items-center gap-1 font-semibold text-violet">
-            <Sparkles className="size-3.5" aria-hidden />
+            <CircleCheck className="size-3.5" aria-hidden />
             So sánh trước & sau khi tối ưu
           </span>
-          <span className="rounded-md bg-surface px-2 py-0.5 text-ink-2">Nguồn trích dẫn: dòng {line.line_no} CV gốc</span>
+          <span className="rounded-md bg-surface px-2 py-0.5 text-ink-2">Căn cứ: dòng {line.line_no} CV gốc</span>
         </p>
         <p className="rounded-lg bg-bad-soft/50 p-2 text-[13px] text-ink-2">
           <span className="block text-[11px] font-semibold tracking-wide text-bad uppercase">Bản gốc của bạn</span>
@@ -245,9 +391,9 @@ function AnnotatedLine({ line, suggestion: s }: { line: CvDocLine; suggestion: S
         </p>
         <p className="rounded-lg bg-violet-soft/60 p-2 text-[13px] text-ink">
           <span className="block text-[11px] font-semibold tracking-wide text-violet uppercase">
-            {s.status === "edited" ? "Bản bạn đã sửa tay" : "Đề xuất tối ưu (đã được bạn phê duyệt)"}
+            {s.status === "edited" ? "Bản bạn đã sửa tay" : "Đề xuất tối ưu (đã được bạn chấp nhận)"}
           </span>
-          {s.proposed_text}
+          {s.final_text}
         </p>
       </div>
     )

@@ -1,31 +1,44 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useState } from "react"
 import {
   ArrowLeftRight,
+  Building2,
+  ChevronDown,
   CircleCheck,
   ClipboardPaste,
   FileText,
   Info,
   Library,
-  Search,
   ShieldCheck,
 } from "lucide-react"
 
 import { Panel } from "@/components/common/panel"
-import { ScoreRing } from "@/components/common/score-ring"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
 import { formatBytes } from "@/lib/format"
 import { countWords } from "@/lib/text"
-import { JD_MIN_WORDS, type CvVersion, type JobDescription, type JobLevel } from "@/lib/types"
+import {
+  JD_MIN_WORDS,
+  type CvVersion,
+  type JobDescription,
+  type JobLevel,
+  type RequirementImportance,
+} from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 export const LEVEL_LABEL: Record<JobLevel, string> = { intern: "Thực tập sinh", fresher: "Fresher", junior: "Junior" }
+
+/** Nhãn và màu cho mức độ yêu cầu; trọng số theo PRD mục 5.2. */
+export const IMPORTANCE_META: Record<RequirementImportance, { label: string; weight: number; chip: string }> = {
+  required: { label: "Bắt buộc", weight: 3, chip: "bg-blue-soft text-blue" },
+  preferred: { label: "Ưu tiên", weight: 2, chip: "bg-violet-soft text-violet" },
+  additional: { label: "Bổ trợ", weight: 1, chip: "bg-surface text-ink-2 ring-1 ring-line" },
+}
 
 // ---------- Cột trái ----------
 
@@ -38,52 +51,22 @@ interface SelectedCvCardProps {
 export function SelectedCvCard({ selected, onChangeCv }: SelectedCvCardProps) {
   return (
     <Panel className="grid min-w-0 gap-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 font-heading text-sm font-bold tracking-wide uppercase">
-          <FileText className="size-4 text-blue" aria-hidden />
-          CV đã chọn
-        </h2>
-        {selected.ats_score !== null && selected.ats_score >= 80 && (
-          <Badge variant="good" className="h-auto px-2.5 py-0.5">
-            Đạt chuẩn ATS
-          </Badge>
-        )}
-      </div>
+      <h2 className="flex items-center gap-2 font-heading text-sm font-bold tracking-wide uppercase">
+        <FileText className="size-4 text-blue" aria-hidden />
+        CV đã chọn
+      </h2>
       <div className="grid gap-1 rounded-xl bg-surface p-3">
         <p className="truncate font-semibold text-ink" title={selected.file_name}>
           {selected.file_name}
         </p>
         <p className="text-xs text-ink-2">
           {selected.label} · {selected.file_type.toUpperCase()} · {formatBytes(selected.size_bytes)}
-          {selected.ats_score !== null && (
-            <>
-              {" "}
-              · Điểm ATS: <span className="font-semibold text-good">{selected.ats_score}/100</span>
-            </>
-          )}
         </p>
       </div>
-      {selected.target_title && (
-        <p className="text-sm text-ink-2">
-          Vị trí đang gắn: <span className="text-ink">{selected.target_title}</span>
-        </p>
-      )}
       <Button variant="secondary" className="h-9 bg-blue-soft text-blue" onClick={onChangeCv}>
         <ArrowLeftRight aria-hidden />
         Đổi tệp CV khác
       </Button>
-    </Panel>
-  )
-}
-
-export function BaseMatchCard({ score }: { score: number }) {
-  return (
-    <Panel className="flex items-center gap-4">
-      <ScoreRing score={score} size={72} strokeWidth={7} labelClassName="text-lg" />
-      <div className="grid gap-0.5">
-        <p className="font-heading font-bold">Điểm ATS hiện tại</p>
-        <p className="text-sm text-ink-2">Mức cơ sở trước khi đối chiếu sâu với JD bạn chọn.</p>
-      </div>
     </Panel>
   )
 }
@@ -96,9 +79,137 @@ export function IntegrityBox() {
         Nguyên tắc đối soát minh bạch
       </h2>
       <p className="text-sm leading-6 text-ink-2">
-        AI đối chiếu trực tiếp từng bằng chứng thực tế trong CV của bạn với JD được chọn để phát hiện khoảng trống năng
-        lực thật, tuyệt đối không tự chế số liệu.
+        AI chỉ diễn đạt lại kinh nghiệm bạn đã có, không thêm thành tích. Mỗi đánh giá đều trích nguyên văn câu trong CV
+        làm bằng chứng.
       </p>
+    </section>
+  )
+}
+
+// ---------- Tab thư viện JD ----------
+
+interface JdLibraryPickerProps {
+  items: JobDescription[] | undefined
+  selected: JobDescription | null
+  onSelect: (jd: JobDescription) => void
+}
+
+/** Chọn JD bằng dropdown; chọn xong hiển thị ngay thông tin JD để SV biết vị trí đó yêu cầu gì. */
+export function JdLibraryPicker({ items, selected, onSelect }: JdLibraryPickerProps) {
+  const options = (items ?? []).map((jd) => ({
+    value: jd.id,
+    label: `${jd.title}${jd.company ? ` – ${jd.company}` : ""}`,
+  }))
+
+  return (
+    <Panel className="grid min-w-0 gap-5">
+      <div className="grid gap-1">
+        <h2 className="font-heading text-lg font-bold">Chọn vị trí từ thư viện JD</h2>
+        <p className="text-sm text-ink-2">Bộ JD chuẩn hoá cho sinh viên mới ra trường, đã gắn mức độ cho từng yêu cầu.</p>
+      </div>
+
+      {!items ? (
+        <Skeleton className="h-10 rounded-lg" />
+      ) : (
+        <div className="grid gap-1.5">
+          <Label htmlFor="jd-library-select" className="text-xs font-semibold">
+            Vị trí ứng tuyển <span className="text-bad">*</span>
+          </Label>
+          <Select
+            items={options}
+            value={selected?.id ?? null}
+            onValueChange={(value) => {
+              const jd = items.find((j) => j.id === value)
+              if (jd) onSelect(jd)
+            }}
+          >
+            <SelectTrigger id="jd-library-select" className="h-11 w-full min-w-0 bg-surface" aria-label="Vị trí ứng tuyển">
+              <SelectValue className="min-w-0 truncate" placeholder={`Chọn một trong ${items.length} vị trí…`} />
+            </SelectTrigger>
+            <SelectContent>
+              {items.map((jd) => (
+                <SelectItem key={jd.id} value={jd.id}>
+                  <span className="grid">
+                    <span className="font-medium">{jd.title}</span>
+                    <span className="text-xs text-ink-2">
+                      {[jd.company, jd.level && LEVEL_LABEL[jd.level]].filter(Boolean).join(" · ")}
+                    </span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {selected ? (
+        <JdDetails jd={selected} />
+      ) : (
+        items && (
+          <p className="flex items-center gap-2 rounded-xl bg-surface p-4 text-sm text-ink-2">
+            <Library className="size-4 shrink-0 text-ink-3" aria-hidden />
+            Chọn một vị trí để xem mô tả công việc và các kỹ năng yêu cầu.
+          </p>
+        )
+      )}
+    </Panel>
+  )
+}
+
+function JdDetails({ jd }: { jd: JobDescription }) {
+  const [expanded, setExpanded] = useState(false)
+  const groups = (Object.keys(IMPORTANCE_META) as RequirementImportance[])
+    .map((importance) => ({ importance, skills: jd.skills.filter((s) => s.importance === importance) }))
+    .filter((g) => g.skills.length > 0)
+
+  return (
+    <section className="grid gap-4 rounded-2xl border border-line p-4" aria-label={`Thông tin JD ${jd.title}`}>
+      <div className="grid gap-1">
+        <h3 className="font-heading text-base font-bold text-ink">{jd.title}</h3>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-2">
+          {jd.company && (
+            <span className="flex items-center gap-1">
+              <Building2 className="size-3.5" aria-hidden />
+              {jd.company}
+            </span>
+          )}
+          {jd.industry && <span>· {jd.industry}</span>}
+          {jd.level && <span className="font-medium text-blue">· {LEVEL_LABEL[jd.level]}</span>}
+        </p>
+      </div>
+
+      <div className="grid gap-2.5">
+        {groups.map(({ importance, skills }) => {
+          const meta = IMPORTANCE_META[importance]
+          return (
+            <div key={importance} className="grid gap-1.5 sm:grid-cols-[120px_1fr] sm:items-start">
+              <p className="pt-1 text-xs font-semibold text-ink">
+                {meta.label} <span className="font-normal text-ink-3">(×{meta.weight})</span>
+              </p>
+              <ul className="flex flex-wrap gap-1.5">
+                {skills.map((s) => (
+                  <li key={s.name} className={cn("rounded-md px-2 py-0.5 text-xs font-medium", meta.chip)}>
+                    {s.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="grid gap-2 border-t border-line pt-3">
+        <p className={cn("text-sm leading-6 whitespace-pre-line text-ink-2", !expanded && "line-clamp-6")}>{jd.content}</p>
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="inline-flex items-center gap-1 justify-self-start text-sm font-medium text-blue hover:underline"
+        >
+          {expanded ? "Thu gọn" : "Xem toàn bộ JD"}
+          <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} aria-hidden />
+        </button>
+      </div>
     </section>
   )
 }
@@ -114,7 +225,7 @@ export interface PastedJd {
 interface JdPasteFormProps {
   value: PastedJd
   onChange: (value: PastedJd) => void
-  /** Hiện lỗi sau khi người dùng bấm "Bắt đầu phân tích". */
+  /** Hiện lỗi sau khi SV đã bắt đầu nhập. */
   showErrors: boolean
 }
 
@@ -122,12 +233,12 @@ export function JdPasteForm({ value, onChange, showErrors }: JdPasteFormProps) {
   const words = countWords(value.text)
   const enough = words >= JD_MIN_WORDS
   const titleError = showErrors && !value.title.trim()
-  const textError = showErrors && !enough
+  const textError = showErrors && value.text.trim() !== "" && !enough
 
   return (
     <Panel className="grid gap-5">
       <div className="grid gap-1">
-        <h2 className="font-heading text-lg font-bold">Chi tiết bản mô tả công việc (JD)</h2>
+        <h2 className="font-heading text-lg font-bold">Dán bản mô tả công việc (JD) của bạn</h2>
         <p className="text-sm text-ink-2">
           Cung cấp tiêu đề và nội dung yêu cầu công việc để AI bóc tách chính xác bộ kỹ năng.
         </p>
@@ -204,143 +315,17 @@ export function JdPasteForm({ value, onChange, showErrors }: JdPasteFormProps) {
       <p className="flex gap-2 rounded-xl bg-blue-soft/60 p-3 text-xs leading-5 text-ink">
         <Info className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
         <span>
-          <strong className="font-semibold text-blue">Lưu ý phân tích:</strong> Nếu JD quá ngắn hoặc thiếu phần tiêu chí
-          đánh giá, kết quả đối chiếu từ khoá ATS sẽ kém chính xác. Hãy dán đầy đủ phần &quot;Yêu cầu ứng viên&quot;.
+          <strong className="font-semibold text-blue">Mẹo:</strong> Hãy dán đầy đủ phần &quot;Yêu cầu ứng viên&quot; và
+          &quot;Ưu tiên&quot; để AI xác định đúng kỹ năng bắt buộc và kỹ năng ưu tiên.
         </span>
       </p>
     </Panel>
   )
 }
 
-// ---------- Tab thư viện JD ----------
-
-type LevelFilter = "all" | JobLevel
-
-interface JdLibraryProps {
-  items: JobDescription[] | undefined
-  selectedId: string | null
-  onSelect: (jd: JobDescription) => void
-}
-
-export function JdLibrary({ items, selectedId, onSelect }: JdLibraryProps) {
-  const [level, setLevel] = useState<LevelFilter>("all")
-  const [query, setQuery] = useState("")
-
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    return (items ?? []).filter(
-      (jd) =>
-        (level === "all" || jd.level === level) &&
-        (!q || jd.title.toLowerCase().includes(q) || jd.skills.some((s) => s.toLowerCase().includes(q))),
-    )
-  }, [items, level, query])
-
-  const levels: { value: LevelFilter; label: string }[] = [
-    { value: "all", label: "Tất cả" },
-    { value: "intern", label: "Thực tập" },
-    { value: "fresher", label: "Fresher" },
-    { value: "junior", label: "Junior" },
-  ]
-
-  return (
-    <Panel className="grid min-w-0 gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid gap-1">
-          <h2 className="font-heading text-lg font-bold">Thư viện JD chuẩn hoá theo ngành</h2>
-          <p className="text-sm text-ink-2">Chọn nhanh một khung JD mẫu phổ biến cho sinh viên mới ra trường.</p>
-        </div>
-        <div role="group" aria-label="Lọc cấp độ" className="flex items-center gap-1">
-          {levels.map((l) => (
-            <button
-              key={l.value}
-              type="button"
-              aria-pressed={level === l.value}
-              onClick={() => setLevel(l.value)}
-              className={cn(
-                "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                level === l.value ? "bg-blue text-on-blue" : "bg-surface text-ink-2 hover:bg-blue-soft",
-              )}
-            >
-              {l.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="relative">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Tìm theo chức danh, kỹ năng (SQL, Figma, Marketing)..."
-          aria-label="Tìm JD trong thư viện"
-          className="h-10 bg-surface pl-9"
-        />
-      </div>
-
-      {!items ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-36 rounded-xl" />
-          ))}
-        </div>
-      ) : visible.length === 0 ? (
-        <p className="rounded-xl bg-surface py-8 text-center text-sm text-ink-2">Không có JD nào khớp bộ lọc.</p>
-      ) : (
-        <div role="radiogroup" aria-label="Thư viện JD" className="grid gap-3 sm:grid-cols-2">
-          {visible.map((jd) => {
-            const selected = jd.id === selectedId
-            return (
-              <button
-                key={jd.id}
-                type="button"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => onSelect(jd)}
-                className={cn(
-                  "grid gap-2 rounded-xl border p-4 text-left transition-colors",
-                  selected ? "border-blue bg-blue-soft/50 ring-2 ring-blue/20" : "border-line bg-surface/60 hover:border-blue/40",
-                )}
-              >
-                <span className="flex items-start justify-between gap-2">
-                  <span className="flex items-start gap-2.5">
-                    <span
-                      aria-hidden
-                      className={cn(
-                        "mt-1 grid size-4 shrink-0 place-items-center rounded-full border-2",
-                        selected ? "border-blue" : "border-ink-3",
-                      )}
-                    >
-                      {selected && <span className="size-2 rounded-full bg-blue" />}
-                    </span>
-                    <span className="grid">
-                      <span className="font-heading font-bold text-ink">{jd.title}</span>
-                      <span className="text-xs text-ink-2">
-                        {jd.industry} • <span className="text-blue">{LEVEL_LABEL[jd.level]}</span>
-                      </span>
-                    </span>
-                  </span>
-                  {selected && <Badge variant="good">Đã chọn</Badge>}
-                </span>
-                <span className="flex flex-wrap gap-1.5 pl-6.5">
-                  {jd.skills.map((skill) => (
-                    <span key={skill} className="rounded-md bg-card px-2 py-0.5 text-xs text-ink-2 ring-1 ring-line">
-                      {skill}
-                    </span>
-                  ))}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      )}
-    </Panel>
-  )
-}
-
 export const JD_TABS = [
-  { value: "paste", label: "Dán JD trực tiếp", icon: ClipboardPaste },
   { value: "library", label: "Chọn từ thư viện JD", icon: Library },
+  { value: "paste", label: "Dán JD của bạn", icon: ClipboardPaste },
 ] as const
 
 export type JdTab = (typeof JD_TABS)[number]["value"]

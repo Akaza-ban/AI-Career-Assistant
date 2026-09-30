@@ -1,137 +1,95 @@
-// Dữ liệu minh hoạ cho màn "Lịch sử & Tiến bộ". Khớp với mockRecentInterviews và mockCvVersions.
+// Dữ liệu minh hoạ lịch sử luyện tập của Minh Anh. Khớp với mockRecentInterviews, mockInterviewReport và mockCvVersions.
 
-import type { CvComparison, InterviewHistoryItem, ProgressMilestone, StarScore } from "@/lib/types"
+import type { AnalysisStatus, InterviewRow } from "@/lib/types"
 
 const now = new Date()
-const at = (days: number, hour: number, minute = 0) => {
-  const d = new Date(now.getTime() - days * 86_400_000)
-  d.setHours(hour, minute, 0, 0)
-  return d.toISOString()
-}
+/** Lùi từ thời điểm hiện tại, không bao giờ rơi vào tương lai. */
+const ago = (days: number, hours = 0) => new Date(now.getTime() - days * 86_400_000 - hours * 3_600_000).toISOString()
 
-const baJd = { id: "jd-ba-intern", title: "Business Analyst Intern", company: "Công ty Công nghệ A" }
+// ---------- Thang 0–5 cho Tổng quan / Lịch sử của SV ----------
 
-/** Mới nhất trước. Buổi 50 ngày trước chỉ hiện khi chọn "90 ngày" hoặc "Toàn bộ quá trình". */
-export const mockInterviewHistory: InterviewHistoryItem[] = [
+const library = (id: string, title: string, company: string) => ({ id, title, company, source: "library" as const })
+const BA = library("jd-ba-intern", "Business Analyst Intern", "Công ty Công nghệ A")
+const PO = library("jd-po-assistant", "Product Owner Assistant", "Ngân hàng C")
+const DA = library("jd-da-intern", "Data Analyst Intern", "Công ty Thương mại điện tử B")
+
+/**
+ * Các buổi đã hoàn thành trước phiên mock, mới nhất trước. Điểm tổng = trung bình 4 tiêu chí.
+ * Buổi 50 ngày trước chỉ hiện khi chọn "90 ngày" hoặc "Toàn bộ quá trình".
+ */
+export const mockInterviewRows: InterviewRow[] = [
   {
     id: "iv-005",
-    completed_at: at(0, 9, 30),
-    duration_seconds: 28 * 60,
-    jd: baJd,
-    round_title: "Vòng 1 & 2 (HR & Chuyên môn)",
-    question_count: 8,
-    total_score: 82,
-    question_scores: [76, 80, 78, 84, 81, 85, 83, 88],
+    jd: BA,
+    completed_at: ago(0, 1),
+    duration_seconds: 16 * 60,
+    overall_score: 3.6,
+    label: "fair",
+    star: { situation: 4.19, task: 3.81, action: 3.6, result: 2.8 },
+    timed_out_count: 0,
   },
   {
     id: "iv-004",
-    completed_at: at(3, 20, 15),
+    jd: BA,
+    completed_at: ago(3, 2),
     duration_seconds: 18 * 60,
-    jd: baJd,
-    round_title: "Vòng 1 (HR & Động lực)",
-    question_count: 4,
-    total_score: 88,
-    question_scores: [82, 86, 90, 94],
+    overall_score: 3.4,
+    label: "fair",
+    star: { situation: 4, task: 3.6, action: 3.4, result: 2.6 },
+    timed_out_count: 0,
   },
   {
     id: "iv-003",
-    completed_at: at(7, 19, 40),
-    duration_seconds: 22 * 60,
-    jd: baJd,
-    round_title: "Vòng 3 (Tình huống Agile)",
-    question_count: 4,
-    total_score: 74,
-    question_scores: [75, 73, 74, 74],
+    jd: BA,
+    completed_at: ago(7, 3),
+    duration_seconds: 19 * 60,
+    overall_score: 3.1,
+    label: "fair",
+    star: { situation: 3.8, task: 3.2, action: 3, result: 2.4 },
+    timed_out_count: 1,
   },
   {
     id: "iv-002",
-    completed_at: at(12, 21, 5),
+    jd: PO,
+    completed_at: ago(12, 1),
     duration_seconds: 15 * 60,
-    jd: { id: "jd-po-assistant", title: "Product Owner Assistant", company: "Ngân hàng C" },
-    round_title: "Vòng 1 (HR cơ bản)",
-    question_count: 3,
-    total_score: 68,
-    question_scores: [64, 68, 72],
+    overall_score: 2.7,
+    label: "basic",
+    star: { situation: 3.2, task: 2.8, action: 2.6, result: 2.2 },
+    timed_out_count: 1,
   },
   {
     id: "iv-001",
-    completed_at: at(21, 14, 0),
-    duration_seconds: 25 * 60,
-    jd: baJd,
-    round_title: "Vòng làm quen",
-    question_count: 5,
-    total_score: 61,
-    question_scores: [66, 63, 60, 58, 58],
+    jd: BA,
+    completed_at: ago(14),
+    duration_seconds: 20 * 60,
+    overall_score: 2.9,
+    label: "basic",
+    star: { situation: 3.5, task: 3, action: 2.8, result: 2.3 },
+    timed_out_count: 0,
   },
   {
     id: "iv-000",
-    completed_at: at(50, 10, 0),
+    jd: DA,
+    completed_at: ago(50),
     duration_seconds: 12 * 60,
-    jd: { id: "jd-da-intern", title: "Data Analyst Intern", company: "Công ty Thương mại điện tử B" },
-    round_title: "Vòng thử nghiệm",
-    question_count: 3,
-    total_score: 55,
-    question_scores: [52, 56, 57],
+    overall_score: 2.4,
+    label: "basic",
+    star: { situation: 3, task: 2.5, action: 2.3, result: 1.8 },
+    timed_out_count: 2,
   },
 ]
 
-/** STAR của buổi đầu tiên trong từng khoảng; buổi gần nhất lấy từ mockInterviewReport. */
-export const mockStarFirst: Record<"iv-001" | "iv-000", StarScore> = {
-  "iv-001": { situation: 72, task: 64, action: 58, result: 48 },
-  "iv-000": { situation: 66, task: 58, action: 52, result: 44 },
-}
-
-export const mockStarInsight =
-  "Điểm Kết quả (Result) tăng rõ nhờ bạn đã bổ sung các con số đo lường cụ thể (KPI, % thời gian tiết kiệm) khi kể về đồ án."
-
-export const mockCvComparison: CvComparison = {
-  from: { id: "cv-v2", version: 2, file_name: "CV_NguyenMinhAnh_BA.pdf" },
-  to: { id: "cv-v3", version: 3, file_name: "Business_Analyst_MinhAnh_v2.pdf" },
-  jd_title: "Business Analyst Intern",
-  analysis_id: "ga-001",
-  ats_before: 76,
-  ats_after: 85,
-  match_before: 64,
-  match_after: 78,
-  keywords_before: 7,
-  keywords_after: 13,
-  keywords_added: ["User Story", "BPMN 2.0", "SQL", "UAT", "Agile/Scrum", "Stakeholder Mapping"],
-}
-
-export const mockMilestones: ProgressMilestone[] = [
-  {
-    id: "m-iv-005",
-    kind: "interview",
-    title: "Hoàn thành buổi phỏng vấn thứ 5",
-    description: "Đạt 82/100 điểm STAR. Trả lời tốt câu hỏi xử lý xung đột yêu cầu (Scope Creep).",
-    occurred_at: at(0, 9, 30),
-  },
-  {
-    id: "m-export",
-    kind: "cv_export",
-    title: "Xuất CV phiên bản 3",
-    description: "Độ khớp với JD Business Analyst Intern tăng từ 64% lên 78% sau khi áp dụng gợi ý.",
-    occurred_at: at(1, 22, 10),
-  },
-  {
-    id: "m-advisor",
-    kind: "advisor_comment",
-    title: "Cố vấn phản hồi",
-    description: "ThS. Trần Hoàng Nam để lại 2 ghi chú cho câu hỏi tình huống số 2 và 4.",
-    occurred_at: at(2, 16, 0),
-  },
-  {
-    id: "m-start",
-    kind: "start",
-    title: "Khởi đầu hành trình",
-    description: "Tải lên CV đầu tiên và hoàn thành buổi phỏng vấn làm quen (61/100).",
-    occurred_at: at(21, 14, 0),
-  },
-  {
-    id: "m-trial",
-    kind: "interview",
-    title: "Buổi thử nghiệm đầu tiên",
-    description: "Làm quen với phòng phỏng vấn ở vị trí Data Analyst Intern (55/100).",
-    occurred_at: at(50, 10, 0),
-  },
+/** Các lượt phân tích trước phiên mock, ngoài mockGapAnalysis (ga-001: CV v1.1 với JD Business Analyst Intern). */
+export const mockAnalysisSeeds: {
+  id: string
+  cv_version_id: string
+  jd_id: string
+  status: AnalysisStatus
+  match_score: number | null
+  created_at: string
+}[] = [
+  { id: "ga-000", cv_version_id: "cv-v1", jd_id: BA.id, status: "completed", match_score: 58.3, created_at: ago(10) },
+  { id: "ga-po", cv_version_id: "cv-v1", jd_id: PO.id, status: "completed", match_score: 62, created_at: ago(13) },
+  { id: "ga-da", cv_version_id: "cv-v1", jd_id: DA.id, status: "failed", match_score: null, created_at: ago(51) },
 ]

@@ -5,13 +5,13 @@ import { useEffect, useMemo, useState } from "react"
 import { ArrowRight, ClipboardPaste, Library, Loader2, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
+import { BottomActionBar } from "@/components/common/bottom-action-bar"
 import { AnalysisStepper } from "@/components/student/analysis/analysis-stepper"
 import { CvPickStep } from "@/components/student/analysis/cv-pick-step"
 import {
-  BaseMatchCard,
   IntegrityBox,
   JD_TABS,
-  JdLibrary,
+  JdLibraryPicker,
   JdPasteForm,
   SelectedCvCard,
   type JdTab,
@@ -36,13 +36,12 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
   const [cvId, setCvId] = useState<string | null>(initialCvId)
   // Vào từ nút "Phân tích" trên thẻ CV (?cv=) thì CV đã chọn sẵn → vào thẳng bước 2.
   const [step, setStep] = useState<0 | 1>(initialCvId ? 1 : 0)
-  const [tab, setTab] = useState<JdTab>("paste")
+  const [tab, setTab] = useState<JdTab>("library")
   const [paste, setPaste] = useState<PastedJd>(EMPTY_PASTE)
   const [libraryJd, setLibraryJd] = useState<JobDescription | null>(null)
-  const [showErrors, setShowErrors] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // US-SV-02 AC3: chưa có CV thì chặn và đưa về bước tải CV.
+  // US-SV-02 AC3: chưa có CV thì chặn và đưa về trang CV để tải lên.
   useEffect(() => {
     if (cvs && cvs.length === 0) {
       toast.warning("Bạn cần tải CV lên trước khi phân tích với JD.")
@@ -56,7 +55,12 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
     return cvs.find((cv) => cv.id === cvId) ?? cvs.find((cv) => cv.is_active) ?? cvs[0]
   }, [cvs, cvId])
 
+  const pasteTouched = paste.title.trim() !== "" || paste.text.trim() !== ""
   const pasteReady = paste.title.trim() !== "" && countWords(paste.text) >= JD_MIN_WORDS
+  // SV chỉ chọn một nguồn JD: tab đang mở quyết định gửi JD thư viện hay JD tự dán.
+  const ready = tab === "library" ? libraryJd !== null : pasteReady
+  const missingHint =
+    tab === "library" ? "Hãy chọn một vị trí trong thư viện JD." : `Nhập tiêu đề và tối thiểu ${JD_MIN_WORDS} từ nội dung JD.`
   const selectionLabel =
     tab === "library"
       ? libraryJd && { text: libraryJd.title, source: "Thư viện", icon: Library }
@@ -65,22 +69,13 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
   function reset() {
     setPaste(EMPTY_PASTE)
     setLibraryJd(null)
-    setShowErrors(false)
   }
 
   async function submit() {
-    if (!selectedCv) return
-    if (tab === "paste" && !pasteReady) {
-      setShowErrors(true)
-      return
-    }
-    if (tab === "library" && !libraryJd) {
-      toast.info("Hãy chọn một JD trong thư viện.")
-      return
-    }
+    if (!selectedCv || !ready) return
     setSubmitting(true)
     try {
-      const result = await api.createGapAnalysis(
+      const analysis = await api.createGapAnalysis(
         tab === "library"
           ? { cv_version_id: selectedCv.id, jd_id: libraryJd!.id }
           : {
@@ -90,9 +85,10 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
               jd_company: paste.company.trim() || undefined,
             },
       )
-      router.push(`/student/analysis/${encodeURIComponent(result.id)}`)
+      // Trang kết quả hiển thị tiến độ từng bước cho tới khi phân tích xong.
+      router.push(`/student/analysis/${encodeURIComponent(analysis.id)}`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Không phân tích được. Hãy thử lại.")
+      toast.error(err instanceof Error ? err.message : "Không bắt đầu phân tích được. Hãy thử lại.")
       setSubmitting(false)
     }
   }
@@ -112,8 +108,8 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
   const SelectionIcon = selectionLabel ? selectionLabel.icon : null
   const steps = [
     { title: "Chọn CV", description: step === 0 ? "Chọn phiên bản CV để đối chiếu" : selectedCv.file_name },
-    { title: "Chọn vị trí / JD", description: "Dán hoặc chọn JD mục tiêu" },
-    { title: "Xem phân tích", description: "Đối soát và đề xuất chiến lược" },
+    { title: "Chọn vị trí / JD", description: "Chọn từ thư viện hoặc dán JD" },
+    { title: "Xem phân tích", description: "Đối soát và đề xuất cải thiện" },
   ]
 
   if (step === 0) {
@@ -141,7 +137,6 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
       <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
         <aside className="grid min-w-0 gap-4 lg:sticky lg:top-24">
           <SelectedCvCard selected={selectedCv} onChangeCv={() => setStep(0)} />
-          {selectedCv.ats_score !== null && <BaseMatchCard score={selectedCv.ats_score} />}
           <IntegrityBox />
         </aside>
 
@@ -168,16 +163,16 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
             ))}
           </div>
 
-          {tab === "paste" ? (
-            <JdPasteForm value={paste} onChange={setPaste} showErrors={showErrors} />
+          {tab === "library" ? (
+            <JdLibraryPicker items={library} selected={libraryJd} onSelect={setLibraryJd} />
           ) : (
-            <JdLibrary items={library} selectedId={libraryJd?.id ?? null} onSelect={setLibraryJd} />
+            <JdPasteForm value={paste} onChange={setPaste} showErrors={pasteTouched} />
           )}
         </div>
       </div>
 
       {/* Thanh hành động dính đáy (Figma: node 18:2980) */}
-      <div className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-card/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:px-6">
+      <BottomActionBar>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 text-xs">
             <span className="font-medium text-ink-2">Đã chọn:</span>
@@ -200,18 +195,19 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
               <span className="text-ink-3">Chưa có vị trí nào</span>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {!ready && <span className="text-xs text-ink-2">{missingHint}</span>}
             <Button variant="ghost" className="h-10 px-4 text-ink-2" onClick={reset} disabled={submitting}>
               Huỷ & Chọn lại
             </Button>
-            <Button className="h-10 px-6 shadow-md" onClick={submit} disabled={submitting}>
+            <Button className="h-10 px-6 shadow-md" onClick={submit} disabled={submitting || !ready}>
               {submitting ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-              {submitting ? "Đang phân tích…" : "Bắt đầu phân tích CV với JD"}
+              {submitting ? "Đang gửi…" : "Phân tích CV với JD"}
               {!submitting && <ArrowRight aria-hidden />}
             </Button>
           </div>
         </div>
-      </div>
+      </BottomActionBar>
     </div>
   )
 }

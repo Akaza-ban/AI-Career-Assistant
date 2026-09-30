@@ -1,16 +1,29 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { CalendarDays, CheckCheck, Clock, LineChart, ListChecks, Lock, MessageSquareText, Radar, Sparkles, Timer } from "lucide-react"
+import { useState } from "react"
+import {
+  CalendarDays,
+  CheckCheck,
+  Clock,
+  Eye,
+  LineChart,
+  Lock,
+  MessageSquareText,
+  Pencil,
+  Radar,
+  Timer,
+  TimerOff,
+} from "lucide-react"
 
+import { ReportDialog } from "@/components/advisor/profile/report-dialog"
 import { ReviewDialog } from "@/components/advisor/profile/review-dialog"
+import { InterviewProgressBlock, StarAverageBars } from "@/components/advisor/progress-blocks"
 import { Panel, PanelHeader } from "@/components/common/panel"
-import { ScoreLineChart, type ScorePoint } from "@/components/common/score-line-chart"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { formatDate, formatRelativeTime, formatWhen } from "@/lib/format"
-import { scoreVerdict, STAR_KEYS, STAR_LABELS, STAR_LEVEL_STYLE, starLevel } from "@/lib/star"
-import type { AdvisorInterviewItem, AdvisorStudentDetail } from "@/lib/types"
+import { formatRelativeTime, formatWhen } from "@/lib/format"
+import { LABEL_META, formatScore } from "@/lib/interview"
+import type { AdvisorInterviewRow, AdvisorReviewInfo, AdvisorStudentDetail } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 type SessionFilter = "all" | "pending" | "reviewed" | "private"
@@ -22,89 +35,72 @@ const FILTERS: { value: SessionFilter; label: string }[] = [
   { value: "private", label: "Chưa chia sẻ" },
 ]
 
-function sessionState(item: AdvisorInterviewItem): Exclude<SessionFilter, "all"> {
+function sessionState(item: AdvisorInterviewRow): Exclude<SessionFilter, "all"> {
   if (!item.shared) return "private"
   return item.review ? "reviewed" : "pending"
 }
 
 interface ProfileInterviewTabProps {
   detail: AdvisorStudentDetail
-  interviews: AdvisorInterviewItem[]
-  onReviewed: (item: AdvisorInterviewItem) => void
+  interviews: AdvisorInterviewRow[]
+  onReviewed: (sessionId: string, review: AdvisorReviewInfo) => void
 }
 
-// Figma: frame "Hồ sơ sinh viên - Phỏng vấn & STAR" (18:6025).
+// Figma: frame "Hồ sơ sinh viên - Phỏng vấn & STAR" (18:6025). Điểm và tóm tắt luôn xem được;
+// câu trả lời chi tiết và nhận xét chỉ khi SV chia sẻ báo cáo đó.
 export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileInterviewTabProps) {
   const { student } = detail
   const [filter, setFilter] = useState<SessionFilter>("all")
-  const [reviewing, setReviewing] = useState<AdvisorInterviewItem | null>(null)
+  const [position, setPosition] = useState(0)
+  const [reviewing, setReviewing] = useState<AdvisorInterviewRow | null>(null)
+  const [viewing, setViewing] = useState<AdvisorInterviewRow | null>(null)
 
-  const points: ScorePoint[] = useMemo(
-    () =>
-      [...interviews].reverse().map((item, i) => ({
-        label: `Buổi ${i + 1}`,
-        sub: formatDate(item.completed_at).slice(0, 5),
-        detail: item.round_title,
-        value: item.total_score,
-      })),
-    [interviews],
-  )
+  const groups = detail.interview_progress
+  const group = groups[Math.min(position, groups.length - 1)]
   const counts = Object.fromEntries(
     FILTERS.map((f) => [f.value, f.value === "all" ? interviews.length : interviews.filter((i) => sessionState(i) === f.value).length]),
   ) as Record<SessionFilter, number>
   const visible = filter === "all" ? interviews : interviews.filter((i) => sessionState(i) === filter)
-  const total = interviews.length
+  // Số thứ tự buổi trong từng vị trí (cũ nhất = 1), khớp cách đánh số ở cờ "Cần chú ý".
+  const roundOf = new Map<string, number>()
+  for (const g of groups) g.points.forEach((p, i) => roundOf.set(p.id, i + 1))
 
   return (
     <div className="grid gap-6">
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
         <Panel className="grid gap-4">
-          <PanelHeader icon={LineChart} title="Tiến trình điểm phỏng vấn" aside={<span className="text-xs text-ink-2">{total} buổi đã chấm</span>} />
-          {points.length > 0 ? (
-            <ScoreLineChart points={points} highlight unit="điểm STAR" className="h-56" />
+          <PanelHeader
+            icon={LineChart}
+            title="Tiến bộ theo vị trí"
+            aside={<span className="text-xs text-ink-2">Điểm chỉ so sánh trong cùng vị trí</span>}
+          />
+          {groups.length > 1 && (
+            <div role="group" aria-label="Chọn vị trí" className="flex flex-wrap gap-1.5">
+              {groups.map((g, i) => (
+                <button
+                  key={g.jd.id}
+                  type="button"
+                  aria-pressed={g === group}
+                  onClick={() => setPosition(i)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    g === group ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
+                  )}
+                >
+                  {g.jd.title} ({g.session_count})
+                </button>
+              ))}
+            </div>
+          )}
+          {group ? (
+            <InterviewProgressBlock group={group} />
           ) : (
-            <p className="rounded-xl bg-surface p-6 text-center text-sm text-ink-2">Sinh viên chưa có buổi phỏng vấn nào được chấm.</p>
+            <p className="rounded-xl bg-surface p-6 text-center text-sm text-ink-2">Sinh viên chưa luyện phỏng vấn buổi nào.</p>
           )}
         </Panel>
         <Panel className="grid gap-4">
-          <PanelHeader icon={Radar} title="Tiêu chí STAR" aside={<Badge variant="violet">AI đánh giá</Badge>} />
-          {student.star_average ? (
-            <>
-              <ul className="grid gap-3">
-                {STAR_KEYS.map((key) => {
-                  const score = student.star_average![key]
-                  const level = STAR_LEVEL_STYLE[starLevel(score)]
-                  return (
-                    <li key={key} className="grid gap-1">
-                      <p className="flex items-center justify-between gap-2 text-sm">
-                        <span className="flex items-center gap-2 text-ink">
-                          <span className="grid size-5 place-items-center rounded-md bg-blue-soft text-[11px] font-bold text-blue">
-                            {STAR_LABELS[key].letter}
-                          </span>
-                          {STAR_LABELS[key].label}
-                        </span>
-                        <span className={cn("font-semibold", level.text)}>{score}%</span>
-                      </p>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-surface">
-                        <div className={cn("h-full rounded-full", level.bar)} style={{ width: `${score}%` }} />
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-              {detail.star_insight && (
-                <p className="flex gap-2 rounded-xl bg-violet-soft/60 p-3 text-xs leading-5 text-ink">
-                  <Sparkles className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
-                  <span>
-                    <strong className="text-violet">Gợi ý cho cố vấn: </strong>
-                    {detail.star_insight}
-                  </span>
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="rounded-xl bg-surface p-4 text-sm text-ink-2">Chưa có dữ liệu STAR được chia sẻ.</p>
-          )}
+          <PanelHeader icon={Radar} title="Tiêu chí STAR" />
+          <StarAverageBars star={detail.star} insight={detail.insight} />
         </Panel>
       </div>
 
@@ -126,7 +122,9 @@ export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileI
                 )}
               >
                 {f.label}
-                <span className={cn("rounded-full px-1.5 text-[11px]", filter === f.value ? "bg-card/25" : "bg-surface")}>{counts[f.value]}</span>
+                <span className={cn("rounded-full px-1.5 text-[11px]", filter === f.value ? "bg-card/25" : "bg-surface")}>
+                  {counts[f.value]}
+                </span>
               </button>
             ))}
           </div>
@@ -137,13 +135,19 @@ export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileI
           <ol className="grid gap-4">
             {visible.map((item) => (
               <li key={item.id}>
-                <SessionCard item={item} index={total - interviews.indexOf(item)} onReview={() => setReviewing(item)} />
+                <SessionCard
+                  item={item}
+                  round={roundOf.get(item.id) ?? 1}
+                  onView={() => setViewing(item)}
+                  onReview={() => setReviewing(item)}
+                />
               </li>
             ))}
           </ol>
         )}
       </section>
 
+      <ReportDialog studentId={student.id} studentName={student.full_name} item={viewing} onClose={() => setViewing(null)} />
       <ReviewDialog
         studentId={student.id}
         studentName={student.full_name}
@@ -155,116 +159,116 @@ export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileI
   )
 }
 
-function SessionCard({ item, index, onReview }: { item: AdvisorInterviewItem; index: number; onReview: () => void }) {
+function SessionCard({
+  item,
+  round,
+  onView,
+  onReview,
+}: {
+  item: AdvisorInterviewRow
+  round: number
+  onView: () => void
+  onReview: () => void
+}) {
   const state = sessionState(item)
-  const verdict = scoreVerdict(item.total_score)
+  const label = LABEL_META[item.label]
   const minutes = Math.max(1, Math.round(item.duration_seconds / 60))
 
-  const header = (
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div className="flex min-w-0 items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-soft font-heading text-sm font-bold text-blue">
-          {String(index).padStart(2, "0")}
-        </span>
-        <div className="grid min-w-0 gap-1">
-          <p className="font-heading font-bold text-ink">
-            Buổi {index}: {item.round_title}
-          </p>
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
-            <span className="flex items-center gap-1">
-              <CalendarDays className="size-3.5" aria-hidden />
-              {formatWhen(item.completed_at)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Timer className="size-3.5" aria-hidden />
-              {minutes} phút
-            </span>
-            <span className="flex items-center gap-1">
-              <ListChecks className="size-3.5" aria-hidden />
-              {item.question_count} câu hỏi
-            </span>
-            <Badge variant="neutral" className="h-auto px-2 py-0.5">
-              {item.jd.title}
-              {item.jd.company && ` · ${item.jd.company}`}
-            </Badge>
-          </p>
-        </div>
-      </div>
-      <span className="flex items-center gap-2">
-        <span className="text-xs text-ink-2">Điểm AI</span>
-        <strong className={cn("font-heading text-lg", verdict.className)}>{item.total_score}/100</strong>
-        <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", verdict.badge)}>{verdict.label}</span>
-      </span>
-    </div>
-  )
-
-  if (state === "private") {
-    return (
-      <Panel className="grid gap-3 bg-surface/60 p-5 shadow-none">
-        {header}
-        <p className="flex items-center gap-2 text-sm text-ink-2">
-          <Lock className="size-4" aria-hidden />
-          Sinh viên chưa chia sẻ báo cáo chi tiết của buổi này.
-        </p>
-      </Panel>
-    )
-  }
-
   return (
-    <Panel className={cn("grid gap-4 p-5", state === "pending" && "ring-2 ring-blue/40")}>
-      {header}
-      {item.summary && (
-        <div className="grid gap-2 rounded-xl bg-surface p-4">
-          <p className="text-xs font-semibold text-ink-2">Tóm tắt của AI</p>
-          <p className="text-sm leading-6 text-ink">{item.summary}</p>
-          <p className="flex flex-wrap gap-1.5 text-xs text-ink-2">
-            Điểm từng câu:
-            {item.question_scores.map((s, i) => (
-              <span key={i} className={cn("rounded px-1.5 font-medium", scoreVerdict(s).badge)}>
-                C{i + 1}: {s}
+    <Panel className={cn("grid gap-4 p-5", state === "private" && "bg-surface/60 shadow-none", state === "pending" && "ring-2 ring-blue/40")}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-soft font-heading text-sm font-bold text-blue">
+            {String(round).padStart(2, "0")}
+          </span>
+          <div className="grid min-w-0 gap-1">
+            <p className="font-heading font-bold text-ink">
+              Buổi {round} · {item.jd.title}
+              {item.jd.company && <span className="font-normal text-ink-2"> · {item.jd.company}</span>}
+            </p>
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
+              <span className="flex items-center gap-1">
+                <CalendarDays className="size-3.5" aria-hidden />
+                {formatWhen(item.completed_at)}
               </span>
-            ))}
-          </p>
+              <span className="flex items-center gap-1">
+                <Timer className="size-3.5" aria-hidden />
+                {minutes} phút
+              </span>
+              {item.timed_out_count > 0 && (
+                <span className="flex items-center gap-1 text-warn">
+                  <TimerOff className="size-3.5" aria-hidden />
+                  {item.timed_out_count} câu hết giờ
+                </span>
+              )}
+            </p>
+          </div>
         </div>
-      )}
-      {item.review ? (
-        <div className="grid gap-2 rounded-xl border border-violet/20 bg-violet-soft/40 p-4">
-          <p className="flex flex-wrap items-center justify-between gap-2 text-xs">
-            <span className="flex items-center gap-1.5 font-semibold text-violet">
-              <MessageSquareText className="size-4" aria-hidden />
-              Nhận xét của {item.review.advisor_name} · {formatRelativeTime(item.review.reviewed_at).toLowerCase()}
-            </span>
-            {item.review.score !== null && (
-              <span className="font-medium text-ink">
-                Điểm cố vấn chốt: {item.review.score}/100 ({item.review.score - item.total_score > 0 ? "+" : ""}
-                {item.review.score - item.total_score} so với AI)
-              </span>
-            )}
-          </p>
-          <blockquote className="text-sm leading-6 text-ink italic">“{item.review.comment}”</blockquote>
-          <p className="flex items-center gap-1.5 text-xs">
-            {item.review_seen_at ? (
-              <span className="flex items-center gap-1 text-good">
-                <CheckCheck className="size-3.5" aria-hidden />
-                Sinh viên đã xem {formatRelativeTime(item.review_seen_at).toLowerCase()}
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-ink-2">
-                <Clock className="size-3.5" aria-hidden />
-                Sinh viên chưa xem
-              </span>
-            )}
-          </p>
-        </div>
+        <span className="flex items-center gap-2">
+          <span className="text-xs text-ink-2">Điểm AI</span>
+          <strong className={cn("font-heading text-lg", label.className)}>{formatScore(item.overall_score)}/5</strong>
+          <Badge variant="neutral" className={label.badge}>
+            {label.text}
+          </Badge>
+        </span>
+      </div>
+
+      <p className="rounded-xl bg-surface px-4 py-3 text-sm leading-6 text-ink">
+        <span className="font-semibold text-ink-2">Tóm tắt: </span>
+        {item.summary}
+      </p>
+
+      {item.review && <ReviewBlock review={item.review} />}
+
+      {state === "private" ? (
+        <p className="flex items-center gap-2 text-sm text-ink-2">
+          <Lock className="size-4 shrink-0" aria-hidden />
+          Sinh viên chưa chia sẻ báo cáo này: bạn chỉ xem được điểm và tóm tắt ở trên.
+        </p>
       ) : (
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-ink-2">Sinh viên đã chia sẻ báo cáo này và đang chờ nhận xét của bạn.</p>
-          <Button onClick={onReview} className="h-10 px-4">
-            <MessageSquareText aria-hidden />
-            Nhận xét buổi này
-          </Button>
+          <p className="text-xs text-ink-2">
+            {item.review ? "Điểm AI giữ nguyên, nhận xét của bạn hiện trong báo cáo của sinh viên." : "Sinh viên đã chia sẻ báo cáo này và đang chờ nhận xét của bạn."}
+          </p>
+          <span className="flex flex-wrap gap-2">
+            <Button variant="soft" onClick={onView} className="h-10 px-4">
+              <Eye aria-hidden />
+              Xem báo cáo
+            </Button>
+            <Button variant={item.review ? "soft" : "default"} onClick={onReview} className="h-10 px-4">
+              {item.review ? <Pencil aria-hidden /> : <MessageSquareText aria-hidden />}
+              {item.review ? "Sửa nhận xét" : "Nhận xét buổi này"}
+            </Button>
+          </span>
         </div>
       )}
     </Panel>
+  )
+}
+
+function ReviewBlock({ review }: { review: AdvisorReviewInfo }) {
+  const edited = review.updated_at !== review.created_at
+  return (
+    <div className="grid gap-2 rounded-xl border border-violet/20 bg-violet-soft/40 p-4">
+      <p className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <span className="flex items-center gap-1.5 font-semibold text-violet">
+          <MessageSquareText className="size-4" aria-hidden />
+          Nhận xét của bạn · {edited ? "sửa " : ""}
+          {formatRelativeTime(review.updated_at).toLowerCase()}
+        </span>
+        {review.seen_at ? (
+          <span className="flex items-center gap-1 text-good">
+            <CheckCheck className="size-3.5" aria-hidden />
+            Sinh viên đã xem {formatRelativeTime(review.seen_at).toLowerCase()}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1 text-ink-2">
+            <Clock className="size-3.5" aria-hidden />
+            Sinh viên chưa xem
+          </span>
+        )}
+      </p>
+      <blockquote className="text-sm leading-6 whitespace-pre-line text-ink">{review.comment}</blockquote>
+    </div>
   )
 }

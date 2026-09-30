@@ -96,7 +96,6 @@ export const advisorShell: ShellConfig = {
   nav: [
     { href: "/advisor", label: "Tổng quan", icon: LayoutGrid },
     { href: "/advisor/students", label: "Sinh viên phụ trách", icon: Users, match: "/advisor/students" },
-    { href: "/advisor/progress", label: "Theo dõi tiến bộ", icon: TrendingUp },
   ],
   settingsHref: null,
   extraPages: [

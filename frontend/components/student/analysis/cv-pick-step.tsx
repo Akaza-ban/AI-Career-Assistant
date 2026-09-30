@@ -1,13 +1,12 @@
 "use client"
 
-import Link from "next/link"
-import { ArrowRight, CircleCheck, FileText, Upload } from "lucide-react"
+import { ArrowRight, CircleCheck, FileText } from "lucide-react"
 
+import { BottomActionBar } from "@/components/common/bottom-action-bar"
 import { Panel } from "@/components/common/panel"
-import { ScoreRing } from "@/components/common/score-ring"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { formatBytes, formatRelativeTime } from "@/lib/format"
+import { formatBytes } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -18,23 +17,17 @@ interface CvPickStepProps {
   onContinue: () => void
 }
 
-/** Bước 1 của luồng phân tích: chọn phiên bản CV để đối chiếu với JD. */
+/** Bước 1 của luồng phân tích: chọn một phiên bản CV đã có trong "CV của tôi" (không tải CV mới ở đây). */
 export function CvPickStep({ cvs, selectedId, onSelect, onContinue }: CvPickStepProps) {
   const selected = cvs.find((cv) => cv.id === selectedId)
   return (
     <>
       <Panel className="grid gap-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="grid gap-1">
-            <h2 className="font-heading text-lg font-bold">Chọn phiên bản CV để phân tích</h2>
-            <p className="text-sm text-ink-2">
-              Mỗi lần phân tích gắn với một phiên bản CV cụ thể, để bạn so sánh kết quả giữa các phiên bản về sau.
-            </p>
-          </div>
-          <Button variant="soft" className="h-9" nativeButton={false} render={<Link href="/student/cv" />}>
-            <Upload aria-hidden />
-            Tải CV mới
-          </Button>
+        <div className="grid gap-1">
+          <h2 className="font-heading text-lg font-bold">Chọn phiên bản CV để phân tích</h2>
+          <p className="text-sm text-ink-2">
+            Mỗi lần phân tích gắn với một phiên bản CV cụ thể, để bạn so sánh kết quả giữa các phiên bản về sau.
+          </p>
         </div>
 
         <div role="radiogroup" aria-label="Phiên bản CV" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -68,22 +61,16 @@ export function CvPickStep({ cvs, selectedId, onSelect, onContinue }: CvPickStep
                         {cv.file_name}
                       </span>
                       <span className="text-xs text-ink-2">
-                        {cv.label} · {cv.file_type.toUpperCase()} · {formatBytes(cv.size_bytes)} · cập nhật{" "}
-                        {formatRelativeTime(cv.uploaded_at).toLowerCase()}
+                        {cv.label} · {cv.file_type.toUpperCase()} · {formatBytes(cv.size_bytes)}
                       </span>
                     </span>
                   </span>
-                  {cv.ats_score !== null && <ScoreRing score={cv.ats_score} size={36} strokeWidth={3.5} labelClassName="text-xs" />}
-                </span>
-                <span className="flex flex-wrap gap-1.5 pl-6.5">
                   {cv.is_active && (
-                    <Badge variant="good">
+                    <Badge variant="good" className="shrink-0">
                       <CircleCheck aria-hidden />
                       Đang dùng
                     </Badge>
                   )}
-                  {cv.is_draft && <Badge variant="neutral">Bản nháp</Badge>}
-                  <Badge variant={cv.target_title ? "blue" : "neutral"}>{cv.target_title ?? "Chưa gắn vị trí"}</Badge>
                 </span>
               </button>
             )
@@ -91,7 +78,7 @@ export function CvPickStep({ cvs, selectedId, onSelect, onContinue }: CvPickStep
         </div>
       </Panel>
 
-      <div className="sticky bottom-0 z-20 -mx-4 border-t border-line bg-card/95 px-4 py-3 backdrop-blur-sm sm:-mx-6 sm:px-6">
+      <BottomActionBar>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <span className="flex min-w-0 items-center gap-2 text-xs">
             <span className="font-medium text-ink-2">Đã chọn:</span>
@@ -109,7 +96,7 @@ export function CvPickStep({ cvs, selectedId, onSelect, onContinue }: CvPickStep
             <ArrowRight aria-hidden />
           </Button>
         </div>
-      </div>
+      </BottomActionBar>
     </>
   )
 }
