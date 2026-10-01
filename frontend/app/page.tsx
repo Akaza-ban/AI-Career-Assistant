@@ -24,13 +24,13 @@ export default function Home() {
     <main className="mx-auto flex min-h-screen w-full max-w-[1180px] flex-col justify-center gap-10 px-4 py-16 sm:px-10">
       <div className="grid justify-items-start gap-4">
         <span className="rounded-full bg-blue-soft px-3 py-1 font-heading text-[13px] font-semibold text-blue">
-          CareerX {!ALL_LIVE && "· dữ liệu minh hoạ"}
+          {/* CareerX {!ALL_LIVE} */}
         </span>
         <h1 className="font-heading text-4xl font-extrabold leading-tight sm:text-5xl">
           Chọn vai trò để <span className="text-grad">bắt đầu</span>
         </h1>
         <p className="max-w-xl text-ink-2">
-          Bản dựng thử giao diện. Đăng nhập thật sẽ thay thế màn hình này khi backend sẵn sàng.
+          {/* Bản dựng thử giao diện. Đăng nhập thật sẽ thay thế màn hình này khi backend sẵn sàng. */}
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">

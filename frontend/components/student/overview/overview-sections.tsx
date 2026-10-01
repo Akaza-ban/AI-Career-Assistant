@@ -358,7 +358,7 @@ const JOURNEY: { kind: NextStep["kind"]; label: string }[] = [
   { kind: "upload_cv", label: "Tải CV" },
   { kind: "analyze", label: "Phân tích CV–JD" },
   { kind: "interview", label: "Luyện phỏng vấn" },
-  { kind: "improve", label: "Cải thiện STAR" },
+  { kind: "improve", label: "Cải thiện điểm STAR" },
 ]
 
 function Journey({ current }: { current: NextStep["kind"] }) {
@@ -513,7 +513,7 @@ export function SkillsCard({ skills, className }: { skills: StudentOverview["ski
           />
         ) : (
           <>
-            <p className="text-xs text-ink-2">Từ lần phân tích gần nhất với {skills.jd.title}, nhóm Bắt buộc trước.</p>
+            <p className="text-xs text-ink-2">Từ lần phân tích gần nhất với {skills.jd.title}.</p>
             <ul className="flex flex-wrap gap-2">
               {skills.skills.map((skill) => (
                 <li
