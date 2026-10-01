@@ -53,8 +53,10 @@ export const mmss = (seconds: number) =>
  * Xu hướng so với buổi trước (PRD mục 5.1): ≥ +0,3 cải thiện rõ rệt; từ −0,3 đến +0,3 chưa thay đổi đáng kể;
  * ≤ −0,3 giảm, cần chú ý. Ngưỡng 0,3 đang chờ PO xác nhận.
  */
+export const TREND_THRESHOLD = 0.3
+
 export function trendOf(delta: number) {
-  if (delta >= 0.3) return { text: "Cải thiện rõ rệt", className: "text-good" }
-  if (delta <= -0.3) return { text: "Giảm, cần chú ý", className: "text-bad" }
+  if (delta >= TREND_THRESHOLD) return { text: "Cải thiện rõ rệt", className: "text-good" }
+  if (delta <= -TREND_THRESHOLD) return { text: "Giảm, cần chú ý", className: "text-bad" }
   return { text: "Chưa thay đổi đáng kể", className: "text-ink-2" }
 }

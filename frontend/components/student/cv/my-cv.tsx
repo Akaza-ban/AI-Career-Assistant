@@ -9,7 +9,7 @@ import { CvPreviewDialog } from "@/components/student/cv/cv-preview-dialog"
 import {
   CvCard,
   CvDropzone,
-  CvTipCard,
+  CvTips,
   CvToolbar,
   UploadStatusBanner,
   type CvSort,
@@ -81,19 +81,19 @@ export function MyCv() {
         }}
       />
 
-      <div className="grid max-w-2xl min-w-0 gap-1">
-        <div className="flex items-center gap-2">
-          <h1 className="font-heading text-[28px] leading-9 font-bold">CV của tôi</h1>
-          {data && (
-            <Badge variant="neutral" className="h-auto bg-blue-soft px-2.5 py-0.5 font-medium">
-              {cvs.length} hồ sơ
-            </Badge>
-          )}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="grid min-w-0 gap-1">
+          <div className="flex items-center gap-2">
+            <h1 className="font-heading text-[28px] leading-9 font-bold">CV của tôi</h1>
+            {data && (
+              <Badge variant="neutral" className="h-auto bg-blue-soft px-2.5 py-0.5 font-medium">
+                {cvs.length} hồ sơ
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-ink-2">Quản lý các phiên bản CV theo từng vị trí ứng tuyển.</p>
         </div>
-        <p className="text-sm text-ink-2">
-          Quản lý các phiên bản CV theo từng vị trí mục tiêu và theo dõi mức độ tối ưu cho hệ thống lọc hồ sơ ATS với sự
-          trợ giúp của AI.
-        </p>
+        <CvTips />
       </div>
 
       <UploadStatusBanner state={uploadState} onDismiss={dismiss} />
@@ -140,8 +140,6 @@ export function MyCv() {
       ) : (
         <CvDropzone onFile={(f) => void upload(f)} onBrowse={openPicker} disabled={uploading} prominent />
       )}
-
-      <CvTipCard />
 
       <CvPreviewDialog cv={previewCv} open={previewOpen} onOpenChange={setPreviewOpen} />
     </div>

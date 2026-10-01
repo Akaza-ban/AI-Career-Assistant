@@ -19,7 +19,7 @@ export function FocusShell({ children }: { children: ReactNode }) {
             <div className="flex min-w-0 items-center gap-3">
               <Logo href="/student" compact />
               <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
-              <span className="hidden truncate text-sm font-medium text-violet sm:inline">Phòng mô phỏng STAR</span>
+              <span className="hidden truncate text-sm font-medium text-violet sm:inline">Phòng phỏng vấn thử</span>
             </div>
             <div className="flex shrink-0 items-center gap-3 sm:gap-4">
               <span className="hidden items-center gap-1.5 rounded-full bg-violet-soft px-3 py-1 text-xs font-semibold text-violet md:inline-flex">

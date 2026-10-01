@@ -34,9 +34,6 @@ interface ExtraPage {
 
 export interface ShellConfig {
   role: Role
-  roleLabel: string
-  /** Mục đầu tiên của breadcrumb. */
-  workspaceLabel: string
   nav: NavItem[]
   settingsHref: string | null
   extraPages: ExtraPage[]
@@ -49,13 +46,11 @@ const analysisResult = (id: string): Crumb => ({ label: "Kết quả phân tích
 // Phân tích CV & JD → Trình tối ưu CV → Xuất CV (/student/analysis/[id]/optimize, /export).
 export const studentShell: ShellConfig = {
   role: "student",
-  roleLabel: "Sinh viên",
-  workspaceLabel: "Không gian học tập",
   nav: [
     { href: "/student", label: "Tổng quan", icon: LayoutGrid },
     { href: "/student/cv", label: "CV của tôi", icon: FileText },
     { href: "/student/analysis/new", label: "Phân tích CV & JD", icon: ScanText, match: "/student/analysis" },
-    { href: "/student/interview/new", label: "Luyện phỏng vấn STAR", icon: MessagesSquare, match: "/student/interview" },
+    { href: "/student/interview/new", label: "Luyện phỏng vấn", icon: MessagesSquare, match: "/student/interview" },
     { href: "/student/history", label: "Lịch sử & Tiến bộ", icon: TrendingUp },
     { href: "/student/share", label: "Chia sẻ với Cố vấn", icon: Users },
   ],
@@ -83,7 +78,7 @@ export const studentShell: ShellConfig = {
     {
       pattern: /^\/student\/interview\/[^/]+\/report$/,
       title: "Báo cáo phỏng vấn",
-      parents: () => [{ label: "Luyện phỏng vấn STAR", href: "/student/interview/new" }],
+      parents: () => [{ label: "Luyện phỏng vấn", href: "/student/interview/new" }],
     },
     { pattern: /^\/student\/settings$/, title: "Cài đặt & Quyền riêng tư" },
   ],
@@ -91,8 +86,6 @@ export const studentShell: ShellConfig = {
 
 export const advisorShell: ShellConfig = {
   role: "advisor",
-  roleLabel: "Cố vấn",
-  workspaceLabel: "Không gian cố vấn",
   nav: [
     { href: "/advisor", label: "Tổng quan", icon: LayoutGrid },
     { href: "/advisor/students", label: "Sinh viên phụ trách", icon: Users, match: "/advisor/students" },
@@ -112,7 +105,7 @@ export function isNavActive(item: NavItem, pathname: string): boolean {
   return item.match ? pathname === prefix || pathname.startsWith(`${prefix}/`) : pathname === item.href
 }
 
-/** Breadcrumb sau mục "Không gian ...": các bước cha (có link) và trang hiện tại (href null). */
+/** Breadcrumb trên topbar: các bước cha (có link) và trang hiện tại (href null). */
 export function getBreadcrumb(config: ShellConfig, pathname: string): Crumb[] {
   for (const page of config.extraPages) {
     const match = pathname.match(page.pattern)

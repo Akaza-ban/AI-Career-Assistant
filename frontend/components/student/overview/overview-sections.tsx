@@ -12,29 +12,35 @@ import {
   FileText,
   Hourglass,
   Loader2,
-  Lock,
   MessagesSquare,
   Mic,
   PauseCircle,
   PlayCircle,
   ScanText,
   ShieldCheck,
-  Target,
+  Sparkles,
   Upload,
-  UserRound,
   type LucideIcon,
 } from "lucide-react"
 
-import { Panel, PanelHeader } from "@/components/common/panel"
+import { Panel, PanelHeader, SectionHeader } from "@/components/common/panel"
 import { IMPORTANCE_META } from "@/components/student/analysis/jd-picker-sections"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ANALYSIS_STEPS, MATCH_LABEL_META, formatPercent } from "@/lib/analysis"
-import { api } from "@/lib/api"
 import { formatDate, formatRelativeTime } from "@/lib/format"
-import { LABEL_META, STAR_META, STAR_ORDER, formatScore, mmss, trendOf } from "@/lib/interview"
+import {
+  LABEL_META,
+  QUESTION_COUNT,
+  SECONDS_PER_QUESTION,
+  STAR_META,
+  STAR_ORDER,
+  TREND_THRESHOLD,
+  formatScore,
+  mmss,
+  trendOf,
+} from "@/lib/interview"
 import type { AnalysisRow, InterviewRow, NextStep, SessionScore, StudentOverview } from "@/lib/types"
-import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
 const signed = (n: number) => `${n > 0 ? "+" : ""}${formatScore(n)}`
@@ -55,44 +61,72 @@ function callName(fullName: string): string {
   return parts.slice(-2).join(" ")
 }
 
+/** SV mới: chưa có CV, chưa phân tích, chưa phỏng vấn. */
+export function isNewStudent(overview: StudentOverview): boolean {
+  return overview.cv_count === 0 && overview.recent_analyses.length === 0 && overview.interview_count === 0
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+const INACTIVE_DAYS = 7
+const SESSION_MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
+
+/**
+ * Câu động viên dưới lời chào, chọn theo hoạt động thật của SV (xét từ trên xuống, gặp trường hợp nào dùng câu đó).
+ * Chỉ nói xu hướng, không lặp lại con số đã có ở 4 thẻ số liệu.
+ */
+function encouragement(overview: StudentOverview, now: Date): string {
+  const { interview_count, interview_week_count, latest_interview: latest, in_progress } = overview
+  if (isNewStudent(overview)) return "Chào mừng bạn đến với CareerX. Bắt đầu từ bước đầu tiên bên dưới nhé."
+
+  const activity = [
+    overview.cv_latest_at,
+    overview.latest_match?.completed_at,
+    latest?.completed_at,
+    ...overview.recent_analyses.map((a) => a.created_at),
+  ].flatMap((iso) => (iso ? [new Date(iso).getTime()] : []))
+  const busy = in_progress.interview !== null || in_progress.analyses.length > 0
+  const idleDays = activity.length > 0 ? Math.floor((now.getTime() - Math.max(...activity)) / DAY_MS) : 0
+  if (!busy && idleDays >= INACTIVE_DAYS) {
+    return `Đã ${idleDays} ngày bạn chưa quay lại. Bắt nhịp lại với bước tiếp theo bên dưới nhé.`
+  }
+
+  if (interview_count === 0) {
+    return "Bạn đã bắt đầu rồi. Hoàn thành từng bước bên dưới để sẵn sàng cho buổi phỏng vấn thử đầu tiên."
+  }
+  if (interview_week_count > 0) {
+    // Cùng ngưỡng với nhãn "Cải thiện rõ rệt" ở thẻ Điểm STAR gần nhất.
+    return latest?.delta != null && latest.delta >= TREND_THRESHOLD
+      ? "Điểm STAR của bạn đang đi lên. Giữ nhịp luyện đều mỗi tuần nhé."
+      : "Mỗi buổi luyện là một lần trả lời rõ ràng hơn. Tiếp tục nhé."
+  }
+  return `Một buổi phỏng vấn thử khoảng ${SESSION_MINUTES} phút là đủ để giữ nhịp tuần này.`
+}
+
+// Đặt thẳng trên nền trang, có khoảng thở rộng.
 export function GreetingBanner({ fullName, overview }: { fullName: string; overview: StudentOverview }) {
-  const position = overview.latest_interview?.jd ?? overview.latest_match?.jd
+  const now = new Date()
   return (
-    <Panel className="relative overflow-hidden p-8">
-      {/* Vệt màu trang trí góc phải (Figma: Gradient+Blur) */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-16 -right-16 size-80 rounded-full bg-gradient-to-bl from-violet-soft via-blue-soft/60 to-transparent blur-3xl"
-      />
-      <div className="relative flex flex-wrap items-center justify-between gap-4">
-        <div className="grid gap-1">
-          <h1 className="font-heading text-[28px] leading-9 font-bold">
-            {greeting(new Date())}, {callName(fullName)}!
-          </h1>
-          <p className="flex items-center gap-1.5 text-sm text-ink-2">
-            <Target className="size-3.5 shrink-0 text-blue" aria-hidden />
-            {position ? (
-              <span>
-                Vị trí bạn đang chuẩn bị gần nhất: <span className="font-medium text-ink">{position.title}</span>
-                {position.company && ` · ${position.company}`}
-              </span>
-            ) : (
-              <span>Tải CV lên và chọn vị trí muốn ứng tuyển để bắt đầu.</span>
-            )}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="soft" className="h-10 px-4" nativeButton={false} render={<Link href="/student/analysis/new" />}>
-            <ScanText aria-hidden />
-            Phân tích CV với JD
-          </Button>
-          <Button variant="violet" className="h-10 px-4" nativeButton={false} render={<Link href="/student/interview/new" />}>
-            <Mic aria-hidden />
-            Luyện phỏng vấn
-          </Button>
-        </div>
+    <div className="flex flex-wrap items-center justify-between gap-4 py-4 sm:py-6">
+      <div className="grid gap-1.5">
+        <h1 className="font-heading text-[32px] leading-10 font-bold">
+          {greeting(now)}, {callName(fullName)}!
+        </h1>
+        <p className="flex items-start gap-2 text-base text-ink-2">
+          <Sparkles className="mt-1 size-4 shrink-0 text-gold" aria-hidden />
+          {encouragement(overview, now)}
+        </p>
       </div>
-    </Panel>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="soft" className="h-10 px-4" nativeButton={false} render={<Link href="/student/analysis/new" />}>
+          <ScanText aria-hidden />
+          Phân tích CV với JD
+        </Button>
+        <Button variant="violet" className="h-10 px-4" nativeButton={false} render={<Link href="/student/interview/new" />}>
+          <Mic aria-hidden />
+          Luyện phỏng vấn
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -261,7 +295,7 @@ export function StatCards({ overview }: { overview: StudentOverview }) {
   const trend = latest?.delta !== null && latest?.delta !== undefined ? trendOf(latest.delta) : null
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
         label="Phiên bản CV"
         icon={FileText}
@@ -330,7 +364,7 @@ const JOURNEY: { kind: NextStep["kind"]; label: string }[] = [
 function Journey({ current }: { current: NextStep["kind"] }) {
   const index = JOURNEY.findIndex((s) => s.kind === current)
   return (
-    <ol className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs" aria-label="Lộ trình chuẩn bị">
+    <ol className="relative flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs" aria-label="Lộ trình chuẩn bị">
       {JOURNEY.map((step, i) => (
         <li key={step.kind} className="flex items-center gap-2">
           <span
@@ -417,98 +451,99 @@ function stepContent(step: NextStep): { title: string; body: ReactNode; cta: { h
   }
 }
 
-export function NextStepCard({ step }: { step: NextStep }) {
+export function NextStepCard({ step, className }: { step: NextStep; className?: string }) {
   const { title, body, cta, disabled, extra } = stepContent(step)
   const CtaIcon = cta.icon
   return (
-    <Panel className="relative flex flex-col gap-4 overflow-hidden bg-gradient-to-br from-card to-blue-soft/40">
-      <div aria-hidden className="pointer-events-none absolute -top-12 -right-12 size-44 rounded-full bg-blue/5" />
-      <p className="relative text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">Bước tiếp theo nên làm</p>
-      <Journey current={step.kind} />
-      <div className="relative grid gap-1.5">
-        <h2 className="font-heading text-xl font-bold">{title}</h2>
-        <p className="text-sm leading-6 text-ink-2">{body}</p>
-      </div>
-      <div className="relative mt-auto flex flex-wrap items-end justify-between gap-3">
-        {extra ?? <span />}
-        {disabled ? (
-          <Button size="brand" disabled>
-            <CtaIcon aria-hidden />
-            {cta.label}
-          </Button>
-        ) : (
-          <Button size="brand" nativeButton={false} render={<Link href={cta.href} />}>
-            <CtaIcon aria-hidden />
-            {cta.label}
-            <ArrowRight aria-hidden />
-          </Button>
-        )}
-      </div>
-    </Panel>
+    <section className={cn("flex min-w-0 flex-col gap-3", className)}>
+      <SectionHeader title="Bước tiếp theo nên làm" />
+      <Panel className="relative flex flex-1 flex-col gap-4 overflow-hidden bg-gradient-to-br from-card to-blue-soft/40">
+        <div aria-hidden className="pointer-events-none absolute -top-12 -right-12 size-44 rounded-full bg-blue/5" />
+        <Journey current={step.kind} />
+        <div className="relative grid gap-1.5">
+          <h3 className="font-heading text-xl font-bold">{title}</h3>
+          <p className="text-sm leading-6 text-ink-2">{body}</p>
+        </div>
+        <div className="relative mt-auto flex flex-wrap items-end justify-between gap-3">
+          {extra ?? <span />}
+          {disabled ? (
+            <Button size="brand" disabled>
+              <CtaIcon aria-hidden />
+              {cta.label}
+            </Button>
+          ) : (
+            <Button size="brand" nativeButton={false} render={<Link href={cta.href} />}>
+              <CtaIcon aria-hidden />
+              {cta.label}
+              <ArrowRight aria-hidden />
+            </Button>
+          )}
+        </div>
+      </Panel>
+    </section>
   )
 }
 
 // ---------- Kỹ năng nên học thêm ----------
 
-export function SkillsCard({ skills }: { skills: StudentOverview["skills_to_learn"] }) {
+export function SkillsCard({ skills, className }: { skills: StudentOverview["skills_to_learn"]; className?: string }) {
   return (
-    <Panel className="grid grid-cols-1 content-start gap-4">
-      <PanelHeader
-        icon={BookOpen}
+    <section className={cn("flex min-w-0 flex-col gap-3", className)}>
+      <SectionHeader
         title="Kỹ năng nên học thêm"
         aside={
           skills && (
             <Link
               href={`/student/analysis/${encodeURIComponent(skills.analysis_id)}`}
-              className="shrink-0 text-xs font-medium text-blue hover:underline"
+              className="shrink-0 text-sm font-medium text-blue hover:underline"
             >
               Xem phân tích
             </Link>
           )
         }
       />
-      {!skills ? (
-        <EmptyNote icon={BookOpen} title="Chưa có dữ liệu" text="Phân tích CV với một JD để biết kỹ năng nào vị trí đó cần mà CV chưa thể hiện." />
-      ) : skills.skills.length === 0 ? (
-        <EmptyNote
-          icon={Check}
-          title="Không thiếu kỹ năng nào"
-          text={`CV đã có bằng chứng cho mọi yêu cầu của vị trí ${skills.jd.title}.`}
-        />
-      ) : (
-        <>
-          <p className="-mt-2 text-xs text-ink-2">
-            Từ lần phân tích gần nhất với {skills.jd.title}, nhóm Bắt buộc trước.
-          </p>
-          <ul className="flex flex-wrap gap-2">
-            {skills.skills.map((skill) => (
-              <li
-                key={skill.name}
-                className="flex items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 text-sm font-medium text-ink"
-              >
-                {skill.name}
-                <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", IMPORTANCE_META[skill.importance].chip)}>
-                  {IMPORTANCE_META[skill.importance].label}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {skills.total_missing > skills.skills.length && (
-            <p className="text-xs text-ink-2">và {skills.total_missing - skills.skills.length} kỹ năng khác trong báo cáo phân tích.</p>
-          )}
-          <p className="flex items-start gap-1.5 border-t border-line pt-3 text-xs text-ink-2">
-            <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-good" aria-hidden />
-            Chỉ đưa kỹ năng vào CV khi bạn đã thực sự học và có kinh nghiệm dùng nó.
-          </p>
-        </>
-      )}
-    </Panel>
+      <Panel className="grid flex-1 grid-cols-1 content-start gap-4">
+        {!skills ? (
+          <EmptyNote icon={BookOpen} title="Chưa có dữ liệu" text="Phân tích CV với một JD để biết kỹ năng nào vị trí đó cần mà CV chưa thể hiện." />
+        ) : skills.skills.length === 0 ? (
+          <EmptyNote
+            icon={Check}
+            title="Không thiếu kỹ năng nào"
+            text={`CV đã có bằng chứng cho mọi yêu cầu của vị trí ${skills.jd.title}.`}
+          />
+        ) : (
+          <>
+            <p className="text-xs text-ink-2">Từ lần phân tích gần nhất với {skills.jd.title}, nhóm Bắt buộc trước.</p>
+            <ul className="flex flex-wrap gap-2">
+              {skills.skills.map((skill) => (
+                <li
+                  key={skill.name}
+                  className="flex items-center gap-2 rounded-xl border border-line bg-card px-3 py-2 text-sm font-medium text-ink"
+                >
+                  {skill.name}
+                  <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", IMPORTANCE_META[skill.importance].chip)}>
+                    {IMPORTANCE_META[skill.importance].label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {skills.total_missing > skills.skills.length && (
+              <p className="text-xs text-ink-2">và {skills.total_missing - skills.skills.length} kỹ năng khác trong báo cáo phân tích.</p>
+            )}
+            <p className="flex items-start gap-1.5 border-t border-line pt-3 text-xs text-ink-2">
+              <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-good" aria-hidden />
+              Chỉ đưa kỹ năng vào CV khi bạn đã thực sự học và có kinh nghiệm dùng nó.
+            </p>
+          </>
+        )}
+      </Panel>
+    </section>
   )
 }
 
-function EmptyNote({ icon: Icon, title, text }: { icon: LucideIcon; title: string; text: string }) {
+function EmptyNote({ icon: Icon, title, text, className }: { icon: LucideIcon; title: string; text: string; className?: string }) {
   return (
-    <div className="grid justify-items-center gap-2 rounded-xl bg-surface px-6 py-8 text-center">
+    <div className={cn("grid content-center justify-items-center gap-2 rounded-xl bg-surface px-6 py-8 text-center", className)}>
       <Icon className="size-6 text-ink-3" aria-hidden />
       <p className="text-sm font-medium text-ink">{title}</p>
       <p className="max-w-sm text-xs text-ink-2">{text}</p>
@@ -537,29 +572,31 @@ function AnalysisStatus({ row }: { row: AnalysisRow }) {
   )
 }
 
-function RecentList({ icon, title, empty, children }: { icon: LucideIcon; title: string; empty: ReactNode; children: ReactNode[] }) {
+// Tiêu đề và "Xem tất cả" nằm ngoài ô; trong ô là danh sách kẻ dòng, không lồng thêm ô cho từng mục.
+function RecentList({ title, empty, children }: { title: string; empty: ReactNode; children: ReactNode[] }) {
   return (
-    <Panel className="grid grid-cols-1 content-start gap-4">
-      <PanelHeader
-        icon={icon}
+    <section className="flex min-w-0 flex-col gap-3">
+      <SectionHeader
         title={title}
         aside={
           children.length > 0 && (
-            <Link href="/student/history" className="shrink-0 text-xs font-medium text-blue hover:underline">
+            <Link href="/student/history" className="shrink-0 text-sm font-medium text-blue hover:underline">
               Xem tất cả
             </Link>
           )
         }
       />
-      {children.length === 0 ? empty : <ul className="grid gap-2">{children}</ul>}
-    </Panel>
+      <Panel className="flex-1 overflow-hidden p-0">
+        {children.length === 0 ? empty : <ul className="divide-y divide-line">{children}</ul>}
+      </Panel>
+    </section>
   )
 }
 
 function RecentItem({ href, title, meta, aside }: { href: string; title: string; meta: ReactNode; aside: ReactNode }) {
   return (
     <li>
-      <Link href={href} className="flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-blue-soft/60">
+      <Link href={href} className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface">
         <div className="grid min-w-0 flex-1 gap-0.5">
           <p className="line-clamp-2 text-sm font-semibold break-words text-ink">{title}</p>
           <p className="text-xs text-ink-2">{meta}</p>
@@ -573,9 +610,15 @@ function RecentItem({ href, title, meta, aside }: { href: string; title: string;
 export function RecentAnalyses({ items }: { items: AnalysisRow[] }) {
   return (
     <RecentList
-      icon={FileSearch}
       title="Phân tích gần đây"
-      empty={<EmptyNote icon={FileSearch} title="Chưa có lượt phân tích" text="Các lượt đối chiếu CV với JD sẽ hiện ở đây." />}
+      empty={
+        <EmptyNote
+          icon={FileSearch}
+          title="Chưa có lượt phân tích"
+          text="Các lượt đối chiếu CV với JD sẽ hiện ở đây."
+          className="h-full bg-transparent"
+        />
+      }
     >
       {items.map((row) => (
         <RecentItem
@@ -593,9 +636,15 @@ export function RecentAnalyses({ items }: { items: AnalysisRow[] }) {
 export function RecentInterviews({ items }: { items: InterviewRow[] }) {
   return (
     <RecentList
-      icon={MessagesSquare}
       title="Phỏng vấn gần đây"
-      empty={<EmptyNote icon={MessagesSquare} title="Chưa có buổi phỏng vấn" text="Báo cáo các buổi phỏng vấn thử sẽ hiện ở đây." />}
+      empty={
+        <EmptyNote
+          icon={MessagesSquare}
+          title="Chưa có buổi phỏng vấn"
+          text="Báo cáo các buổi phỏng vấn thử sẽ hiện ở đây."
+          className="h-full bg-transparent"
+        />
+      }
     >
       {items.map((row) => {
         const label = LABEL_META[row.label]
@@ -625,77 +674,56 @@ export function RecentInterviews({ items }: { items: InterviewRow[] }) {
   )
 }
 
-// ---------- Trung bình S/T/A/R ----------
+// ---------- Trung bình STAR ----------
 
-export function StarAverageCard({ star }: { star: StudentOverview["star"] }) {
+export function StarAverageCard({ star, className }: { star: StudentOverview["star"]; className?: string }) {
   return (
-    <Panel className="grid grid-cols-1 content-start gap-4">
-      <PanelHeader icon={BarChart3} title="Điểm trung bình S/T/A/R" />
-      {!star ? (
-        <EmptyNote icon={BarChart3} title="Chưa có dữ liệu STAR" text="Hoàn thành buổi phỏng vấn thử đầu tiên để xem điểm từng tiêu chí." />
-      ) : (
-        <>
-          <p className="-mt-2 text-xs text-ink-2">
-            Trung bình {star.session_count} buổi gần nhất, thang 0–5
-          </p>
-          <ul className="grid gap-3.5">
-            {STAR_ORDER.map((key) => {
-              const score = star.average[key]
-              const weakest = key === star.weakest
-              return (
-                <li key={key} className="grid gap-1.5">
-                  <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="flex items-center gap-2 font-medium text-ink">
-                      <span className="grid size-6 place-items-center rounded-md bg-blue-soft text-xs font-bold text-blue">
-                        {STAR_META[key].letter}
+    <section className={cn("flex min-w-0 flex-col gap-3", className)}>
+      <SectionHeader title="Điểm trung bình STAR" />
+      <Panel className="grid flex-1 grid-cols-1 content-start gap-4 p-5">
+        {!star ? (
+          <EmptyNote
+            icon={BarChart3}
+            title="Chưa có dữ liệu STAR"
+            text="Hoàn thành buổi phỏng vấn thử đầu tiên để xem điểm từng tiêu chí."
+            className="h-full bg-transparent"
+          />
+        ) : (
+          <>
+            <p className="text-xs text-ink-2">Trung bình {star.session_count} buổi gần nhất, thang 0–5</p>
+            <ul className="grid gap-3.5">
+              {STAR_ORDER.map((key) => {
+                const score = star.average[key]
+                const weakest = key === star.weakest
+                return (
+                  <li key={key} className="grid gap-1.5">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex items-center gap-2 font-medium text-ink">
+                        <span className="grid size-6 place-items-center rounded-md bg-blue-soft text-xs font-bold text-blue">
+                          {STAR_META[key].letter}
+                        </span>
+                        {STAR_META[key].label}
+                        {weakest && <Badge variant="warn">Yếu nhất</Badge>}
                       </span>
-                      {STAR_META[key].label}
-                      {weakest && <Badge variant="warn">Yếu nhất</Badge>}
-                    </span>
-                    <span className="font-heading font-bold text-ink">{formatScore(score)}/5</span>
-                  </div>
-                  <div
-                    className="h-2 overflow-hidden rounded-full bg-surface"
-                    role="progressbar"
-                    aria-label={STAR_META[key].label}
-                    aria-valuenow={score}
-                    aria-valuemin={0}
-                    aria-valuemax={5}
-                  >
-                    <div className={cn("h-full rounded-full", weakest ? "bg-warn" : "bg-blue")} style={{ width: `${(score / 5) * 100}%` }} />
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </>
-      )}
-    </Panel>
-  )
-}
-
-// ---------- Trạng thái chia sẻ với cố vấn ----------
-
-/** Một dòng tóm tắt; bật/tắt chia sẻ nằm ở trang "Chia sẻ với cố vấn". */
-export function SharingStatus() {
-  const { data: sharing } = useApi(api.getSharing)
-  if (!sharing) return null
-  const sharedCount = sharing.items.filter((i) => i.shared).length
-  const advisor = sharing.advisor?.full_name
-  const text = !advisor
-    ? "Bạn chưa được phân công cố vấn. Mọi tài liệu của bạn đang ở chế độ riêng tư."
-    : sharedCount === 0
-      ? `Cố vấn ${advisor} đang thấy số liệu tổng hợp; bạn chưa chia sẻ tài liệu nào để cố vấn góp ý.`
-      : `Cố vấn ${advisor} đang xem được ${sharedCount} tài liệu bạn chia sẻ.`
-  return (
-    <p className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-line bg-card px-5 py-3 text-xs text-ink-2">
-      <span className="flex items-center gap-2">
-        {advisor ? <UserRound className="size-4 shrink-0 text-violet" aria-hidden /> : <Lock className="size-4 shrink-0 text-violet" aria-hidden />}
-        {text}
-      </span>
-      <Link href="/student/share" className="font-medium text-blue hover:underline">
-        Chia sẻ với cố vấn
-      </Link>
-    </p>
+                      <span className="font-heading font-bold text-ink">{formatScore(score)}/5</span>
+                    </div>
+                    <div
+                      className="h-2 overflow-hidden rounded-full bg-surface"
+                      role="progressbar"
+                      aria-label={STAR_META[key].label}
+                      aria-valuenow={score}
+                      aria-valuemin={0}
+                      aria-valuemax={5}
+                    >
+                      <div className={cn("h-full rounded-full", weakest ? "bg-warn" : "bg-blue")} style={{ width: `${(score / 5) * 100}%` }} />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
+      </Panel>
+    </section>
   )
 }

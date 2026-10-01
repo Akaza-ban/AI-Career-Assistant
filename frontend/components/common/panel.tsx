@@ -16,6 +16,19 @@ interface PanelHeaderProps {
   className?: string
 }
 
+/**
+ * Tiêu đề một mục đặt ngoài ô, ngay trên nền trang (link "Xem tất cả" ở bên phải).
+ * Ô bên dưới chỉ chứa nội dung, để trang không thành một lưới ô giống nhau và ô nhấn mạnh nổi lên được.
+ */
+export function SectionHeader({ title, aside, className }: Omit<PanelHeaderProps, "icon">) {
+  return (
+    <div className={cn("flex min-h-7 items-center justify-between gap-3", className)}>
+      <h2 className="font-heading text-lg font-bold text-ink">{title}</h2>
+      {aside}
+    </div>
+  )
+}
+
 export function PanelHeader({ icon: Icon, title, aside, className }: PanelHeaderProps) {
   return (
     <div className={cn("flex items-center justify-between gap-3", className)}>

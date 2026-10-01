@@ -7,6 +7,7 @@ import {
   CircleCheck,
   Clock,
   CloudUpload,
+  Download,
   Eye,
   FilePen,
   GitCompare,
@@ -35,9 +36,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { OPTIMIZER_AVAILABLE } from "@/lib/config"
+import { downloadCv } from "@/lib/download"
 import { features } from "@/lib/features"
 import { formatBytes, formatRelativeTime } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
@@ -267,14 +270,14 @@ export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
             >
               <MoreVertical aria-hidden />
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-60">
+            <DropdownMenuContent align="end" className="w-max">
               <DropdownMenuItem disabled={cv.is_active} onClick={() => onSetActive(cv)}>
                 <Star aria-hidden />
                 Đặt làm phiên bản đang dùng
               </DropdownMenuItem>
-              <DropdownMenuItem render={<Link href={analyzeHref} />}>
-                <ScanText aria-hidden />
-                Phân tích với JD mới
+              <DropdownMenuItem onClick={() => void downloadCv(cv)}>
+                <Download aria-hidden />
+                Tải xuống
               </DropdownMenuItem>
               {cv.source_analysis_id && (
                 <DropdownMenuItem
@@ -459,25 +462,36 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
 
 // ---------- Mẹo ----------
 
-export function CvTipCard() {
+const CV_TIPS = [
+  "Giữ mỗi vị trí mục tiêu một phiên bản CV riêng để đối chiếu chính xác với kỹ năng trong JD.",
+  "Độ khớp JD cao cho thấy CV đã thể hiện rõ yêu cầu của vị trí, nhưng không đảm bảo vượt qua vòng lọc hồ sơ.",
+  "Nội dung CV phải phản ánh đúng kinh nghiệm thật của bạn.",
+]
+
+/** Mẹo gọn trong một nút ở góc tiêu đề: rê chuột (hoặc bấm, trên màn hình cảm ứng) thì mới hiện, để trang bớt chữ. */
+export function CvTips() {
   return (
-    <Panel className="flex gap-4 p-4">
-      <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-blue-soft text-blue">
-        <Lightbulb className="size-5" aria-hidden />
-      </span>
-      <div className="grid gap-1">
-        <h2 className="flex flex-wrap items-center gap-2 font-heading text-base font-bold">
-          Mẹo tối ưu CV cho sinh viên
-          <Badge variant="violet" className="rounded-md">
-            Gợi ý
-          </Badge>
-        </h2>
-        <p className="text-[13px] leading-[21px] text-ink-2">
-          Nên giữ mỗi vị trí mục tiêu một phiên bản CV riêng để đối chiếu chính xác với kỹ năng trong JD. Độ khớp JD cao cho
-          thấy CV đã thể hiện rõ các yêu cầu của vị trí, nhưng không đảm bảo vượt qua vòng lọc hồ sơ; nội dung vẫn phải
-          phản ánh đúng kinh nghiệm thật của bạn.
-        </p>
-      </div>
-    </Panel>
+    <Popover>
+      <PopoverTrigger
+        openOnHover
+        delay={150}
+        closeDelay={100}
+        render={<Button variant="ghost" className="h-9 gap-1.5 px-3 text-ink-2 hover:text-ink" />}
+      >
+        <Lightbulb className="text-gold" aria-hidden />
+        Mẹo tối ưu CV
+      </PopoverTrigger>
+      <PopoverContent align="end" sideOffset={6} className="w-80 gap-2 rounded-xl p-4">
+        <p className="font-heading text-sm font-bold text-ink">Mẹo tối ưu CV cho sinh viên</p>
+        <ul className="grid gap-1.5">
+          {CV_TIPS.map((tip) => (
+            <li key={tip} className="flex gap-2 text-[13px] leading-5 text-ink-2">
+              <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-ink-3" />
+              {tip}
+            </li>
+          ))}
+        </ul>
+      </PopoverContent>
+    </Popover>
   )
 }

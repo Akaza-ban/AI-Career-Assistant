@@ -51,9 +51,7 @@ export function AppTopbar({ role }: { role: Role }) {
           </Sheet>
 
           <nav aria-label="Breadcrumb" className="min-w-0">
-            <ol className="flex min-w-0 items-center gap-1 text-xs font-medium whitespace-nowrap">
-              {/* Luồng nhiều bước (ví dụ Phân tích → Tối ưu → Xuất) thì bỏ mục "Không gian..." cho gọn. */}
-              {crumbs.length === 1 && <li className="hidden text-ink-2 sm:block">{config.workspaceLabel}</li>}
+            <ol className="flex min-w-0 items-center gap-1 text-sm font-medium whitespace-nowrap">
               {crumbs.map((crumb, index) => (
                 <li
                   key={crumb.label}
@@ -64,7 +62,7 @@ export function AppTopbar({ role }: { role: Role }) {
                     crumb.href && index < crumbs.length - 2 && "hidden sm:flex",
                   )}
                 >
-                  {(index > 0 || crumbs.length === 1) && (
+                  {index > 0 && (
                     <ChevronRight className="size-3.5 shrink-0 text-ink-3" aria-hidden />
                   )}
                   {crumb.href ? (
@@ -103,10 +101,6 @@ export function AppTopbar({ role }: { role: Role }) {
               <TooltipContent>Trợ giúp</TooltipContent>
             </Tooltip>
           </div>
-
-          <span className="hidden rounded-full bg-blue-soft px-2.5 py-1 text-xs font-medium text-ink-2 sm:inline">
-            {config.roleLabel}
-          </span>
 
           <DropdownMenu>
             <DropdownMenuTrigger

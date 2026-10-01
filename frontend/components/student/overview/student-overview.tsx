@@ -11,10 +11,10 @@ import {
   NextStepCard,
   RecentAnalyses,
   RecentInterviews,
-  SharingStatus,
   SkillsCard,
   StarAverageCard,
   StatCards,
+  isNewStudent,
 } from "@/components/student/overview/overview-sections"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -53,10 +53,11 @@ export function StudentOverview() {
   if (!overview || !profile) return <OverviewSkeleton />
 
   // SV mới (chưa có CV, chưa phân tích, chưa phỏng vấn): chỉ hiện việc cần làm đầu tiên.
-  const isNew = overview.cv_count === 0 && overview.recent_analyses.length === 0 && overview.interview_count === 0
+  const isNew = isNewStudent(overview)
 
+  // Chỉ lời chào đặt thẳng trên nền trang; các mục khác nằm trong ô, tiêu đề mục đặt ngoài ô.
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-10">
       <GreetingBanner fullName={profile.full_name} overview={overview} />
       <InProgressPanel inProgress={overview.in_progress} />
       {isNew ? (
@@ -64,44 +65,46 @@ export function StudentOverview() {
       ) : (
         <>
           <StatCards overview={overview} />
-          <div className="grid items-stretch gap-6 xl:grid-cols-12">
-            <div className="grid min-w-0 xl:col-span-7">
-              <NextStepCard step={overview.next_step} />
-            </div>
-            <div className="grid min-w-0 xl:col-span-5">
-              <SkillsCard skills={overview.skills_to_learn} />
-            </div>
+          <div className="grid gap-x-8 gap-y-10 xl:grid-cols-12">
+            <NextStepCard step={overview.next_step} className="xl:col-span-7" />
+            <SkillsCard skills={overview.skills_to_learn} className="xl:col-span-5" />
           </div>
-          <div className="grid items-start gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
             <RecentAnalyses items={overview.recent_analyses} />
             <RecentInterviews items={overview.recent_interviews} />
-            <div className="md:col-span-2 xl:col-span-1">
-              <StarAverageCard star={overview.star} />
-            </div>
+            <StarAverageCard star={overview.star} className="md:col-span-2 xl:col-span-1" />
           </div>
         </>
       )}
-      <SharingStatus />
     </div>
   )
 }
 
 function OverviewSkeleton() {
   return (
-    <div className="grid gap-6" aria-busy="true" aria-label="Đang tải tổng quan">
-      <Skeleton className="h-[116px] rounded-[20px]" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-10" aria-busy="true" aria-label="Đang tải tổng quan">
+      <div className="flex flex-wrap items-center justify-between gap-4 py-4 sm:py-6">
+        <div className="grid gap-2.5">
+          <Skeleton className="h-10 w-80 max-w-full" />
+          <Skeleton className="h-5 w-[420px] max-w-full" />
+        </div>
+        <div className="flex gap-2">
+          <Skeleton className="h-10 w-44 rounded-lg" />
+          <Skeleton className="h-10 w-40 rounded-lg" />
+        </div>
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
           <Skeleton key={i} className="h-[140px] rounded-[20px]" />
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-12">
+      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-12">
         <Skeleton className="h-[260px] rounded-[20px] xl:col-span-7" />
         <Skeleton className="h-[260px] rounded-[20px] xl:col-span-5" />
       </div>
-      <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
         {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-[340px] rounded-[20px]" />
+          <Skeleton key={i} className="h-[300px] rounded-[20px]" />
         ))}
       </div>
     </div>
