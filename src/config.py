@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "sqlite:///./data/app.db"
 
+    # Thư mục lưu file CV gốc do sinh viên tải lên
+    upload_dir: str = "./data/uploads"
+
+    # Tạo nhóm SV giả định do cố vấn demo phụ trách (dữ liệu minh hoạ cho các trang Cố vấn)
+    seed_demo_cohort: bool = True
+
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
 

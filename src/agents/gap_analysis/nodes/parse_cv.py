@@ -2,6 +2,7 @@ import re
 from typing import Any
 
 from src.agents.gap_analysis.state import GapAnalysisState
+from src.services.skill_matching import split_cv_lines
 from src.services.taxonomy import STATIC_TAXONOMY
 
 # Danh mục các từ khóa kỹ năng cần nhận diện
@@ -121,4 +122,6 @@ async def parse_cv_node(state: GapAnalysisState) -> dict[str, Any]:
     return {
         "parsed_cv": parsed_cv,
         "parsed_jd": parsed_jd,
+        # Dòng CV kèm mục (Kinh nghiệm, Dự án, Kỹ năng...) để chấm Match theo bảng anchor PRD 5.2
+        "cv_lines": split_cv_lines(cv_raw),
     }
