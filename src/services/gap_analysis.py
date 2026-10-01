@@ -12,6 +12,7 @@ from src.api.errors import AppError
 from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
+from src.services import cv_versions
 from src.services.skill_matching import match_label
 
 logger = logging.getLogger(__name__)
@@ -65,7 +66,7 @@ def create_analysis(db: Session, user: User, request: CreateGapAnalysisRequest) 
         owner_id=user.id,
         cv_version_id=cv.id,
         cv_file_name=cv.file_name,
-        cv_label=f"v{cv.version}.0",
+        cv_label=cv_versions.label(cv),
         jd_id=jd.id,
         status="processing",
         current_step=STEPS[0],

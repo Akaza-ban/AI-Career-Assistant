@@ -251,8 +251,9 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
           <>
             Phiên bản mới gồm {counts.accepted} gợi ý đã chấp nhận, {counts.edited} câu bạn sửa tay
             {learning.length > 0 && ` và ${learning.length} kỹ năng đang học`}.
-            {counts.pending > 0 && ` ${counts.pending} gợi ý chưa xem sẽ giữ nguyên câu gốc.`} Phiên bản {session.cv.label} vẫn
-            được giữ nguyên. Sau khi hoàn tất, bạn không đổi được các lựa chọn trong lượt tối ưu này nữa.
+            {counts.pending > 0 && ` ${counts.pending} gợi ý chưa xem sẽ giữ nguyên câu gốc.`} Phiên bản mới được thêm vào
+            cùng CV, bản {session.cv.label} vẫn được giữ trong lịch sử phiên bản. Sau khi hoàn tất, bạn không đổi được các
+            lựa chọn trong lượt tối ưu này nữa.
           </>
         }
         confirmLabel="Hoàn tất & tạo phiên bản"

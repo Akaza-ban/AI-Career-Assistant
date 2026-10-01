@@ -58,6 +58,7 @@ def init_db() -> None:
     from src.db import models  # noqa: F401  (đăng ký các bảng vào Base.metadata)
     from src.db.demo_cohort import seed_demo_cohort
     from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
+    from src.services.cv_versions import backfill as backfill_cv_versions
 
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
@@ -67,3 +68,5 @@ def init_db() -> None:
         if get_settings().seed_demo_cohort:
             seed_demo_cohort(db)
         fail_interrupted_analyses(db)
+        # Phiên bản CV tạo trước khi có lịch sử phiên bản theo từng CV
+        backfill_cv_versions(db)

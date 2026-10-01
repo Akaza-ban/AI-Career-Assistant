@@ -19,10 +19,12 @@ export const mockAdvisorContact: AdvisorContact = {
   avatar_url: null,
 }
 
-/** Tài liệu Minh Anh đang chia sẻ lúc đầu (không có trong danh sách = riêng tư) và lần cố vấn xem gần nhất. */
+/**
+ * Tài liệu Minh Anh đang chia sẻ lúc đầu (không có trong danh sách = riêng tư) và lần cố vấn xem gần nhất.
+ * CV chia sẻ theo mã CV (family_id): cố vấn xem bản mới nhất và các bản trước.
+ */
 export const mockInitialShared: Record<string, { viewed_at: string | null }> = {
-  "cv-v3": { viewed_at: at(0, 10, 15) },
-  "cv-v2": { viewed_at: null },
+  "cv-ba-v10": { viewed_at: at(0, 10, 15) },
   "iv-005": { viewed_at: at(1, 15, 30) },
   "iv-004": { viewed_at: at(2, 9, 0) },
 }

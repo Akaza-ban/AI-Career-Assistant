@@ -13,17 +13,18 @@ import { useApi } from "@/lib/use-api"
 
 type Preview = { kind: "pdf"; url: string } | { kind: "text"; text: string } | { kind: "unavailable" }
 
-// Trình duyệt hiển thị được PDF; DOCX thì xem nhanh bằng văn bản đã trích.
+// Trình duyệt hiển thị được PDF; DOCX (hoặc PDF không có file, ví dụ ở chế độ mock) thì xem bằng văn bản đã trích.
 async function loadPreview(cv: CvVersion): Promise<Preview> {
   if (cv.file_type === "pdf") {
     const blob = await api.getCvFile(cv.id)
-    return blob ? { kind: "pdf", url: URL.createObjectURL(blob) } : { kind: "unavailable" }
+    if (blob) return { kind: "pdf", url: URL.createObjectURL(blob) }
   }
   const text = await api.getCvText(cv.id)
   return text !== null ? { kind: "text", text } : { kind: "unavailable" }
 }
 
-function PreviewBody({ cv }: { cv: CvVersion }) {
+/** Nội dung một phiên bản CV, cao bằng khung chứa (dùng ở popup Xem nhanh và trang Chi tiết CV). */
+export function CvPreviewBody({ cv }: { cv: CvVersion }) {
   const fetchPreview = useCallback(() => loadPreview(cv), [cv])
   const { data, error, reload } = useApi(fetchPreview)
 
@@ -58,9 +59,7 @@ function PreviewBody({ cv }: { cv: CvVersion }) {
   if (data.kind === "text") {
     return (
       <div className="h-full overflow-y-auto rounded-lg bg-surface p-5">
-        <p className="mb-3 text-xs text-ink-3">
-          Bản xem nhanh dạng văn bản (trình duyệt không hiển thị được DOCX). Tải file gốc để xem đúng bố cục.
-        </p>
+        <p className="mb-3 text-xs text-ink-3">Bản xem dạng văn bản. Tải file gốc để xem đúng bố cục.</p>
         <p className="text-sm leading-6 whitespace-pre-line text-ink">{data.text}</p>
       </div>
     )
@@ -94,7 +93,7 @@ export function CvPreviewDialog({ cv, open, onOpenChange }: CvPreviewDialogProps
                 {cv.page_count ? ` · ${cv.page_count} trang` : ""}
               </DialogDescription>
             </DialogHeader>
-            <div className="h-[70vh]">{open && <PreviewBody cv={cv} />}</div>
+            <div className="h-[70vh]">{open && <CvPreviewBody cv={cv} />}</div>
             <div className="flex justify-end">
               <Button variant="soft" className="h-9" onClick={() => void downloadCv(cv)}>
                 <Download aria-hidden />

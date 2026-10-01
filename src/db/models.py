@@ -58,7 +58,8 @@ class ShareGrant(Base):
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    # "cv" (phiên bản CV) | "interview" (báo cáo buổi phỏng vấn)
+    # "cv" (cả CV: item_id là mã CV / family_id, cố vấn xem bản mới nhất và các bản trước) |
+    # "interview" (báo cáo buổi phỏng vấn)
     kind: Mapped[str] = mapped_column(String(16))
     item_id: Mapped[str] = mapped_column(String(64))
     shared_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -118,15 +119,26 @@ class AdvisorNote(Base):
 
 
 class CvVersion(Base):
-    """Một phiên bản CV của sinh viên. Mỗi lần tải lên tạo bản mới, không ghi đè bản cũ (US-SV-01)."""
+    """
+    Một phiên bản CV của sinh viên, không ghi đè bản cũ (US-SV-01). Các phiên bản cùng family_id là một CV
+    (một thẻ trong "CV của tôi"): tải file lên tạo CV mới (v1.0); "Hoàn tất" ở Trình tối ưu thêm số phụ (v1.1, v1.2);
+    khôi phục một bản cũ thêm số chính (v2.0). Phiên bản mới nhất của CV là bản hiển thị trên thẻ.
+    """
 
     __tablename__ = "cv_versions"
     __table_args__ = (UniqueConstraint("owner_id", "version"),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
-    # Tăng dần theo từng sinh viên, bắt đầu từ 1
+    # Số thứ tự nội bộ, tăng dần theo từng sinh viên (mọi CV), bắt đầu từ 1; nhãn hiển thị dùng major/minor
     version: Mapped[int] = mapped_column(Integer)
+    # Mã CV = id của phiên bản đầu tiên (bản tải lên). Cột cho phép NULL để tự thêm vào DB cũ; được điền khi khởi động
+    family_id: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    # Nhãn "v{major}.{minor}", đánh số riêng trong từng CV
+    major: Mapped[int | None] = mapped_column(Integer, default=None)
+    minor: Mapped[int | None] = mapped_column(Integer, default=None)
+    # Phiên bản cũ được khôi phục thành bản này (origin = "restored")
+    restored_from_id: Mapped[str | None] = mapped_column(String(64), default=None)
     file_name: Mapped[str] = mapped_column(String(255))
     # "pdf" | "docx"
     file_type: Mapped[str] = mapped_column(String(8))
@@ -134,7 +146,8 @@ class CvVersion(Base):
     page_count: Mapped[int | None] = mapped_column(Integer, default=None)
     # Văn bản trích từ file, đầu vào cho phân tích khoảng cách CV–JD
     content_text: Mapped[str] = mapped_column(Text)
-    # "upload": SV tự tải lên; "optimized": tạo ra khi áp dụng gợi ý (US-SV-03)
+    # "upload": SV tự tải lên; "optimized": tạo ra khi "Hoàn tất" ở Trình tối ưu (US-SV-03);
+    # "restored": bản sao của một phiên bản cũ khi SV khôi phục
     origin: Mapped[str] = mapped_column(String(16), default="upload")
     is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     is_draft: Mapped[bool] = mapped_column(Boolean, default=False)

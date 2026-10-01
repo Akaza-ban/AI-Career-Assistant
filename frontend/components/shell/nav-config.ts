@@ -48,7 +48,7 @@ export const studentShell: ShellConfig = {
   role: "student",
   nav: [
     { href: "/student", label: "Tổng quan", icon: LayoutGrid },
-    { href: "/student/cv", label: "CV của tôi", icon: FileText },
+    { href: "/student/cv", label: "CV của tôi", icon: FileText, match: "/student/cv" },
     { href: "/student/analysis/new", label: "Phân tích CV & JD", icon: ScanText, match: "/student/analysis" },
     { href: "/student/interview/new", label: "Luyện phỏng vấn", icon: MessagesSquare, match: "/student/interview" },
     { href: "/student/history", label: "Lịch sử & Tiến bộ", icon: TrendingUp },
@@ -79,6 +79,11 @@ export const studentShell: ShellConfig = {
       pattern: /^\/student\/interview\/[^/]+\/report$/,
       title: "Báo cáo phỏng vấn",
       parents: () => [{ label: "Luyện phỏng vấn", href: "/student/interview/new" }],
+    },
+    {
+      pattern: /^\/student\/cv\/[^/]+$/,
+      title: "Chi tiết CV",
+      parents: () => [{ label: "CV của tôi", href: "/student/cv" }],
     },
     { pattern: /^\/student\/settings$/, title: "Cài đặt & Quyền riêng tư" },
   ],

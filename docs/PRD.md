@@ -39,7 +39,7 @@ Năm cuối Trường X, chuẩn bị ứng tuyển, CV chưa chắc khớp vị
 **AC1: Tải lên thành công**
 - **Given** SV đã đăng nhập và đang ở màn hình tải CV, chưa có CV nào trong phiên hiện tại
 - **When** SV chọn 1 file PDF hoặc DOCX dung lượng ≤ 10MB và bấm "Tải lên"
-- **Then** hệ thống lưu file và tạo bản ghi CV phiên bản 1 (version = 1) gắn với tài khoản SV
+- **Then** hệ thống lưu file và tạo một CV mới với phiên bản đầu tiên v1.0, gắn với tài khoản SV
 - **And** hệ thống hiển thị trạng thái "Tải lên thành công" kèm tên file và thời điểm tải lên
 
 **AC2: File đúng định dạng nhưng không trích xuất được nội dung (VD: bản scan ảnh)**
@@ -135,9 +135,9 @@ Năm cuối Trường X, chuẩn bị ứng tuyển, CV chưa chắc khớp vị
 
 **AC1: Áp dụng gợi ý — tạo version CV mới**
 - **Given** hệ thống đã trả về ít nhất 1 gợi ý diễn đạt lại cho 1 mục "khoảng cách trình bày"
-- **When** SV chọn "Áp dụng gợi ý" cho mục đó
-- **Then** hệ thống tạo 1 bản CV phiên bản mới (version = version hiện tại + 1), không ghi đè bản cũ
-- **And** bản CV mới lưu rõ phần nội dung đã thay đổi so với bản trước, để SV xem lại lịch sử
+- **When** SV chọn "Áp dụng gợi ý" cho mục đó rồi bấm "Hoàn tất" lượt tối ưu
+- **Then** hệ thống thêm 1 phiên bản mới vào cùng CV (số phụ + 1, ví dụ v1.1 → v1.2), gộp mọi gợi ý đã áp dụng trong lượt đó; bản cũ không bị ghi đè
+- **And** bản CV mới lưu rõ phần nội dung đã thay đổi so với bản trước, để SV xem lại trong lịch sử phiên bản của CV
 
 **AC2: Nội dung nghi ngờ không nhất quán (thiếu ngữ cảnh hỗ trợ)**
 - **Given** hệ thống phát hiện 1 số liệu hoặc thành tích trong CV không có ngữ cảnh/chứng cứ hỗ trợ đi kèm
@@ -451,7 +451,7 @@ Hỗ trợ nhiều SV cùng lúc, không đủ thời gian tư vấn 1-1 sâu ch
 - Gap analysis: so sánh CV vs JD, output phân loại rõ 2 nhóm + CV–JD Matching Score (%) hiển thị kèm gap analysis:
   - **Presentation gap** → gợi ý diễn đạt lại (agent xử lý được)
   - **Capability gap** → flag cho SV + cố vấn, không tự "sửa" (agent không xử lý)
-- Lưu CV theo phiên bản (versioned), không ghi đè — mỗi lần tối ưu tạo bản mới, giữ lịch sử
+- Lưu CV theo phiên bản (versioned), không ghi đè: mỗi CV có lịch sử phiên bản riêng — tải lên tạo v1.0, mỗi lần tối ưu tăng số phụ (v1.1, v1.2), khôi phục một bản cũ tạo bản sao với số chính mới (v2.0). "CV của tôi" hiển thị bản mới nhất của mỗi CV; các bản trước xem, tải và khôi phục ở trang Chi tiết CV
 - Mock interview: nhiều vòng, theo vị trí đã chọn, chấm điểm theo rubric STAR
 - Auto-escalate: sau 2 vòng liên tiếp điểm không tăng (hoặc giảm) → gắn cờ trên advisor dashboard
 - Advisor dashboard: xem SV được assign, lịch sử điểm, CV/JD đang theo dõi

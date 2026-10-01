@@ -1,4 +1,7 @@
-"""Quản lý CV của sinh viên (US-SV-01): tải lên, danh sách phiên bản, đặt CV đang dùng, xoá, xem file, xuất CV."""
+"""
+Quản lý CV của sinh viên (US-SV-01): tải lên, danh sách CV, lịch sử phiên bản, khôi phục, đặt CV đang dùng, xoá,
+xem file, xuất CV. Quy tắc phiên bản (v1.0, v1.1, v2.0) nằm ở services/cv_versions.py.
+"""
 
 import uuid
 from typing import Annotated
@@ -9,20 +12,31 @@ from sqlalchemy import func, select, update
 
 from src.api.deps import CurrentStudent, DbSession
 from src.api.errors import AppError
-from src.db.models import CvVersion, GapAnalysis, JobDescription
+from src.db.models import CvVersion, GapAnalysis, JobDescription, utcnow
 from src.models.schemas import CvTextResponse, CvVersionResponse, ExportCvRequest, ExportCvResponse
-from src.services import cv_files, cv_optimizer, sharing
+from src.services import cv_files, cv_optimizer, cv_versions, sharing
 
 router = APIRouter(prefix="/cv", tags=["CV Management"])
 
 
-def to_response(cv: CvVersion, latest: tuple[GapAnalysis, str] | None = None) -> CvVersionResponse:
-    """latest: (lượt phân tích hoàn tất gần nhất của phiên bản này, tên vị trí của JD)."""
+def to_response(
+    cv: CvVersion,
+    latest: tuple[GapAnalysis, str] | None = None,
+    *,
+    version_count: int = 1,
+    target_title: str | None = None,
+    source_jd_title: str | None = None,
+    restored_from_label: str | None = None,
+) -> CvVersionResponse:
+    """latest: (lượt phân tích hoàn tất gần nhất của phiên bản này, tên vị trí của JD);
+    target_title: vị trí dùng khi phiên bản này chưa được phân tích (ví dụ vị trí của bản trước trong cùng CV)."""
     analysis, jd_title = latest or (None, None)
     return CvVersionResponse(
         id=cv.id,
         version=cv.version,
-        label=f"v{cv.version}.0",
+        label=cv_versions.label(cv),
+        family_id=cv_versions.family_of(cv),
+        version_count=version_count,
         file_name=cv.file_name,
         file_type=cv.file_type,
         size_bytes=cv.size_bytes,
@@ -31,11 +45,13 @@ def to_response(cv: CvVersion, latest: tuple[GapAnalysis, str] | None = None) ->
         origin=cv.origin,
         is_active=cv.is_active,
         is_draft=cv.is_draft,
-        target_title=jd_title,
+        target_title=jd_title or target_title,
         # Thẻ CV hiển thị "Độ khớp JD gần nhất" = CV–JD Matching Score của lần phân tích gần nhất
         match_score=round(analysis.match_score) if analysis and analysis.match_score is not None else None,
         latest_analysis_id=analysis.id if analysis else None,
         source_analysis_id=cv.source_analysis_id,
+        source_jd_title=source_jd_title,
+        restored_from_label=restored_from_label,
     )
 
 
@@ -58,12 +74,22 @@ def get_owned_cv(db: DbSession, owner_id: str, cv_id: str) -> CvVersion:
     return cv
 
 
+def _versions(db: DbSession, cv: CvVersion) -> list[CvVersion]:
+    """Các phiên bản của CV chứa cv, mới nhất trước."""
+    return cv_versions.versions_of(db, cv.owner_id, cv_versions.family_of(cv)) or [cv]
+
+
+def head_response(versions: list[CvVersion], latest: dict[str, tuple[GapAnalysis, str]]) -> CvVersionResponse:
+    """Thẻ CV: phiên bản mới nhất; vị trí lấy từ bản gần nhất đã được phân tích nếu bản mới nhất chưa phân tích."""
+    target = next((latest[v.id][1] for v in versions if v.id in latest), None)
+    return to_response(versions[0], latest.get(versions[0].id), version_count=len(versions), target_title=target)
+
+
 @router.get("", response_model=list[CvVersionResponse])
-def list_cv_versions(user: CurrentStudent, db: DbSession) -> list[CvVersionResponse]:
-    """Các phiên bản CV của sinh viên, mới nhất trước."""
-    cvs = db.scalars(select(CvVersion).where(CvVersion.owner_id == user.id).order_by(CvVersion.version.desc()))
+def list_cvs(user: CurrentStudent, db: DbSession) -> list[CvVersionResponse]:
+    """Mỗi CV một dòng: phiên bản mới nhất kèm số phiên bản; CV vừa có bản mới đứng trước."""
     latest = latest_analyses(db, user.id)
-    return [to_response(cv, latest.get(cv.id)) for cv in cvs]
+    return [head_response(versions, latest) for versions in cv_versions.families(db, user.id)]
 
 
 @router.post("/upload", response_model=CvVersionResponse, status_code=status.HTTP_201_CREATED)
@@ -73,7 +99,7 @@ def upload_cv(
     file: Annotated[UploadFile, File(description="File CV định dạng PDF hoặc DOCX, tối đa 5MB")],
 ) -> CvVersionResponse:
     """
-    Tải lên CV mới và tạo phiên bản kế tiếp (không ghi đè bản cũ).
+    Tải lên một CV mới (bản đầu tiên v1.0), không đụng tới các CV đã có.
     Từ chối file sai định dạng / quá 5MB (AC3) và file không trích xuất được văn bản như PDF scan (AC2).
     """
     file_name = file.filename or "cv"
@@ -82,19 +108,20 @@ def upload_cv(
     cv_files.check_size(len(data))
     extracted = cv_files.extract_cv(file_type, data)
 
-    latest = db.scalar(select(func.max(CvVersion.version)).where(CvVersion.owner_id == user.id))
+    sequence = cv_versions.next_sequence(db, user.id)
     cv = CvVersion(
         id=f"cv_{uuid.uuid4().hex[:12]}",
         owner_id=user.id,
-        version=(latest or 0) + 1,
+        version=sequence,
         file_name=file_name,
         file_type=file_type,
         size_bytes=len(data),
         page_count=extracted.page_count,
         content_text=extracted.text,
-        # CV đầu tiên tự động là phiên bản đang dùng
-        is_active=latest is None,
+        # CV đầu tiên tự động là CV đang dùng
+        is_active=sequence == 1,
     )
+    cv_versions.start_family(cv)
     cv_files.save_file(user.id, cv.id, file_type, data)
     db.add(cv)
     try:
@@ -105,34 +132,78 @@ def upload_cv(
     return to_response(cv)
 
 
+@router.get("/{cv_id}/versions", response_model=list[CvVersionResponse])
+def list_versions(cv_id: str, user: CurrentStudent, db: DbSession) -> list[CvVersionResponse]:
+    """Lịch sử phiên bản của CV chứa phiên bản cv_id (nhận cả mã CV), mới nhất trước."""
+    versions = _versions(db, get_owned_cv(db, user.id, cv_id))
+    latest = latest_analyses(db, user.id)
+    labels = {v.id: cv_versions.label(v) for v in versions}
+    sources = [v.source_analysis_id for v in versions if v.source_analysis_id]
+    titles = dict(
+        db.execute(
+            select(GapAnalysis.id, JobDescription.title)
+            .join(JobDescription, JobDescription.id == GapAnalysis.jd_id)
+            .where(GapAnalysis.id.in_(sources))
+        ).all()
+    )
+    return [
+        to_response(
+            v,
+            latest.get(v.id),
+            version_count=len(versions),
+            source_jd_title=titles.get(v.source_analysis_id or ""),
+            restored_from_label=labels.get(v.restored_from_id or ""),
+        )
+        for v in versions
+    ]
+
+
+@router.post("/{cv_id}/restore", response_model=CvVersionResponse, status_code=status.HTTP_201_CREATED)
+def restore_version(cv_id: str, user: CurrentStudent, db: DbSession) -> CvVersionResponse:
+    """
+    Khôi phục phiên bản cv_id: tạo bản sao làm phiên bản mới nhất của CV với số chính mới (ví dụ v1.1 → v2.0).
+    Không xoá bản nào; CV đang dùng thì bản khôi phục tự thành bản đang dùng.
+    """
+    source = get_owned_cv(db, user.id, cv_id)
+    restored = cv_versions.restore(db, source, utcnow())
+    return to_response(
+        restored, version_count=len(_versions(db, restored)), restored_from_label=cv_versions.label(source)
+    )
+
+
 @router.post("/{cv_id}/activate", response_model=CvVersionResponse)
 def set_active_cv(cv_id: str, user: CurrentStudent, db: DbSession) -> CvVersionResponse:
-    """Đặt một phiên bản làm CV đang dùng (mỗi sinh viên chỉ có một)."""
-    cv = get_owned_cv(db, user.id, cv_id)
+    """Đặt một CV làm CV đang dùng (mỗi sinh viên chỉ có một); bản đang dùng là phiên bản mới nhất của CV đó."""
+    versions = _versions(db, get_owned_cv(db, user.id, cv_id))
     db.execute(update(CvVersion).where(CvVersion.owner_id == user.id).values(is_active=False))
-    cv.is_active = True
+    versions[0].is_active = True
     db.commit()
-    return to_response(cv, latest_analyses(db, user.id).get(cv.id))
+    return head_response(versions, latest_analyses(db, user.id))
 
 
 @router.delete("/{cv_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_cv(cv_id: str, user: CurrentStudent, db: DbSession) -> Response:
-    """Xoá một phiên bản CV. Không xoá được CV đang dùng khi vẫn còn phiên bản khác."""
+    """Xoá một CV cùng mọi phiên bản của nó (nhận mã của bất kỳ phiên bản nào). Không xoá được CV đang dùng khi
+    sinh viên vẫn còn CV khác."""
     cv = get_owned_cv(db, user.id, cv_id)
-    if cv.is_active:
+    family_id = cv_versions.family_of(cv)
+    versions = _versions(db, cv)
+    if any(v.is_active for v in versions):
         others = db.scalar(
-            select(func.count()).select_from(CvVersion).where(CvVersion.owner_id == user.id, CvVersion.id != cv.id)
+            select(func.count())
+            .select_from(CvVersion)
+            .where(CvVersion.owner_id == user.id, CvVersion.family_id != family_id)
         )
         if others:
             raise AppError(
-                409,
-                "Đây là CV đang dùng. Hãy chọn một phiên bản khác làm CV đang dùng trước khi xoá.",
-                "cv_active",
+                409, "Đây là CV đang dùng. Hãy chọn một CV khác làm CV đang dùng trước khi xoá.", "cv_active"
             )
-    db.delete(cv)
-    sharing.unshare_deleted(db, cv.id)
+    for v in versions:
+        db.delete(v)
+    sharing.unshare_deleted(db, family_id)
     db.commit()
-    cv_files.delete_file(user.id, cv.id, cv.file_type)
+    for v in versions:
+        cv_files.delete_file(user.id, v.id, v.file_type)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

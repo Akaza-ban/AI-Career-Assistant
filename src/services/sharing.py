@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
 from src.db.models import AdvisorAssignment, AdvisorReview, CvVersion, GapAnalysis, JobDescription, ShareGrant, User
-from src.services import progress
+from src.services import cv_versions, progress
 
 KIND_CV = "cv"
 KIND_INTERVIEW = "interview"
@@ -26,7 +26,7 @@ def advisor_of(db: Session, student: User) -> User | None:
 
 
 def grants_of(db: Session, owner_id: str) -> dict[str, ShareGrant]:
-    """Tài liệu đang chia sẻ của SV theo mã tài liệu (mã CV và mã buổi phỏng vấn không trùng nhau)."""
+    """Tài liệu đang chia sẻ của SV theo mã tài liệu: mã CV (family_id, chia sẻ cả CV) hoặc mã buổi phỏng vấn."""
     return {g.item_id: g for g in db.scalars(select(ShareGrant).where(ShareGrant.owner_id == owner_id))}
 
 
@@ -65,24 +65,29 @@ def advisor_contact(advisor: User) -> dict[str, Any]:
 
 
 def items(db: Session, student: User) -> list[dict[str, Any]]:
-    """Mọi phiên bản CV (mới nhất trước) rồi mọi báo cáo phỏng vấn đã hoàn thành (mới nhất trước)."""
+    """
+    Mỗi CV một dòng (CV vừa có bản mới trước; chia sẻ cả CV, cố vấn xem bản mới nhất và các bản trước) rồi mọi báo cáo
+    phỏng vấn đã hoàn thành (mới nhất trước).
+    """
     grants = grants_of(db, student.id)
-    cvs = db.scalars(select(CvVersion).where(CvVersion.owner_id == student.id).order_by(CvVersion.version.desc()))
     matches = latest_match_by_cv(db, student.id)
     sessions = progress.completed_sessions(db, student)
     jds = progress.load_jds(db, {s.jd_id for s in sessions})
     reviewed = set(db.scalars(select(AdvisorReview.session_id).where(AdvisorReview.student_id == student.id)))
 
     result = []
-    for cv in cvs:
-        grant = grants.get(cv.id)
+    for versions in cv_versions.families(db, student.id):
+        cv = versions[0]
+        family_id = cv_versions.family_of(cv)
+        grant = grants.get(family_id)
         score = matches.get(cv.id)
+        count = f" · {len(versions)} phiên bản" if len(versions) > 1 else ""
         result.append(
             {
-                "id": cv.id,
+                "id": family_id,
                 "kind": "cv",
                 "title": cv.file_name,
-                "subtitle": f"Phiên bản v{cv.version}.0",
+                "subtitle": f"Phiên bản {cv_versions.label(cv)}{count}",
                 "tag": "primary" if cv.is_active else "draft" if cv.is_draft else None,
                 "created_at": cv.uploaded_at,
                 "score": round(score) if score is not None else None,
@@ -113,7 +118,11 @@ def items(db: Session, student: User) -> list[dict[str, Any]]:
 
 def update(db: Session, student: User, item_ids: list[str], shared: bool, now: datetime) -> None:
     """Bật / tắt chia sẻ nhiều tài liệu cùng lúc; mã không thuộc SV thì báo 404 và không đổi gì."""
-    kinds = {cv_id: KIND_CV for cv_id in db.scalars(select(CvVersion.id).where(CvVersion.owner_id == student.id))}
+    kinds = {
+        family_id: KIND_CV
+        for family_id in db.scalars(select(CvVersion.family_id).where(CvVersion.owner_id == student.id))
+        if family_id
+    }
     kinds.update({s.id: KIND_INTERVIEW for s in progress.completed_sessions(db, student)})
     unknown = [item_id for item_id in item_ids if item_id not in kinds]
     if unknown:

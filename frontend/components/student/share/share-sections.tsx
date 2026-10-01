@@ -223,7 +223,7 @@ export function SharedItemsPanel({ items, pendingIds, onChange }: SharedItemsPan
   const count = (kind: ShareTab) => (kind === "all" ? items.length : items.filter((i) => i.kind === kind).length)
   const tabs: { value: ShareTab; label: string }[] = [
     { value: "all", label: `Tất cả (${count("all")})` },
-    { value: "cv", label: `Phiên bản CV (${count("cv")})` },
+    { value: "cv", label: `CV (${count("cv")})` },
     { value: "interview_report", label: `Báo cáo phỏng vấn (${count("interview_report")})` },
   ]
   const visible = tab === "all" ? items : items.filter((i) => i.kind === tab)

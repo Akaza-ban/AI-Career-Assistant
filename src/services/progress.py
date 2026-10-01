@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
 from src.db.models import CvVersion, GapAnalysis, InterviewSession, InterviewTurn, JobDescription, User
-from src.services import interview
+from src.services import cv_versions, interview
 from src.services.skill_matching import match_label
 
 RECENT_LIMIT = 5
@@ -65,10 +65,10 @@ def timed_out_counts(db: Session, session_ids: list[str]) -> dict[str, int]:
     return {session_id: count for session_id, count in rows}
 
 
-def _version_of(analysis: GapAnalysis) -> int:
-    """Số phiên bản CV từ nhãn "v3.0" (CV có thể đã bị xoá nên không tra bảng cv_versions)."""
-    found = re.match(r"v(\d+)", analysis.cv_label)
-    return int(found.group(1)) if found else 0
+def _version_of(analysis: GapAnalysis) -> tuple[int, int]:
+    """(Số chính, số phụ) từ nhãn "v1.2" (CV có thể đã bị xoá nên không tra bảng cv_versions)."""
+    found = re.match(r"v(\d+)(?:\.(\d+))?", analysis.cv_label)
+    return (int(found.group(1)), int(found.group(2) or 0)) if found else (0, 0)
 
 
 def _delta(after: float | None, before: float | None) -> float | None:
@@ -164,7 +164,7 @@ def _next_step(
         return {"kind": "upload_cv"}
     if not completed:
         cv = next((c for c in cvs if c.is_active), cvs[0])
-        return {"kind": "analyze", "cv_version_id": cv.id, "cv_label": f"v{cv.version}.0"}
+        return {"kind": "analyze", "cv_version_id": cv.id, "cv_label": cv_versions.label(cv)}
 
     latest = completed[0]
     if latest.jd_id not in {s.jd_id for s in sessions}:

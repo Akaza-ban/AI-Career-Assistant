@@ -88,8 +88,12 @@ class CvVersionResponse(BaseModel):
     """Một phiên bản CV (khớp CvVersion trong frontend/lib/types.ts)."""
 
     id: str = Field(..., description="Mã phiên bản CV")
-    version: int = Field(..., description="Số thứ tự phiên bản, tăng dần, không ghi đè bản cũ")
-    label: str = Field(..., description="Nhãn hiển thị, ví dụ 'v2.0'")
+    version: int = Field(..., description="Số thứ tự nội bộ, tăng dần trên mọi CV của SV, không ghi đè bản cũ")
+    label: str = Field(
+        ..., description="Nhãn trong CV: 'v1.0' bản tải lên, số phụ +1 mỗi lần tối ưu, số chính +1 khi khôi phục"
+    )
+    family_id: str = Field(..., description="Mã CV (các phiên bản cùng mã là một CV, một thẻ trong 'CV của tôi')")
+    version_count: int = Field(default=1, description="Số phiên bản của CV này (có ở danh sách CV)")
     file_name: str = Field(..., description="Tên file gốc")
     file_type: Literal["pdf", "docx"] = Field(..., description="Định dạng file")
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
@@ -101,10 +105,16 @@ class CvVersionResponse(BaseModel):
     match_score: int | None = Field(
         default=None, description="CV–JD Matching Score (0–100) của lần phân tích gần nhất — không phải điểm ATS"
     )
-    origin: Literal["upload", "optimized"] = Field(default="upload", description="Nguồn tạo phiên bản")
+    origin: Literal["upload", "optimized", "restored"] = Field(default="upload", description="Nguồn tạo phiên bản")
     latest_analysis_id: str | None = Field(default=None, description="Lần phân tích gần nhất của phiên bản này")
     source_analysis_id: str | None = Field(
         default=None, description="Lượt phân tích đã dùng để tối ưu ra phiên bản này (origin = 'optimized')"
+    )
+    source_jd_title: str | None = Field(
+        default=None, description="Vị trí của JD đã dùng để tối ưu ra phiên bản này (có ở lịch sử phiên bản)"
+    )
+    restored_from_label: str | None = Field(
+        default=None, description="Nhãn phiên bản cũ được khôi phục thành bản này (origin = 'restored')"
     )
     is_active: bool = Field(default=False, description="Phiên bản đang dùng")
     is_draft: bool = Field(default=False, description="Bản nháp")

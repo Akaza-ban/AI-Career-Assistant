@@ -95,9 +95,15 @@ function trendOf(delta: number | null): StudentTrend {
   return "stable"
 }
 
+/** Chia sẻ CV tính theo cả CV (family_id): mọi phiên bản của CV đã chia sẻ đều xem được. */
+export function cvShared(src: StudentSource, cvVersionId: string): boolean {
+  const cv = src.cvs.find((c) => c.id === cvVersionId)
+  return cv !== undefined && src.shared.has(cv.family_id)
+}
+
 function missingRequired(src: StudentSource): string[] {
   const latest = src.analyses[0]
-  if (!latest || !src.shared.has(latest.row.cv_version_id)) return []
+  if (!latest || !cvShared(src, latest.row.cv_version_id)) return []
   return latest.requirements.filter((r) => r.status === "missing" && r.importance === "required").map((r) => r.skill)
 }
 
@@ -112,7 +118,8 @@ export function summarize(src: StudentSource): AssignedStudent {
     ...src.analyses.map((a) => a.row.created_at),
     ...src.sessions.map((s) => s.completed_at),
   ].sort((a, b) => time(b) - time(a))
-  const items = [...src.cvs.map((c) => c.id), ...src.sessions.map((s) => s.id)]
+  // Mỗi CV tính một tài liệu dù có nhiều phiên bản
+  const items = [...new Set(src.cvs.map((c) => c.family_id)), ...src.sessions.map((s) => s.id)]
   return {
     ...src.profile,
     target,
@@ -206,7 +213,7 @@ export function progressOf(src: StudentSource, now = Date.now()): AdvisorStudent
 function gapOf(src: StudentSource): AdvisorGap | null {
   const latest = src.analyses[0]
   if (!latest) return null
-  const shared = src.shared.has(latest.row.cv_version_id)
+  const shared = cvShared(src, latest.row.cv_version_id)
   const skills = (status: MatchStatus) => (shared ? latest.requirements.filter((r) => r.status === status).map((r) => r.skill) : [])
   return {
     analysis_id: latest.row.id,
@@ -239,7 +246,7 @@ export function detailOf(src: StudentSource, notes: AdvisorNote[], now = Date.no
   const targetRef = src.analyses[0]?.row.jd ?? src.sessions[0]?.jd ?? null
   return {
     student: summarize(src),
-    cvs: src.cvs.map((cv) => ({ ...cv, shared: src.shared.has(cv.id) })),
+    cvs: src.cvs.map((cv) => ({ ...cv, shared: cvShared(src, cv.id) })),
     target_jd: targetRef ? jobDescription(targetRef) : null,
     latest_gap: gapOf(src),
     interviews: src.sessions.map((s) => ({
@@ -531,7 +538,7 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
           id: `ga_${key}_${i + 1}`,
           jd,
           cv_version_id: cvId,
-          cv_label: `v${i + 1}.0`,
+          cv_label: `v1.${i}`,
           cv_file_name: `CV_${spec.full_name.split(" ").at(-1)}_${spec.short}_v${i + 1}.docx`,
           status: "completed",
           current_step: null,
@@ -542,10 +549,13 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
         },
         requirements,
       })
+      // Mọi phiên bản thuộc cùng một CV: bản tải lên v1.0, các lần tối ưu v1.1, v1.2...
       return {
         id: cvId,
         version: i + 1,
-        label: `v${i + 1}.0`,
+        label: `v1.${i}`,
+        family_id: `cv_${key}_1`,
+        version_count: spec.versions.length,
         file_name: `CV_${spec.full_name.split(" ").at(-1)}_${spec.short}_v${i + 1}.docx`,
         file_type: "docx",
         size_bytes: 24_000,
@@ -558,6 +568,8 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
         origin: i === 0 ? "upload" : "optimized",
         latest_analysis_id: `ga_${key}_${i + 1}`,
         source_analysis_id: i > 0 ? `ga_${key}_${i}` : null,
+        source_jd_title: i > 0 ? jd.title : null,
+        restored_from_label: null,
         is_active: i === spec.versions.length - 1,
         is_draft: false,
       }
@@ -580,8 +592,9 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
 
     const chronological = [...sessions].reverse()
     const shared = new Set<string>()
-    if (spec.share === "all") [...cvs, ...sessions].forEach((x) => shared.add(x.id))
-    if (spec.share === "cv" || spec.share === "latest") shared.add(cvs[0].id)
+    // CV chia sẻ theo mã CV: cố vấn xem bản mới nhất và các bản trước
+    if (spec.share !== "none") shared.add(cvs[0].family_id)
+    if (spec.share === "all") sessions.forEach((s) => shared.add(s.id))
     if (spec.share === "latest") chronological.slice(-2).forEach((s) => shared.add(s.id))
 
     const reviews: Record<string, AdvisorReviewInfo> = {}

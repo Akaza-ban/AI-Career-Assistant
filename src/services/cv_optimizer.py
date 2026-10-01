@@ -5,7 +5,8 @@ Trình tối ưu CV (US-SV-03, US-SV-05, PRD mục 6).
   định được gom vào bản nháp và ghi Audit Trail (PRD 6.5). Gợi ý đã bỏ qua không được đề xuất lại (AC3).
 - Kỹ năng JD yêu cầu mà CV chưa có: SV tự xác nhận; AI không tự thêm vào CV. Kỹ năng SV ghi là đang học chỉ vào mục
   "Kỹ năng đang phát triển", không nằm trong nội dung được chấm khi phân tích lại.
-- "Hoàn tất" tạo đúng một phiên bản CV mới (không ghi đè bản cũ) kèm file DOCX, sau đó phiên tối ưu bị khoá.
+- "Hoàn tất" tạo đúng một phiên bản mới trong cùng CV (số phụ +1, ví dụ v1.1 → v1.2; không ghi đè bản cũ) kèm file
+  DOCX, sau đó phiên tối ưu bị khoá. CV đang dùng thì bản mới tự thành bản đang dùng (xem services/cv_versions.py).
 """
 
 import re
@@ -14,12 +15,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
 from src.db.models import CvEditAudit, CvExport, CvOptimization, CvVersion, GapAnalysis, JobDescription, User
-from src.services import cv_files
+from src.services import cv_files, cv_versions
 from src.services.skill_matching import (
     BULLET_PREFIX,
     IMPORTANCE_LABELS,
@@ -81,9 +82,9 @@ def apply_changes(text: str, replacements: dict[int, str]) -> str:
     return "\n".join(out)
 
 
-def _optimized_file_name(file_name: str, version: int) -> str:
-    stem = re.sub(r"_v\d+$", "", Path(file_name).stem) or "CV"
-    return f"{stem}_v{version}.docx"
+def _optimized_file_name(file_name: str, version_label: str) -> str:
+    stem = re.sub(r"_v\d+(\.\d+)?$", "", Path(file_name).stem) or "CV"
+    return f"{stem}_{version_label}.docx"
 
 
 # ---------- Gợi ý & kiểm tra kỹ năng ----------
@@ -341,12 +342,9 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
 
     developing = {s["name"].lower(): s for s in cv.developing_skills or []}
     developing.update({s["name"].lower(): s for s in learning})
-    version = (db.scalar(select(func.max(CvVersion.version)).where(CvVersion.owner_id == user.id)) or 0) + 1
     new_cv = CvVersion(
         id=f"cv_{uuid.uuid4().hex[:12]}",
         owner_id=user.id,
-        version=version,
-        file_name=_optimized_file_name(cv.file_name, version),
         file_type="docx",
         size_bytes=0,
         page_count=None,
@@ -358,6 +356,8 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
         developing_skills=list(developing.values()) or None,
         source_analysis_id=analysis.id,
     )
+    cv_versions.append(db, cv, new_cv, new_major=False)
+    new_cv.file_name = _optimized_file_name(cv.file_name, cv_versions.label(new_cv))
     data = cv_files.build_docx(cv_document(new_cv), DEVELOPING_TITLE)
     new_cv.size_bytes = len(data)
     cv_files.save_file(user.id, new_cv.id, "docx", data)
