@@ -5,6 +5,7 @@ $ErrorActionPreference = 'Stop'
 
 $HookFile = '.git/hooks/pre-push'
 
+# Git on Windows runs hooks via Git's internal sh, so shebang must be /bin/sh with LF endings.
 $HookBody = @'
 #!/bin/sh
 # Pre-push: sweep recent Antigravity / Gemini prompts, then submit AI logs.
@@ -12,11 +13,8 @@ python scripts/log_antigravity.py --auto 2>/dev/null || py -3 scripts/log_antigr
 python scripts/submit_log.py || py -3 scripts/submit_log.py || python3 scripts/submit_log.py || true
 exit 0
 '@
-
-
-# Ensure LF line endings and no UTF-8 BOM so Git for Windows can execute the hook
-$HookBodyLf = $HookBody.Replace("`r`n", "`n") + "`n"
-[System.IO.File]::WriteAllText((Join-Path (Get-Location) $HookFile), $HookBodyLf, [System.Text.UTF8Encoding]::new($false))
+$HookBody = ($HookBody -replace "`r`n", "`n") + "`n"
+[System.IO.File]::WriteAllText($HookFile, $HookBody, [System.Text.UTF8Encoding]::new($false))
 Write-Host "[ai-log] Git pre-push hook installed."
 
 if (-not (Test-Path .ai-log)) { New-Item -ItemType Directory -Path .ai-log | Out-Null }
