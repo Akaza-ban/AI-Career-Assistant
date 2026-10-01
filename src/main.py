@@ -1,12 +1,20 @@
 import os
+import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from src.api.errors import register_error_handlers
 from src.api.routes import router
 from src.config import get_settings
+from src.db.database import init_db
 from src.models.schemas import HealthResponse
+
+# Console Windows mặc định cp1252 không in được tiếng Việt/emoji khi output bị chuyển hướng
+# (ghi file, chạy nền) và làm app crash lúc khởi động.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
 @asynccontextmanager
@@ -28,6 +36,8 @@ async def lifespan(app: FastAPI):
         if settings.langchain_tracing_v2 and settings.langchain_api_key
         else "Disabled / Missing Key"
     )
+
+    init_db()
 
     print("=" * 60)
     print(f"🚀 {settings.app_name} starting in [{settings.app_env}] mode")
@@ -64,6 +74,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Chuẩn hoá lỗi về {"detail": str, "code": str}
+register_error_handlers(app)
 
 # Đăng ký routes với tiền tố /api/v1
 app.include_router(router, prefix="/api/v1")

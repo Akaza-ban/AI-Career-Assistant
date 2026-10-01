@@ -1,0 +1,177 @@
+import pytest
+from sqlalchemy import delete
+
+from src.db.database import SessionLocal, init_db
+from src.db.models import CvVersion, Feedback, GapAnalysis, JobDescription
+from tests.helpers import ADVISOR, STUDENT, make_docx, upload_cv
+
+CV_LINES = [
+    "Nguyễn Minh Anh",
+    "Sinh viên năm cuối ngành Kinh doanh Quốc tế",
+    "Mục tiêu: Trở thành chuyên viên phân tích dữ liệu",
+    "Kinh nghiệm",
+    "Thực tập sinh tại Công ty ABC: xây dựng dashboard Power BI theo dõi doanh số hằng tuần",
+    "Viết truy vấn SQL tổng hợp dữ liệu đơn hàng cho báo cáo tháng",
+    "Kỹ năng",
+    "Python, Excel, Tableau",
+]
+PASTED_JD = (
+    "Công ty X tuyển thực tập sinh kỹ sư dữ liệu làm việc với đội phân tích. Mô tả công việc: xây dựng pipeline "
+    "xử lý dữ liệu bán hàng, viết truy vấn tổng hợp và hỗ trợ đội kinh doanh khai thác số liệu hằng tuần. "
+    "Yêu cầu ứng viên: thành thạo Python và SQL, biết Docker để đóng gói dịch vụ, có kinh nghiệm làm việc "
+    "với Git trong nhóm. Ưu tiên ứng viên từng tham gia dự án thực tế và có tinh thần học hỏi."
+)
+
+
+@pytest.fixture(autouse=True)
+def clean_data():
+    init_db()
+    with SessionLocal() as db:
+        for model in (Feedback, GapAnalysis, CvVersion):
+            db.execute(delete(model))
+        db.execute(delete(JobDescription).where(JobDescription.source == "pasted"))
+        db.commit()
+
+
+async def create_cv(client) -> dict:
+    return (await upload_cv(client, "CV_MinhAnh.docx", make_docx(CV_LINES))).json()
+
+
+async def analyze(client, **body) -> tuple[dict, dict]:
+    """Tạo lượt phân tích; trong test, tác vụ nền chạy xong trước khi request trả về."""
+    created = await client.post("/api/v1/gap-analysis", json=body, headers=STUDENT)
+    assert created.status_code == 202, created.text
+    result = await client.get(f"/api/v1/gap-analysis/{created.json()['id']}", headers=STUDENT)
+    return created.json(), result.json()
+
+
+@pytest.mark.asyncio
+async def test_jd_library_has_seeded_jds_with_importance(client):
+    response = await client.get("/api/v1/jd/library", headers=STUDENT)
+    assert response.status_code == 200
+    jds = {jd["id"]: jd for jd in response.json()}
+    assert len(jds) == 8
+    da = jds["jd-da-intern"]
+    assert da["source"] == "library" and da["content"]
+    assert {"name": "Power BI", "importance": "required"} in da["skills"]
+    assert {s["importance"] for s in da["skills"]} == {"required", "preferred", "additional"}
+
+
+@pytest.mark.asyncio
+async def test_library_analysis_scores_by_prd_formula(client):
+    cv = await create_cv(client)
+    created, result = await analyze(client, cv_version_id=cv["id"], jd_id="jd-da-intern")
+
+    assert created["status"] == "processing"
+    assert created["current_step"] == "parse"
+    assert result["status"] == "completed"
+    assert result["current_step"] is None
+    # Required: SQL 1, Excel 0.5, Power BI 1 · Preferred: Python 0.5, Trực quan hoá 1, Thống kê 0
+    # Additional: Tableau 0.5, Google Analytics 0, Tiếng Anh 0 → 11 / 18
+    assert result["match_score"] == 61.1
+    assert result["match_label"] == "medium"
+    assert result["counts"] == {"matched": 3, "partial": 3, "missing": 3}
+
+    rows = {r["skill"]: r for r in result["requirements"]}
+    assert rows["SQL"]["evidence"]["section_label"] == "Kinh nghiệm"
+    assert rows["Excel"]["status"] == "partial"
+    assert rows["Thống kê"]["evidence"] is None
+    # Không có LLM → không sinh câu viết lại
+    assert result["llm_used"] is False and result["suggestions"] == []
+    assert result["jd"]["title"] == "Data Analyst Intern"
+
+    # Thẻ CV hiển thị "Độ khớp JD gần nhất"
+    [card] = (await client.get("/api/v1/cv", headers=STUDENT)).json()
+    assert card["target_title"] == "Data Analyst Intern"
+    assert card["match_score"] == 61
+    assert card["latest_analysis_id"] == result["id"]
+
+
+@pytest.mark.asyncio
+async def test_pasted_jd_requirements_are_extracted_and_saved(client):
+    cv = await create_cv(client)
+    _, result = await analyze(client, cv_version_id=cv["id"], jd_text=PASTED_JD, jd_title="Data Engineer Intern")
+
+    assert result["status"] == "completed"
+    assert result["jd"]["source"] == "pasted"
+    skills = {r["skill"] for r in result["requirements"]}
+    assert {"Python", "SQL", "Docker", "Git"} <= skills
+    with SessionLocal() as db:
+        jd = db.get(JobDescription, result["jd"]["id"])
+        assert {s["name"] for s in jd.skills} == skills
+
+
+@pytest.mark.asyncio
+async def test_pasted_jd_without_requirements_fails_clearly(client):
+    cv = await create_cv(client)
+    text = " ".join(["Công ty chúng tôi đang tìm kiếm những bạn trẻ năng động và nhiệt huyết."] * 6)
+    _, result = await analyze(client, cv_version_id=cv["id"], jd_text=text, jd_title="Vị trí X")
+    assert result["status"] == "failed"
+    assert "Không trích xuất được yêu cầu" in result["error_message"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("body", "status", "code"),
+    [
+        ({}, 422, "jd_required"),
+        ({"jd_text": "JD quá ngắn", "jd_title": "X"}, 422, "jd_too_short"),
+        ({"jd_text": PASTED_JD}, 422, "jd_title_required"),
+        ({"jd_id": "jd-khong-ton-tai"}, 404, "jd_not_found"),
+        ({"jd_id": "jd-da-intern", "jd_text": PASTED_JD, "jd_title": "X"}, 422, "jd_source_conflict"),
+    ],
+    ids=["no-jd", "short-jd", "no-title", "unknown-jd", "both-sources"],
+)
+async def test_create_analysis_validation(client, body, status, code):
+    cv = await create_cv(client)
+    response = await client.post("/api/v1/gap-analysis", json={"cv_version_id": cv["id"], **body}, headers=STUDENT)
+    assert response.status_code == status
+    assert response.json()["code"] == code
+
+
+@pytest.mark.asyncio
+async def test_unknown_cv_and_analysis_are_not_found(client):
+    response = await client.post(
+        "/api/v1/gap-analysis", json={"cv_version_id": "cv_khong_co", "jd_id": "jd-da-intern"}, headers=STUDENT
+    )
+    assert response.json()["code"] == "cv_not_found"
+    response = await client.get("/api/v1/gap-analysis/ga_khong_co", headers=STUDENT)
+    assert response.json()["code"] == "analysis_not_found"
+
+
+@pytest.mark.asyncio
+async def test_advisor_cannot_create_analysis(client):
+    response = await client.post("/api/v1/gap-analysis", json={"cv_version_id": "x", "jd_id": "y"}, headers=ADVISOR)
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_feedback_first_submission_wins(client):
+    first = await client.post(
+        "/api/v1/feedback", json={"response_id": "sg_1", "kind": "thumb", "value": 1}, headers=STUDENT
+    )
+    assert first.json()["already_submitted"] is False
+    again = await client.post(
+        "/api/v1/feedback", json={"response_id": "sg_1", "kind": "thumb", "value": -1}, headers=STUDENT
+    )
+    assert again.json() == {**again.json(), "already_submitted": True, "value": 1}
+
+    status = await client.get("/api/v1/feedback", params={"response_id": "sg_1", "kind": "thumb"}, headers=STUDENT)
+    assert status.json() == {"kind": "thumb", "value": 1}
+    empty = await client.get("/api/v1/feedback", params={"response_id": "ga_1", "kind": "csat"}, headers=STUDENT)
+    assert empty.json() == {"kind": "csat", "value": None}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"response_id": "ga_1", "kind": "csat", "value": 6, "activity": "gap_analysis"},
+        {"response_id": "ga_1", "kind": "csat", "value": 5},
+        {"response_id": "sg_1", "kind": "thumb", "value": 2},
+    ],
+    ids=["csat-out-of-range", "csat-no-activity", "thumb-invalid"],
+)
+async def test_feedback_validation(client, body):
+    response = await client.post("/api/v1/feedback", json=body, headers=STUDENT)
+    assert response.status_code == 422

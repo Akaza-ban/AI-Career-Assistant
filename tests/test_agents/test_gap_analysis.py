@@ -1,6 +1,15 @@
 import pytest
 
 from src.agents.gap_analysis.graph import gap_analysis_agent
+from src.agents.gap_analysis.nodes import compare_gap, verify_grounding
+from src.services import guardrails
+from src.services.skill_matching import (
+    assess_by_rules,
+    compute_score,
+    match_label,
+    normalize_requirements,
+    split_cv_lines,
+)
 from src.services.taxonomy import (
     STATIC_TAXONOMY,
     apply_taxonomy_matching,
@@ -98,21 +107,160 @@ async def test_gap_analysis_graph_4_nodes_flow():
     assert "Qdrant" in result["missing_skills"]
     assert "Redis" in result["missing_skills"]
 
-    # 2. Kiểm tra suggestions và ràng buộc evidence_span
-    assert "suggestions" in result
-    suggestions = result["suggestions"]
-    assert len(suggestions) > 0
+    # 2. Không có LLM: không sinh câu viết lại từ mẫu có sẵn (tránh thêm thông tin không có trong CV — PRD mục 6)
+    assert result["llm_used"] is False
+    assert result["suggestions"] == []
 
-    for item in suggestions:
-        assert "skill" in item
-        assert "evidence_span" in item
-        assert "suggested_revision" in item
-
-        # RÀNG BUỘC CỐT LÕI: evidence_span PHẢI được trích từ CV gốc
-        span = item["evidence_span"]
-        assert span in cv_text, f"evidence_span '{span}' không có trong CV gốc!"
+    # Mọi bằng chứng đều là nguyên văn một dòng trong CV gốc
+    for item in result["assessments"]:
+        if item["evidence"]:
+            assert item["evidence"]["text"] in cv_text
 
     # 3. Kiểm tra ngữ cảnh retrieved_context từ RAG (top-k=3-5)
     assert "retrieved_context" in result
     retrieved = result["retrieved_context"]
     assert 3 <= len(retrieved) <= 5
+
+
+# ---------- CV–JD Matching Score theo PRD mục 5.2 ----------
+
+CV_DATA_ANALYST = """Nguyễn Minh Anh
+Mục tiêu: Trở thành chuyên viên phân tích dữ liệu
+KINH NGHIỆM
+Thực tập sinh tại Công ty ABC: xây dựng dashboard Power BI theo dõi doanh số hằng tuần
+Viết truy vấn SQL tổng hợp dữ liệu đơn hàng cho báo cáo tháng
+KỸ NĂNG
+Python, Excel, Tableau"""
+
+
+def test_split_cv_lines_assigns_sections():
+    lines = split_cv_lines(CV_DATA_ANALYST)
+    by_text = {line["text"]: line for line in lines}
+    assert by_text["Nguyễn Minh Anh"]["section"] == "header"
+    assert by_text["Mục tiêu: Trở thành chuyên viên phân tích dữ liệu"]["section"] == "summary"
+    assert by_text["KINH NGHIỆM"]["is_heading"] is True
+    assert by_text["Viết truy vấn SQL tổng hợp dữ liệu đơn hàng cho báo cáo tháng"]["section"] == "experience"
+    assert by_text["Python, Excel, Tableau"]["section"] == "skills"
+
+
+def test_inline_listing_inside_entry_keeps_section():
+    """'Technologies: ...' trong mục Kinh nghiệm không biến các dòng mô tả phía sau thành mục Kỹ năng."""
+    lines = split_cv_lines(
+        "EXPERIENCE\nWeb Developer Intern\nTechnologies: React.js, Git\nXây dựng API CRUD bằng Python FastAPI.\n"
+        "KỸ NĂNG\nPython, SQL\nCông cụ: Git, Docker"
+    )
+    by_text = {line["text"]: line for line in lines}
+    listing = by_text["Technologies: React.js, Git"]
+    assert (listing["section"], listing["block"]) == ("skills", "experience")
+    described = by_text["Xây dựng API CRUD bằng Python FastAPI."]
+    assert (described["section"], described["block"]) == ("experience", "experience")
+    assert by_text["Công cụ: Git, Docker"]["block"] == "skills"
+    [python] = normalize_requirements([{"name": "Python", "importance": "required"}])
+    assert assess_by_rules(python, lines)["match"] == 1
+
+
+def test_rule_anchor_levels():
+    lines = split_cv_lines(CV_DATA_ANALYST)
+    reqs = normalize_requirements(
+        [
+            {"name": "SQL", "importance": "required"},
+            {"name": "Excel", "importance": "required"},
+            {"name": "Thống kê", "importance": "preferred"},
+        ]
+    )
+    sql, excel, stats = (assess_by_rules(r, lines) for r in reqs)
+    assert (sql["match"], sql["evidence"]["section"]) == (1, "experience")
+    assert (excel["match"], excel["evidence"]["section"]) == (0.5, "skills")
+    assert (stats["match"], stats["evidence"]) == (0, None)
+
+
+def test_rule_taxonomy_child_counts_as_parent():
+    lines = split_cv_lines("KINH NGHIỆM\nXây dựng REST API cho hệ thống đặt lịch bằng FastAPI")
+    [python] = normalize_requirements([{"name": "Python", "importance": "required"}])
+    result = assess_by_rules(python, lines)
+    assert result["match"] == 1
+    assert "taxonomy" in result["note"]
+
+
+def test_score_formula_matches_prd_example():
+    """Ví dụ trong PRD mục 5.2: (3 + 3 + 1.5 + 0 + 0 + 1) / 14 × 100% = 60.7%."""
+    rows = [("SQL", "required", 1), ("Python", "required", 1), ("Excel", "required", 0.5)]
+    rows += [("Power BI", "preferred", 0), ("Tableau", "preferred", 0), ("Git", "additional", 1)]
+    items = [
+        {"importance": imp, "match": m, "status": {1: "matched", 0.5: "partial", 0: "missing"}[m]} for _, imp, m in rows
+    ]
+    score, breakdown = compute_score(items)
+    assert score == 60.7
+    assert match_label(score) == "medium"
+    assert [b["weight"] for b in breakdown] == [3, 2, 1]
+
+
+@pytest.mark.asyncio
+async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
+    """Kết quả LLM được kiểm tra chéo bằng quy tắc anchor và guardrail trước khi hiển thị."""
+    requirements = [
+        {"name": "Power BI", "importance": "required"},
+        {"name": "Excel", "importance": "required"},
+        {"name": "Thống kê", "importance": "preferred"},
+    ]
+    calls = []
+
+    async def fake_score(lines, reqs, context):
+        calls.append(1)
+        return {
+            "requirements": [
+                {"id": "r1", "match": 1, "evidence_lines": [4], "note": ""},
+                # Excel chỉ nằm ở mục Kỹ năng → phải hạ xuống 0.5 dù LLM chấm 1
+                {"id": "r2", "match": 1, "evidence_lines": [7], "note": ""},
+                # LLM khẳng định có nhưng không chỉ ra dòng bằng chứng → bỏ, dùng kết quả quy tắc (0)
+                {"id": "r3", "match": 1, "evidence_lines": [], "note": ""},
+            ],
+            "suggestions": [
+                {
+                    "requirement_id": "r1",
+                    "line": 4,
+                    "rewrite": "Xây dựng dashboard Power BI theo dõi doanh số hằng tuần cho Công ty ABC",
+                    "reason": "Nêu rõ công cụ",
+                },
+                # Thêm số liệu không có trong CV → guardrail chặn, chờ cố vấn xem lại
+                {
+                    "requirement_id": "r1",
+                    "line": 5,
+                    "rewrite": "Viết truy vấn SQL giúp giảm 30% thời gian làm báo cáo",
+                    "reason": "Định lượng",
+                },
+                # Dòng chỉ liệt kê kỹ năng → không viết lại
+                {"requirement_id": "r2", "line": 7, "rewrite": "Kỹ năng: Microsoft Excel", "reason": "Chuẩn hoá tên"},
+                # Kỹ năng CV chưa có → không được sinh câu mới
+                {
+                    "requirement_id": "r3",
+                    "line": 4,
+                    "rewrite": "Áp dụng thống kê để phân tích doanh số",
+                    "reason": "Bổ sung",
+                },
+            ],
+            "summary": "CV có bằng chứng tốt cho Power BI.",
+        }
+
+    monkeypatch.setattr(compare_gap, "llm_configured", lambda: True)
+    monkeypatch.setattr(compare_gap, "score_with_llm", fake_score)
+    audit_db = tmp_path / "audit.db"
+    monkeypatch.setattr(
+        verify_grounding,
+        "check_output_grounding",
+        lambda **kw: guardrails.check_output_grounding(**kw, db_path=audit_db),
+    )
+
+    result = await gap_analysis_agent.ainvoke(
+        {"cv_raw": CV_DATA_ANALYST, "jd_raw": "JD Data Analyst", "requirements": requirements}
+    )
+
+    by_skill = {a["skill"]: a for a in result["assessments"]}
+    assert by_skill["Power BI"]["match"] == 1
+    assert (by_skill["Excel"]["match"], by_skill["Excel"]["source"]) == (0.5, "llm")
+    assert (by_skill["Thống kê"]["match"], by_skill["Thống kê"]["source"]) == (0, "rule")
+    assert [s["skill"] for s in result["suggestions"]] == ["Power BI"]
+    assert len(result["manual_review_items"]) == 1
+    assert result["match_score"] == round((3 * 1 + 3 * 0.5 + 0) / 8 * 100, 1)
+    assert result["gap_summary"] == "CV có bằng chứng tốt cho Power BI."
+    assert len(calls) == 1 and result["llm_calls"] == 1
