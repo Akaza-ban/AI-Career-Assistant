@@ -15,7 +15,7 @@ export function FocusShell({ children }: { children: ReactNode }) {
     <ProfileProvider role="student">
       <div className="flex min-h-screen flex-col bg-surface">
         <header className="sticky top-0 z-30 border-b border-line/60 bg-card/95 backdrop-blur-sm">
-          <div className="mx-auto flex h-16 w-full max-w-[1280px] items-center justify-between gap-3 px-4 sm:px-12">
+          <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between gap-3 px-4 sm:px-12">
             <div className="flex min-w-0 items-center gap-3">
               <Logo href="/student" compact />
               <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
@@ -31,7 +31,7 @@ export function FocusShell({ children }: { children: ReactNode }) {
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-[1280px] flex-1 px-4 py-6 sm:px-12 sm:py-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-12 sm:py-8">{children}</main>
       </div>
     </ProfileProvider>
   )
