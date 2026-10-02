@@ -294,7 +294,11 @@ export function CvFilesCard({ cvs, onDelete }: CvFilesCardProps) {
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}
         title={`Xoá ${deleting?.file_name ?? "CV"}?`}
-        description="Tệp CV sẽ bị xoá vĩnh viễn. Các báo cáo phân tích đã tạo từ tệp này vẫn được giữ trong lịch sử."
+        description={
+          deleting && deleting.version_count > 1
+            ? `CV này có ${deleting.version_count} phiên bản; tất cả sẽ bị xoá vĩnh viễn. Các báo cáo phân tích đã tạo vẫn được giữ trong lịch sử.`
+            : "Tệp CV sẽ bị xoá vĩnh viễn. Các báo cáo phân tích đã tạo từ tệp này vẫn được giữ trong lịch sử."
+        }
         confirmLabel="Xoá tệp"
         destructive
         onConfirm={() => (deleting ? onDelete(deleting) : Promise.resolve())}

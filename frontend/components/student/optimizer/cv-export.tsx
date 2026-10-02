@@ -177,7 +177,7 @@ function ExportView({ session, resultCv, optimizerHref }: { session: OptimizerSe
         <BackLink href={optimizerHref} />
         <span className="flex items-center gap-1.5 text-xs text-ink-2">
           <span className="size-2 rounded-full bg-good" aria-hidden />
-          Đã lưu phiên bản {resultCv.label} trong CV của tôi · bản {session.cv.label} vẫn giữ nguyên
+          Đã lưu phiên bản {resultCv.label} trong CV của tôi · bản {session.cv.label} vẫn giữ trong lịch sử phiên bản
         </span>
       </div>
 

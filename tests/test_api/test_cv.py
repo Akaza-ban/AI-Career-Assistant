@@ -1,8 +1,12 @@
+import uuid
+
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from src.db.database import SessionLocal, init_db
-from src.db.models import CvVersion
+from src.db.models import CvVersion, GapAnalysis, ShareGrant, utcnow
+from src.db.seed import DEMO_STUDENT_ID
+from src.services import cv_files, cv_versions
 from src.services.cv_files import CV_MAX_BYTES, _split_diacritics
 from tests.helpers import ADVISOR, STUDENT, make_docx, make_pdf, upload_cv
 
@@ -17,8 +21,30 @@ def upload(client, name: str, data: bytes, headers=STUDENT):
 def clean_cvs():
     init_db()
     with SessionLocal() as db:
-        db.execute(delete(CvVersion))
+        for model in (ShareGrant, GapAnalysis, CvVersion):
+            db.execute(delete(model))
         db.commit()
+
+
+def add_optimized(base_id: str) -> str:
+    """Một bản tối ưu của CV chứa base_id (như "Hoàn tất" ở Trình tối ưu)."""
+    with SessionLocal() as db:
+        base = db.get(CvVersion, base_id)
+        cv = CvVersion(
+            id=f"cv_{uuid.uuid4().hex[:8]}",
+            owner_id=base.owner_id,
+            file_name="cv_toi_uu.docx",
+            file_type="docx",
+            size_bytes=4,
+            content_text=CV_TEXT,
+            origin="optimized",
+            uploaded_at=utcnow(),
+        )
+        cv_versions.append(db, base, cv, new_major=False)
+        db.add(cv)
+        db.commit()
+        cv_files.save_file(cv.owner_id, cv.id, "docx", b"docx")
+        return cv.id
 
 
 @pytest.mark.asyncio
@@ -36,7 +62,9 @@ async def test_upload_creates_incrementing_versions_first_is_active(client):
 
     second = await upload(client, "cv_moi.docx", make_docx(CV_TEXT.split(" - ")))
     assert second.status_code == 201
-    assert second.json()["version"] == 2
+    # Mỗi file tải lên là một CV mới, bắt đầu từ v1.0
+    assert second.json()["version"] == 2 and second.json()["label"] == "v1.0"
+    assert second.json()["family_id"] == second.json()["id"] != data["family_id"]
     assert second.json()["is_active"] is False
     assert second.json()["page_count"] is None
 
@@ -89,6 +117,126 @@ async def test_delete_rules(client):
 
 
 @pytest.mark.asyncio
+async def test_history_and_restore(client):
+    pdf = make_pdf(CV_TEXT)
+    root = (await upload(client, "cv.pdf", pdf)).json()
+    other = (await upload(client, "khac.pdf", make_pdf(CV_TEXT))).json()
+    v11, v12 = add_optimized(root["id"]), add_optimized(root["id"])
+
+    history = (await client.get(f"/api/v1/cv/{root['id']}/versions", headers=STUDENT)).json()
+    assert [(v["id"], v["label"]) for v in history] == [(v12, "v1.2"), (v11, "v1.1"), (root["id"], "v1.0")]
+    # CV đang dùng: bản tối ưu mới nhất tự thành bản đang dùng
+    assert [v["is_active"] for v in history] == [True, False, False]
+
+    res = await client.post(f"/api/v1/cv/{root['id']}/restore", headers=STUDENT)
+    assert res.status_code == 201
+    restored = res.json()
+    assert (restored["label"], restored["origin"], restored["restored_from_label"]) == ("v2.0", "restored", "v1.0")
+    assert restored["family_id"] == root["id"] and restored["is_active"] is True and restored["version_count"] == 4
+    assert (await client.get(f"/api/v1/cv/{restored['id']}/file", headers=STUDENT)).content == pdf
+
+    # Không xoá bản nào; "CV của tôi" vẫn hai CV, CV vừa khôi phục đứng trước
+    cvs = (await client.get("/api/v1/cv", headers=STUDENT)).json()
+    assert [(c["id"], c["label"], c["version_count"]) for c in cvs] == [
+        (restored["id"], "v2.0", 4),
+        (other["id"], "v1.0", 1),
+    ]
+
+    # Tối ưu tiếp sau khi khôi phục: tăng số phụ trên nền bản khôi phục
+    v21 = add_optimized(v11)
+    history = (await client.get(f"/api/v1/cv/{v21}/versions", headers=STUDENT)).json()
+    assert [v["label"] for v in history] == ["v2.1", "v2.0", "v1.2", "v1.1", "v1.0"]
+
+    current = await client.post(f"/api/v1/cv/{v21}/restore", headers=STUDENT)
+    assert current.status_code == 409 and current.json()["code"] == "cv_already_current"
+
+
+@pytest.mark.asyncio
+async def test_activate_uses_latest_version_of_cv(client):
+    first = (await upload(client, "a.pdf", make_pdf(CV_TEXT))).json()
+    second = (await upload(client, "b.pdf", make_pdf(CV_TEXT))).json()
+    newest = add_optimized(second["id"])
+    # CV chưa dùng thì bản tối ưu không tự thành bản đang dùng
+    listed = (await client.get("/api/v1/cv", headers=STUDENT)).json()
+    assert {c["id"]: c["is_active"] for c in listed} == {newest: False, first["id"]: True}
+
+    res = await client.post(f"/api/v1/cv/{second['id']}/activate", headers=STUDENT)
+    assert res.status_code == 200 and res.json()["id"] == newest and res.json()["is_active"] is True
+    listed = (await client.get("/api/v1/cv", headers=STUDENT)).json()
+    assert {c["id"]: c["is_active"] for c in listed} == {newest: True, first["id"]: False}
+
+
+@pytest.mark.asyncio
+async def test_delete_removes_all_versions_of_cv(client):
+    kept = (await upload(client, "a.pdf", make_pdf(CV_TEXT))).json()
+    other = (await upload(client, "b.pdf", make_pdf(CV_TEXT))).json()
+    newest = add_optimized(other["id"])
+
+    assert (await client.delete(f"/api/v1/cv/{other['id']}", headers=STUDENT)).status_code == 204
+    assert [c["id"] for c in (await client.get("/api/v1/cv", headers=STUDENT)).json()] == [kept["id"]]
+    assert (await client.get(f"/api/v1/cv/{newest}/file", headers=STUDENT)).status_code == 404
+    assert not cv_files.stored_path(DEMO_STUDENT_ID, newest, "docx").exists()
+
+
+def legacy_analysis(analysis_id: str, cv_id: str, cv_label: str) -> GapAnalysis:
+    return GapAnalysis(
+        id=analysis_id,
+        owner_id=DEMO_STUDENT_ID,
+        cv_version_id=cv_id,
+        cv_file_name="goc.pdf",
+        cv_label=cv_label,
+        jd_id="jd-ba-intern",
+        status="completed",
+        current_step=None,
+        match_score=60.0,
+        result={},
+        completed_at=utcnow(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_backfill_groups_versions_created_before_cv_history(client):
+    """DB cũ: mỗi phiên bản là một dòng riêng (nhãn vN.0). Khởi động lại thì bản tối ưu về chung CV với bản gốc."""
+    root = (await upload(client, "goc.pdf", make_pdf(CV_TEXT))).json()["id"]
+    other = (await upload(client, "khac.pdf", make_pdf(CV_TEXT))).json()["id"]
+    with SessionLocal() as db:
+        for cv in db.scalars(select(CvVersion)):
+            cv.family_id = cv.major = cv.minor = None
+        db.add(legacy_analysis("ga_cu", root, "v1.0"))
+        db.add(
+            CvVersion(
+                id="cv_toi_uu_cu",
+                owner_id=DEMO_STUDENT_ID,
+                version=3,
+                file_name="goc_v3.docx",
+                file_type="docx",
+                size_bytes=4,
+                content_text=CV_TEXT,
+                origin="optimized",
+                source_analysis_id="ga_cu",
+                uploaded_at=utcnow(),
+            )
+        )
+        db.add(legacy_analysis("ga_moi", "cv_toi_uu_cu", "v3.0"))
+        # Quyền chia sẻ cũ gắn với từng phiên bản
+        db.add(ShareGrant(id="sh_goc", owner_id=DEMO_STUDENT_ID, kind="cv", item_id=root))
+        db.add(ShareGrant(id="sh_toi_uu", owner_id=DEMO_STUDENT_ID, kind="cv", item_id="cv_toi_uu_cu"))
+        db.commit()
+
+    init_db()
+    cvs = {c["id"]: c for c in (await client.get("/api/v1/cv", headers=STUDENT)).json()}
+    assert {cid: (c["label"], c["version_count"]) for cid, c in cvs.items()} == {
+        "cv_toi_uu_cu": ("v1.1", 2),
+        other: ("v1.0", 1),
+    }
+    # Bản gốc đang dùng nên bản mới nhất của CV đó thành bản đang dùng
+    assert cvs["cv_toi_uu_cu"]["is_active"] is True and cvs[other]["is_active"] is False
+    with SessionLocal() as db:
+        assert db.get(GapAnalysis, "ga_moi").cv_label == "v1.1"
+        assert [g.item_id for g in db.scalars(select(ShareGrant))] == [root]
+
+
+@pytest.mark.asyncio
 async def test_file_and_text_preview(client):
     pdf = make_pdf(CV_TEXT)
     cv = (await upload(client, "cv.pdf", pdf)).json()
@@ -115,6 +263,12 @@ async def test_unknown_cv_is_not_found(client):
     response = await client.post("/api/v1/cv/cv_khong_ton_tai/activate", headers=STUDENT)
     assert response.status_code == 404
     assert response.json()["code"] == "cv_not_found"
+
+
+def test_restored_file_name_follows_new_label():
+    assert cv_versions.restored_file_name("CV_MinhAnh_v1.1.docx", "v3.0") == "CV_MinhAnh_v3.0.docx"
+    # File SV tự đặt tên (không có hậu tố phiên bản) giữ nguyên tên
+    assert cv_versions.restored_file_name("CV_MinhAnh.pdf", "v2.0") == "CV_MinhAnh.pdf"
 
 
 def test_detects_pdf_text_with_split_vietnamese_letters():

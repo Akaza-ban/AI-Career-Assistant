@@ -29,6 +29,7 @@ from src.db.models import (
 from src.db.seed import DEMO_ADVISOR_ID, assign
 from src.services import cv_files
 from src.services.cv_optimizer import DEVELOPING_TITLE, cv_document
+from src.services.cv_versions import label
 from src.services.interview import CRITERIA, GUIDANCE, QUESTION_BANK
 from src.services.skill_matching import IMPORTANCE_WEIGHTS, compute_score
 
@@ -398,11 +399,15 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
     cvs: list[CvVersion] = []
     for index, (days, missing, partial) in enumerate(spec["versions"]):
         stem = f"CV_{spec['full_name'].split()[-1]}_{spec['short']}"
+        # Mọi phiên bản của SV demo thuộc cùng một CV: bản tải lên v1.0, các lần tối ưu v1.1, v1.2...
         cv = CvVersion(
             id=f"cv_{spec['id'][3:]}_{index + 1}",
             owner_id=spec["id"],
             version=index + 1,
-            file_name=f"{stem}_v{index + 1}.docx",
+            family_id=f"cv_{spec['id'][3:]}_1",
+            major=1,
+            minor=index,
+            file_name=f"{stem}_v1.{index}.docx",
             file_type="docx",
             size_bytes=0,
             content_text=_cv_text(spec, jd, index),
@@ -424,7 +429,7 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
                 owner_id=spec["id"],
                 cv_version_id=cv.id,
                 cv_file_name=cv.file_name,
-                cv_label=f"v{cv.version}.0",
+                cv_label=label(cv),
                 jd_id=jd.id,
                 status="completed",
                 current_step=None,
@@ -444,7 +449,8 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
 
     shared: list[tuple[str, str]] = []
     if spec["share"] in ("all", "cv", "latest"):
-        shared += [("cv", c.id) for c in (cvs if spec["share"] == "all" else cvs[-1:])]
+        # Chia sẻ theo cả CV (mã CV = id bản đầu tiên): cố vấn xem bản mới nhất và các bản trước
+        shared.append(("cv", cvs[0].id))
     if spec["share"] == "all":
         shared += [("interview", s.id) for s in sessions]
     elif spec["share"] == "latest":

@@ -28,7 +28,7 @@ from src.db.models import (
     ShareGrant,
     User,
 )
-from src.services import interview, progress, sharing
+from src.services import cv_versions, interview, progress, sharing
 from src.services.skill_matching import match_label
 
 # Chênh lệch ≥ +0,3 là tiến bộ rõ, ≤ −0,3 là giảm (PRD mục 5.1)
@@ -111,6 +111,14 @@ class StudentData:
     def shared(self, item_id: str) -> bool:
         return item_id in self.grants
 
+    def cv_shared(self, cv_version_id: str) -> bool:
+        """Chia sẻ CV tính theo cả CV (family_id): mọi phiên bản của CV đã chia sẻ đều xem được."""
+        cv = next((c for c in self.cvs if c.id == cv_version_id), None)
+        return cv is not None and self.shared(cv_versions.family_of(cv))
+
+    def cv_families(self) -> set[str]:
+        return {cv_versions.family_of(cv) for cv in self.cvs}
+
     @property
     def latest_analysis(self) -> GapAnalysis | None:
         return self.analyses[0] if self.analyses else None
@@ -118,7 +126,7 @@ class StudentData:
     def missing_required(self) -> list[str]:
         """Kỹ năng bắt buộc còn thiếu trong lần phân tích gần nhất; chỉ khi SV đã chia sẻ CV của lần đó."""
         analysis = self.latest_analysis
-        if analysis is None or not self.shared(analysis.cv_version_id):
+        if analysis is None or not self.cv_shared(analysis.cv_version_id):
             return []
         return [
             r["skill"]
@@ -151,8 +159,8 @@ class StudentData:
         return max([a.completed_at for a in self.analyses] + [s.completed_at for s in self.sessions], default=None)
 
     def shared_count(self) -> int:
-        """Số tài liệu còn tồn tại đang được chia sẻ."""
-        return sum(1 for item in [*self.cvs, *self.sessions] if self.shared(item.id))
+        """Số tài liệu còn tồn tại đang được chia sẻ (mỗi CV tính một, dù có nhiều phiên bản)."""
+        return sum(1 for item_id in [*self.cv_families(), *(s.id for s in self.sessions)] if self.shared(item_id))
 
     def pending_reviews(self) -> int:
         return sum(1 for s in self.sessions if self.shared(s.id) and s.id not in self.reviews)
@@ -208,7 +216,7 @@ def summary(data: StudentData) -> dict[str, Any]:
         "missing_required": data.missing_required(),
         "last_active_at": data.last_active_at(),
         "shared_items": data.shared_count(),
-        "total_items": len(data.cvs) + len(data.sessions),
+        "total_items": len(data.cv_families()) + len(data.sessions),
         "pending_reviews": data.pending_reviews(),
     }
 
@@ -339,7 +347,7 @@ def _gap(data: StudentData) -> dict[str, Any] | None:
     analysis = data.latest_analysis
     if analysis is None:
         return None
-    shared = data.shared(analysis.cv_version_id)
+    shared = data.cv_shared(analysis.cv_version_id)
     requirements = (analysis.result or {}).get("requirements", []) if shared else []
     return {
         "analysis_id": analysis.id,
@@ -369,7 +377,7 @@ def student_detail(db: Session, advisor: User, student_id: str, now: datetime) -
     )
     return {
         "student": row,
-        "cvs": [(cv, data.shared(cv.id)) for cv in data.cvs],
+        "cvs": [(cv, data.cv_shared(cv.id)) for cv in data.cvs],
         "target_jd": target,
         "latest_gap": _gap(data),
         "interviews": [
@@ -568,9 +576,10 @@ def shared_cv(db: Session, advisor: User, student_id: str, cv_id: str, now: date
     cv = db.get(CvVersion, cv_id)
     if cv is None or cv.owner_id != student.id:
         raise AppError(404, "Không tìm thấy phiên bản CV.", "cv_not_found")
-    grant = sharing.grant_for(db, sharing.KIND_CV, cv_id)
+    # Chia sẻ theo cả CV: mở được mọi phiên bản của CV SV đã chia sẻ (PRD US-ADV AC2: xem lại các bản trước)
+    grant = sharing.grant_for(db, sharing.KIND_CV, cv_versions.family_of(cv))
     if grant is None:
-        raise AppError(403, "Sinh viên chưa chia sẻ phiên bản CV này.", "not_shared")
+        raise AppError(403, "Sinh viên chưa chia sẻ CV này.", "not_shared")
     grant.advisor_viewed_at = now
     db.commit()
     return cv

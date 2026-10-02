@@ -97,6 +97,70 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 const isNewStudent = MOCK_SCENARIO === "new_student"
 const submittedFeedback = new Map<string, number>()
 let cvVersions = isNewStudent ? [] : clone(mockCvVersions)
+
+// ---- Phiên bản CV theo từng CV (mô phỏng src/services/cv_versions.py) ----
+// cvVersions giữ mọi phiên bản của mọi CV; các phiên bản cùng family_id là một CV.
+
+/** Các CV, mỗi CV là danh sách phiên bản mới nhất trước; CV vừa có bản mới đứng trước. */
+function cvFamilies(): CvVersion[][] {
+  const groups = new Map<string, CvVersion[]>()
+  for (const cv of [...cvVersions].sort((a, b) => b.version - a.version)) {
+    groups.set(cv.family_id, [...(groups.get(cv.family_id) ?? []), cv])
+  }
+  return [...groups.values()]
+}
+
+/** Các phiên bản của CV chứa phiên bản id (nhận cả mã CV), mới nhất trước. */
+function cvFamilyOf(id: string): CvVersion[] {
+  const cv = cvVersions.find((c) => c.id === id || c.family_id === id)
+  if (!cv) throw new ApiError(404, "Không tìm thấy phiên bản CV.", "cv_not_found")
+  return cvVersions.filter((c) => c.family_id === cv.family_id).sort((a, b) => b.version - a.version)
+}
+
+/** Thẻ CV: bản mới nhất kèm số phiên bản; vị trí lấy từ bản gần nhất đã phân tích nếu bản mới nhất chưa phân tích. */
+function cvCard(versions: CvVersion[]): CvVersion {
+  const target = versions.find((v) => v.target_title)?.target_title ?? null
+  return { ...versions[0], version_count: versions.length, target_title: versions[0].target_title ?? target }
+}
+
+/** Nội dung CV mẫu dạng văn bản (bản demo không có file CV thật). */
+function sampleCvText(fullName: string): string {
+  const doc = mockCvDocument
+  return [
+    fullName,
+    ...doc.header.slice(1).map((l) => l.text),
+    ...doc.sections.flatMap((sec) => [sec.title, ...sec.lines.map((l) => `- ${l.text}`)]),
+  ].join("\n")
+}
+
+const nextCvSequence = () => Math.max(0, ...cvVersions.map((c) => c.version)) + 1
+
+/**
+ * Thêm bản mới vào CV chứa baseId: số phụ +1 (tối ưu) hoặc số chính +1, về .0 (khôi phục).
+ * CV đang dùng thì bản mới tự thành bản đang dùng. Trả về đúng đối tượng đã thêm (sửa tiếp được, ví dụ tên file).
+ */
+function appendCvVersion(
+  baseId: string,
+  fields: Omit<CvVersion, "id" | "version" | "label" | "family_id" | "version_count" | "is_active">,
+  newMajor: boolean,
+): CvVersion {
+  const family = cvFamilyOf(baseId)
+  const [, major, minor] = /v(\d+)\.(\d+)/.exec(family[0].label)!.map(Number)
+  const version = nextCvSequence()
+  const active = family.some((v) => v.is_active)
+  if (active) cvVersions = cvVersions.map((c) => ({ ...c, is_active: false }))
+  const created: CvVersion = {
+    ...fields,
+    id: `cv-v${version}`,
+    version,
+    label: newMajor ? `v${major + 1}.0` : `v${major}.${minor + 1}`,
+    family_id: family[0].family_id,
+    version_count: family.length + 1,
+    is_active: active,
+  }
+  cvVersions.unshift(created)
+  return created
+}
 const notifications: Record<Role, AppNotification[]> = {
   student: clone(mockStudentNotifications),
   advisor: clone(mockAdvisorNotifications),
@@ -385,19 +449,21 @@ const reviewRead = (r: AdvisorReviewInfo) => r.seen_at !== null && r.seen_at >= 
 /** Danh sách tài liệu có thể chia sẻ: mọi phiên bản CV và mọi buổi phỏng vấn đã hoàn thành. */
 function sharableItems(): SharedItem[] {
   const state = (id: string) => ({ shared: shared.has(id), advisor_viewed_at: shared.get(id)?.viewed_at ?? null })
-  const cvs: SharedItem[] = [...cvVersions]
-    .sort((a, b) => b.version - a.version)
-    .map((cv) => ({
-      id: cv.id,
+  // Mỗi CV một dòng, chia sẻ theo mã CV: cố vấn xem bản mới nhất và các bản trước
+  const cvs: SharedItem[] = cvFamilies().map((versions) => {
+    const cv = versions[0]
+    return {
+      id: cv.family_id,
       kind: "cv",
       title: cv.file_name,
-      subtitle: `Phiên bản ${cv.label}`,
+      subtitle: `Phiên bản ${cv.label}${versions.length > 1 ? ` · ${versions.length} phiên bản` : ""}`,
       tag: cv.is_active ? "primary" : cv.is_draft ? "draft" : null,
       created_at: cv.uploaded_at,
       score: cv.match_score,
-      ...state(cv.id),
+      ...state(cv.family_id),
       has_advisor_comment: false,
-    }))
+    }
+  })
   const interviewItems: SharedItem[] = completedInterviews().map((iv) => ({
     id: iv.id,
     kind: "interview_report",
@@ -679,7 +745,52 @@ export const mockApi = {
 
   async listCvVersions() {
     await delay()
-    return clone(cvVersions)
+    return clone(cvFamilies().map(cvCard))
+  },
+
+  /** Bản demo không có file thật: trả nội dung CV mẫu dạng văn bản để Xem nhanh / trang Chi tiết có nội dung. */
+  async getCvText(id: string): Promise<string> {
+    await delay(300)
+    cvFamilyOf(id)
+    return sampleCvText(mockStudent.full_name)
+  },
+
+  async listCvHistory(id: string): Promise<CvVersion[]> {
+    await delay()
+    const family = cvFamilyOf(id)
+    return clone(family.map((v) => ({ ...v, version_count: family.length })))
+  },
+
+  /** Khôi phục: bản sao của bản cũ thành bản mới nhất với số chính mới; không xoá bản nào. */
+  async restoreCv(id: string): Promise<CvVersion> {
+    await delay(500)
+    const source = cvVersions.find((c) => c.id === id)
+    if (!source) throw new ApiError(404, "Không tìm thấy phiên bản CV.", "cv_not_found")
+    if (cvFamilyOf(id)[0].id === id) throw new ApiError(409, "Đây đã là phiên bản hiện tại của CV.", "cv_already_current")
+    const restored = appendCvVersion(
+      id,
+      {
+        file_name: source.file_name,
+        file_type: source.file_type,
+        size_bytes: source.size_bytes,
+        page_count: source.page_count,
+        uploaded_at: new Date().toISOString(),
+        status: "ready",
+        error_message: null,
+        target_title: null,
+        match_score: null,
+        origin: "restored",
+        latest_analysis_id: null,
+        source_analysis_id: null,
+        source_jd_title: null,
+        restored_from_label: source.label,
+        is_draft: false,
+      },
+      true,
+    )
+    // Hậu tố phiên bản cũ trong tên file (…_v1.1.docx) đổi theo nhãn mới; tên không có hậu tố giữ nguyên
+    restored.file_name = source.file_name.replace(/_v\d+(\.\d+)?(\.[^.]+)$/, `_${restored.label}$2`)
+    return clone(restored)
   },
 
   // US-SV-01 AC3: sai định dạng hoặc > 5MB thì từ chối, không tạo bản ghi.
@@ -700,11 +811,14 @@ export const mockApi = {
         "cv_not_extractable",
       )
     }
-    const version = Math.max(0, ...cvVersions.map((cv) => cv.version)) + 1
+    // Mỗi file tải lên là một CV mới, bắt đầu từ v1.0
+    const version = nextCvSequence()
     const created: CvVersion = {
       id: `cv-v${version}`,
       version,
-      label: `v${version}.0`,
+      label: "v1.0",
+      family_id: `cv-v${version}`,
+      version_count: 1,
       file_name: file.name,
       file_type: ext,
       size_bytes: file.size,
@@ -717,7 +831,9 @@ export const mockApi = {
       origin: "upload",
       latest_analysis_id: null,
       source_analysis_id: null,
-      // CV đầu tiên tự động là phiên bản đang dùng.
+      source_jd_title: null,
+      restored_from_label: null,
+      // CV đầu tiên tự động là CV đang dùng.
       is_active: cvVersions.length === 0,
       is_draft: false,
     }
@@ -725,11 +841,12 @@ export const mockApi = {
     return clone(created)
   },
 
+  /** Đặt một CV làm CV đang dùng; bản đang dùng là phiên bản mới nhất của CV đó. */
   async setActiveCv(id: string): Promise<CvVersion> {
     await delay(300)
-    if (!cvVersions.some((cv) => cv.id === id)) throw new ApiError(404, "Không tìm thấy phiên bản CV.")
-    cvVersions = cvVersions.map((cv) => ({ ...cv, is_active: cv.id === id }))
-    return clone(cvVersions.find((cv) => cv.id === id)!)
+    const head = cvFamilyOf(id)[0]
+    cvVersions = cvVersions.map((cv) => ({ ...cv, is_active: cv.id === head.id }))
+    return clone(cvCard(cvFamilyOf(id)))
   },
 
   async listJdLibrary() {
@@ -865,7 +982,7 @@ export const mockApi = {
     return optimizerView(analysisId)
   },
 
-  /** "Hoàn tất": tạo đúng một phiên bản CV mới (không ghi đè bản cũ) rồi khoá phiên. */
+  /** "Hoàn tất": thêm đúng một phiên bản mới vào cùng CV (số phụ +1, không ghi đè bản cũ) rồi khoá phiên. */
   async finalizeOptimization(analysisId: string): Promise<OptimizerSession> {
     await delay(700)
     const { analysis, cv, opt } = optimizerAnalysis(analysisId)
@@ -879,26 +996,29 @@ export const mockApi = {
         "no_changes",
       )
     }
-    const version = Math.max(0, ...cvVersions.map((c) => c.version)) + 1
-    const stem = cv.file_name.replace(/\.[^.]+$/, "").replace(/_v\d+$/, "") || "CV"
-    const created: CvVersion = {
-      ...clone(cv),
-      id: `cv-v${version}`,
-      version,
-      label: `v${version}.0`,
-      file_name: `${stem}_v${version}.docx`,
-      file_type: "docx",
-      page_count: null,
-      uploaded_at: new Date().toISOString(),
-      origin: "optimized",
-      target_title: null,
-      match_score: null,
-      latest_analysis_id: null,
-      source_analysis_id: analysis.id,
-      is_active: false,
-      is_draft: false,
-    }
-    cvVersions.unshift(created)
+    const stem = cv.file_name.replace(/\.[^.]+$/, "").replace(/_v\d+(\.\d+)?$/, "") || "CV"
+    const created = appendCvVersion(
+      cv.id,
+      {
+        file_name: "",
+        file_type: "docx",
+        size_bytes: cv.size_bytes,
+        page_count: null,
+        uploaded_at: new Date().toISOString(),
+        status: "ready",
+        error_message: null,
+        target_title: null,
+        match_score: null,
+        origin: "optimized",
+        latest_analysis_id: null,
+        source_analysis_id: analysis.id,
+        source_jd_title: analysis.jd.title,
+        restored_from_label: null,
+        is_draft: false,
+      },
+      false,
+    )
+    created.file_name = `${stem}_${created.label}.docx`
     Object.assign(opt, {
       status: "finalized",
       result_cv_id: created.id,
@@ -1119,15 +1239,16 @@ export const mockApi = {
     return { password_updated_at: settings.password_updated_at! }
   },
 
+  /** Xoá cả CV (mọi phiên bản) chứa phiên bản id. */
   async deleteCv(id: string): Promise<void> {
     await delay(400)
-    const cv = cvVersions.find((c) => c.id === id)
-    if (!cv) throw new ApiError(404, "Không tìm thấy phiên bản CV.")
-    if (cv.is_active && cvVersions.length > 1) {
-      throw new ApiError(409, "Đây là CV đang dùng. Hãy chọn một phiên bản khác làm CV đang dùng trước khi xoá.", "cv_active")
+    const family = cvFamilyOf(id)
+    const familyId = family[0].family_id
+    if (family.some((v) => v.is_active) && cvVersions.some((c) => c.family_id !== familyId)) {
+      throw new ApiError(409, "Đây là CV đang dùng. Hãy chọn một CV khác làm CV đang dùng trước khi xoá.", "cv_active")
     }
-    cvVersions = cvVersions.filter((c) => c.id !== id)
-    shared.delete(id)
+    cvVersions = cvVersions.filter((c) => c.family_id !== familyId)
+    shared.delete(familyId)
   },
 
   async withdrawConsent(): Promise<StudentSettings> {
@@ -1284,14 +1405,9 @@ export const mockApi = {
     const source = advisorSource(studentId)
     const cv = source.cvs.find((c) => c.id === cvId)
     if (!cv) throw new ApiError(404, "Không tìm thấy phiên bản CV.", "cv_not_found")
-    if (!source.shared.has(cvId)) throw new ApiError(403, "Sinh viên chưa chia sẻ phiên bản CV này.", "not_shared")
-    if (studentId === MINH_ANH) shared.set(cvId, { viewed_at: new Date().toISOString() })
-    const doc = mockCvDocument
-    return [
-      source.profile.full_name,
-      ...doc.header.slice(1).map((l) => l.text),
-      ...doc.sections.flatMap((sec) => [sec.title, ...sec.lines.map((l) => `- ${l.text}`)]),
-    ].join("\n")
+    if (!source.shared.has(cv.family_id)) throw new ApiError(403, "Sinh viên chưa chia sẻ CV này.", "not_shared")
+    if (studentId === MINH_ANH) shared.set(cv.family_id, { viewed_at: new Date().toISOString() })
+    return sampleCvText(source.profile.full_name)
   },
 
   async createAdvisorNote(studentId: string, body: AdvisorNoteRequest): Promise<AdvisorNote> {

@@ -23,6 +23,7 @@ from src.db.models import (
     utcnow,
 )
 from src.db.seed import DEMO_ADVISOR_ID, DEMO_STUDENT_ID
+from src.services import cv_versions
 from tests.helpers import ADVISOR, STUDENT
 
 BA, DA = "jd-ba-intern", "jd-da-intern"
@@ -86,6 +87,7 @@ def add_cv(owner: str, version: int = 1, days: int = 10) -> str:
             is_active=version == 1,
             uploaded_at=utcnow() - timedelta(days=days),
         )
+        cv_versions.start_family(cv)
         db.add(cv)
         db.commit()
         return cv.id
@@ -237,6 +239,44 @@ async def test_toggle_sharing(client):
     assert (await client.delete(f"{API}/cv/{cv}", headers=STUDENT)).status_code == 204
     with SessionLocal() as db:
         assert db.scalar(select(ShareGrant).where(ShareGrant.item_id == cv)) is None
+
+
+@pytest.mark.asyncio
+async def test_sharing_a_cv_covers_all_its_versions(client):
+    """Chia sẻ theo cả CV: cố vấn xem bản mới nhất và các bản trước (US-ADV AC2); trang chia sẻ của SV một dòng/CV."""
+    first = add_cv(DEMO_STUDENT_ID)
+    with SessionLocal() as db:
+        newer = CvVersion(
+            id=f"cv_{uuid.uuid4().hex[:8]}",
+            owner_id=DEMO_STUDENT_ID,
+            file_name="cv-v1.1.docx",
+            file_type="docx",
+            size_bytes=100,
+            content_text="Nguyễn Văn A\nKINH NGHIỆM\n- Viết truy vấn SQL cho báo cáo tháng (12 báo cáo).",
+            origin="optimized",
+            uploaded_at=utcnow(),
+        )
+        cv_versions.append(db, db.get(CvVersion, first), newer, new_major=False)
+        db.add(newer)
+        db.commit()
+        newer_id = newer.id
+
+    def text_url(cv_id: str) -> str:
+        return f"{API}/advisor/students/{DEMO_STUDENT_ID}/cvs/{cv_id}/text"
+
+    assert (await client.get(text_url(newer_id), headers=ADVISOR)).status_code == 403
+    items = (await client.get(f"{API}/students/me/sharing", headers=STUDENT)).json()["items"]
+    cv_items = [i for i in items if i["kind"] == "cv"]
+    assert [(i["id"], i["subtitle"]) for i in cv_items] == [(first, "Phiên bản v1.1 · 2 phiên bản")]
+
+    await share(client, first)
+    for cv_id in (first, newer_id):
+        assert (await client.get(text_url(cv_id), headers=ADVISOR)).status_code == 200
+    detail = (await client.get(f"{API}/advisor/students/{DEMO_STUDENT_ID}", headers=ADVISOR)).json()
+    assert [(c["id"], c["label"], c["shared"]) for c in detail["cvs"]] == [
+        (newer_id, "v1.1", True),
+        (first, "v1.0", True),
+    ]
 
 
 @pytest.mark.asyncio

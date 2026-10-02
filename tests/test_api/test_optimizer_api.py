@@ -296,9 +296,10 @@ async def test_finalize_creates_one_new_version(client):
     body = res.json()
     assert body["status"] == "finalized" and body["finalized_at"]
     new = body["result_cv"]
-    assert new["version"] == 2 and new["label"] == "v2.0" and new["origin"] == "optimized"
-    assert new["is_active"] is False and new["file_type"] == "docx"
-    assert new["file_name"] == "CV_MinhAnh_v2.docx" and new["source_analysis_id"] == analysis_id
+    # Bản mới nằm trong cùng CV (số phụ +1); CV đang dùng nên bản mới tự thành bản đang dùng
+    assert new["version"] == 2 and new["label"] == "v1.1" and new["origin"] == "optimized"
+    assert new["family_id"] == cv_id and new["is_active"] is True and new["file_type"] == "docx"
+    assert new["file_name"] == "CV_MinhAnh_v1.1.docx" and new["source_analysis_id"] == analysis_id
     result_lines = body["result_document"]["sections"][0]["lines"]
     assert [line["text"] for line in result_lines] == [
         UAT_REWRITE,
@@ -316,8 +317,12 @@ async def test_finalize_creates_one_new_version(client):
     # Kỹ năng đang học không nằm trong nội dung được chấm khi phân tích lại; JIRA không bị tự thêm
     assert "Power BI" not in created.content_text and "JIRA" not in created.content_text
 
-    versions = (await client.get("/api/v1/cv", headers=STUDENT)).json()
-    assert [v["version"] for v in versions] == [2, 1]
+    # "CV của tôi" vẫn chỉ có một CV, hiển thị bản mới nhất; bản cũ nằm trong lịch sử phiên bản
+    cvs = (await client.get("/api/v1/cv", headers=STUDENT)).json()
+    assert [(c["id"], c["label"], c["version_count"]) for c in cvs] == [(new["id"], "v1.1", 2)]
+    history = (await client.get(f"/api/v1/cv/{cv_id}/versions", headers=STUDENT)).json()
+    assert [(v["label"], v["is_active"]) for v in history] == [("v1.1", True), ("v1.0", False)]
+    assert history[0]["source_jd_title"] == "Business Analyst Intern"
 
     file = await client.get(f"/api/v1/cv/{new['id']}/file", headers=STUDENT)
     assert file.status_code == 200

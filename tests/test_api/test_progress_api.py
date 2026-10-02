@@ -45,6 +45,8 @@ def add_cv(version: int, active: bool = False) -> str:
             is_active=active,
             uploaded_at=NOW - timedelta(days=40 - version),
         )
+        # Mỗi lần gọi là một CV riêng, nhãn vN.0 khớp nhãn của các lượt phân tích tạo ở add_analysis
+        cv.family_id, cv.major, cv.minor = cv.id, version, 0
         db.add(cv)
         db.commit()
         return cv.id

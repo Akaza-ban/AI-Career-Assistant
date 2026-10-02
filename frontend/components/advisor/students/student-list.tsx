@@ -163,8 +163,8 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
           )}
         </h1>
         <p className="max-w-3xl text-sm text-ink-2">
-          Điểm STAR (0–5) buổi đầu → gần nhất ở vị trí mỗi sinh viên đang luyện. Bấm vào một sinh viên để xem nhanh tiến bộ
-          và gợi ý cho buổi tư vấn tới. Nội dung CV và báo cáo chỉ xem được khi sinh viên bật chia sẻ.
+          {/* Điểm STAR (0–5) buổi đầu → gần nhất ở vị trí mỗi sinh viên đang luyện. Bấm vào một sinh viên để xem nhanh tiến bộ
+          và gợi ý cho buổi tư vấn tới. Nội dung CV và báo cáo chỉ xem được khi sinh viên bật chia sẻ. */}
         </p>
       </header>
 

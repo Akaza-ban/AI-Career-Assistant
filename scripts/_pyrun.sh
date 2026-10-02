@@ -8,21 +8,13 @@
 # Exits 0 silently if no Python is found — hooks must never block the AI tool.
 set -u
 
-# Use a candidate only if it actually runs: on Windows, `python3` often resolves
-# to the Microsoft Store stub in WindowsApps, which exists but fails (exit 49).
-works() { $1 -c "import sys" >/dev/null 2>&1; }
-
-PY=""
-# Prefer the project venv so dependencies (python-dotenv) are available.
-for cand in .venv/Scripts/python.exe .venv/bin/python; do
-  if [ -x "$cand" ] && works "$cand"; then PY="$cand"; break; fi
-done
-for cand in python3 python "py -3"; do
-  [ -n "$PY" ] && break
-  if command -v ${cand%% *} >/dev/null 2>&1 && works "$cand"; then PY="$cand"; break; fi
-done
-
-if [ -z "$PY" ]; then
+if py -3 -c "import sys" >/dev/null 2>&1; then
+  PY="py -3"
+elif python -c "import sys" >/dev/null 2>&1; then
+  PY=python
+elif python3 -c "import sys" >/dev/null 2>&1; then
+  PY=python3
+else
   # PATH lookup failed — probe standard Windows install locations.
   PY=""
   shopt -s nullglob 2>/dev/null || true

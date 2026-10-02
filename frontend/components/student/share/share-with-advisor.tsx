@@ -68,7 +68,7 @@ export function ShareWithAdvisor() {
         <div className="grid max-w-3xl gap-2">
           <h1 className="font-heading text-[28px] leading-9 font-bold">Chia sẻ với Cố vấn</h1>
           <p className="text-sm text-ink-2">
-            Chủ động cấp quyền xem CV và báo cáo phỏng vấn để cố vấn đồng hành và nhận xét giúp bạn cải thiện.
+            {/* Chủ động cấp quyền xem CV và báo cáo phỏng vấn để cố vấn đồng hành và nhận xét giúp bạn cải thiện. */}
           </p>
         </div>
         <span className="flex items-center gap-1.5 rounded-full bg-good-soft px-3 py-1.5 text-xs font-medium text-good">

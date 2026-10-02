@@ -22,11 +22,21 @@ export interface UserProfile {
 export type CvFileType = "pdf" | "docx"
 export type CvStatus = "processing" | "ready" | "failed"
 
+/**
+ * Một phiên bản CV. Các phiên bản cùng family_id là một CV (một thẻ trong "CV của tôi"): tải file lên tạo CV mới v1.0,
+ * "Hoàn tất" ở Trình tối ưu thêm số phụ (v1.1), khôi phục một bản cũ thêm số chính (v2.0). Bản mới nhất hiển thị
+ * trên thẻ; các bản trước xem ở trang Chi tiết CV (src/services/cv_versions.py).
+ */
 export interface CvVersion {
   id: string
-  /** Tăng dần, không ghi đè bản cũ. */
+  /** Số thứ tự nội bộ, tăng dần trên mọi CV của SV; không dùng để hiển thị. */
   version: number
+  /** "v1.0", "v1.1", "v2.0"... đánh số riêng trong từng CV. */
   label: string
+  /** Mã CV = id phiên bản đầu tiên; dùng cho trang Chi tiết CV và chia sẻ với cố vấn. */
+  family_id: string
+  /** Số phiên bản của CV này (có ở danh sách CV). */
+  version_count: number
   file_name: string
   file_type: CvFileType
   size_bytes: number
@@ -39,12 +49,17 @@ export interface CvVersion {
   target_title: string | null
   /** CV–JD Matching Score (0–100) của lần phân tích gần nhất; không phải điểm ATS (PRD mục 8). */
   match_score: number | null
-  /** "upload": SV tự tải lên; "optimized": tạo ra khi "Hoàn tất" trong Trình tối ưu (US-SV-03). */
-  origin: "upload" | "optimized"
+  /** "upload": SV tự tải lên; "optimized": tạo ra khi "Hoàn tất" trong Trình tối ưu (US-SV-03);
+   * "restored": bản sao của một phiên bản cũ khi SV khôi phục. */
+  origin: "upload" | "optimized" | "restored"
   /** Lần phân tích gần nhất của phiên bản này; dùng cho nút "Tối ưu". */
   latest_analysis_id: string | null
   /** Lượt phân tích đã dùng để tối ưu ra phiên bản này (origin = "optimized"); dùng cho "Xem thay đổi". */
   source_analysis_id: string | null
+  /** Vị trí của JD đã dùng để tối ưu ra phiên bản này (có ở lịch sử phiên bản). */
+  source_jd_title: string | null
+  /** Nhãn phiên bản cũ được khôi phục thành bản này (origin = "restored"). */
+  restored_from_label: string | null
   is_active: boolean
   is_draft: boolean
 }

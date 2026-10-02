@@ -92,6 +92,7 @@ function CvCard({ cv, onView, onDownload }: { cv: AdvisorCv; onView: () => void;
           <p className="text-xs text-ink-2">
             Tải lên {formatDate(cv.uploaded_at)} · {formatBytes(cv.size_bytes)}
             {cv.origin === "optimized" && " · Tạo từ Trình tối ưu"}
+            {cv.origin === "restored" && cv.restored_from_label && ` · Khôi phục từ ${cv.restored_from_label}`}
           </p>
         </div>
       </div>

@@ -10,14 +10,16 @@ import {
   Download,
   Eye,
   FilePen,
-  GitCompare,
+  History,
   Lightbulb,
   Loader2,
   MoreVertical,
+  RotateCcw,
   ScanText,
   Search,
   Sparkles,
   Star,
+  Trash2,
   Upload,
   Wand2,
   X,
@@ -33,6 +35,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -150,6 +153,7 @@ function statusBadge(cv: CvVersion) {
   if (cv.is_active) return { icon: CircleCheck, label: "Phiên bản đang dùng", variant: "good" as const }
   if (cv.is_draft) return { icon: FilePen, label: "Bản nháp", variant: "neutral" as const }
   if (cv.origin === "optimized") return { icon: Wand2, label: "Đã tối ưu", variant: "blue" as const }
+  if (cv.origin === "restored") return { icon: RotateCcw, label: "Đã khôi phục", variant: "neutral" as const }
   return { icon: Upload, label: "Bản tải lên", variant: "neutral" as const }
 }
 
@@ -236,12 +240,17 @@ interface CvCardProps {
   index: number
   onSetActive: (cv: CvVersion) => void
   onPreview: (cv: CvVersion) => void
+  onDelete: (cv: CvVersion) => void
+  /** CV đang dùng khi còn CV khác: backend không cho xoá (409 cv_active), nên chặn sẵn ở menu. */
+  deleteBlocked: boolean
 }
 
-export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
+/** Một thẻ = một CV, hiển thị phiên bản mới nhất; các bản trước xem ở trang Chi tiết CV. */
+export function CvCard({ cv, index, onSetActive, onPreview, onDelete, deleteBlocked }: CvCardProps) {
   const badge = statusBadge(cv)
   const BadgeIcon = badge.icon
   const analyzeHref = `/student/analysis/new?cv=${encodeURIComponent(cv.id)}`
+  const detailHref = `/student/cv/${encodeURIComponent(cv.family_id)}`
   const meta = [`Cập nhật ${formatRelativeTime(cv.uploaded_at).toLowerCase()}`, formatBytes(cv.size_bytes)]
   if (cv.page_count) meta.push(`${cv.page_count} trang`)
 
@@ -271,6 +280,10 @@ export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
               <MoreVertical aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-max">
+              <DropdownMenuItem render={<Link href={detailHref} />}>
+                <History aria-hidden />
+                Chi tiết & lịch sử phiên bản
+              </DropdownMenuItem>
               <DropdownMenuItem disabled={cv.is_active} onClick={() => onSetActive(cv)}>
                 <Star aria-hidden />
                 Đặt làm phiên bản đang dùng
@@ -279,14 +292,16 @@ export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
                 <Download aria-hidden />
                 Tải xuống
               </DropdownMenuItem>
-              {cv.source_analysis_id && (
-                <DropdownMenuItem
-                  render={<Link href={`/student/analysis/${encodeURIComponent(cv.source_analysis_id)}/export`} />}
-                >
-                  <GitCompare aria-hidden />
-                  Xem thay đổi & xuất CV
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" disabled={deleteBlocked} onClick={() => onDelete(cv)}>
+                <Trash2 aria-hidden />
+                <span className="grid">
+                  Xoá CV
+                  {deleteBlocked && (
+                    <span className="text-xs text-ink-2">Đặt CV khác làm bản đang dùng trước khi xoá</span>
+                  )}
+                </span>
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -296,7 +311,9 @@ export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
 
       <div className="grid gap-1">
         <h2 className="truncate font-heading text-base font-bold" title={cv.file_name}>
-          {cv.file_name}
+          <Link href={detailHref} className="hover:text-blue hover:underline">
+            {cv.file_name}
+          </Link>
         </h2>
         {cv.target_title ? (
           <Badge variant="blue" className="h-auto px-2.5 py-0.5">
@@ -333,9 +350,17 @@ export function CvCard({ cv, index, onSetActive, onPreview }: CvCardProps) {
         )}
       </div>
 
-      <p className="flex items-center gap-1 text-xs text-ink-2">
+      <p className="flex flex-wrap items-center gap-1 text-xs text-ink-2">
         <Clock className="size-3 shrink-0" aria-hidden />
         {meta.join(" • ")}
+        {cv.version_count > 1 && (
+          <>
+            {" • "}
+            <Link href={detailHref} className="font-medium text-blue hover:underline">
+              {cv.version_count} phiên bản
+            </Link>
+          </>
+        )}
       </p>
 
       <div className="mt-auto grid grid-cols-2 gap-2 pt-2">

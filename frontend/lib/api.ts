@@ -170,7 +170,14 @@ export const api = {
     ),
 
   // ---- CV ----
+  /** Mỗi CV một dòng: phiên bản mới nhất kèm số phiên bản. */
   listCvVersions: (): Promise<CvVersion[]> => via("cv", () => mockApi.listCvVersions(), () => request("/cv")),
+  /** Lịch sử phiên bản của CV chứa phiên bản id (nhận cả mã CV), mới nhất trước. */
+  listCvHistory: (id: string): Promise<CvVersion[]> =>
+    via("cv", () => mockApi.listCvHistory(id), () => request(`/cv/${encodeURIComponent(id)}/versions`)),
+  /** Khôi phục phiên bản id thành bản mới nhất của CV (số chính +1); không xoá bản nào. */
+  restoreCv: (id: string): Promise<CvVersion> =>
+    via("cv", () => mockApi.restoreCv(id), () => request(`/cv/${encodeURIComponent(id)}/restore`, { method: "POST" })),
   uploadCv: (file: File): Promise<CvVersion> =>
     via(
       "cv",
@@ -186,13 +193,14 @@ export const api = {
   /** File gốc của một phiên bản CV; null ở chế độ mock (không có file thật). */
   getCvFile: (id: string): Promise<Blob | null> =>
     via("cv", async () => null, async () => (await send(`/cv/${encodeURIComponent(id)}/file`)).blob()),
-  /** Văn bản đã trích từ CV, dùng xem nhanh file DOCX; null ở chế độ mock. */
+  /** Văn bản đã trích từ CV, dùng xem nhanh file DOCX (và PDF khi không có file, ví dụ ở chế độ mock). */
   getCvText: (id: string): Promise<string | null> =>
     via(
       "cv",
-      async () => null,
+      () => mockApi.getCvText(id),
       async () => (await request<{ text: string }>(`/cv/${encodeURIComponent(id)}/text`)).text,
     ),
+  /** Xoá cả CV (mọi phiên bản) chứa phiên bản id. */
   deleteCv: (id: string): Promise<void> =>
     via("cv", () => mockApi.deleteCv(id), () => request(`/cv/${encodeURIComponent(id)}`, { method: "DELETE" })),
 

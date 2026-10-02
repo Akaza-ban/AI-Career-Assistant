@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react"
 import { AlertCircle, SearchX } from "lucide-react"
 import { toast } from "sonner"
 
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { Panel } from "@/components/common/panel"
 import { CvPreviewDialog } from "@/components/student/cv/cv-preview-dialog"
 import {
@@ -21,6 +22,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import type { CvVersion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
+
+function deleteDescription(cv: CvVersion | null): string {
+  const kept = "Các báo cáo phân tích đã tạo từ CV này vẫn được giữ trong lịch sử."
+  if (cv && cv.version_count > 1) return `CV này có ${cv.version_count} phiên bản; tất cả sẽ bị xoá vĩnh viễn. ${kept}`
+  return `Tệp CV sẽ bị xoá vĩnh viễn. ${kept}`
+}
 
 function sortCvs(list: CvVersion[], sort: CvSort): CvVersion[] {
   const copy = [...list]
@@ -40,6 +47,7 @@ export function MyCv() {
   const [sort, setSort] = useState<CvSort>("recent")
   const [previewCv, setPreviewCv] = useState<CvVersion | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [deleting, setDeleting] = useState<CvVersion | null>(null)
 
   const cvs = useMemo(() => data ?? [], [data])
   const visible = useMemo(() => {
@@ -50,11 +58,22 @@ export function MyCv() {
   async function handleSetActive(cv: CvVersion) {
     try {
       await api.setActiveCv(cv.id)
-      toast.success(`Đã đặt ${cv.label} làm phiên bản đang dùng`)
+      toast.success(`Đã đặt ${cv.file_name} làm CV đang dùng`)
       reload()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không đổi được phiên bản đang dùng.")
     }
+  }
+
+  async function handleDelete(cv: CvVersion) {
+    try {
+      await api.deleteCv(cv.id)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không xoá được CV.")
+      throw err
+    }
+    toast.success(`Đã xoá ${cv.file_name}.`)
+    reload()
   }
 
   function openPreview(cv: CvVersion) {
@@ -124,7 +143,15 @@ export function MyCv() {
           {visible.length > 0 ? (
             <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {visible.map((cv, index) => (
-                <CvCard key={cv.id} cv={cv} index={index} onSetActive={handleSetActive} onPreview={openPreview} />
+                <CvCard
+                  key={cv.id}
+                  cv={cv}
+                  index={index}
+                  onSetActive={handleSetActive}
+                  onPreview={openPreview}
+                  onDelete={setDeleting}
+                  deleteBlocked={cv.is_active && cvs.length > 1}
+                />
               ))}
             </div>
           ) : (
@@ -142,6 +169,15 @@ export function MyCv() {
       )}
 
       <CvPreviewDialog cv={previewCv} open={previewOpen} onOpenChange={setPreviewOpen} />
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(open) => !open && setDeleting(null)}
+        title={`Xoá ${deleting?.file_name ?? "CV"}?`}
+        description={deleteDescription(deleting)}
+        confirmLabel="Xoá CV"
+        destructive
+        onConfirm={() => (deleting ? handleDelete(deleting) : Promise.resolve())}
+      />
     </div>
   )
 }
