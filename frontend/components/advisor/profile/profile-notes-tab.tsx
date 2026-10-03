@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, type Ref } from "react"
-import { Lightbulb, Loader2, Lock, NotebookPen, Pencil, Pin, PinOff, Trash2 } from "lucide-react"
+import { Loader2, Lock, NotebookPen, Pencil, Pin, PinOff, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { SuggestionList } from "@/components/advisor/progress-blocks"
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
-import { Panel, PanelHeader } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -110,81 +110,89 @@ export function ProfileNotesTab({ studentId, studentName, notes, suggestions, on
   }
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <div className="grid min-w-0 gap-6">
-        <p className="flex items-start gap-3 rounded-[20px] bg-blue-soft/50 p-4 text-sm text-ink">
-          <Lock className="mt-0.5 size-5 shrink-0 text-blue" aria-hidden />
-          <span>
-            <strong className="font-heading">Không gian riêng của cố vấn.</strong> Chỉ bạn thấy các ghi chú này. Sinh viên và
-            các bên khác không bao giờ xem được.
-          </span>
-        </p>
-
-        <Panel className="grid gap-4">
-          <PanelHeader icon={NotebookPen} title="Thêm ghi chú mới" />
-          <Textarea
-            ref={inputRef}
-            value={body}
-            onChange={(e) => setBody(e.target.value)}
-            placeholder={`Quan sát, nhận xét thái độ, điểm cần rèn thêm cho ${studentName}…`}
-            aria-label="Nội dung ghi chú"
-            className="min-h-28 bg-surface"
-          />
-          <TagPicker value={tags} onChange={setTags} />
-          <Button className="h-10 justify-self-start px-4" onClick={create} disabled={saving || !body.trim()}>
-            {saving && <Loader2 className="animate-spin" aria-hidden />}
-            Lưu ghi chú
-          </Button>
-        </Panel>
+    <div className="grid items-start gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid min-w-0 gap-10">
+        <section className="grid gap-3">
+          <div className="grid gap-1">
+            <SectionHeader title="Thêm ghi chú mới" />
+            <p className="flex items-center gap-1.5 text-xs text-ink-2">
+              <Lock className="size-3.5 shrink-0 text-blue" aria-hidden />
+              Không gian riêng của cố vấn: chỉ bạn thấy các ghi chú này, sinh viên và các bên khác không bao giờ xem được.
+            </p>
+          </div>
+          <Panel className="grid gap-4">
+            <Textarea
+              ref={inputRef}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder={`Quan sát, nhận xét thái độ, điểm cần rèn thêm cho ${studentName}…`}
+              aria-label="Nội dung ghi chú"
+              className="min-h-28 bg-surface"
+            />
+            <TagPicker value={tags} onChange={setTags} />
+            <Button className="h-10 justify-self-start px-4" onClick={create} disabled={saving || !body.trim()}>
+              {saving && <Loader2 className="animate-spin" aria-hidden />}
+              Lưu ghi chú
+            </Button>
+          </Panel>
+        </section>
 
         <section className="grid gap-3" aria-labelledby="notes-heading">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="notes-heading" className="flex items-center gap-2 font-heading text-lg font-bold">
-              Nhật ký theo dõi
-              <Badge variant="neutral" className="h-auto px-2 py-0.5">
-                {notes.length} mục
-              </Badge>
-            </h2>
-            <div role="group" aria-label="Lọc theo thẻ" className="flex flex-wrap gap-1">
-              {[{ value: "all" as const, label: "Tất cả" }, ...NOTE_TAGS].map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  aria-pressed={filter === t.value}
-                  onClick={() => setFilter(t.value)}
-                  className={cn(
-                    "rounded-full px-2.5 py-1 text-xs font-medium",
-                    filter === t.value ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
-                  )}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {visible.length === 0 ? (
-            <Panel className="py-10 text-center text-sm text-ink-2">
-              {notes.length === 0 ? "Chưa có ghi chú nào cho sinh viên này." : "Không có ghi chú nào với thẻ này."}
-            </Panel>
-          ) : (
-            <ul className="grid gap-3">
-              {visible.map((note) => (
-                <li key={note.id}>
-                  <NoteCard note={note} onUpdate={(patch) => update(note, patch)} onDelete={() => setDeleting(note)} />
-                </li>
-              ))}
-            </ul>
-          )}
+          <SectionHeader
+            title={
+              <span id="notes-heading" className="flex items-center gap-2">
+                Nhật ký theo dõi
+                <Badge variant="neutral" className="h-auto px-2 py-0.5 font-sans">
+                  {notes.length} mục
+                </Badge>
+              </span>
+            }
+            aside={
+              <div role="group" aria-label="Lọc theo thẻ" className="flex flex-wrap gap-1">
+                {[{ value: "all" as const, label: "Tất cả" }, ...NOTE_TAGS].map((t) => (
+                  <button
+                    key={t.value}
+                    type="button"
+                    aria-pressed={filter === t.value}
+                    onClick={() => setFilter(t.value)}
+                    className={cn(
+                      "rounded-full px-2.5 py-1 text-xs font-medium",
+                      filter === t.value ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
+                    )}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            }
+          />
+          <Panel className="overflow-hidden p-0">
+            {visible.length === 0 ? (
+              <p className="py-10 text-center text-sm text-ink-2">
+                {notes.length === 0 ? "Chưa có ghi chú nào cho sinh viên này." : "Không có ghi chú nào với thẻ này."}
+              </p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {visible.map((note) => (
+                  <NoteRow key={note.id} note={note} onUpdate={(patch) => update(note, patch)} onDelete={() => setDeleting(note)} />
+                ))}
+              </ul>
+            )}
+          </Panel>
         </section>
       </div>
 
-      <Panel className="grid gap-3 bg-blue-soft/40 shadow-none">
-        <PanelHeader icon={Lightbulb} title="Gợi ý cho buổi tư vấn tiếp theo" />
-        <p className="-mt-1 text-xs text-ink-2">
-          Tổng hợp theo quy tắc từ số liệu tiến bộ và tài liệu sinh viên đã chia sẻ. Bạn quyết định có dùng hay không.
-        </p>
-        <SuggestionList items={suggestions} />
-      </Panel>
+      <section className="grid gap-3">
+        <div className="grid gap-1">
+          <SectionHeader title="Gợi ý cho buổi tư vấn tiếp theo" />
+          <p className="text-xs text-ink-2">
+            Tổng hợp theo quy tắc từ số liệu tiến bộ và tài liệu sinh viên đã chia sẻ. Bạn quyết định có dùng hay không.
+          </p>
+        </div>
+        <Panel>
+          <SuggestionList items={suggestions} />
+        </Panel>
+      </section>
 
       <ConfirmDialog
         open={deleting !== null}
@@ -199,7 +207,7 @@ export function ProfileNotesTab({ studentId, studentName, notes, suggestions, on
   )
 }
 
-function NoteCard({
+function NoteRow({
   note,
   onUpdate,
   onDelete,
@@ -221,7 +229,7 @@ function NoteCard({
   }
 
   return (
-    <Panel className={cn("grid gap-3 p-5", note.pinned && "ring-1 ring-blue/25")}>
+    <li className={cn("grid gap-3 px-6 py-5", note.pinned && "bg-blue-soft/25")}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-blue-soft text-blue">
@@ -293,6 +301,6 @@ function NoteCard({
           )}
         </>
       )}
-    </Panel>
+    </li>
   )
 }

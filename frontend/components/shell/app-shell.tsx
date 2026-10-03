@@ -3,14 +3,13 @@ import type { ReactNode } from "react"
 import { ChatProvider } from "@/components/chat/chat-context"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { AppTopbar } from "@/components/shell/app-topbar"
-import { NoticeBanner } from "@/components/shell/notice-banner"
 import { ProfileProvider } from "@/components/shell/profile-context"
 import { SidebarNav } from "@/components/shell/sidebar-nav"
 import type { Role } from "@/lib/types"
 
 /**
  * Khung giao diện chính: sidebar cố định (desktop), topbar dính trên cùng,
- * dải thông báo, vùng nội dung và khung chat SV ↔ cố vấn. Dưới 1024px sidebar chuyển vào menu trượt.
+ * vùng nội dung và khung chat SV ↔ cố vấn. Dưới 1024px sidebar chuyển vào menu trượt.
  *
  * Sidebar desktop thu gọn thành rail 72px (logo, icon, avatar). Rê chuột (sau 150ms, tránh bung khi chuột
  * chỉ lướt qua) hoặc Tab bằng bàn phím thì mở ra 240px, phủ lên nội dung chứ không đẩy nội dung sang phải.
@@ -26,7 +25,6 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
           </aside>
           <div className="flex min-h-screen flex-col lg:pl-18">
             <AppTopbar role={role} />
-            <NoticeBanner role={role} />
             <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
           </div>
         </div>
