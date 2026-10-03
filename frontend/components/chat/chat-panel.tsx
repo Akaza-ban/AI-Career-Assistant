@@ -121,8 +121,10 @@ function ConversationList() {
     }
   }, [role])
 
+  // Chỉ hiện sinh viên đã có tin nhắn; muốn nhắn SV mới thì bấm "Nhắn tin" ở hồ sơ / danh sách sinh viên.
+  const started = (rows ?? []).filter((r) => r.last_message)
   const q = query.trim().toLowerCase()
-  const visible = (rows ?? []).filter((r) => !q || r.counterpart.full_name.toLowerCase().includes(q))
+  const visible = started.filter((r) => !q || r.counterpart.full_name.toLowerCase().includes(q))
 
   return (
     <>
@@ -141,17 +143,21 @@ function ConversationList() {
           />
         </label>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
         {error && !rows ? (
           <ErrorState message={error.message} />
         ) : !rows ? (
           <ListSkeleton />
         ) : visible.length === 0 ? (
           <p className="p-6 text-center text-sm text-ink-2">
-            {rows.length === 0 ? "Bạn chưa được phân công sinh viên nào." : "Không có sinh viên nào khớp."}
+            {rows.length === 0
+              ? "Bạn chưa được phân công sinh viên nào."
+              : started.length === 0
+                ? "Chưa có cuộc trò chuyện nào. Bấm “Nhắn tin” ở hồ sơ sinh viên để bắt đầu."
+                : "Không có cuộc trò chuyện nào khớp."}
           </p>
         ) : (
-          <ul className="grid p-2">
+          <ul className="grid grid-cols-1 p-2">
             {visible.map((r) => (
               <li key={r.student_id}>
                 <button
@@ -160,7 +166,7 @@ function ConversationList() {
                   className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-surface"
                 >
                   <UserAvatar name={r.counterpart.full_name} src={r.counterpart.avatar_url} className="size-10" />
-                  <span className="grid min-w-0 flex-1 gap-0.5">
+                  <span className="grid min-w-0 flex-1 grid-cols-1 gap-0.5">
                     <span className="flex items-baseline justify-between gap-2">
                       <span className={cn("truncate text-sm text-ink", r.unread_count > 0 ? "font-bold" : "font-medium")}>
                         {r.counterpart.full_name}
@@ -171,9 +177,7 @@ function ConversationList() {
                     </span>
                     <span className="flex items-center justify-between gap-2">
                       <span className={cn("truncate text-xs", r.unread_count > 0 ? "font-semibold text-ink" : "text-ink-2")}>
-                        {r.last_message
-                          ? `${r.last_message.mine ? "Bạn: " : ""}${r.last_message.body}`
-                          : `${r.counterpart.subtitle} · Chưa có tin nhắn`}
+                        {r.last_message && `${r.last_message.mine ? "Bạn: " : ""}${r.last_message.body}`}
                       </span>
                       {r.unread_count > 0 && (
                         <span
@@ -261,7 +265,7 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
           const el = e.currentTarget
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
         }}
-        className="min-h-0 flex-1 overflow-y-auto px-4 py-3"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-3"
       >
         {error && !conversation ? (
           <ErrorState message={error.message} onRetry={() => void load()} />
@@ -274,7 +278,7 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
               : `Gửi tin nhắn đầu tiên cho ${conversation.counterpart.full_name}.`}
           </CenteredNote>
         ) : (
-          <ol className="grid gap-1.5" role="log" aria-live="polite" aria-label="Tin nhắn">
+          <ol className="grid grid-cols-1 gap-1.5" role="log" aria-live="polite" aria-label="Tin nhắn">
             {conversation.messages.map((m, i) => {
               const previous = conversation.messages[i - 1]
               const newDay = !previous || dayKey(previous.created_at) !== dayKey(m.created_at)
@@ -288,7 +292,7 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
                   <li className={cn("grid max-w-[85%] gap-0.5", m.mine ? "justify-self-end justify-items-end" : "justify-self-start")}>
                     <p
                       className={cn(
-                        "rounded-2xl px-3.5 py-2 text-sm leading-6 break-words whitespace-pre-wrap",
+                        "rounded-2xl px-3.5 py-2 text-sm leading-6 wrap-anywhere whitespace-pre-wrap",
                         m.mine ? "rounded-br-md bg-blue text-on-blue" : "rounded-bl-md bg-surface text-ink",
                       )}
                     >

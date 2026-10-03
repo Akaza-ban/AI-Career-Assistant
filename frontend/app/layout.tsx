@@ -4,7 +4,6 @@ import { Be_Vietnam_Pro, Plus_Jakarta_Sans } from "next/font/google"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { noticeInitScript } from "@/lib/notice"
 import "./globals.css"
 
 const heading = Plus_Jakarta_Sans({
@@ -34,10 +33,6 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${heading.variable} ${body.variable} h-full`}
       suppressHydrationWarning
     >
-      <head>
-        {/* Chạy trước khi hiển thị để dải lưu ý đã tắt không bị nháy lên (lib/notice.ts) */}
-        <script dangerouslySetInnerHTML={{ __html: noticeInitScript }} />
-      </head>
       <body className="min-h-full">
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>

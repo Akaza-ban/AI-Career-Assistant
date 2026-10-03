@@ -69,12 +69,13 @@ export function InterviewProgressBlock({ group, compact = false }: { group: Inte
 /** Độ khớp CV–JD qua các phiên bản CV, mỗi JD một nhóm. */
 export function CvProgressBlock({ groups }: { groups: CvProgress[] }) {
   if (groups.length === 0) {
-    return <p className="rounded-xl bg-surface p-4 text-sm text-ink-2">Sinh viên chưa có lượt phân tích CV–JD nào.</p>
+    return <p className="text-sm text-ink-2">Sinh viên chưa có lượt phân tích CV–JD nào.</p>
   }
+  // Mỗi JD một nhóm, ngăn bằng đường kẻ (không lồng ô trong ô).
   return (
-    <ul className="grid gap-3">
+    <ul className="grid divide-y divide-line">
       {groups.map((group) => (
-        <li key={group.jd.id} className="grid gap-2 rounded-xl border border-line p-3">
+        <li key={group.jd.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
           <p className="flex flex-wrap items-center justify-between gap-2 text-sm">
             <span className="font-medium text-ink">{group.jd.title}</span>
             {group.delta !== null && (
@@ -116,14 +117,15 @@ export function StarAverageBars({
 }: {
   star: (Pick<StarSummary, "average" | "weakest"> & { session_count?: number }) | null
   insight: string | null
-  caption?: string
+  /** null: không hiện chú thích (trang đã đặt chú thích dưới tiêu đề mục). */
+  caption?: string | null
 }) {
-  if (!star) return <p className="rounded-xl bg-surface p-4 text-sm text-ink-2">Chưa có buổi phỏng vấn nào.</p>
+  if (!star) return <p className="text-sm text-ink-2">Chưa có buổi phỏng vấn nào.</p>
   return (
     <div className="grid gap-3">
-      <p className="text-xs text-ink-2">
-        {caption ?? `Trung bình ${star.session_count} buổi gần nhất (mọi vị trí), thang 0–5`}
-      </p>
+      {caption !== null && (
+        <p className="text-xs text-ink-2">{caption ?? `Trung bình ${star.session_count} buổi gần nhất (mọi vị trí), thang 0–5`}</p>
+      )}
       <ul className="grid gap-2.5">
         {STAR_ORDER.map((key) => {
           const score = star.average[key]

@@ -206,12 +206,6 @@
   }
 }
 
-/* Dải lưu ý dưới topbar: ẩn khi người dùng đã bấm X trong phiên này (xem lib/notice.ts) */
-html[data-notice-dismissed-student] [data-notice="student"],
-html[data-notice-dismissed-advisor] [data-notice="advisor"] {
-  display: none;
-}
-
 /* Thanh tiến trình không xác định (đang tải CV lên) */
 @keyframes cv-progress {
   from {
