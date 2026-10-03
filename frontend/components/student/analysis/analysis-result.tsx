@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, ArrowLeft, Briefcase, Circle, CircleCheck, FileText, Loader2, RotateCcw } from "lucide-react"
+import { AlertCircle, Briefcase, Circle, CircleCheck, FileText, Loader2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
@@ -55,8 +55,8 @@ export function AnalysisResult({ id }: { id: string }) {
 
   if (!analysis) {
     return (
-      <div className="grid gap-6" aria-busy="true" aria-label="Đang tải kết quả phân tích">
-        <Skeleton className="h-32 rounded-[20px]" />
+      <div className="grid gap-8" aria-busy="true" aria-label="Đang tải kết quả phân tích">
+        <Skeleton className="h-24 rounded-[20px]" />
         <Skeleton className="h-64 rounded-[20px]" />
         <Skeleton className="h-[420px] rounded-[20px]" />
       </div>
@@ -64,12 +64,7 @@ export function AnalysisResult({ id }: { id: string }) {
   }
 
   return (
-    <div className="grid gap-6">
-      <Link href="/student/cv" className="inline-flex items-center gap-1.5 justify-self-start text-sm font-medium text-blue hover:underline">
-        <ArrowLeft className="size-4" aria-hidden />
-        Quay lại CV của tôi
-      </Link>
-
+    <div className="grid gap-8">
       <ResultHeader analysis={analysis} />
 
       {analysis.status === "processing" && <ProcessingView analysis={analysis} />}
@@ -97,26 +92,30 @@ export function AnalysisResult({ id }: { id: string }) {
 function ResultHeader({ analysis }: { analysis: GapAnalysis }) {
   const company = analysis.jd.company ? ` – ${analysis.jd.company}` : ""
   return (
-    <Panel className="grid gap-3">
+    <div className="grid gap-3 py-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
         <Badge variant="violet">Báo cáo đối soát CV</Badge>
         {analysis.jd.source === "pasted" && <Badge variant="neutral">JD tự dán</Badge>}
         <span>{formatRelativeTime(analysis.created_at)}</span>
       </div>
-      <h1 className="font-heading text-[28px] leading-9 font-bold">Kết quả phân tích CV – JD</h1>
+      <h1 className="font-heading text-[32px] leading-10 font-bold">Kết quả phân tích CV – JD</h1>
       {/* US-SV-02 AC1: kết quả gắn với đúng cặp (phiên bản CV, JD) */}
       <div className="flex flex-wrap gap-2 text-xs">
-        <span className="flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-ink">
-          <Briefcase className="size-3.5 text-blue" aria-hidden />
-          Vị trí: <strong className="font-semibold">{analysis.jd.title + company}</strong>
+        <span className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-ink ring-1 ring-line">
+          <Briefcase className="size-3.5 shrink-0 text-blue" aria-hidden />
+          <span>
+            Vị trí: <strong className="font-semibold">{analysis.jd.title + company}</strong>
+          </span>
         </span>
-        <span className="flex items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-ink">
-          <FileText className="size-3.5 text-blue" aria-hidden />
-          CV: <strong className="font-semibold">{analysis.cv_file_name}</strong>
-          <span className="text-ink-3">({analysis.cv_label})</span>
+        <span className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-ink ring-1 ring-line">
+          <FileText className="size-3.5 shrink-0 text-blue" aria-hidden />
+          <span className="min-w-0 break-all">
+            CV: <strong className="font-semibold">{analysis.cv_file_name}</strong>{" "}
+            <span className="text-ink-3">({analysis.cv_label})</span>
+          </span>
         </span>
       </div>
-    </Panel>
+    </div>
   )
 }
 

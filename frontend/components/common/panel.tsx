@@ -22,7 +22,7 @@ interface PanelHeaderProps {
  */
 export function SectionHeader({ title, aside, className }: Omit<PanelHeaderProps, "icon">) {
   return (
-    <div className={cn("flex min-h-7 items-center justify-between gap-3", className)}>
+    <div className={cn("flex min-h-7 flex-wrap items-center justify-between gap-3", className)}>
       <h2 className="font-heading text-lg font-bold text-ink">{title}</h2>
       {aside}
     </div>
