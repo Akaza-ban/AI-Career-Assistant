@@ -2,8 +2,8 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react"
-import { AlertCircle, Circle, CircleCheck, ListChecks, LogOut, Pause, Play, ShieldCheck, Timer, TimerOff, UserRound } from "lucide-react"
+import { useCallback, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
+import { AlertCircle, Circle, CircleCheck, ListChecks, LogOut, Pause, Play, Timer, TimerOff, UserRound } from "lucide-react"
 import { toast } from "sonner"
 
 import { InterviewChat, type Rejection } from "@/components/InterviewChat"
@@ -20,9 +20,9 @@ import {
 } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, ApiError } from "@/lib/api"
-import { PAUSE_MAX_SECONDS, QUESTION_THEMES, SECONDS_PER_QUESTION, formatScore, mmss } from "@/lib/interview"
+import { PAUSE_MAX_SECONDS, QUESTION_THEMES, SECONDS_PER_QUESTION, mmss } from "@/lib/interview"
 import { setLeaveGuard } from "@/lib/leave-guard"
-import type { InterviewSession } from "@/lib/types"
+import type { InterviewSession, InterviewTurn } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
@@ -227,86 +227,58 @@ function Room({ initial }: { initial: InterviewSession }) {
 
   return (
     <div className="grid gap-6">
-      {/* Thanh tiến độ dính dưới header: câu hiện tại, đồng hồ, tạm dừng, kết thúc sớm. */}
-      <div className="sticky top-16 z-20 -mt-2 bg-surface pt-2 pb-2">
-        <Panel className="flex flex-wrap items-center justify-between gap-4 p-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet">
-              <UserRound className="size-5" aria-hidden />
-            </span>
-            <div className="grid min-w-0">
-              <p className="truncate font-heading text-lg font-bold">{initial.jd.title}</p>
-              <p className={cn("flex items-center gap-1.5 text-xs font-medium", paused ? "text-warn" : finished ? "text-good" : "text-bad")}>
-                <span
-                  className={cn("size-2 rounded-full", paused ? "bg-warn" : finished ? "bg-good" : "animate-pulse bg-bad")}
-                  aria-hidden
-                />
-                {finished ? "Đã hoàn thành" : paused ? `Đang tạm dừng · tự chạy lại sau ${pauseLeft} giây` : "Đang phỏng vấn"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-4 rounded-2xl bg-blue-soft/60 px-4 py-2.5">
-            <span className="font-heading text-sm font-bold text-blue">
-              Câu {Math.min(turns.length + (finished ? 0 : 1), total)}/{total}
-            </span>
-            <span className="flex gap-1.5" aria-hidden>
-              {Array.from({ length: total }, (_, i) => i + 1).map((index) => (
-                <span
-                  key={index}
-                  className={cn(
-                    "size-2.5 rounded-full",
-                    answeredIndexes.has(index)
-                      ? "bg-good"
-                      : index === current?.index
-                        ? "bg-violet ring-4 ring-violet/20"
-                        : "bg-line",
-                  )}
-                />
-              ))}
-            </span>
-            {active && (
-              <span
-                role="timer"
-                aria-label={`Còn ${secondsLeft} giây cho câu này`}
-                className={cn(
-                  "flex items-center gap-1 border-l border-line pl-4 font-heading text-base font-bold tabular-nums",
-                  secondsLeft <= 10 && !paused ? "animate-pulse text-bad" : urgent ? "text-warn" : "text-ink",
-                )}
-              >
-                <Timer className="size-4" aria-hidden />
-                {mmss(secondsLeft)}
-              </span>
-            )}
-          </div>
-
+      <RoomHeader
+        title={initial.jd.title}
+        tone={finished ? "done" : paused ? "paused" : "live"}
+        status={finished ? "Đã hoàn thành" : paused ? `Đang tạm dừng · tự chạy lại sau ${pauseLeft} giây` : "Đang phỏng vấn"}
+      >
+        <RoomProgress
+          total={total}
+          answered={answeredIndexes}
+          currentIndex={current?.index ?? null}
+          label={`Câu ${Math.min(turns.length + (finished ? 0 : 1), total)}/${total}`}
+        >
           {active && (
-            <div className="flex items-center gap-2">
-              {paused ? (
-                <Button variant="soft" className="h-9" onClick={() => void resume()}>
-                  <Play aria-hidden />
-                  Tiếp tục
-                </Button>
-              ) : (
-                <Button
-                  variant="soft"
-                  className="h-9"
-                  onClick={() => void pause()}
-                  disabled={pauseUsed || sending}
-                  title={pauseUsed ? "Mỗi buổi chỉ được tạm dừng 1 lần" : `Tạm dừng tối đa ${PAUSE_MAX_SECONDS} giây`}
-                >
-                  <Pause aria-hidden />
-                  {pauseUsed ? "Đã dùng tạm dừng" : "Tạm dừng"}
-                </Button>
+            <span
+              role="timer"
+              aria-label={`Còn ${secondsLeft} giây cho câu này`}
+              className={cn(
+                "flex items-center gap-1 border-l border-line pl-4 font-heading text-base font-bold tabular-nums",
+                secondsLeft <= 10 && !paused ? "animate-pulse text-bad" : urgent ? "text-warn" : "text-ink",
               )}
-              <Button variant="ghost" className="h-9 text-bad hover:bg-bad-soft hover:text-bad" onClick={() => setConfirmEnd(true)}>
-                <LogOut aria-hidden />
-                Kết thúc sớm
-              </Button>
-            </div>
+            >
+              <Timer className="size-4" aria-hidden />
+              {mmss(secondsLeft)}
+            </span>
           )}
-        </Panel>
-      </div>
+        </RoomProgress>
+
+        {active && (
+          <div className="flex items-center gap-2">
+            {paused ? (
+              <Button variant="soft" className="h-9" onClick={() => void resume()}>
+                <Play aria-hidden />
+                Tiếp tục
+              </Button>
+            ) : (
+              <Button
+                variant="soft"
+                className="h-9"
+                onClick={() => void pause()}
+                disabled={pauseUsed || sending}
+                title={pauseUsed ? "Mỗi buổi chỉ được tạm dừng 1 lần" : `Tạm dừng tối đa ${PAUSE_MAX_SECONDS} giây`}
+              >
+                <Pause aria-hidden />
+                {pauseUsed ? "Đã dùng tạm dừng" : "Tạm dừng"}
+              </Button>
+            )}
+            <Button variant="ghost" className="h-9 text-bad hover:bg-bad-soft hover:text-bad" onClick={() => setConfirmEnd(true)}>
+              <LogOut aria-hidden />
+              Kết thúc sớm
+            </Button>
+          </div>
+        )}
+      </RoomHeader>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
@@ -327,68 +299,8 @@ function Room({ initial }: { initial: InterviewSession }) {
           />
         </div>
 
-        <aside className="grid min-w-0 gap-4 lg:sticky lg:top-52">
-          <Panel className="grid gap-3 p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="flex items-center gap-2 font-heading text-base font-bold">
-                <ListChecks className="size-4 text-violet" aria-hidden />
-                Lộ trình câu hỏi
-              </h2>
-              <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-semibold text-violet">
-                {turns.length}/{total}
-              </span>
-            </div>
-            <ol className="grid gap-2">
-              {QUESTION_THEMES.slice(0, total).map((theme, i) => {
-                const index = i + 1
-                const turn = turns.find((t) => t.index === index)
-                const isCurrent = !turn && index === current?.index
-                return (
-                  <li
-                    key={theme}
-                    className={cn(
-                      "flex gap-2.5 rounded-xl p-3 text-sm",
-                      isCurrent ? "bg-violet-soft/60 ring-1 ring-violet/20" : turn ? "bg-surface" : "",
-                    )}
-                  >
-                    {turn ? (
-                      turn.timed_out && !turn.answer ? (
-                        <TimerOff className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
-                      ) : (
-                        <CircleCheck className="mt-0.5 size-4 shrink-0 text-good" aria-hidden />
-                      )
-                    ) : isCurrent ? (
-                      <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2 border-violet" aria-hidden>
-                        <span className="size-1.5 rounded-full bg-violet" />
-                      </span>
-                    ) : (
-                      <Circle className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
-                    )}
-                    <span className="grid min-w-0 flex-1">
-                      <span className={cn("truncate", isCurrent ? "font-semibold text-violet" : "text-ink")}>
-                        Câu {index}: {theme}
-                      </span>
-                      <span className={cn("text-xs", turn ? "text-good" : isCurrent ? "text-violet" : "text-ink-3")}>
-                        {turn ? `Đã chấm · ${formatScore(turn.score ?? 0)}/5` : isCurrent ? "Đang trả lời" : "Sắp tới"}
-                      </span>
-                    </span>
-                  </li>
-                )
-              })}
-            </ol>
-          </Panel>
-          <Panel className="grid gap-2 p-5">
-            <h2 className="flex items-center gap-2 font-heading text-base font-bold">
-              <ShieldCheck className="size-4 text-blue" aria-hidden />
-              Luật buổi phỏng vấn
-            </h2>
-            <ul className="grid gap-1.5 text-xs leading-5 text-ink-2">
-              <li>Mỗi câu {SECONDS_PER_QUESTION / 60} phút. Hết giờ, phần đang gõ được tự nộp.</li>
-              <li>Được tạm dừng 1 lần, tối đa {PAUSE_MAX_SECONDS} giây.</li>
-              <li>Mỗi câu được chấm 4 tiêu chí S/T/A/R, thang 0–5.</li>
-              <li>Kết thúc sớm hoặc rời phòng thì buổi không được lưu, không tính lượt.</li>
-            </ul>
-          </Panel>
+        <aside className="min-w-0 lg:sticky lg:top-52">
+          <QuestionRoadmap total={total} turns={turns} currentIndex={finished ? null : (current?.index ?? null)} />
         </aside>
       </div>
 
@@ -414,3 +326,145 @@ function Room({ initial }: { initial: InterviewSession }) {
     </div>
   )
 }
+
+// ---------- Phần dùng chung với phòng chờ trước khi bắt đầu (interview-lobby.tsx) ----------
+
+type RoomTone = "idle" | "live" | "paused" | "done"
+
+const TONE: Record<RoomTone, { text: string; dot: string }> = {
+  idle: { text: "text-ink-2", dot: "bg-ink-3" },
+  live: { text: "text-bad", dot: "animate-pulse bg-bad" },
+  paused: { text: "text-warn", dot: "bg-warn" },
+  done: { text: "text-good", dot: "bg-good" },
+}
+
+/** Thanh dính dưới header: vị trí, trạng thái buổi; children là tiến độ câu và các nút điều khiển. */
+export function RoomHeader({
+  title,
+  status,
+  tone,
+  children,
+}: {
+  title: string
+  status: string
+  tone: RoomTone
+  children?: ReactNode
+}) {
+  return (
+    <div className="sticky top-16 z-20 -mt-2 bg-surface pt-2 pb-2">
+      <Panel className="flex flex-wrap items-center justify-between gap-4 p-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet">
+            <UserRound className="size-5" aria-hidden />
+          </span>
+          <div className="grid min-w-0">
+            <p className="truncate font-heading text-lg font-bold">{title}</p>
+            <p className={cn("flex items-center gap-1.5 text-xs font-medium", TONE[tone].text)}>
+              <span className={cn("size-2 rounded-full", TONE[tone].dot)} aria-hidden />
+              {status}
+            </p>
+          </div>
+        </div>
+        {children}
+      </Panel>
+    </div>
+  )
+}
+
+/** "Câu x/y" kèm chấm tiến độ; children là đồng hồ (khi đang trả lời). */
+export function RoomProgress({
+  total,
+  answered,
+  currentIndex,
+  label,
+  children,
+}: {
+  total: number
+  answered: Set<number>
+  currentIndex: number | null
+  label: string
+  children?: ReactNode
+}) {
+  return (
+    <div className="flex items-center gap-4 rounded-2xl bg-blue-soft/60 px-4 py-2.5">
+      <span className="font-heading text-sm font-bold text-blue">{label}</span>
+      <span className="flex gap-1.5" aria-hidden>
+        {Array.from({ length: total }, (_, i) => i + 1).map((index) => (
+          <span
+            key={index}
+            className={cn(
+              "size-2.5 rounded-full",
+              answered.has(index) ? "bg-good" : index === currentIndex ? "bg-violet ring-4 ring-violet/20" : "bg-line",
+            )}
+          />
+        ))}
+      </span>
+      {children}
+    </div>
+  )
+}
+
+/** Lộ trình 4 câu; chỉ cho biết đã trả lời hay chưa, không hiện điểm (điểm có trong báo cáo sau buổi). */
+export function QuestionRoadmap({
+  total,
+  turns,
+  currentIndex,
+}: {
+  total: number
+  turns: InterviewTurn[]
+  currentIndex: number | null
+}) {
+  return (
+    <Panel className="grid gap-3 p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="flex items-center gap-2 font-heading text-base font-bold">
+          <ListChecks className="size-4 text-violet" aria-hidden />
+          Lộ trình câu hỏi
+        </h2>
+        <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-semibold text-violet">
+          {turns.length}/{total}
+        </span>
+      </div>
+      <ol className="grid gap-2">
+        {QUESTION_THEMES.slice(0, total).map((theme, i) => {
+          const index = i + 1
+          const turn = turns.find((t) => t.index === index)
+          const isCurrent = !turn && index === currentIndex
+          const timedOutBlank = turn?.timed_out && !turn.answer
+          return (
+            <li
+              key={theme}
+              className={cn(
+                "flex gap-2.5 rounded-xl p-3 text-sm",
+                isCurrent ? "bg-violet-soft/60 ring-1 ring-violet/20" : turn ? "bg-surface" : "",
+              )}
+            >
+              {turn ? (
+                timedOutBlank ? (
+                  <TimerOff className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+                ) : (
+                  <CircleCheck className="mt-0.5 size-4 shrink-0 text-good" aria-hidden />
+                )
+              ) : isCurrent ? (
+                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2 border-violet" aria-hidden>
+                  <span className="size-1.5 rounded-full bg-violet" />
+                </span>
+              ) : (
+                <Circle className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
+              )}
+              <span className="grid min-w-0 flex-1">
+                <span className={cn("truncate", isCurrent ? "font-semibold text-violet" : "text-ink")}>
+                  Câu {index}: {theme}
+                </span>
+                <span className={cn("text-xs", turn ? (timedOutBlank ? "text-warn" : "text-good") : isCurrent ? "text-violet" : "text-ink-3")}>
+                  {turn ? (timedOutBlank ? "Hết giờ, chưa trả lời" : "Đã trả lời") : isCurrent ? "Đang trả lời" : "Sắp tới"}
+                </span>
+              </span>
+            </li>
+          )
+        })}
+      </ol>
+    </Panel>
+  )
+}
+

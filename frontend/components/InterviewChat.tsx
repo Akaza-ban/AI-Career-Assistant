@@ -1,18 +1,18 @@
 "use client"
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
+import { useEffect, useRef, type KeyboardEvent } from "react"
 import { Bot, CircleCheck, Info, Lightbulb, Loader2, SendHorizontal, ShieldCheck, TimerOff } from "lucide-react"
 
-import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { MAX_ANSWER_CHARS, MIN_ANSWER_CHARS, STAR_META, STAR_ORDER, formatScore } from "@/lib/interview"
+import { MAX_ANSWER_CHARS, MIN_ANSWER_CHARS } from "@/lib/interview"
 import type { InterviewQuestion, InterviewTurn } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 // S6: khung chat phỏng vấn. Logic đồng hồ / nộp bài nằm ở InterviewRoom; component này chỉ hiển thị.
+// Như một buổi phỏng vấn thật: không hiện điểm hay nhận xét sau từng câu; điểm STAR và nhận xét có trong báo cáo.
 
 /** Thông báo guardrail cho một câu: không tính câu, SV sửa rồi gửi lại. */
 export interface Rejection {
@@ -67,7 +67,6 @@ export function InterviewChat(props: InterviewChatProps) {
               <SystemBubble key={r.id} reason={r.reason} />
             ))}
             <AnswerBubble turn={turn} name={candidateName} avatar={candidateAvatar} />
-            <ScoreBubble turn={turn} />
           </li>
         ))}
         {current && (
@@ -81,7 +80,7 @@ export function InterviewChat(props: InterviewChatProps) {
         {sending && (
           <li className="flex items-center gap-2 justify-self-start rounded-full bg-violet-soft/70 px-4 py-2 text-sm text-violet">
             <Loader2 className="size-4 animate-spin" aria-hidden />
-            AI Career Coach đang chấm câu trả lời theo STAR…
+            AI Career Coach đang ghi nhận câu trả lời…
           </li>
         )}
       </ol>
@@ -181,41 +180,6 @@ function AnswerBubble({ turn, name, avatar }: { turn: InterviewTurn; name: strin
           )}
         </div>
       </div>
-    </div>
-  )
-}
-
-/** Điểm nhanh 4 tiêu chí + nhận xét ngắn (thu gọn 2 dòng, bấm để xem thêm). */
-function ScoreBubble({ turn }: { turn: InterviewTurn }) {
-  const [expanded, setExpanded] = useState(false)
-  if (!turn.star) return null
-  return (
-    <div className="ml-13 grid gap-2 rounded-xl bg-surface px-4 py-3">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {STAR_ORDER.map((key) => (
-          <span key={key} className="rounded-md bg-card px-2 py-0.5 text-xs text-ink ring-1 ring-line">
-            <strong className="text-blue">{STAR_META[key].letter}</strong> {formatScore(turn.star![key])}
-          </span>
-        ))}
-        <span className="ml-1 text-xs font-semibold text-ink">
-          Câu này: {formatScore(turn.score ?? 0)}/5
-        </span>
-      </div>
-      {turn.feedback && (
-        <div className="grid gap-1">
-          <p className={cn("text-sm leading-6 text-ink", !expanded && "line-clamp-2")}>{turn.feedback}</p>
-          {turn.feedback.length > 160 && (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="justify-self-start text-xs font-medium text-blue hover:underline"
-            >
-              {expanded ? "Thu gọn" : "Xem thêm"}
-            </button>
-          )}
-        </div>
-      )}
-      <FeedbackWidget variant="thumbs" responseId={turn.id} />
     </div>
   )
 }

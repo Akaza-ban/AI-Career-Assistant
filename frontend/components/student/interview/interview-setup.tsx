@@ -14,7 +14,6 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react"
-import { toast } from "sonner"
 
 import { Panel, SectionHeader } from "@/components/common/panel"
 import { InterviewIntro, InterviewTour, interviewIntroHidden } from "@/components/student/interview/interview-tour"
@@ -22,7 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
-import { api, ApiError } from "@/lib/api"
+import { api } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 import { QUESTION_COUNT, SECONDS_PER_QUESTION } from "@/lib/interview"
 import { useApi } from "@/lib/use-api"
@@ -34,13 +33,13 @@ const MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
 // Trang chỉ giữ phần chọn vị trí & CV và tóm tắt (xếp chồng, trải hết bề ngang khung tập trung). Cách phòng hoạt
 // động (chủ đề câu hỏi, đồng hồ, khung STAR, lượt) nằm trong hướng dẫn từng bước: popup giới thiệu hiện mỗi lần vào
 // trang (trừ khi SV tick "Không hiển thị lại"), nút "Hướng dẫn" mở thẳng hướng dẫn từng bước.
-export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) {
+export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: string | null; initialCvId: string | null }) {
   const router = useRouter()
   const { data: jds } = useApi(api.listInterviewJds)
   const { data: cvs } = useApi(api.listCvVersions)
 
   const [jdId, setJdId] = useState<string | null>(initialJdId)
-  const [cvId, setCvId] = useState<string | null>(null)
+  const [cvId, setCvId] = useState<string | null>(initialCvId)
   const [starting, setStarting] = useState(false)
   const [introOpen, setIntroOpen] = useState(() => !interviewIntroHidden())
   const [tourOpen, setTourOpen] = useState(false)
@@ -57,16 +56,11 @@ export function InterviewSetup({ initialJdId }: { initialJdId: string | null }) 
   const { data: quota } = useApi(fetchQuota)
   const exhausted = quota !== undefined && quota.remaining === 0
 
-  async function start() {
+  // Vào phòng chờ: xem luật rồi bấm "Sẵn sàng" mới tạo buổi (đồng hồ câu 1 chạy ngay khi tạo buổi).
+  function start() {
     if (!jd || !activeCv || exhausted) return
     setStarting(true)
-    try {
-      const session = await api.createInterview({ jd_id: jd.id, cv_version_id: activeCv.id })
-      router.push(`/student/interview/${encodeURIComponent(session.id)}`)
-    } catch (err) {
-      toast.error(err instanceof ApiError || err instanceof Error ? err.message : "Không bắt đầu được phỏng vấn.")
-      setStarting(false)
-    }
+    router.push(`/student/interview/start?jd=${encodeURIComponent(jd.id)}&cv=${encodeURIComponent(activeCv.id)}`)
   }
 
   if (!jds || !cvs) {
