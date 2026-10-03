@@ -15,12 +15,14 @@ import {
   MessageSquareText,
   Mic,
   MicOff,
+  ShieldCheck,
   SquareArrowOutUpRight,
   UserRoundCheck,
 } from "lucide-react"
 
 import { useChat } from "@/components/chat/chat-context"
-import { Panel } from "@/components/common/panel"
+import { HintPopover } from "@/components/common/hint-popover"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -37,60 +39,60 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorContact | null }) {
   const { openChat } = useChat()
   if (!advisor) {
     return (
-      <Panel className="flex items-center gap-4">
-        <span className="grid size-14 shrink-0 place-items-center rounded-full bg-surface text-ink-3">
-          <UserRoundCheck className="size-6" aria-hidden />
-        </span>
-        <div className="grid gap-1">
-          <p className="font-heading font-bold">Bạn chưa được phân công cố vấn</p>
-          <p className="text-sm text-ink-2">
-            Khi nhà trường phân công, cố vấn sẽ xuất hiện ở đây. Tài liệu của bạn vẫn riêng tư cho tới khi bạn bật chia sẻ.
-          </p>
-        </div>
-      </Panel>
+      <section className="grid gap-3">
+        <SectionHeader title="Cố vấn phụ trách" />
+        <Panel className="flex items-center gap-4">
+          <span className="grid size-14 shrink-0 place-items-center rounded-full bg-surface text-ink-3">
+            <UserRoundCheck className="size-6" aria-hidden />
+          </span>
+          <div className="grid gap-1">
+            <p className="font-heading font-bold">Bạn chưa được phân công cố vấn</p>
+            <p className="text-sm text-ink-2">
+              Khi nhà trường phân công, cố vấn sẽ xuất hiện ở đây. Tài liệu của bạn vẫn riêng tư cho tới khi bạn bật chia sẻ.
+            </p>
+          </div>
+        </Panel>
+      </section>
     )
   }
   return (
-    <Panel className="flex flex-wrap items-center justify-between gap-5">
-      <div className="flex min-w-0 items-center gap-5">
-        <span className="relative shrink-0">
-          <UserAvatar name={advisor.full_name} src={advisor.avatar_url} className="size-16 [&_[data-slot=avatar-fallback]]:text-lg" />
-          <span className="absolute right-0 bottom-0 size-3.5 rounded-full border-2 border-card bg-good" aria-hidden />
-        </span>
-        <div className="grid min-w-0 gap-1">
-          <p className="flex flex-wrap items-center gap-2">
-            <span className="font-heading text-lg font-bold">{advisor.full_name}</span>
-            <Badge variant="good" className="h-auto gap-1 px-2 py-0.5">
-              <span className="size-1.5 rounded-full bg-good" aria-hidden />
-              Cố vấn phụ trách của bạn
-            </Badge>
-          </p>
-          <p className="text-sm text-ink-2">{advisor.title}</p>
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2">
-            <a href={`mailto:${advisor.email}`} className="flex items-center gap-1 hover:text-blue">
-              <Mail className="size-3.5" aria-hidden />
-              {advisor.email}
-            </a>
-            {advisor.office && (
-              <span className="flex items-center gap-1">
-                <MapPin className="size-3.5" aria-hidden />
-                Văn phòng: {advisor.office}
-              </span>
-            )}
-            {advisor.office_hours && (
-              <span className="flex items-center gap-1">
-                <Clock className="size-3.5" aria-hidden />
-                Giờ tư vấn: {advisor.office_hours}
-              </span>
-            )}
-          </p>
+    <section className="grid gap-3">
+      <SectionHeader title="Cố vấn phụ trách" />
+      <Panel className="flex flex-wrap items-center justify-between gap-5">
+        <div className="flex min-w-0 items-center gap-5">
+          <span className="relative shrink-0">
+            <UserAvatar name={advisor.full_name} src={advisor.avatar_url} className="size-16 [&_[data-slot=avatar-fallback]]:text-lg" />
+            <span className="absolute right-0 bottom-0 size-3.5 rounded-full border-2 border-card bg-good" aria-hidden />
+          </span>
+          <div className="grid min-w-0 gap-1">
+            <p className="font-heading text-lg font-bold">{advisor.full_name}</p>
+            <p className="text-sm text-ink-2">{advisor.title}</p>
+            <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2">
+              <a href={`mailto:${advisor.email}`} className="flex items-center gap-1 hover:text-blue">
+                <Mail className="size-3.5" aria-hidden />
+                {advisor.email}
+              </a>
+              {advisor.office && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="size-3.5" aria-hidden />
+                  Văn phòng: {advisor.office}
+                </span>
+              )}
+              {advisor.office_hours && (
+                <span className="flex items-center gap-1">
+                  <Clock className="size-3.5" aria-hidden />
+                  Giờ tư vấn: {advisor.office_hours}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
-      </div>
-      <Button size="brand" onClick={() => openChat()}>
-        <MessageCircle aria-hidden />
-        Nhắn tin cho cố vấn
-      </Button>
-    </Panel>
+        <Button size="brand" onClick={() => openChat()}>
+          <MessageCircle aria-hidden />
+          Nhắn tin
+        </Button>
+      </Panel>
+    </section>
   )
 }
 
@@ -155,14 +157,14 @@ function SharedItemRow({
   return (
     <li
       className={cn(
-        "flex items-center gap-4 rounded-2xl border p-4 transition-colors",
-        item.shared ? "border-blue/15 bg-blue-soft/35" : "border-line bg-surface/60",
+        "flex items-center gap-4 px-5 py-4 transition-colors",
+        item.shared && "bg-blue-soft/30",
       )}
     >
       <span
         className={cn(
           "grid size-11 shrink-0 place-items-center rounded-xl",
-          !item.shared ? "bg-card text-ink-3" : isCv ? "bg-blue-soft text-blue" : "bg-violet-soft text-violet",
+          !item.shared ? "bg-surface text-ink-3" : isCv ? "bg-blue-soft text-blue" : "bg-violet-soft text-violet",
         )}
       >
         <Icon className="size-5" aria-hidden />
@@ -232,73 +234,87 @@ export function SharedItemsPanel({ items, pendingIds, onChange }: SharedItemsPan
   const busy = pendingIds.size > 0
 
   return (
-    <Panel className="grid gap-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex flex-wrap items-center gap-2 font-heading text-lg font-bold">
-          Nội dung được chia sẻ
-          <Badge variant="blue" className="h-auto px-2.5 py-0.5">
-            Đang chia sẻ {sharedCount} / {items.length} tài liệu
-          </Badge>
-        </h2>
-        <div className="flex gap-2">
-          <Button
-            variant="soft"
-            className="h-9"
-            disabled={busy || visible.every((i) => i.shared)}
-            onClick={() => onChange(visible.filter((i) => !i.shared).map((i) => i.id), true)}
-          >
-            Chia sẻ tất cả
-          </Button>
-          <Button
-            variant="outline"
-            className="h-9"
-            disabled={busy || visible.every((i) => !i.shared)}
-            onClick={() => onChange(visible.filter((i) => i.shared).map((i) => i.id), false)}
-          >
-            Tắt tất cả
-          </Button>
+    <section className="grid min-w-0 gap-3">
+      <SectionHeader
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Nội dung được chia sẻ
+            <Badge variant="blue" className="h-auto px-2.5 py-0.5 font-sans">
+              Đang chia sẻ {sharedCount} / {items.length} tài liệu
+            </Badge>
+          </span>
+        }
+        aside={
+          <div className="flex gap-2">
+            <Button
+              variant="soft"
+              className="h-9"
+              disabled={busy || visible.every((i) => i.shared)}
+              onClick={() => onChange(visible.filter((i) => !i.shared).map((i) => i.id), true)}
+            >
+              Chia sẻ tất cả
+            </Button>
+            <Button
+              variant="outline"
+              className="h-9 bg-card"
+              disabled={busy || visible.every((i) => !i.shared)}
+              onClick={() => onChange(visible.filter((i) => i.shared).map((i) => i.id), false)}
+            >
+              Tắt tất cả
+            </Button>
+          </div>
+        }
+      />
+
+      <Panel className="grid overflow-hidden p-0">
+        <div className="border-b border-line px-5 py-4">
+          <div role="group" aria-label="Loại tài liệu" className="flex w-fit flex-wrap rounded-xl bg-surface p-1">
+            {tabs.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                aria-pressed={tab === t.value}
+                onClick={() => setTab(t.value)}
+                className={cn(
+                  "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  tab === t.value ? "bg-card text-blue shadow-card" : "text-ink-2 hover:text-ink",
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div role="group" aria-label="Loại tài liệu" className="flex w-fit flex-wrap rounded-xl bg-surface p-1">
-        {tabs.map((t) => (
-          <button
-            key={t.value}
-            type="button"
-            aria-pressed={tab === t.value}
-            onClick={() => setTab(t.value)}
-            className={cn(
-              "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-              tab === t.value ? "bg-card text-blue shadow-card" : "text-ink-2 hover:text-ink",
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {visible.length === 0 ? (
-        <p className="rounded-2xl bg-surface p-8 text-center text-sm text-ink-2">
-          {tab === "cv" ? "Bạn chưa tải lên CV nào." : "Chưa có tài liệu nào để chia sẻ."}
-        </p>
-      ) : (
-        <ul className="grid gap-3">
-          {rows.map((item) => (
-            <SharedItemRow
-              key={item.id}
-              item={item}
-              pending={pendingIds.has(item.id)}
-              onToggle={(value) => onChange([item.id], value)}
-            />
-          ))}
-        </ul>
-      )}
-      {visible.length > INITIAL_ROWS && (
-        <Button variant="ghost" className="h-9 justify-self-center text-blue hover:bg-blue-soft hover:text-blue" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Thu gọn" : `Xem thêm ${visible.length - INITIAL_ROWS} tài liệu`}
-        </Button>
-      )}
-    </Panel>
+        {visible.length === 0 ? (
+          <p className="p-8 text-center text-sm text-ink-2">
+            {tab === "cv" ? "Bạn chưa tải lên CV nào." : "Chưa có tài liệu nào để chia sẻ."}
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {rows.map((item) => (
+              <SharedItemRow
+                key={item.id}
+                item={item}
+                pending={pendingIds.has(item.id)}
+                onToggle={(value) => onChange([item.id], value)}
+              />
+            ))}
+          </ul>
+        )}
+        {visible.length > INITIAL_ROWS && (
+          <div className="grid border-t border-line py-2">
+            <Button
+              variant="ghost"
+              className="h-9 justify-self-center text-blue hover:bg-blue-soft hover:text-blue"
+              onClick={() => setExpanded((v) => !v)}
+            >
+              {expanded ? "Thu gọn" : `Xem thêm ${visible.length - INITIAL_ROWS} tài liệu`}
+            </Button>
+          </div>
+        )}
+      </Panel>
+    </section>
   )
 }
 
@@ -307,76 +323,92 @@ export function SharedItemsPanel({ items, pendingIds, onChange }: SharedItemsPan
 export function AdvisorFeedbackPanel({ feedback, onOpen }: { feedback: AdvisorFeedback[]; onOpen: (id: string) => void }) {
   const unread = feedback.filter((f) => !f.read).length
   return (
-    <Panel className="grid gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-          Phản hồi từ cố vấn
-          {unread > 0 && (
-            <span className="rounded-full bg-bad px-1.5 text-xs font-semibold text-white" aria-label={`${unread} chưa đọc`}>
-              {unread}
-            </span>
-          )}
-        </h2>
-        <span className="text-xs text-ink-2">Gần đây</span>
-      </div>
-      {feedback.length === 0 ? (
-        <p className="rounded-xl bg-surface p-4 text-center text-sm text-ink-2">
-          Chưa có nhận xét nào. Bật chia sẻ một báo cáo phỏng vấn để cố vấn góp ý.
-        </p>
-      ) : (
-        <ul className="grid gap-3">
-          {feedback.map((f) => (
-            <li key={f.id} className={cn("grid gap-2 rounded-2xl p-4", f.read ? "bg-surface" : "bg-blue-soft/50 ring-1 ring-blue/15")}>
-              <p className="flex items-center justify-between gap-2 text-xs">
-                <span className="flex items-center gap-1.5 font-heading font-bold text-ink">
-                  {!f.read && <span className="size-2 rounded-full bg-blue" aria-label="Chưa đọc" />}
-                  {f.advisor_name}
-                </span>
-                <time dateTime={f.created_at} className="text-ink-2">
-                  {formatWhen(f.created_at)}
-                </time>
-              </p>
-              <blockquote className="text-sm leading-6 text-ink">“{f.comment}”</blockquote>
-              <Link
-                href={`/student/interview/${encodeURIComponent(f.target.id)}/report`}
-                onClick={() => onOpen(f.id)}
-                className="flex w-fit items-center gap-1 text-sm font-medium text-blue hover:underline"
-              >
-                {f.target.label}
-                <SquareArrowOutUpRight className="size-3.5" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
+    <section className="grid min-w-0 gap-3">
+      <SectionHeader
+        title={
+          <span className="flex items-center gap-2">
+            Phản hồi từ cố vấn
+            {unread > 0 && (
+              <span className="rounded-full bg-bad px-1.5 font-sans text-xs font-semibold text-white" aria-label={`${unread} chưa đọc`}>
+                {unread}
+              </span>
+            )}
+          </span>
+        }
+        aside={<span className="text-sm text-ink-2">Gần đây</span>}
+        // Cao bằng tiêu đề "Nội dung được chia sẻ" (có nút) để hai ô bên dưới thẳng hàng
+        className="min-h-9"
+      />
+      <Panel className="grid overflow-hidden p-0">
+        {feedback.length === 0 ? (
+          <p className="p-5 text-center text-sm text-ink-2">
+            Chưa có nhận xét nào. Bật chia sẻ một báo cáo phỏng vấn để cố vấn góp ý.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {feedback.map((f) => (
+              <li key={f.id} className={cn("grid gap-2 px-5 py-4", !f.read && "bg-blue-soft/40")}>
+                <p className="flex items-center justify-between gap-2 text-xs">
+                  <span className="flex items-center gap-1.5 font-heading font-bold text-ink">
+                    {!f.read && <span className="size-2 rounded-full bg-blue" aria-label="Chưa đọc" />}
+                    {f.advisor_name}
+                  </span>
+                  <time dateTime={f.created_at} className="text-ink-2">
+                    {formatWhen(f.created_at)}
+                  </time>
+                </p>
+                <blockquote className="text-sm leading-6 text-ink">“{f.comment}”</blockquote>
+                <Link
+                  href={`/student/interview/${encodeURIComponent(f.target.id)}/report`}
+                  onClick={() => onOpen(f.id)}
+                  className="flex w-fit items-center gap-1 text-sm font-medium text-blue hover:underline"
+                >
+                  {f.target.label}
+                  <SquareArrowOutUpRight className="size-3.5" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </section>
   )
 }
 
-// ---------- Dải nguyên tắc riêng tư ----------
+// ---------- Lưu ý về chia sẻ ----------
 
-/** Theo lựa chọn (a): cố vấn luôn thấy số liệu tổng hợp; nội dung chỉ thấy khi SV bật chia sẻ. */
-export function PrivacyStrip() {
+/**
+ * Theo lựa chọn (a): cố vấn luôn thấy số liệu tổng hợp; nội dung chỉ thấy khi SV bật chia sẻ.
+ * Gọn trong một nút ở góc tiêu đề trang (rê chuột mới hiện), cùng kiểu "Mẹo tối ưu CV" ở trang CV của tôi.
+ */
+export function SharingNote() {
   return (
-    <div className="grid gap-3 rounded-[20px] bg-blue-soft/50 px-5 py-4 text-sm leading-6 text-ink sm:grid-cols-2">
-      <p className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-card text-blue">
-          <Lock className="size-4" aria-hidden />
-        </span>
-        <span>
-          <strong className="text-blue">Nội dung chỉ thấy khi bạn bật chia sẻ:</strong> file CV, câu trả lời và nhận xét
-          AI trong báo cáo phỏng vấn, chi tiết kỹ năng trong phân tích. Tắt lúc nào cũng được.
-        </span>
-      </p>
-      <p className="flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-card text-blue">
-          <BarChart3 className="size-4" aria-hidden />
-        </span>
-        <span>
-          <strong className="text-blue">Cố vấn phụ trách luôn thấy số liệu tổng hợp:</strong> điểm STAR từng buổi, mức
-          tiến bộ, độ khớp CV và ngày hoạt động, để kịp thời hỗ trợ khi bạn gặp khó khăn.
-        </span>
-      </p>
-    </div>
+    <HintPopover
+      label="Lưu ý về chia sẻ"
+      icon={ShieldCheck}
+      iconClassName="text-blue"
+      title="Cố vấn xem được những gì?"
+      className="w-96"
+      items={[
+        {
+          icon: Lock,
+          content: (
+            <>
+              <strong className="font-semibold text-ink">Chỉ thấy khi bạn bật chia sẻ:</strong> file CV, câu trả lời và nhận
+              xét AI trong báo cáo phỏng vấn, chi tiết kỹ năng trong phân tích. Tắt lúc nào cũng được.
+            </>
+          ),
+        },
+        {
+          icon: BarChart3,
+          content: (
+            <>
+              <strong className="font-semibold text-ink">Luôn thấy số liệu tổng hợp:</strong> điểm STAR từng buổi, mức tiến
+              bộ, độ khớp CV và ngày hoạt động, để kịp thời hỗ trợ khi bạn gặp khó khăn.
+            </>
+          ),
+        },
+      ]}
+    />
   )
 }

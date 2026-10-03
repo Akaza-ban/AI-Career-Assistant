@@ -2,20 +2,9 @@
 
 import Link from "next/link"
 import { useState, type ReactNode } from "react"
-import {
-  ArrowRight,
-  ChevronLeft,
-  ChevronRight,
-  FileCheck2,
-  FileSearch,
-  LineChart,
-  Loader2,
-  MessagesSquare,
-  RotateCcw,
-  TimerOff,
-} from "lucide-react"
+import { ArrowRight, ChevronLeft, ChevronRight, Loader2, MessagesSquare, RotateCcw, TimerOff } from "lucide-react"
 
-import { Panel, PanelHeader } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { ScoreLineChart, type ScorePoint } from "@/components/common/score-line-chart"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -39,6 +28,16 @@ function JdTitle({ jd }: { jd: { title: string; company: string | null } }) {
       <span className="truncate font-heading text-base font-bold text-ink">{jd.title}</span>
       {jd.company && <span className="truncate text-xs text-ink-2">{jd.company}</span>}
     </span>
+  )
+}
+
+/** Tiêu đề mục đặt ngoài ô (như trang Tổng quan) kèm một dòng giải thích cách đọc số liệu. */
+function SectionTitle({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="grid gap-1">
+      <SectionHeader title={title} />
+      <p className="text-xs text-ink-2">{description}</p>
+    </div>
   )
 }
 
@@ -186,16 +185,11 @@ function InterviewProgressCard({ group }: { group: InterviewProgress }) {
 
 export function InterviewProgressSection({ groups }: { groups: InterviewProgress[] }) {
   return (
-    <section className="grid gap-4" aria-labelledby="interview-progress-title">
-      <div className="grid gap-0.5">
-        <h2 id="interview-progress-title" className="flex items-center gap-2 font-heading text-lg font-bold">
-          <LineChart className="size-5 text-blue" aria-hidden />
-          Tiến bộ phỏng vấn
-        </h2>
-        <p className="text-xs text-ink-2">
-          Điểm STAR thang 0–5, so sánh trong từng vị trí. Chênh từ 0,3 điểm trở lên so với buổi trước được xem là thay đổi rõ.
-        </p>
-      </div>
+    <section className="grid gap-3">
+      <SectionTitle
+        title="Tiến bộ phỏng vấn"
+        description="Điểm STAR thang 0–5, so sánh trong từng vị trí. Chênh từ 0,3 điểm trở lên so với buổi trước được xem là thay đổi rõ."
+      />
       {groups.length === 0 ? (
         <Panel className="grid justify-items-center gap-2 py-10 text-center">
           <MessagesSquare className="size-6 text-ink-3" aria-hidden />
@@ -213,7 +207,7 @@ export function InterviewProgressSection({ groups }: { groups: InterviewProgress
 function CvProgressGroup({ group }: { group: CvProgress }) {
   const last = group.points.length - 1
   return (
-    <div className="grid content-start gap-3 rounded-xl border border-line p-4">
+    <Panel className="grid content-start gap-3 p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <JdTitle jd={group.jd} />
         {group.delta !== null && (
@@ -247,34 +241,32 @@ function CvProgressGroup({ group }: { group: CvProgress }) {
       {group.points.length === 1 && (
         <p className="text-xs text-ink-2">Tối ưu CV rồi phân tích lại với JD này để thấy độ khớp thay đổi.</p>
       )}
-    </div>
+    </Panel>
   )
 }
 
 export function CvProgressSection({ groups }: { groups: CvProgress[] }) {
   return (
-    <Panel className="grid gap-4">
-      <div className="grid gap-0.5">
-        <PanelHeader icon={FileCheck2} title="Tiến bộ CV" />
-        <p className="text-xs text-ink-2">
-          Độ khớp CV–JD (0–100) qua các phiên bản CV với cùng một JD; mỗi phiên bản lấy lần phân tích gần nhất.
-        </p>
-      </div>
+    <section className="grid gap-3">
+      <SectionTitle
+        title="Tiến bộ CV"
+        description="Độ khớp CV–JD (0–100) qua các phiên bản CV với cùng một JD; mỗi phiên bản lấy lần phân tích gần nhất."
+      />
       {groups.length === 0 ? (
-        <div className="grid justify-items-center gap-3 rounded-xl bg-surface px-6 py-8 text-center">
+        <Panel className="grid justify-items-center gap-3 py-8 text-center">
           <p className="text-sm text-ink-2">Chưa có lượt phân tích hoàn thành nào trong khoảng này.</p>
           <Button variant="soft" nativeButton={false} render={<Link href="/student/analysis/new" />}>
             Phân tích CV với JD
           </Button>
-        </div>
+        </Panel>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid items-start gap-6 md:grid-cols-2">
           {groups.map((group) => (
             <CvProgressGroup key={group.jd.id} group={group} />
           ))}
         </div>
       )}
-    </Panel>
+    </section>
   )
 }
 
@@ -290,7 +282,6 @@ function usePage<T>(rows: T[]) {
 }
 
 interface TablePanelProps {
-  icon: typeof MessagesSquare
   title: string
   total: number
   unit: string
@@ -301,52 +292,54 @@ interface TablePanelProps {
   children: ReactNode
 }
 
-function TablePanel({ icon, title, total, unit, head, columns, empty, page, children }: TablePanelProps) {
+function TablePanel({ title, total, unit, head, columns, empty, page, children }: TablePanelProps) {
   return (
-    <Panel className="grid gap-4 p-0">
-      <PanelHeader icon={icon} title={title} className="px-6 pt-6" aside={<span className="text-xs text-ink-2">{total} {unit}</span>} />
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px] text-sm">
-          <thead className="bg-blue-soft/40 text-left text-xs font-semibold tracking-wide text-ink-2 uppercase">{head}</thead>
-          <tbody className="divide-y divide-line">
-            {total === 0 ? (
-              <tr>
-                <td colSpan={columns} className="px-6 py-10 text-center text-ink-2">
-                  {empty}
-                </td>
-              </tr>
-            ) : (
-              children
-            )}
-          </tbody>
-        </table>
-      </div>
-      {page.pageCount > 1 && (
-        <div className="flex items-center justify-end gap-1 border-t border-line px-6 py-3 text-xs text-ink-2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Trang trước"
-            disabled={page.current === 0}
-            onClick={() => page.setPage(page.current - 1)}
-          >
-            <ChevronLeft aria-hidden />
-          </Button>
-          <span className="min-w-12 text-center font-medium text-ink">
-            {page.current + 1} / {page.pageCount}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Trang sau"
-            disabled={page.current >= page.pageCount - 1}
-            onClick={() => page.setPage(page.current + 1)}
-          >
-            <ChevronRight aria-hidden />
-          </Button>
+    <section className="grid gap-3">
+      <SectionHeader title={title} aside={<span className="text-sm text-ink-2">{total} {unit}</span>} />
+      <Panel className="grid overflow-hidden p-0">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead className="bg-blue-soft/40 text-left text-xs font-semibold tracking-wide text-ink-2 uppercase">{head}</thead>
+            <tbody className="divide-y divide-line">
+              {total === 0 ? (
+                <tr>
+                  <td colSpan={columns} className="px-6 py-10 text-center text-ink-2">
+                    {empty}
+                  </td>
+                </tr>
+              ) : (
+                children
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
-    </Panel>
+        {page.pageCount > 1 && (
+          <div className="flex items-center justify-end gap-1 border-t border-line px-6 py-3 text-xs text-ink-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Trang trước"
+              disabled={page.current === 0}
+              onClick={() => page.setPage(page.current - 1)}
+            >
+              <ChevronLeft aria-hidden />
+            </Button>
+            <span className="min-w-12 text-center font-medium text-ink">
+              {page.current + 1} / {page.pageCount}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Trang sau"
+              disabled={page.current >= page.pageCount - 1}
+              onClick={() => page.setPage(page.current + 1)}
+            >
+              <ChevronRight aria-hidden />
+            </Button>
+          </div>
+        )}
+      </Panel>
+    </section>
   )
 }
 
@@ -354,7 +347,6 @@ export function InterviewTable({ rows }: { rows: InterviewRow[] }) {
   const page = usePage(rows)
   return (
     <TablePanel
-      icon={MessagesSquare}
       title="Các buổi phỏng vấn thử"
       total={rows.length}
       unit="buổi"
@@ -442,7 +434,6 @@ export function AnalysisTable({ rows }: { rows: AnalysisRow[] }) {
   const page = usePage(rows)
   return (
     <TablePanel
-      icon={FileSearch}
       title="Các lượt phân tích CV–JD"
       total={rows.length}
       unit="lượt"
