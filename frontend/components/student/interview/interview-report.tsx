@@ -7,7 +7,6 @@ import {
   CircleCheck,
   Clock,
   Home,
-  Lightbulb,
   ListChecks,
   MessageSquareHeart,
   MessageSquareText,
@@ -20,7 +19,7 @@ import {
 } from "lucide-react"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
-import { Panel } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { ResultDisclaimer } from "@/components/student/analysis/analysis-result-sections"
 import { CsatDialog } from "@/components/student/interview/csat-dialog"
 import { Badge } from "@/components/ui/badge"
@@ -53,9 +52,13 @@ export function InterviewReport({ sessionId }: { sessionId: string }) {
 
   if (!report) {
     return (
-      <div className="grid gap-6" aria-busy="true" aria-label="Đang tải kết quả">
-        <Skeleton className="h-36 rounded-[20px]" />
-        <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-8" aria-busy="true" aria-label="Đang tải kết quả">
+        <div className="grid gap-3">
+          <Skeleton className="h-6 w-72" />
+          <Skeleton className="h-10 w-96 max-w-full" />
+          <Skeleton className="h-5 w-80 max-w-full" />
+        </div>
+        <div className="grid gap-8 lg:grid-cols-2">
           <Skeleton className="h-72 rounded-[20px]" />
           <Skeleton className="h-72 rounded-[20px]" />
         </div>
@@ -67,13 +70,14 @@ export function InterviewReport({ sessionId }: { sessionId: string }) {
   return <ReportView report={report} />
 }
 
+// Thiết kế như trang Tổng quan: đầu trang nằm thẳng trên nền, tiêu đề mục đặt ngoài ô, ô chỉ chứa nội dung.
 function ReportView({ report }: { report: Report }) {
   const retryHref = `/student/interview/new?jd=${encodeURIComponent(report.jd.id)}`
   const label = LABEL_META[report.label]
 
   return (
-    <div className="grid gap-6">
-      <Panel className="grid gap-3">
+    <div className="grid gap-8">
+      <div className="grid gap-3 py-2">
         <div className="flex flex-wrap gap-2">
           <Badge variant="violet" className="h-auto px-2.5 py-0.5">
             <Mic2 aria-hidden />
@@ -83,7 +87,7 @@ function ReportView({ report }: { report: Report }) {
             Vị trí: {report.jd.title}
           </Badge>
         </div>
-        <h1 className="font-heading text-[28px] leading-9 font-bold">Kết quả phỏng vấn thử</h1>
+        <h1 className="font-heading text-[32px] leading-10 font-bold">Kết quả phỏng vấn thử</h1>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
           <span className="flex items-center gap-1">
             <Clock className="size-4" aria-hidden />
@@ -99,95 +103,96 @@ function ReportView({ report }: { report: Report }) {
             {report.timed_out_count > 0 && ` · ${report.timed_out_count} câu hết giờ`}
           </span>
         </p>
-      </Panel>
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-2">
         {/* Điểm tổng + so sánh với buổi đầu tiên cùng vị trí */}
-        <Panel className="grid content-start gap-4">
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">Điểm tổng (thang 0–5)</p>
-          <div className="flex items-end gap-3">
-            <span className={cn("font-heading text-5xl leading-none font-extrabold", label.className)}>
-              {formatScore(report.overall_score)}
-            </span>
-            <span className="pb-1 text-lg font-semibold text-ink-3">/5</span>
-            <Badge variant="neutral" className={cn("mb-1 h-auto px-2.5 py-0.5", label.badge)}>
-              {label.text}
-            </Badge>
-          </div>
-          <p className="text-sm text-ink-2">Điểm tổng là trung bình điểm STAR của {report.turns.length} câu trả lời.</p>
-          {report.comparison ? (
-            <Comparison report={report} />
-          ) : (
-            <p className="rounded-xl bg-surface p-3 text-sm text-ink-2">
-              Đây là buổi đầu tiên cho vị trí này. Hoàn thành thêm buổi để theo dõi tiến bộ.
+        <section className="flex min-w-0 flex-col gap-3">
+          <SectionHeader title="Điểm tổng"/>
+          <Panel className="grid flex-1 content-start gap-4">
+            <div className="flex items-end gap-3">
+              <span className={cn("font-heading text-5xl leading-none font-extrabold", label.className)}>
+                {formatScore(report.overall_score)}
+              </span>
+              <span className="pb-1 text-lg font-semibold text-ink-3">/5</span>
+              <Badge variant="neutral" className={cn("mb-1 h-auto px-2.5 py-0.5", label.badge)}>
+                {label.text}
+              </Badge>
+            </div>
+            <p className="text-sm text-ink-2">Điểm tổng là trung bình điểm STAR của {report.turns.length} câu trả lời.</p>
+            {report.comparison ? (
+              <Comparison report={report} />
+            ) : (
+              <p className="rounded-xl bg-surface p-3 text-sm text-ink-2">
+                Đây là buổi đầu tiên cho vị trí này. Hoàn thành thêm buổi để theo dõi tiến bộ.
+              </p>
+            )}
+            <p className="flex items-center gap-1.5 text-xs text-ink-2">
+              <ShieldCheck className="size-3.5 text-blue" aria-hidden />
+              Đây là luyện tập, không tính điểm chính thức.
             </p>
-          )}
-          <p className="flex items-center gap-1.5 text-xs text-ink-2">
-            <ShieldCheck className="size-3.5 text-blue" aria-hidden />
-            Đây là luyện tập, không tính điểm chính thức.
-          </p>
-        </Panel>
+          </Panel>
+        </section>
 
         {/* 4 thanh S/T/A/R, đánh dấu tiêu chí yếu nhất */}
-        <Panel className="grid content-start gap-4">
-          <p className="text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">Điểm theo tiêu chí STAR</p>
-          <ul className="grid gap-3.5">
-            {STAR_ORDER.map((key) => {
-              const score = report.star[key]
-              const weakest = key === report.weakest
-              return (
-                <li key={key} className="grid gap-1.5">
-                  <div className="flex items-center justify-between gap-2 text-sm">
-                    <span className="flex items-center gap-2 font-medium text-ink">
-                      <span className="grid size-6 place-items-center rounded-md bg-blue-soft text-xs font-bold text-blue">
-                        {STAR_META[key].letter}
+        <section className="flex min-w-0 flex-col gap-3">
+          <SectionHeader title="Điểm theo tiêu chí STAR" />
+          <Panel className="grid flex-1 content-start gap-4">
+            <ul className="grid gap-3.5">
+              {STAR_ORDER.map((key) => {
+                const score = report.star[key]
+                const weakest = key === report.weakest
+                return (
+                  <li key={key} className="grid gap-1.5">
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <span className="flex items-center gap-2 font-medium text-ink">
+                        <span className="grid size-6 place-items-center rounded-md bg-blue-soft text-xs font-bold text-blue">
+                          {STAR_META[key].letter}
+                        </span>
+                        {STAR_META[key].label}
+                        {weakest && <Badge variant="warn">Yếu nhất</Badge>}
                       </span>
-                      {STAR_META[key].label}
-                      {weakest && <Badge variant="warn">Yếu nhất</Badge>}
-                    </span>
-                    <span className="font-heading font-bold text-ink">{formatScore(score)}/5</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-surface" aria-hidden>
-                    <div
-                      className={cn("h-full rounded-full", weakest ? "bg-warn" : "bg-blue")}
-                      style={{ width: `${(score / 5) * 100}%` }}
-                    />
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </Panel>
+                      <span className="font-heading font-bold text-ink">{formatScore(score)}/5</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-surface" aria-hidden>
+                      <div
+                        className={cn("h-full rounded-full", weakest ? "bg-warn" : "bg-blue")}
+                        style={{ width: `${(score / 5) * 100}%` }}
+                      />
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </Panel>
+        </section>
       </div>
 
       {report.advisor_review && <AdvisorReviewCard review={report.advisor_review} />}
 
       {/* Hướng dẫn cải thiện: chỉ khung trả lời, không viết sẵn câu trả lời chứa thành tích SV chưa nêu */}
-      <Panel className="grid gap-3">
-        <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-          <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet">
-            <Lightbulb className="size-4" aria-hidden />
-          </span>
-          Hướng dẫn cải thiện
-        </h2>
-        <ul className="grid gap-2">
-          {report.guidance.map((g) => (
-            <li key={g} className="flex gap-2.5 rounded-xl bg-surface p-3 text-sm leading-6 text-ink">
-              <CircleCheck className="mt-1 size-4 shrink-0 text-violet" aria-hidden />
-              {g}
-            </li>
-          ))}
-        </ul>
-        <p className="text-xs text-ink-2">Hệ thống chỉ gợi ý cách trình bày, không viết sẵn câu trả lời cho bạn.</p>
-      </Panel>
+      <section className="grid gap-3">
+        <SectionHeader title="Hướng dẫn cải thiện" />
+        <Panel className="grid gap-3">
+          <ul className="grid gap-2">
+            {report.guidance.map((g) => (
+              <li key={g} className="flex gap-2.5 rounded-xl bg-surface p-3 text-sm leading-6 text-ink">
+                <CircleCheck className="mt-1 size-4 shrink-0 text-violet" aria-hidden />
+                {g}
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-ink-2">Hệ thống chỉ gợi ý cách trình bày, không viết sẵn câu trả lời cho bạn.</p>
+        </Panel>
+      </section>
 
-      <section className="grid gap-3" aria-labelledby="turns-title">
-        <h2 id="turns-title" className="font-heading text-lg font-bold">
-          Chi tiết từng câu
-        </h2>
-        {report.turns.map((turn) => (
-          <TurnCard key={turn.id} turn={turn} />
-        ))}
+      <section className="grid gap-3">
+        <SectionHeader title="Chi tiết từng câu" />
+        <div className="grid gap-4">
+          {report.turns.map((turn) => (
+            <TurnCard key={turn.id} turn={turn} />
+          ))}
+        </div>
       </section>
 
       <Actions report={report} retryHref={retryHref} />
@@ -203,21 +208,23 @@ function AdvisorReviewCard({ review }: { review: ReportAdvisorReview }) {
   }, [review.id, review.read])
 
   return (
-    <Panel className="grid gap-3 border-violet/25 bg-violet-soft/40">
-      <p className="flex flex-wrap items-center justify-between gap-2">
-        <span className="flex items-center gap-2 font-heading text-lg font-bold">
-          <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet">
-            <MessageSquareText className="size-4" aria-hidden />
+    <section className="grid gap-3">
+      <SectionHeader
+        title="Nhận xét của cố vấn"
+        aside={
+          <span className="text-xs text-ink-2">
+            {review.advisor_name} · {formatRelativeTime(review.updated_at).toLowerCase()}
           </span>
-          Nhận xét của cố vấn
-        </span>
-        <span className="text-xs text-ink-2">
-          {review.advisor_name} · {formatRelativeTime(review.updated_at).toLowerCase()}
-        </span>
-      </p>
-      <blockquote className="text-sm leading-6 whitespace-pre-line text-ink">&ldquo;{review.comment}&rdquo;</blockquote>
-      <p className="text-xs text-ink-2">Điểm AI của buổi này giữ nguyên; nhận xét giúp bạn biết nên luyện gì tiếp.</p>
-    </Panel>
+        }
+      />
+      <Panel className="grid gap-3 border-violet/25 bg-violet-soft/40">
+        <blockquote className="flex gap-3 text-sm leading-6 whitespace-pre-line text-ink">
+          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-violet" aria-hidden />
+          <span>&ldquo;{review.comment}&rdquo;</span>
+        </blockquote>
+        <p className="text-xs text-ink-2">Điểm AI của buổi này giữ nguyên; nhận xét giúp bạn biết nên luyện gì tiếp.</p>
+      </Panel>
+    </section>
   )
 }
 
@@ -305,34 +312,34 @@ function Actions({ report, retryHref }: { report: Report; retryHref: string }) {
   const rated = submitted ?? saved?.value ?? null
 
   return (
-    <Panel className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-card to-violet-soft/50">
-      <div className="grid gap-1">
-        <h2 className="font-heading text-lg font-bold">Bước tiếp theo</h2>
+    <section className="grid gap-3">
+      <SectionHeader title="Bước tiếp theo" />
+      <Panel className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-card to-violet-soft/50">
         <p className="text-sm text-ink-2">
           {rated ? `Bạn đã đánh giá buổi này ${rated} sao. Cảm ơn bạn!` : "Luyện thêm để cải thiện tiêu chí yếu nhất, hoặc cho chúng tôi biết cảm nhận của bạn."}
         </p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button variant="soft" className="h-10" nativeButton={false} render={<Link href="/student" />}>
-          <Home aria-hidden />
-          Về trang chủ
-        </Button>
-        <Button variant="soft" className="h-10" nativeButton={false} render={<Link href={retryHref} />}>
-          <RotateCcw aria-hidden />
-          Luyện lại
-        </Button>
-        <Button variant="violet" className="h-10 px-5" onClick={() => setOpen(true)} disabled={rated !== null}>
-          <MessageSquareHeart aria-hidden />
-          {rated ? "Đã đánh giá" : "Tiếp tục khảo sát"}
-        </Button>
-      </div>
-      <CsatDialog
-        responseId={report.response_id}
-        activity="interview"
-        open={open}
-        onOpenChange={setOpen}
-        onSubmitted={setSubmitted}
-      />
-    </Panel>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="soft" className="h-10" nativeButton={false} render={<Link href="/student" />}>
+            <Home aria-hidden />
+            Về trang chủ
+          </Button>
+          <Button variant="soft" className="h-10" nativeButton={false} render={<Link href={retryHref} />}>
+            <RotateCcw aria-hidden />
+            Luyện lại
+          </Button>
+          <Button variant="violet" className="h-10 px-5" onClick={() => setOpen(true)} disabled={rated !== null}>
+            <MessageSquareHeart aria-hidden />
+            {rated ? "Đã đánh giá" : "Đánh giá"}
+          </Button>
+        </div>
+        <CsatDialog
+          responseId={report.response_id}
+          activity="interview"
+          open={open}
+          onOpenChange={setOpen}
+          onSubmitted={setSubmitted}
+        />
+      </Panel>
+    </section>
   )
 }
