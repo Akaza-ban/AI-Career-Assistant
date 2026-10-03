@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
@@ -153,6 +153,50 @@ class JobDescriptionResponse(BaseModel):
     content: str = Field(..., description="Toàn văn JD")
     skills: list[JdSkill] = Field(default_factory=list, description="Yêu cầu kỹ năng theo mức độ")
     source: Literal["library", "pasted"]
+
+
+class JDRecommendationItem(BaseModel):
+    """Một vị trí JD được đề xuất dựa trên CV (Task A3)."""
+
+    jd_id: str
+    title: str
+    company: str | None = None
+    industry: str | None = None
+    level: str | None = None
+    semantic_score: float = Field(..., description="Độ tương đồng ngữ nghĩa từ Vector Store (0-1)")
+    match_score: float | None = Field(default=None, description="Điểm phù hợp CV–JD theo trọng số PRD 5.2 (0-100)")
+    match_label: Literal["low", "medium", "high"] | None = Field(
+        default=None, description="Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75)"
+    )
+    matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
+    partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
+    missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
+    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+
+
+class CareerAdvice(BaseModel):
+    """Lời khuyên tư vấn nghề nghiệp từ AI dựa trên kết quả đối sánh (RAG Generation)."""
+
+    summary: str = Field(..., description="Nhận xét tổng quan về mức độ phù hợp nghề nghiệp")
+    top_position_advice: str = Field(..., description="Lời khuyên chi tiết cho vị trí phù hợp nhất")
+    action_plan: list[str] = Field(default_factory=list, description="Kế hoạch hành động cải thiện kỹ năng còn thiếu")
+
+
+class RecommendJDsRequest(BaseModel):
+    """Yêu cầu gợi ý Top-N JD phù hợp từ CV."""
+
+    cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
+    cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
+    top_n: int = Field(default=3, ge=1, le=10, description="Số lượng JD tối đa cần gợi ý (1–10)")
+    generate_advice: bool = Field(default=True, description="Có gọi LLM sinh lời khuyên nghề nghiệp hay không")
+
+
+class RecommendJDsResponse(BaseModel):
+    """Phản hồi danh sách các JD được gợi ý phù hợp nhất."""
+
+    cv_version_id: str | None = None
+    recommendations: list[JDRecommendationItem]
+    advice: CareerAdvice | None = Field(default=None, description="Lời khuyên tư vấn nghề nghiệp được sinh bởi LLM")
 
 
 class CreateGapAnalysisRequest(BaseModel):

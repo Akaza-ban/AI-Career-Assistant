@@ -5,11 +5,68 @@ from sqlalchemy import select
 
 from src.api.deps import CurrentStudent, CurrentUser, DbSession
 from src.api.errors import AppError
-from src.db.models import GapAnalysis, JobDescription
-from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse, JobDescriptionResponse
+from src.db.models import CvVersion, GapAnalysis, JobDescription
+from src.models.schemas import (
+    CareerAdvice,
+    CreateGapAnalysisRequest,
+    GapAnalysisResponse,
+    JobDescriptionResponse,
+    RecommendJDsRequest,
+    RecommendJDsResponse,
+)
 from src.services import gap_analysis
+from src.services.jd_recommendation import generate_career_advice_with_llm, recommend_top_jds_from_cv
 
 router = APIRouter()
+
+
+@router.post(
+    "/jd/recommend",
+    response_model=RecommendJDsResponse,
+    tags=["Gap Analysis"],
+)
+async def recommend_jds(
+    body: RecommendJDsRequest,
+    user: CurrentStudent,
+    db: DbSession,
+) -> RecommendJDsResponse:
+    """
+    (Task A3) Gợi ý Top-N JD phù hợp nhất với CV đã chọn kèm Matching Score từng JD (Full RAG):
+    - Stage 1: Dense Retrieval tìm ứng viên qua Chroma Vector Store.
+    - Stage 2: ATS Rule Scorer chấm điểm và sắp xếp theo Matching Score (PRD 5.2).
+    - Stage 3: LLM Generation sinh lời khuyên nghề nghiệp và kế hoạch hành động cá nhân hóa.
+    Sinh viên có thể truyền cv_version_id hoặc cv_text trực tiếp.
+    """
+    cv_text = ""
+    if body.cv_version_id:
+        cv = db.get(CvVersion, body.cv_version_id)
+        if cv is None or cv.owner_id != user.id:
+            raise AppError(404, "Không tìm thấy CV.", "cv_not_found")
+        cv_text = cv.content_text
+    elif body.cv_text and body.cv_text.strip():
+        cv_text = body.cv_text
+    else:
+        raise AppError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
+
+    results = recommend_top_jds_from_cv(
+        cv_text=cv_text,
+        db=db,
+        top_n=body.top_n,
+    )
+
+    advice = None
+    if body.generate_advice:
+        advice_data = await generate_career_advice_with_llm(
+            cv_summary=cv_text[:800],
+            recommendations=results,
+        )
+        advice = CareerAdvice(**advice_data)
+
+    return RecommendJDsResponse(
+        cv_version_id=body.cv_version_id,
+        recommendations=results,
+        advice=advice,
+    )
 
 
 @router.get("/jd/library", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
