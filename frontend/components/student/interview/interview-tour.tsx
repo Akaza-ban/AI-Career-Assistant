@@ -245,7 +245,7 @@ function steps(weeklyLimit: number): TourStep[] {
     },
     {
       title: "Chấm điểm theo STAR",
-      body: "Mỗi câu được chấm 4 tiêu chí. Bạn thấy điểm và nhận xét ngắn ngay sau mỗi câu; báo cáo đầy đủ có sau câu cuối.",
+      body: "Mỗi câu được chấm 4 tiêu chí. Như một buổi phỏng vấn thật, điểm không hiện trong lúc trả lời; điểm và nhận xét từng câu có trong báo cáo sau khi bạn hoàn thành đủ các câu.",
       illustration: (
         <div className="grid gap-3">
           <div className="grid grid-cols-4 gap-2">
@@ -276,8 +276,8 @@ function steps(weeklyLimit: number): TourStep[] {
       body: (
         <>
           Mỗi vị trí có <strong className="text-ink">{weeklyLimit} buổi chấm điểm mỗi tuần</strong>; chỉ buổi làm đủ{" "}
-          {QUESTION_COUNT} câu mới tính lượt. Kết thúc sớm hoặc rời phòng giữa chừng thì buổi không được lưu. Sẵn sàng thì
-          bấm <strong className="text-ink">Bắt đầu phỏng vấn</strong>.
+          {QUESTION_COUNT} câu mới tính lượt. Bấm <strong className="text-ink">Bắt đầu phỏng vấn</strong> để vào phòng; đồng
+          hồ chỉ chạy khi bạn đọc luật và bấm <strong className="text-ink">Sẵn sàng</strong>.
         </>
       ),
     },
