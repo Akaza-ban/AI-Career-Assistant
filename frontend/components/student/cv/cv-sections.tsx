@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
+import { HintPopover } from "@/components/common/hint-popover"
 import { Panel } from "@/components/common/panel"
 import { ScoreRing } from "@/components/common/score-ring"
 import { CV_MAX_MB, type UploadState } from "@/components/student/cv/use-cv-upload"
@@ -39,7 +40,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { OPTIMIZER_AVAILABLE } from "@/lib/config"
@@ -493,30 +493,15 @@ const CV_TIPS = [
   "Nội dung CV phải phản ánh đúng kinh nghiệm thật của bạn.",
 ]
 
-/** Mẹo gọn trong một nút ở góc tiêu đề: rê chuột (hoặc bấm, trên màn hình cảm ứng) thì mới hiện, để trang bớt chữ. */
+/** Mẹo gọn trong một nút ở góc tiêu đề trang (rê chuột mới hiện). */
 export function CvTips() {
   return (
-    <Popover>
-      <PopoverTrigger
-        openOnHover
-        delay={150}
-        closeDelay={100}
-        render={<Button variant="ghost" className="h-9 gap-1.5 px-3 text-ink-2 hover:text-ink" />}
-      >
-        <Lightbulb className="text-gold" aria-hidden />
-        Mẹo tối ưu CV
-      </PopoverTrigger>
-      <PopoverContent align="end" sideOffset={6} className="w-80 gap-2 rounded-xl p-4">
-        <p className="font-heading text-sm font-bold text-ink">Mẹo tối ưu CV cho sinh viên</p>
-        <ul className="grid gap-1.5">
-          {CV_TIPS.map((tip) => (
-            <li key={tip} className="flex gap-2 text-[13px] leading-5 text-ink-2">
-              <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-ink-3" />
-              {tip}
-            </li>
-          ))}
-        </ul>
-      </PopoverContent>
-    </Popover>
+    <HintPopover
+      label="Mẹo tối ưu CV"
+      icon={Lightbulb}
+      iconClassName="text-gold"
+      title="Mẹo tối ưu CV cho sinh viên"
+      items={CV_TIPS.map((tip) => ({ content: tip }))}
+    />
   )
 }

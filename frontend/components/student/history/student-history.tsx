@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useCallback, useState } from "react"
-import { AlertCircle, Lock, MessagesSquare, TrendingUp } from "lucide-react"
+import { AlertCircle, MessagesSquare, TrendingUp } from "lucide-react"
 
 import { Panel } from "@/components/common/panel"
 import {
@@ -57,8 +57,8 @@ export function StudentHistory() {
   const noActivity = progress !== undefined && progress.positions.length === 0
 
   return (
-    <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="grid gap-8">
+      <header className="flex flex-wrap items-end justify-between gap-4 py-2">
         <div className="grid max-w-2xl gap-2">
           <p className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
             <Badge variant="violet" className="h-auto px-2.5 py-0.5">
@@ -67,7 +67,7 @@ export function StudentHistory() {
             </Badge>
             {progress?.last_activity_at && <span>Hoạt động gần nhất: {formatWhen(progress.last_activity_at)}</span>}
           </p>
-          <h1 className="font-heading text-[28px] leading-9 font-bold">Lịch sử & Tiến bộ</h1>
+          <h1 className="font-heading text-[32px] leading-10 font-bold">Lịch sử & Tiến bộ</h1>
           <p className="text-sm text-ink-2">
             Theo dõi điểm phỏng vấn STAR và độ khớp CV với từng vị trí qua các lần luyện tập.
           </p>
@@ -115,7 +115,7 @@ export function StudentHistory() {
       ) : noActivity ? (
         <EmptyHistory />
       ) : (
-        <div className={cn("grid gap-6 transition-opacity", stale && "pointer-events-none opacity-60")} aria-busy={stale}>
+        <div className={cn("grid gap-10 transition-opacity", stale && "pointer-events-none opacity-60")} aria-busy={stale}>
           <InterviewProgressSection groups={progress.interview_progress} />
           <CvProgressSection groups={progress.cv_progress} />
           {/* key: về trang 1 khi đổi bộ lọc */}
@@ -124,15 +124,6 @@ export function StudentHistory() {
         </div>
       )}
 
-      <p className="flex flex-wrap items-center justify-between gap-2 rounded-[20px] border border-line bg-card px-5 py-3 text-xs text-ink-2">
-        <span className="flex items-center gap-2">
-          <Lock className="size-4 shrink-0 text-violet" aria-hidden />
-          Cố vấn chỉ xem được báo cáo và CV mà bạn chọn chia sẻ.
-        </span>
-        <Link href="/student/share" className="font-medium text-blue hover:underline">
-          Chia sẻ với cố vấn
-        </Link>
-      </p>
     </div>
   )
 }
@@ -162,7 +153,7 @@ function EmptyHistory() {
 
 function HistorySkeleton() {
   return (
-    <div className="grid gap-6" aria-busy="true" aria-label="Đang tải lịch sử">
+    <div className="grid gap-10" aria-busy="true" aria-label="Đang tải lịch sử">
       <Skeleton className="h-[380px] rounded-[20px]" />
       <Skeleton className="h-[240px] rounded-[20px]" />
       <Skeleton className="h-[360px] rounded-[20px]" />
