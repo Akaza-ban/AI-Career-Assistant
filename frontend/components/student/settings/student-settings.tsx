@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, ShieldCheck } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
 import { Panel } from "@/components/common/panel"
@@ -9,38 +9,33 @@ import { useProfile } from "@/components/shell/profile-context"
 import {
   AccountCard,
   ConsentCard,
-  CvFilesCard,
   NotificationsCard,
   PasswordCard,
+  PersonalDataCard,
   PrivacyCard,
-  ResponsibleAiCard,
   SETTINGS_SECTIONS,
   SettingsNav,
-  StorageCard,
   type SettingsSectionId,
 } from "@/components/student/settings/settings-sections"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
-import type { CvVersion, StudentSettings, UpdateSettingsRequest } from "@/lib/types"
+import type { StudentSettings, UpdateSettingsRequest } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-const sectionClass = "grid scroll-mt-24 gap-6"
+const sectionClass = "grid scroll-mt-24 gap-8"
 
-// Figma: frame "Cài đặt & Quyền riêng tư" (18:7888).
+// Figma: frame "Cài đặt & Quyền riêng tư" (18:7888). Quản lý tệp CV nằm ở trang CV của tôi.
 export function StudentSettingsPage() {
   const profile = useProfile()
   const settingsQuery = useApi(api.getSettings)
-  const cvQuery = useApi(api.listCvVersions)
   const sharingQuery = useApi(api.getSharing)
   // Bản sau lần cập nhật gần nhất; null = dùng dữ liệu vừa tải.
   const [updatedSettings, setSettings] = useState<StudentSettings | null>(null)
-  const [updatedCvs, setCvs] = useState<CvVersion[] | null>(null)
-  const [active, setActive] = useState<SettingsSectionId>("data")
+  const [active, setActive] = useState<SettingsSectionId>("account")
 
   const settings = updatedSettings ?? settingsQuery.data
-  const cvs = updatedCvs ?? cvQuery.data
-  const ready = settings !== undefined && cvs !== undefined
+  const ready = settings !== undefined
 
   // Đánh dấu mục đang xem khi cuộn; mở /student/settings#privacy thì cuộn tới mục đó.
   useEffect(() => {
@@ -84,18 +79,6 @@ export function StudentSettingsPage() {
     }
   }
 
-  async function deleteCv(cv: CvVersion) {
-    try {
-      await api.deleteCv(cv.id)
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Không xoá được tệp CV.")
-      throw err
-    }
-    setCvs((cvs ?? []).filter((c) => c.id !== cv.id))
-    setSettings(await api.getSettings())
-    toast.success(`Đã xoá ${cv.file_name}.`)
-  }
-
   async function withdrawConsent() {
     try {
       setSettings(await api.withdrawConsent())
@@ -113,25 +96,17 @@ export function StudentSettingsPage() {
       toast.error(err instanceof Error ? err.message : "Không xoá được dữ liệu.")
       throw err
     }
-    setCvs([])
     setSettings(await api.getSettings())
     toast.success("Đã xoá toàn bộ dữ liệu của bạn.")
   }
 
-  const error = settingsQuery.error ?? cvQuery.error
-  if (error) {
+  if (settingsQuery.error) {
     return (
       <Panel className="grid justify-items-center gap-3 py-12 text-center">
         <AlertCircle className="size-8 text-bad" aria-hidden />
         <p className="font-heading font-bold">Không tải được cài đặt</p>
-        <p className="text-sm text-ink-2">{error.message}</p>
-        <Button
-          variant="soft"
-          onClick={() => {
-            settingsQuery.reload()
-            cvQuery.reload()
-          }}
-        >
+        <p className="text-sm text-ink-2">{settingsQuery.error.message}</p>
+        <Button variant="soft" onClick={settingsQuery.reload}>
           Thử lại
         </Button>
       </Panel>
@@ -139,36 +114,27 @@ export function StudentSettingsPage() {
   }
 
   return (
-    <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid max-w-3xl gap-2">
-          <h1 className="font-heading text-[28px] leading-9 font-bold">Cài đặt & Quyền riêng tư</h1>
-          <p className="text-sm text-ink-2">
-            Quản lý dữ liệu CV, quyền riêng tư học thuật và các tuỳ chọn thông báo của bạn.
-          </p>
-        </div>
-        <span className="flex items-center gap-2 rounded-2xl bg-blue-soft/60 px-4 py-2.5 text-xs">
-          <ShieldCheck className="size-5 text-blue" aria-hidden />
-          <span className="grid">
-            <strong className="font-heading text-ink">Bạn kiểm soát dữ liệu của mình</strong>
-            <span className="text-ink-2">Mặc định mọi tài liệu đều riêng tư</span>
-          </span>
-        </span>
+    <div className="grid gap-8">
+      <header className="grid gap-2 py-2">
+        <h1 className="font-heading text-[32px] leading-10 font-bold">Cài đặt & Quyền riêng tư</h1>
+        <p className="text-sm text-ink-2">Quản lý tài khoản, quyền riêng tư và các tuỳ chọn thông báo của bạn.</p>
       </header>
 
       {!ready ? (
         <SettingsSkeleton />
       ) : (
-        <div className="grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="grid gap-4 lg:sticky lg:top-24">
+        <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <aside className="lg:sticky lg:top-24">
             <SettingsNav active={active} onSelect={select} />
-            <StorageCard storage={settings.storage} />
-            <ResponsibleAiCard />
           </aside>
 
           <div className="grid min-w-0 gap-8">
-            <section id="data" aria-label="Dữ liệu CV & Phỏng vấn" className={sectionClass}>
-              <CvFilesCard cvs={cvs} onDelete={deleteCv} />
+            <section id="account" aria-label="Tài khoản & Bảo mật" className={sectionClass}>
+              <AccountCard fullName={profile?.full_name ?? ""} settings={settings} />
+              <PasswordCard
+                updatedAt={settings.password_updated_at}
+                onChanged={(at) => setSettings({ ...settings, password_updated_at: at })}
+              />
             </section>
             <section id="privacy" aria-label="Quyền riêng tư & Liêm chính" className={sectionClass}>
               <ConsentCard consentAt={settings.consent_accepted_at} onWithdraw={withdrawConsent} />
@@ -181,12 +147,8 @@ export function StudentSettingsPage() {
             <section id="notifications" aria-label="Thông báo & Lời nhắc" className={sectionClass}>
               <NotificationsCard settings={settings} onChange={patch} />
             </section>
-            <section id="account" aria-label="Tài khoản & Bảo mật" className={sectionClass}>
-              <PasswordCard
-                updatedAt={settings.password_updated_at}
-                onChanged={(at) => setSettings({ ...settings, password_updated_at: at })}
-              />
-              <AccountCard fullName={profile?.full_name ?? ""} settings={settings} onDeleteAll={deleteAll} />
+            <section id="data" aria-label="Dữ liệu cá nhân" className={sectionClass}>
+              <PersonalDataCard storage={settings.storage} onDeleteAll={deleteAll} />
             </section>
           </div>
         </div>
@@ -197,13 +159,10 @@ export function StudentSettingsPage() {
 
 function SettingsSkeleton() {
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px_1fr]" aria-busy="true" aria-label="Đang tải cài đặt">
-      <div className="grid content-start gap-4">
-        <Skeleton className="h-60 rounded-[20px]" />
-        <Skeleton className="h-36 rounded-[20px]" />
-      </div>
-      <div className="grid gap-6">
-        <Skeleton className="h-[420px] rounded-[20px]" />
+    <div className="grid gap-8 lg:grid-cols-[280px_1fr]" aria-busy="true" aria-label="Đang tải cài đặt">
+      <Skeleton className="h-60 rounded-[20px]" />
+      <div className="grid gap-8">
+        <Skeleton className="h-[220px] rounded-[20px]" />
         <Skeleton className="h-[360px] rounded-[20px]" />
       </div>
     </div>
