@@ -7,7 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  Bot,
+  Briefcase,
   CircleCheck,
   Clock,
   FileCheck2,
@@ -20,7 +20,7 @@ import {
 import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
-import { Panel } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { CvDocumentView } from "@/components/student/cv-document-view"
 import { CapabilityCheckCard } from "@/components/student/optimizer/capability-check-card"
 import { SuggestionCard } from "@/components/student/optimizer/suggestion-card"
@@ -110,9 +110,9 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
 
   if (!session) {
     return (
-      <div className="grid gap-6" aria-busy="true" aria-label="Đang tải trình tối ưu">
-        <Skeleton className="h-28 rounded-[20px]" />
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
+      <div className="grid gap-8" aria-busy="true" aria-label="Đang tải trình tối ưu">
+        <Skeleton className="h-24 rounded-[20px]" />
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
           <Skeleton className="h-[720px] rounded-[20px]" />
           <Skeleton className="h-[560px] rounded-[20px]" />
         </div>
@@ -138,12 +138,7 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
   }
 
   return (
-    <div className="grid gap-6">
-      <Link href={analysisHref} className="inline-flex items-center gap-1.5 justify-self-start text-sm font-medium text-blue hover:underline">
-        <ArrowLeft className="size-4" aria-hidden />
-        Quay lại kết quả phân tích
-      </Link>
-
+    <div className="grid gap-8">
       <OptimizerHeader
         session={session}
         reviewed={session.suggestions.length - counts.pending}
@@ -154,44 +149,49 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
 
       {!editable && <FinalizedBanner session={session} exportHref={exportHref} />}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <Panel className="min-w-0">
-          <CvDocumentView
-            doc={preview}
-            renderLine={renderLine}
-            sectionAside={(sectionId) => {
-              const n = session.document.sections
-                .find((sec) => sec.id === sectionId)
-                ?.lines.filter((l) => bySuggestionLine.get(l.id)?.status === "pending").length
-              return n ? <Badge variant="warn">Có {n} đề xuất tối ưu</Badge> : null
-            }}
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_400px]">
+        <section className="grid min-w-0 gap-3">
+          <SectionHeader
+            title="Bản xem trước CV"
+            aside={
+              <span className="hidden text-xs text-ink-2 md:inline">Dòng tô vàng là dòng có gợi ý, bấm để tới gợi ý tương ứng</span>
+            }
           />
-        </Panel>
+          <Panel>
+            <CvDocumentView
+              doc={preview}
+              renderLine={renderLine}
+              sectionAside={(sectionId) => {
+                const n = session.document.sections
+                  .find((sec) => sec.id === sectionId)
+                  ?.lines.filter((l) => bySuggestionLine.get(l.id)?.status === "pending").length
+                return n ? <Badge variant="warn">Có {n} đề xuất tối ưu</Badge> : null
+              }}
+            />
+          </Panel>
+        </section>
 
         <aside className="grid min-w-0 gap-4 lg:sticky lg:top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
-          <Panel className="grid gap-3 p-4">
-            <div className="flex items-center gap-3">
-              <span className="grid size-10 place-items-center rounded-xl bg-violet-soft text-violet">
-                <Bot className="size-5" aria-hidden />
-              </span>
-              <div className="grid">
-                <p className="font-heading font-bold">Cố vấn AI Career Coach</p>
-                <p className="text-xs text-ink-2">
+          <div className="grid gap-2">
+            <SectionHeader
+              title="Gợi ý tối ưu"
+              aside={
+                <span className="text-xs text-ink-2">
                   {!editable
-                    ? "Phiên tối ưu đã hoàn tất"
+                    ? "Đã hoàn tất"
                     : pendingSuggestions.length + pendingChecks.length > 0
                       ? `${pendingSuggestions.length + pendingChecks.length} mục chờ bạn xem`
-                      : "Bạn đã xem hết các mục"}
-                </p>
-              </div>
-            </div>
+                      : "Đã xem hết"}
+                </span>
+              }
+            />
             {/* PRD mục 6.4: giữ nguyên văn */}
-            <p className="flex items-start gap-2 rounded-xl bg-surface p-3 text-xs leading-5 text-ink-2">
+            <p className="flex items-start gap-2 rounded-xl bg-blue-soft/50 px-3 py-2.5 text-xs leading-5 text-ink-2">
               <Info className="mt-0.5 size-3.5 shrink-0 text-blue" aria-hidden />
               Các nội dung do AI đề xuất cần được kiểm tra trước khi sử dụng. Bạn chịu trách nhiệm đảm bảo thông tin phản ánh
               chính xác kinh nghiệm, kỹ năng và thành tích thực tế của mình.
             </p>
-          </Panel>
+          </div>
 
           {session.suggestions.length === 0 && <NoSuggestions session={session} />}
           {session.pending_review_count > 0 && (
@@ -212,9 +212,7 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
           ))}
 
           {session.capability_checks.length > 0 && (
-            <p className="pt-2 text-xs font-semibold tracking-[0.06em] text-ink-3 uppercase">
-              Kỹ năng JD yêu cầu mà CV chưa thể hiện
-            </p>
+            <h3 className="pt-4 font-heading text-base font-bold text-ink">Kỹ năng JD yêu cầu mà CV chưa thể hiện</h3>
           )}
           {pendingChecks.map((c) => (
             <CapabilityCheckCard key={c.id} check={c} editable={editable} onAnswer={(body) => answerCheck(c.id, body)} />
@@ -229,7 +227,7 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
           ))}
 
           {doneSuggestions.length > 0 && (
-            <p className="pt-2 text-xs font-semibold tracking-[0.06em] text-ink-3 uppercase">Gợi ý đã xử lý</p>
+            <h3 className="pt-4 font-heading text-base font-bold text-ink">Gợi ý đã xử lý</h3>
           )}
           {doneSuggestions.map((s) => (
             <SuggestionCard
@@ -278,58 +276,59 @@ function OptimizerHeader({
 }) {
   const label = session.match_label ? MATCH_LABEL_META[session.match_label] : null
   return (
-    <Panel className="flex flex-wrap items-center justify-between gap-4">
-      <div className="grid min-w-0 gap-2">
-        <h1 className="truncate font-heading text-2xl font-bold" title={session.cv.file_name}>
-          {session.cv.file_name}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <Badge variant="neutral" className="h-auto bg-blue-soft px-2.5 py-0.5">
+    <header className="flex flex-wrap items-end justify-between gap-4 py-2">
+      <div className="grid min-w-0 gap-3">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
+          <Badge variant="violet">Trình tối ưu CV</Badge>
+          <Badge variant="neutral" className="bg-blue-soft">
             Phiên bản {session.cv.label}
           </Badge>
-          <span className="text-ink-2">
-            Tối ưu cho: <strong className="font-semibold text-ink">{session.jd.title}</strong>
-            {session.jd.company && ` · ${session.jd.company}`}
+        </div>
+        <h1 className="truncate font-heading text-[32px] leading-10 font-bold" title={session.cv.file_name}>
+          {session.cv.file_name}
+        </h1>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-ink ring-1 ring-line">
+            <Briefcase className="size-3.5 shrink-0 text-blue" aria-hidden />
+            <span>
+              Tối ưu cho: <strong className="font-semibold">{session.jd.title}</strong>
+              {session.jd.company && <span className="text-ink-2"> · {session.jd.company}</span>}
+            </span>
+          </span>
+          {session.match_score !== null && (
+            <span className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-ink ring-1 ring-line">
+              Độ khớp lúc phân tích: <strong className="font-semibold">{formatPercent(session.match_score)}%</strong>
+              {label && <Badge variant={label.badge}>{label.text}</Badge>}
+            </span>
+          )}
+          {session.suggestions.length > 0 && (
+            <span className="flex items-center rounded-lg bg-card px-2.5 py-1.5 text-ink-2 ring-1 ring-line">
+              Đã xem&nbsp;<strong className="font-semibold text-ink">{reviewed}/{session.suggestions.length}</strong>&nbsp;gợi ý
+            </span>
+          )}
+          <span className="flex items-center gap-1.5 rounded-lg bg-blue-soft px-2.5 py-1.5 font-medium text-blue">
+            <ShieldCheck className="size-3.5" aria-hidden />
+            Không bịa kinh nghiệm
           </span>
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
-        {session.match_score !== null && (
-          <span className="grid rounded-xl bg-surface px-3 py-2 text-xs">
-            <span className="text-ink-2">Độ khớp với JD lúc phân tích</span>
-            <span className="flex items-center gap-1.5">
-              <strong className="font-heading text-base text-ink">{formatPercent(session.match_score)}%</strong>
-              {label && <Badge variant={label.badge}>{label.text}</Badge>}
-            </span>
-          </span>
-        )}
-        <span className="flex items-center gap-1.5 rounded-xl bg-blue-soft px-3 py-2 text-xs font-medium text-blue">
-          <ShieldCheck className="size-4" aria-hidden />
-          Không bịa kinh nghiệm
-        </span>
-        {session.suggestions.length > 0 && (
-          <span className="rounded-xl bg-surface px-3 py-2 text-xs text-ink-2">
-            Đã xem <strong className="text-ink">{reviewed}/{session.suggestions.length}</strong> gợi ý
-          </span>
-        )}
-        {session.status === "draft" ? (
-          <span className="grid justify-items-end gap-1">
-            <Button size="brand" onClick={onFinalize} disabled={changeCount === 0}>
-              <FileCheck2 aria-hidden />
-              Hoàn tất & tạo phiên bản mới
-            </Button>
-            {changeCount === 0 && (
-              <span className="text-[11px] text-ink-3">Áp dụng ít nhất một gợi ý hoặc ghi kỹ năng đang học</span>
-            )}
-          </span>
-        ) : (
-          <Button size="brand" nativeButton={false} render={<Link href={exportHref} />}>
-            Xem & xuất CV
-            <ArrowRight aria-hidden />
+      {session.status === "draft" ? (
+        <span className="grid justify-items-end gap-1">
+          <Button size="brand" onClick={onFinalize} disabled={changeCount === 0}>
+            <FileCheck2 aria-hidden />
+            Hoàn tất & tạo phiên bản mới
           </Button>
-        )}
-      </div>
-    </Panel>
+          {changeCount === 0 && (
+            <span className="text-[11px] text-ink-3">Áp dụng ít nhất một gợi ý hoặc ghi kỹ năng đang học</span>
+          )}
+        </span>
+      ) : (
+        <Button size="brand" nativeButton={false} render={<Link href={exportHref} />}>
+          Xem & xuất CV
+          <ArrowRight aria-hidden />
+        </Button>
+      )}
+    </header>
   )
 }
 

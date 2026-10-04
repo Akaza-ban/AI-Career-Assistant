@@ -5,16 +5,11 @@ import {
   Activity,
   AlertCircle,
   ArrowRight,
-  Award,
   BadgeCheck,
   BarChart3,
   CheckCheck,
   Clock,
-  Flag,
-  LineChart,
   MessageSquareText,
-  PieChart,
-  Radar,
   Star,
   TrendingDown,
   TrendingUp,
@@ -25,7 +20,7 @@ import type { ReactNode } from "react"
 
 import { StarAverageBars } from "@/components/advisor/progress-blocks"
 import { FlagDetail, STATUS_META, ScoreDelta } from "@/components/advisor/student-status"
-import { Panel, PanelHeader } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { ScoreLineChart, type ScorePoint } from "@/components/common/score-line-chart"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
@@ -59,6 +54,7 @@ const percent = (part: number, total: number) => (total ? Math.round((part / tot
 
 // Tổng quan cả nhóm SV phụ trách (gộp "Theo dõi tiến bộ"). PRD US-ADV-01, US-ADV-02, KPI mục 9.
 // Chỉ dùng số liệu tổng hợp; nội dung từng tài liệu vẫn cần SV chia sẻ.
+// Cùng kiểu trang Tổng quan của sinh viên: lời chào đặt thẳng trên nền, tiêu đề mục nằm ngoài ô.
 export function AdvisorOverview() {
   const { data, error, reload } = useApi(api.getAdvisorOverview)
 
@@ -78,14 +74,14 @@ export function AdvisorOverview() {
 
   const flaggedCount = data.status_counts.flagged
   return (
-    <div className="grid gap-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="grid max-w-2xl gap-2">
-          <h1 className="font-heading text-[28px] leading-9 font-bold">
+    <div className="grid gap-10">
+      <header className="flex flex-wrap items-center justify-between gap-4 py-4 sm:py-6">
+        <div className="grid max-w-3xl gap-1.5">
+          <h1 className="font-heading text-[32px] leading-10 font-bold">
             {greeting(new Date())}, {callName(data.advisor_name)}!
           </h1>
           {data.student_count > 0 ? (
-            <p className="text-sm leading-6 text-ink-2">
+            <p className="text-base leading-7 text-ink-2">
               Hôm nay có{" "}
               <Link href="/advisor/students?status=pending" className="font-semibold text-blue hover:underline">
                 {data.pending_reviews} báo cáo chờ nhận xét
@@ -97,7 +93,7 @@ export function AdvisorOverview() {
               trong tổng số {data.student_count} sinh viên phụ trách.
             </p>
           ) : (
-            <p className="text-sm leading-6 text-ink-2">Bạn chưa được phân công sinh viên nào.</p>
+            <p className="text-base text-ink-2">Bạn chưa được phân công sinh viên nào.</p>
           )}
         </div>
         {data.pending_reviews > 0 && (
@@ -127,39 +123,62 @@ export function AdvisorOverview() {
 function OverviewBody({ data }: { data: Overview }) {
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         <StudentsCard data={data} />
         <ActiveCard data={data} />
         <ScoreCard data={data} />
         <CsatCard data={data} />
       </div>
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <WeeklyScores data={data} />
         <FlaggedStudents students={data.flagged_students} />
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-10 lg:grid-cols-2">
         <StatusDistribution data={data} />
-        <Panel className="grid gap-4">
-          <PanelHeader icon={Radar} title="Tiêu chí STAR của cả nhóm" />
-          <StarAverageBars
-            star={data.star}
-            insight={data.insight}
-            caption={
-              data.star
-                ? `Trung bình của ${data.star.student_count} sinh viên (mỗi người tối đa 5 buổi gần nhất), thang 0–5`
-                : undefined
-            }
-          />
-        </Panel>
+        <Section
+          title="Tiêu chí STAR của cả nhóm"
+          caption={
+            data.star
+              ? `Trung bình của ${data.star.student_count} sinh viên (mỗi người tối đa 5 buổi gần nhất), thang 0–5.`
+              : undefined
+          }
+        >
+          <Panel className="flex-1">
+            <StarAverageBars star={data.star} insight={data.insight} caption={null} />
+          </Panel>
+        </Section>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-2">
+      <div className="grid gap-x-8 gap-y-10 lg:grid-cols-2">
         <TopImprovers students={data.top_improvers} />
         <RecentReviews items={data.recent_reviews} />
       </div>
     </>
+  )
+}
+
+/** Một mục: tiêu đề (và chú thích) đặt ngoài ô. Ô biểu đồ giãn đều chiều cao với mục cùng hàng; ô danh sách theo nội dung. */
+function Section({
+  title,
+  aside,
+  caption,
+  children,
+}: {
+  title: ReactNode
+  aside?: ReactNode
+  caption?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="flex min-w-0 flex-col gap-3">
+      <div className="grid gap-1">
+        <SectionHeader title={title} aside={aside} />
+        {caption && <p className="text-xs text-ink-2">{caption}</p>}
+      </div>
+      {children}
+    </section>
   )
 }
 
@@ -179,20 +198,20 @@ function StatCard({
   footer: ReactNode
 }) {
   return (
-    <Panel className="flex flex-col justify-between gap-4 p-5">
+    <Panel className="flex flex-col justify-between gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-semibold tracking-wide text-ink-2 uppercase">{label}</p>
-        <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", iconClass)}>
-          <Icon className="size-5" aria-hidden />
+        <p className="text-sm font-medium text-ink-2">{label}</p>
+        <span className={cn("grid size-9 shrink-0 place-items-center rounded-lg", iconClass)}>
+          <Icon className="size-[18px]" aria-hidden />
         </span>
       </div>
-      <p className="flex items-baseline gap-1">{children}</p>
+      <p className="flex items-baseline gap-1.5">{children}</p>
       <div className="grid gap-1.5 text-xs text-ink-2">{footer}</div>
     </Panel>
   )
 }
 
-const BIG = "font-heading text-[36px] leading-none font-bold"
+const BIG = "font-heading text-[32px] leading-9 font-bold tracking-[-0.025em] text-ink"
 
 function Target({ met, children }: { met: boolean; children: ReactNode }) {
   return (
@@ -218,7 +237,7 @@ function StudentsCard({ data }: { data: Overview }) {
       }
     >
       <span className={BIG}>{data.student_count}</span>
-      <span className="text-sm text-ink-2">sinh viên</span>
+      <span className="text-[13px] text-ink-2">sinh viên</span>
     </StatCard>
   )
 }
@@ -245,7 +264,7 @@ function ActiveCard({ data }: { data: Overview }) {
       }
     >
       <span className={BIG}>{rate}%</span>
-      <span className="text-sm text-ink-2">
+      <span className="text-[13px] text-ink-2">
         ({data.active_count}/{data.student_count} SV)
       </span>
     </StatCard>
@@ -276,7 +295,7 @@ function ScoreCard({ data }: { data: Overview }) {
       }
     >
       <span className={BIG}>{data.average_score !== null ? formatScore(data.average_score) : "—"}</span>
-      <span className="text-sm text-ink-2">/5</span>
+      <span className="text-[13px] text-ink-2">/5</span>
     </StatCard>
   )
 }
@@ -299,7 +318,7 @@ function CsatCard({ data }: { data: Overview }) {
       }
     >
       <span className={BIG}>{data.csat !== null ? formatScore(data.csat) : "—"}</span>
-      <span className="text-sm text-ink-2">/5</span>
+      <span className="text-[13px] text-ink-2">/5</span>
     </StatCard>
   )
 }
@@ -314,70 +333,74 @@ function WeeklyScores({ data }: { data: Overview }) {
     detail: `${i === last ? "Tuần này" : `Tuần từ ${formatDate(w.week_start).slice(0, 5)}`} · ${w.student_count} sinh viên có điểm`,
   }))
   return (
-    <Panel className="grid gap-4">
-      <PanelHeader icon={LineChart} title="Điểm phỏng vấn trung bình theo tuần" />
-      <p className="-mt-2 text-xs text-ink-2">Mỗi sinh viên lấy điểm buổi gần nhất tính đến cuối tuần, thang 0–5.</p>
-      {points.length > 0 ? (
-        <ScoreLineChart points={points} max={5} unit="điểm TB" sparseTicksOnMobile className="h-60" />
-      ) : (
-        <p className="rounded-xl bg-surface p-6 text-center text-sm text-ink-2">Chưa có buổi phỏng vấn nào được chấm.</p>
-      )}
-    </Panel>
+    <Section
+      title="Điểm phỏng vấn trung bình theo tuần"
+      caption="Mỗi sinh viên lấy điểm buổi gần nhất tính đến cuối tuần, thang 0–5."
+    >
+      <Panel className="flex-1">
+        {points.length > 0 ? (
+          <ScoreLineChart points={points} max={5} unit="điểm TB" sparseTicksOnMobile className="h-60" />
+        ) : (
+          <p className="py-10 text-center text-sm text-ink-2">Chưa có buổi phỏng vấn nào được chấm.</p>
+        )}
+      </Panel>
+    </Section>
   )
 }
 
 function FlaggedStudents({ students }: { students: AssignedStudent[] }) {
   return (
-    <Panel className="grid gap-4">
-      <PanelHeader
-        icon={Flag}
-        title="Sinh viên cần chú ý"
-        aside={
-          <Badge variant={students.length ? "bad" : "neutral"} className="h-auto px-2 py-0.5">
-            {students.length} sinh viên
-          </Badge>
-        }
-      />
-      <p className="-mt-2 text-xs text-ink-2">
-        Tự động gắn cờ khi 2 vòng liên tiếp không tăng điểm ở vị trí đang luyện; tự gỡ khi có buổi cao hơn buổi liền trước.
-      </p>
-      {students.length === 0 ? (
-        <p className="flex items-center gap-2 rounded-xl bg-good-soft/60 p-4 text-sm text-good">
-          <BadgeCheck className="size-4" aria-hidden />
-          Không có sinh viên nào cần chú ý.
-        </p>
-      ) : (
-        <ul className="@container grid gap-2">
-          {students.slice(0, FLAGGED_LIMIT).map((s) => (
-            <li key={s.id}>
-              <Link
-                href={`/advisor/students/${encodeURIComponent(s.id)}`}
-                className="flex items-center gap-3 rounded-xl bg-bad-soft/40 p-3 transition-colors hover:bg-bad-soft/70"
-              >
-                <UserAvatar name={s.full_name} src={s.avatar_url} className="size-9" />
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate font-heading text-sm font-bold text-ink">{s.full_name}</span>
-                  {s.flag && <span className="truncate text-xs text-ink-2">{s.flag.jd.title}</span>}
-                  <FlagDetail student={s} />
-                  <span className="@md:hidden">
+    <Section
+      title="Sinh viên cần chú ý"
+      aside={
+        <Badge variant={students.length ? "bad" : "neutral"} className="h-auto px-2 py-0.5">
+          {students.length} sinh viên
+        </Badge>
+      }
+      caption="Tự động gắn cờ khi 2 vòng liên tiếp không tăng điểm ở vị trí đang luyện; tự gỡ khi có buổi cao hơn buổi liền trước."
+    >
+      <Panel className="flex flex-col overflow-hidden p-0">
+        {students.length === 0 ? (
+          <p className="flex items-center gap-2 p-5 text-sm text-good">
+            <BadgeCheck className="size-4" aria-hidden />
+            Không có sinh viên nào cần chú ý.
+          </p>
+        ) : (
+          <ul className="@container divide-y divide-line">
+            {students.slice(0, FLAGGED_LIMIT).map((s) => (
+              <li key={s.id}>
+                <Link
+                  href={`/advisor/students/${encodeURIComponent(s.id)}`}
+                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-bad-soft/30"
+                >
+                  <UserAvatar name={s.full_name} src={s.avatar_url} className="size-9" />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="truncate font-heading text-sm font-bold text-ink">{s.full_name}</span>
+                    {s.flag && <span className="truncate text-xs text-ink-2">{s.flag.jd.title}</span>}
+                    <FlagDetail student={s} />
+                    <span className="@md:hidden">
+                      <ScoreDelta student={s} />
+                    </span>
+                  </span>
+                  <span className="@max-md:hidden">
                     <ScoreDelta student={s} />
                   </span>
-                </span>
-                <span className="@max-md:hidden">
-                  <ScoreDelta student={s} />
-                </span>
-                <ArrowRight className="size-4 shrink-0 text-ink-3" aria-hidden />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {students.length > FLAGGED_LIMIT && (
-        <Link href="/advisor/students?status=flagged" className="justify-self-start text-sm font-medium text-blue hover:underline">
-          Xem cả {students.length} sinh viên
-        </Link>
-      )}
-    </Panel>
+                  <ArrowRight className="size-4 shrink-0 text-ink-3" aria-hidden />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {students.length > FLAGGED_LIMIT && (
+          <Link
+            href="/advisor/students?status=flagged"
+            className="border-t border-line px-5 py-3 text-sm font-medium text-blue hover:underline"
+          >
+            Xem cả {students.length} sinh viên
+          </Link>
+        )}
+      </Panel>
+    </Section>
   )
 }
 
@@ -392,153 +415,159 @@ const STATUS_ROWS: { key: StudentStatus; note: string; bar: string }[] = [
 function StatusDistribution({ data }: { data: Overview }) {
   const total = data.student_count
   return (
-    <Panel className="grid gap-4">
-      <PanelHeader icon={PieChart} title="Phân bố mức tiến bộ" />
-      <p className="-mt-2 text-xs text-ink-2">Điểm buổi gần nhất so với buổi đầu ở vị trí sinh viên đang luyện.</p>
-      <div
-        className="flex h-3 overflow-hidden rounded-full bg-surface"
-        role="img"
-        aria-label={STATUS_ROWS.map((r) => `${STATUS_META[r.key].label} ${data.status_counts[r.key]}`).join(", ")}
-      >
-        {STATUS_ROWS.map((r) => (
-          <div key={r.key} className={r.bar} style={{ width: `${percent(data.status_counts[r.key], total)}%` }} />
-        ))}
-      </div>
-      <ul className="grid gap-1">
-        {STATUS_ROWS.map((r) => {
-          const meta = STATUS_META[r.key]
-          const Icon = meta.icon
-          const count = data.status_counts[r.key]
-          return (
-            <li key={r.key}>
-              <Link
-                href={`/advisor/students?status=${r.key}`}
-                className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface"
-              >
-                <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", meta.className)}>
-                  <Icon className="size-4" aria-hidden />
-                </span>
-                <span className="grid min-w-0 flex-1">
-                  <span className="text-sm font-medium text-ink">{meta.label}</span>
-                  <span className="text-xs text-ink-2">{r.note}</span>
-                </span>
-                <span className="text-right text-sm whitespace-nowrap text-ink-2">
-                  <strong className="font-heading text-base text-ink">{count}</strong> SV ({percent(count, total)}%)
-                </span>
-              </Link>
-            </li>
-          )
-        })}
-      </ul>
-    </Panel>
+    <Section title="Phân bố mức tiến bộ" caption="Điểm buổi gần nhất so với buổi đầu ở vị trí sinh viên đang luyện.">
+      <Panel className="grid flex-1 content-start gap-4">
+        <div
+          className="flex h-3 overflow-hidden rounded-full bg-surface"
+          role="img"
+          aria-label={STATUS_ROWS.map((r) => `${STATUS_META[r.key].label} ${data.status_counts[r.key]}`).join(", ")}
+        >
+          {STATUS_ROWS.map((r) => (
+            <div key={r.key} className={r.bar} style={{ width: `${percent(data.status_counts[r.key], total)}%` }} />
+          ))}
+        </div>
+        <ul className="-mx-2 grid gap-1">
+          {STATUS_ROWS.map((r) => {
+            const meta = STATUS_META[r.key]
+            const Icon = meta.icon
+            const count = data.status_counts[r.key]
+            return (
+              <li key={r.key}>
+                <Link
+                  href={`/advisor/students?status=${r.key}`}
+                  className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface"
+                >
+                  <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", meta.className)}>
+                    <Icon className="size-4" aria-hidden />
+                  </span>
+                  <span className="grid min-w-0 flex-1">
+                    <span className="text-sm font-medium text-ink">{meta.label}</span>
+                    <span className="text-xs text-ink-2">{r.note}</span>
+                  </span>
+                  <span className="text-right text-sm whitespace-nowrap text-ink-2">
+                    <strong className="font-heading text-base text-ink">{count}</strong> SV ({percent(count, total)}%)
+                  </span>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </Panel>
+    </Section>
   )
 }
 
 function TopImprovers({ students }: { students: AssignedStudent[] }) {
   return (
-    <Panel className="grid gap-4">
-      <PanelHeader icon={Award} title="Tiến bộ nhiều nhất" aside={<span className="text-xs text-ink-2">Buổi đầu → gần nhất</span>} />
-      {students.length === 0 ? (
-        <p className="rounded-xl bg-surface p-4 text-center text-sm text-ink-2">
-          Chưa có sinh viên nào tăng điểm so với buổi đầu.
-        </p>
-      ) : (
-        <ol className="@container grid gap-2">
-          {students.map((s, i) => (
-            <li key={s.id}>
-              <Link
-                href={`/advisor/students/${encodeURIComponent(s.id)}`}
-                className="flex items-center gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-good-soft/50"
-              >
-                <span className="w-4 shrink-0 text-center font-heading text-sm font-bold text-ink-3">{i + 1}</span>
-                <UserAvatar name={s.full_name} src={s.avatar_url} className="size-9" />
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="truncate font-heading text-sm font-bold text-ink">{s.full_name}</span>
-                  <span className="truncate text-xs text-ink-2">
-                    {s.target?.title} · {s.focus_session_count} buổi
+    <Section title="Tiến bộ nhiều nhất" aside={<span className="text-xs text-ink-2">Buổi đầu → gần nhất</span>}>
+      <Panel className="overflow-hidden p-0">
+        {students.length === 0 ? (
+          <p className="p-5 text-center text-sm text-ink-2">Chưa có sinh viên nào tăng điểm so với buổi đầu.</p>
+        ) : (
+          <ol className="@container divide-y divide-line">
+            {students.map((s, i) => (
+              <li key={s.id}>
+                <Link
+                  href={`/advisor/students/${encodeURIComponent(s.id)}`}
+                  className="flex items-center gap-3 px-5 py-3.5 transition-colors hover:bg-surface"
+                >
+                  <span className="w-4 shrink-0 text-center font-heading text-sm font-bold text-ink-3">{i + 1}</span>
+                  <UserAvatar name={s.full_name} src={s.avatar_url} className="size-9" />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="truncate font-heading text-sm font-bold text-ink">{s.full_name}</span>
+                    <span className="truncate text-xs text-ink-2">
+                      {s.target?.title} · {s.focus_session_count} buổi
+                    </span>
+                    <span className="@md:hidden">
+                      <ScoreDelta student={s} />
+                    </span>
                   </span>
-                  <span className="@md:hidden">
+                  <span className="@max-md:hidden">
                     <ScoreDelta student={s} />
                   </span>
-                </span>
-                <span className="@max-md:hidden">
-                  <ScoreDelta student={s} />
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ol>
-      )}
-    </Panel>
+                </Link>
+              </li>
+            ))}
+          </ol>
+        )}
+      </Panel>
+    </Section>
   )
 }
 
 function RecentReviews({ items }: { items: RecentReview[] }) {
   const seen = items.filter((r) => r.seen_at).length
   return (
-    <Panel className="grid gap-4">
-      <PanelHeader icon={MessageSquareText} title="Nhận xét đã gửi gần đây" />
-      {items.length === 0 ? (
-        <p className="rounded-xl bg-surface p-4 text-center text-sm text-ink-2">
-          Bạn chưa gửi nhận xét nào. Nhận xét viết cho các báo cáo sinh viên đã chia sẻ.
-        </p>
-      ) : (
-        <ul className="grid gap-2">
-          {items.map((r) => (
-            <li key={r.id}>
-              <Link
-                href={`/advisor/students/${encodeURIComponent(r.student_id)}`}
-                className="flex gap-3 rounded-xl bg-surface p-3 transition-colors hover:bg-blue-soft/50"
-              >
-                <UserAvatar name={r.student_name} src={r.avatar_url} className="size-9" />
-                <span className="grid min-w-0 flex-1 gap-0.5">
-                  <span className="flex flex-wrap items-center justify-between gap-x-2">
-                    <span className="font-heading text-sm font-bold text-ink">{r.student_name}</span>
-                    {r.seen_at ? (
-                      <span className="flex items-center gap-1 text-xs text-good">
-                        <CheckCheck className="size-3.5" aria-hidden />
-                        Đã xem {formatRelativeTime(r.seen_at).toLowerCase()}
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-xs text-ink-2">
-                        <Clock className="size-3.5" aria-hidden />
-                        Chưa xem
-                      </span>
-                    )}
+    <Section
+      title="Nhận xét đã gửi gần đây"
+      // aside={
+      //   items.length > 0 && (
+      //     <span className="text-xs text-ink-2">
+      //       Sinh viên đã xem{" "}
+      //       <strong className="text-ink">
+      //         {seen}/{items.length}
+      //       </strong>
+      //     </span>
+      //   )
+      // }
+    >
+      <Panel className="overflow-hidden p-0">
+        {items.length === 0 ? (
+          <p className="p-5 text-center text-sm text-ink-2">
+            Bạn chưa gửi nhận xét nào. Nhận xét viết cho các báo cáo sinh viên đã chia sẻ.
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {items.map((r) => (
+              <li key={r.id}>
+                <Link
+                  href={`/advisor/students/${encodeURIComponent(r.student_id)}`}
+                  className="flex gap-3 px-5 py-3.5 transition-colors hover:bg-surface"
+                >
+                  <UserAvatar name={r.student_name} src={r.avatar_url} className="size-9" />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="flex flex-wrap items-center justify-between gap-x-2">
+                      <span className="font-heading text-sm font-bold text-ink">{r.student_name}</span>
+                      {r.seen_at ? (
+                        <span className="flex items-center gap-1 text-xs text-good">
+                          <CheckCheck className="size-3.5" aria-hidden />
+                          Đã xem {formatRelativeTime(r.seen_at).toLowerCase()}
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 text-xs text-ink-2">
+                          <Clock className="size-3.5" aria-hidden />
+                          Chưa xem
+                        </span>
+                      )}
+                    </span>
+                    <span className="truncate text-xs text-ink-2">
+                      {r.jd.title} · gửi {formatRelativeTime(r.updated_at).toLowerCase()}
+                    </span>
+                    <span className="line-clamp-2 text-sm text-ink">“{r.comment}”</span>
                   </span>
-                  <span className="truncate text-xs text-ink-2">
-                    {r.jd.title} · gửi {formatRelativeTime(r.updated_at).toLowerCase()}
-                  </span>
-                  <span className="line-clamp-2 text-sm text-ink">“{r.comment}”</span>
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      {items.length > 0 && (
-        <p className="border-t border-line pt-3 text-xs text-ink-2">
-          Sinh viên đã xem{" "}
-          <strong className="text-ink">
-            {seen}/{items.length}
-          </strong>{" "}
-          nhận xét gần đây.
-        </p>
-      )}
-    </Panel>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </Section>
   )
 }
 
 function OverviewSkeleton() {
   return (
-    <div className="grid gap-6" aria-busy="true" aria-label="Đang tải tổng quan">
-      <Skeleton className="h-20 rounded-[20px]" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-10" aria-busy="true" aria-label="Đang tải tổng quan">
+      <div className="grid gap-2.5 py-4 sm:py-6">
+        <Skeleton className="h-10 w-80 max-w-full" />
+        <Skeleton className="h-5 w-[520px] max-w-full" />
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-40 rounded-[20px]" />
+          <Skeleton key={i} className="h-[140px] rounded-[20px]" />
         ))}
       </div>
-      <div className="grid gap-6 xl:grid-cols-[3fr_2fr]">
+      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-[3fr_2fr]">
         <Skeleton className="h-80 rounded-[20px]" />
         <Skeleton className="h-80 rounded-[20px]" />
       </div>

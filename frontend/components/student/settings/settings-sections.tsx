@@ -5,21 +5,15 @@ import { useId, useState, type FormEvent, type ReactNode } from "react"
 import {
   BadgeCheck,
   Bell,
+  Check,
   CircleAlert,
   CircleX,
-  CloudUpload,
+  Database,
   Download,
-  Check,
   Eye,
   EyeOff,
-  FileText,
-  KeyRound,
   Loader2,
-  FolderOpen,
-  FolderDown,
   ShieldCheck,
-  SlidersHorizontal,
-  Sparkles,
   Trash2,
   TriangleAlert,
   UserRound,
@@ -28,7 +22,7 @@ import {
 import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
-import { Panel } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -42,47 +36,40 @@ import {
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { api, ApiError } from "@/lib/api"
-import { downloadCv } from "@/lib/download"
 import { features } from "@/lib/features"
 import { formatBytes, formatDate, formatRelativeTime, formatTime } from "@/lib/format"
 import { isStrongPassword, PASSWORD_RULES } from "@/lib/password"
-import type { CvVersion, StudentSettings } from "@/lib/types"
+import type { StudentSettings } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 // ---------- Khung chung ----------
 
 export const SETTINGS_SECTIONS = [
-  { id: "data", label: "Dữ liệu CV & Phỏng vấn", icon: FileText },
+  { id: "account", label: "Tài khoản & Bảo mật", icon: UserRound },
   { id: "privacy", label: "Quyền riêng tư & Liêm chính", icon: ShieldCheck },
   { id: "notifications", label: "Thông báo & Lời nhắc", icon: Bell },
-  { id: "account", label: "Tài khoản & Bảo mật", icon: UserRound },
+  { id: "data", label: "Dữ liệu cá nhân", icon: Database },
 ] as const satisfies readonly { id: string; label: string; icon: LucideIcon }[]
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]["id"]
 
-function SectionHeader({
-  icon: Icon,
+/** Một khối cài đặt: tiêu đề và mô tả nằm ngoài ô, ô chỉ chứa nội dung (cùng kiểu các trang khác). */
+function SettingsBlock({
   title,
   description,
-  aside,
-  iconClass = "text-blue",
+  children,
 }: {
-  icon: LucideIcon
   title: string
-  description: string
-  aside?: ReactNode
-  iconClass?: string
+  description: ReactNode
+  children: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="grid gap-3">
       <div className="grid gap-1">
-        <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-          <Icon className={cn("size-5", iconClass)} aria-hidden />
-          {title}
-        </h2>
-        <p className="text-sm text-ink-2">{description}</p>
+        <SectionHeader title={title} />
+        <p className="text-xs text-ink-2">{description}</p>
       </div>
-      {aside}
+      {children}
     </div>
   )
 }
@@ -96,7 +83,7 @@ function SoonBadge() {
   )
 }
 
-// ---------- Cột trái: mục lục, dung lượng, AI có trách nhiệm ----------
+// ---------- Mục lục ----------
 
 export function SettingsNav({ active, onSelect }: { active: SettingsSectionId; onSelect: (id: SettingsSectionId) => void }) {
   return (
@@ -131,182 +118,6 @@ export function SettingsNav({ active, onSelect }: { active: SettingsSectionId; o
   )
 }
 
-export function StorageCard({ storage }: { storage: StudentSettings["storage"] }) {
-  const percent = Math.min(100, Math.round((storage.used_bytes / storage.limit_bytes) * 100))
-  return (
-    <Panel className="grid gap-3 p-5">
-      <p className="flex items-center justify-between gap-2 text-sm font-semibold">
-        <span className="flex items-center gap-2">
-          <CloudUpload className="size-4 text-blue" aria-hidden />
-          Dung lượng lưu trữ
-        </span>
-        <span className="text-blue">{percent}%</span>
-      </p>
-      <div
-        className="h-2 overflow-hidden rounded-full bg-surface"
-        role="progressbar"
-        aria-valuenow={percent}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label="Dung lượng đã dùng"
-      >
-        <div className="h-full rounded-full bg-blue" style={{ width: `${Math.max(percent, 2)}%` }} />
-      </div>
-      <p className="text-xs text-ink-2">
-        Đã dùng {formatBytes(storage.used_bytes)} / {formatBytes(storage.limit_bytes)}
-      </p>
-      <p className="text-xs text-ink-3">Dung lượng do {storage.allocated_by} cấp.</p>
-    </Panel>
-  )
-}
-
-export function ResponsibleAiCard() {
-  return (
-    <div className="grid gap-2 rounded-[20px] bg-violet-soft/60 p-5 text-sm">
-      <p className="flex items-center gap-2 font-heading font-bold text-violet">
-        <Sparkles className="size-4" aria-hidden />
-        AI có trách nhiệm
-      </p>
-      <p className="leading-6 text-ink">
-        CV và câu trả lời phỏng vấn của bạn chỉ dùng để tạo phân tích cho chính bạn. Dữ liệu định danh không được dùng
-        để huấn luyện mô hình bên ngoài phạm vi nhà trường.
-      </p>
-    </div>
-  )
-}
-
-// ---------- Dữ liệu CV ----------
-
-function cvTag(cv: CvVersion) {
-  if (cv.is_active) return <Badge variant="blue">CV đang dùng</Badge>
-  if (cv.is_draft) return <Badge variant="violet">Bản nháp</Badge>
-  return <Badge variant="neutral">Bản lưu {cv.label}</Badge>
-}
-
-interface CvFilesCardProps {
-  cvs: CvVersion[]
-  onDelete: (cv: CvVersion) => Promise<void>
-}
-
-export function CvFilesCard({ cvs, onDelete }: CvFilesCardProps) {
-  const [deleting, setDeleting] = useState<CvVersion | null>(null)
-  const [exporting, setExporting] = useState(false)
-
-  async function exportAll() {
-    setExporting(true)
-    try {
-      const { download_url } = await api.requestDataExport()
-      if (download_url) window.open(download_url, "_blank", "noopener")
-      else toast.success("Đã tạo gói dữ liệu. Bản demo không có file thật để tải.")
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Không tạo được gói dữ liệu.")
-    } finally {
-      setExporting(false)
-    }
-  }
-
-  return (
-    <Panel className="grid gap-5">
-      <SectionHeader
-        icon={FolderOpen}
-        title="Quản lý tệp CV đã tải lên"
-        description="Các tệp dùng để phân tích độ khớp với JD và tạo câu hỏi phỏng vấn STAR."
-        aside={
-          <Badge variant="blue" className="h-auto px-2.5 py-1">
-            {cvs.length} tệp
-          </Badge>
-        }
-      />
-
-      {cvs.length === 0 ? (
-        <p className="rounded-2xl bg-surface p-6 text-center text-sm text-ink-2">Bạn chưa tải lên CV nào.</p>
-      ) : (
-        <ul className="grid gap-3">
-          {cvs.map((cv) => (
-            <li key={cv.id} className="flex flex-wrap items-center gap-4 rounded-2xl bg-surface p-4">
-              <span
-                className={cn(
-                  "grid size-11 shrink-0 place-items-center rounded-xl text-[10px] font-bold uppercase",
-                  cv.is_active ? "bg-blue-soft text-blue" : "bg-card text-ink-2",
-                )}
-                aria-hidden
-              >
-                {cv.file_type}
-              </span>
-              <div className="grid min-w-0 flex-1 gap-1">
-                <p className="flex min-w-0 flex-wrap items-center gap-2">
-                  <span className="truncate font-heading font-bold text-ink">{cv.file_name}</span>
-                  {cvTag(cv)}
-                </p>
-                <p className="flex flex-wrap items-center gap-x-2 text-xs text-ink-2">
-                  <span>{formatBytes(cv.size_bytes)}</span>
-                  <span aria-hidden>•</span>
-                  <span>Tải lên {formatDate(cv.uploaded_at)}</span>
-                  <span aria-hidden>•</span>
-                  {cv.match_score !== null ? (
-                    <span className="flex items-center gap-1 font-medium text-good">
-                      <BadgeCheck className="size-3.5" aria-hidden />
-                      Độ khớp JD {cv.match_score}%
-                    </span>
-                  ) : (
-                    <span>Chưa phân tích</span>
-                  )}
-                </p>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" className="h-9 bg-card" onClick={() => downloadCv(cv)}>
-                  <Download aria-hidden />
-                  Tải về
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 text-ink-2 hover:bg-bad-soft hover:text-bad"
-                  aria-label={`Xoá ${cv.file_name}`}
-                  onClick={() => setDeleting(cv)}
-                >
-                  <Trash2 aria-hidden />
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-line bg-blue-soft/30 p-4">
-        <div className="flex items-start gap-3">
-          <FolderDown className="mt-0.5 size-5 shrink-0 text-violet" aria-hidden />
-          <div className="grid gap-0.5">
-            <p className="flex items-center gap-2 font-heading text-sm font-bold">
-              Quyền sở hữu dữ liệu
-              {!features.dataActions && <SoonBadge />}
-            </p>
-            <p className="text-xs text-ink-2">Tải về toàn bộ lịch sử phân tích, báo cáo phỏng vấn và các phiên bản CV.</p>
-          </div>
-        </div>
-        <Button variant="outline" className="h-10 bg-card" disabled={!features.dataActions || exporting} onClick={exportAll}>
-          <Download aria-hidden />
-          Tải xuống toàn bộ dữ liệu cá nhân
-        </Button>
-      </div>
-
-      <ConfirmDialog
-        open={deleting !== null}
-        onOpenChange={(open) => !open && setDeleting(null)}
-        title={`Xoá ${deleting?.file_name ?? "CV"}?`}
-        description={
-          deleting && deleting.version_count > 1
-            ? `CV này có ${deleting.version_count} phiên bản; tất cả sẽ bị xoá vĩnh viễn. Các báo cáo phân tích đã tạo vẫn được giữ trong lịch sử.`
-            : "Tệp CV sẽ bị xoá vĩnh viễn. Các báo cáo phân tích đã tạo từ tệp này vẫn được giữ trong lịch sử."
-        }
-        confirmLabel="Xoá tệp"
-        destructive
-        onConfirm={() => (deleting ? onDelete(deleting) : Promise.resolve())}
-      />
-    </Panel>
-  )
-}
-
 // ---------- Đồng ý xử lý dữ liệu & liêm chính ----------
 
 const CONSENT_TERMS = [
@@ -328,60 +139,59 @@ export function ConsentCard({
   const [withdrawing, setWithdrawing] = useState(false)
 
   return (
-    <Panel className="grid gap-5">
-      <SectionHeader
-        icon={ShieldCheck}
-        iconClass="text-good"
-        title="Đồng ý xử lý dữ liệu & Cam kết liêm chính học thuật"
-        description="Nguyên tắc bảo vệ hồ sơ sinh viên và cam kết trung thực của ứng viên."
-      />
-      {consentAt ? (
-        <div className="grid gap-2 rounded-2xl bg-good-soft/70 p-5 text-sm">
-          <p className="flex items-center gap-2 font-heading font-bold text-good">
-            <BadgeCheck className="size-5" aria-hidden />
-            Bạn đã đồng ý điều khoản xử lý dữ liệu & cam kết liêm chính học thuật
-          </p>
-          <p className="text-xs text-ink-2">
-            Xác nhận lúc {formatTime(consentAt)} ngày {formatDate(consentAt)}, khi khởi tạo hồ sơ lần đầu.
-          </p>
-          <p className="leading-6 font-medium text-ink">
-            Nguyên tắc cốt lõi: AI chỉ phân tích khoảng trống kỹ năng và gợi ý cách diễn đạt dựa trên{" "}
-            <span className="underline underline-offset-2">kinh nghiệm có thật</span> do bạn cung cấp. Bạn chịu trách
-            nhiệm về tính trung thực của hồ sơ trước nhà tuyển dụng và nhà trường.
-          </p>
-        </div>
-      ) : (
-        <p role="status" className="flex items-start gap-2 rounded-2xl bg-warn-soft/70 p-5 text-sm text-ink">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
-          Bạn đã rút lại sự đồng ý. Các chức năng phân tích CV và phỏng vấn thử tạm khoá cho tới khi bạn đồng ý lại.
-        </p>
-      )}
-      <div className="grid gap-3">
-        {consentAt && (
-          <p className="flex items-center gap-1.5 text-xs text-ink-2">
-            <CircleAlert className="size-3.5 text-bad" aria-hidden />
-            Rút lại sự đồng ý sẽ khoá ngay các chức năng phân tích bằng AI.
+    <SettingsBlock
+      title="Đồng ý xử lý dữ liệu & Cam kết liêm chính học thuật"
+      description="Nguyên tắc bảo vệ hồ sơ sinh viên và cam kết trung thực của ứng viên."
+    >
+      <Panel className="grid gap-5">
+        {consentAt ? (
+          <div className="grid gap-2 text-sm">
+            <p className="flex items-center gap-2 font-heading font-bold text-good">
+              <BadgeCheck className="size-5 shrink-0" aria-hidden />
+              Bạn đã đồng ý điều khoản xử lý dữ liệu & cam kết liêm chính học thuật
+            </p>
+            <p className="text-xs text-ink-2">
+              Xác nhận lúc {formatTime(consentAt)} ngày {formatDate(consentAt)}, khi khởi tạo hồ sơ lần đầu.
+            </p>
+            <p className="leading-6 text-ink">
+              Nguyên tắc cốt lõi: AI chỉ phân tích khoảng trống kỹ năng và gợi ý cách diễn đạt dựa trên{" "}
+              <span className="underline underline-offset-2">kinh nghiệm có thật</span> do bạn cung cấp. Bạn chịu trách
+              nhiệm về tính trung thực của hồ sơ trước nhà tuyển dụng và nhà trường.
+            </p>
+          </div>
+        ) : (
+          <p role="status" className="flex items-start gap-2 rounded-2xl bg-warn-soft/70 p-5 text-sm text-ink">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+            Bạn đã rút lại sự đồng ý. Các chức năng phân tích CV và phỏng vấn thử tạm khoá cho tới khi bạn đồng ý lại.
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="soft" className="h-10" onClick={() => setViewing(true)}>
-            <Eye aria-hidden />
-            Xem lại văn bản cam kết
-          </Button>
+        <div className="grid gap-3 border-t border-line pt-4">
           {consentAt && (
-            <Button
-              variant="ghost"
-              className="h-10 bg-bad-soft text-bad hover:bg-bad-soft/80 hover:text-bad"
-              disabled={!features.dataActions}
-              onClick={() => setWithdrawing(true)}
-            >
-              <CircleX aria-hidden />
-              Rút lại sự đồng ý
-            </Button>
+            <p className="flex items-center gap-1.5 text-xs text-ink-2">
+              <CircleAlert className="size-3.5 text-bad" aria-hidden />
+              Rút lại sự đồng ý sẽ khoá ngay các chức năng phân tích bằng AI.
+            </p>
           )}
-          {consentAt && !features.dataActions && <SoonBadge />}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="soft" className="h-10" onClick={() => setViewing(true)}>
+              <Eye aria-hidden />
+              Xem lại văn bản cam kết
+            </Button>
+            {consentAt && (
+              <Button
+                variant="ghost"
+                className="h-10 bg-bad-soft text-bad hover:bg-bad-soft/80 hover:text-bad"
+                disabled={!features.dataActions}
+                onClick={() => setWithdrawing(true)}
+              >
+                <CircleX aria-hidden />
+                Rút lại sự đồng ý
+              </Button>
+            )}
+            {consentAt && !features.dataActions && <SoonBadge />}
+          </div>
         </div>
-      </div>
+      </Panel>
 
       <Dialog open={viewing} onOpenChange={setViewing}>
         <DialogContent className="sm:max-w-lg">
@@ -411,7 +221,7 @@ export function ConsentCard({
         destructive
         onConfirm={onWithdraw}
       />
-    </Panel>
+    </SettingsBlock>
   )
 }
 
@@ -429,15 +239,15 @@ interface ToggleRowProps {
 
 function ToggleRow({ id, title, tag, description, checked, disabled, onChange }: ToggleRowProps) {
   return (
-    <li className="flex items-start justify-between gap-6 rounded-2xl bg-surface p-5">
-      <div className="grid gap-1">
+    <li className="flex items-start justify-between gap-6 px-6 py-5">
+      <div className="grid min-w-0 gap-1">
         <label htmlFor={id} className="flex flex-wrap items-center gap-2 font-heading font-bold text-ink">
           {title}
           {tag && <Badge variant="neutral">{tag}</Badge>}
         </label>
-        <p className="text-sm leading-6 text-ink-2">{description}</p>
+        <p className="text-sm leading-6 wrap-anywhere text-ink-2">{description}</p>
       </div>
-      <Switch id={id} size="lg" checked={checked} disabled={disabled} onCheckedChange={onChange} className="mt-1" />
+      <Switch id={id} size="lg" checked={checked} disabled={disabled} onCheckedChange={onChange} className="mt-1 shrink-0" />
     </li>
   )
 }
@@ -454,36 +264,35 @@ export function PrivacyCard({
   onChange: (patch: SettingsPatch) => void
 }) {
   return (
-    <Panel className="grid gap-5">
-      <SectionHeader
-        icon={SlidersHorizontal}
-        iconClass="text-violet"
-        title="Tuỳ chọn quyền riêng tư & chia sẻ"
-        description="Chủ động quyết định ai được xem dữ liệu hướng nghiệp của bạn."
-      />
-      <ul className="grid gap-3">
-        <li className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-surface p-4">
-          <div className="grid min-w-0 gap-1">
-            <p className="font-heading text-sm font-bold text-ink">Chia sẻ tài liệu với cố vấn</p>
-            <p className="text-xs leading-5 text-ink-2">
-              {advisorName ? `Người phụ trách: ${advisorName}. ` : ""}Bạn bật / tắt chia sẻ từng CV và báo cáo phỏng vấn ở trang
-              Chia sẻ với cố vấn. Mặc định mọi tài liệu là riêng tư.
-            </p>
-          </div>
-          <Link href="/student/share" className="shrink-0 text-sm font-medium text-blue hover:underline">
-            Mở trang Chia sẻ
-          </Link>
-        </li>
-        <ToggleRow
-          id="anonymous-contribution"
-          title="Đóng góp dữ liệu ẩn danh để cải thiện gợi ý"
-          tag="Cộng đồng"
-          description="Họ tên, email, số điện thoại và địa chỉ được loại bỏ trước khi dữ liệu được dùng để thống kê chất lượng gợi ý."
-          checked={settings.privacy.anonymous_contribution}
-          onChange={(v) => onChange({ privacy: { anonymous_contribution: v } })}
-        />
-      </ul>
-    </Panel>
+    <SettingsBlock
+      title="Tuỳ chọn quyền riêng tư & chia sẻ"
+      description="Chủ động quyết định ai được xem dữ liệu hướng nghiệp của bạn."
+    >
+      <Panel className="grid overflow-hidden p-0">
+        <ul className="divide-y divide-line">
+          <li className="flex items-center justify-between gap-6 px-6 py-5">
+            <div className="grid min-w-0 gap-1">
+              <p className="font-heading font-bold text-ink">Chia sẻ tài liệu với cố vấn</p>
+              <p className="text-sm leading-6 text-ink-2">
+                {advisorName ? `Người phụ trách: ${advisorName}. ` : ""}Bạn bật / tắt chia sẻ từng CV và báo cáo phỏng vấn ở
+                trang Chia sẻ với cố vấn. Mặc định mọi tài liệu là riêng tư.
+              </p>
+            </div>
+            <Link href="/student/share" className="shrink-0 text-sm font-medium text-blue hover:underline">
+              Mở trang Chia sẻ
+            </Link>
+          </li>
+          <ToggleRow
+            id="anonymous-contribution"
+            title="Đóng góp dữ liệu ẩn danh để cải thiện gợi ý"
+            tag="Cộng đồng"
+            description="Họ tên, email, số điện thoại và địa chỉ được loại bỏ trước khi dữ liệu được dùng để thống kê chất lượng gợi ý."
+            checked={settings.privacy.anonymous_contribution}
+            onChange={(v) => onChange({ privacy: { anonymous_contribution: v } })}
+          />
+        </ul>
+      </Panel>
+    </SettingsBlock>
   )
 }
 
@@ -496,39 +305,40 @@ export function NotificationsCard({
 }) {
   const n = settings.notifications
   return (
-    <Panel className="grid gap-5">
-      <SectionHeader icon={Bell} title="Thông báo & Lời nhắc" description="Chọn những gì bạn muốn được báo qua chuông thông báo." />
-      <ul className="grid gap-3">
-        <ToggleRow
-          id="notify-advisor"
-          title="Khi cố vấn để lại nhận xét mới"
-          description="Báo ngay khi cố vấn nhận xét CV hoặc báo cáo phỏng vấn bạn đã chia sẻ."
-          checked={n.advisor_comment}
-          onChange={(v) => onChange({ notifications: { advisor_comment: v } })}
-        />
-        <ToggleRow
-          id="notify-report"
-          title="Khi báo cáo phân tích hoặc phỏng vấn sẵn sàng"
-          description="Hữu ích khi bạn rời trang trong lúc hệ thống đang chấm điểm."
-          checked={n.report_ready}
-          onChange={(v) => onChange({ notifications: { report_ready: v } })}
-        />
-        <ToggleRow
-          id="notify-weekly"
-          title="Nhắc luyện tập hằng tuần"
-          description="Nhắc bạn khi chưa luyện phỏng vấn trong 7 ngày và còn lượt trong tuần."
-          checked={n.weekly_reminder}
-          onChange={(v) => onChange({ notifications: { weekly_reminder: v } })}
-        />
-        <ToggleRow
-          id="notify-email"
-          title="Gửi thêm qua email"
-          description={`Gửi bản sao các thông báo đang bật tới ${settings.email}.`}
-          checked={n.email}
-          onChange={(v) => onChange({ notifications: { email: v } })}
-        />
-      </ul>
-    </Panel>
+    <SettingsBlock title="Thông báo & Lời nhắc" description="Chọn những gì bạn muốn được báo qua chuông thông báo.">
+      <Panel className="grid overflow-hidden p-0">
+        <ul className="divide-y divide-line">
+          <ToggleRow
+            id="notify-advisor"
+            title="Khi cố vấn để lại nhận xét mới"
+            description="Báo ngay khi cố vấn nhận xét CV hoặc báo cáo phỏng vấn bạn đã chia sẻ."
+            checked={n.advisor_comment}
+            onChange={(v) => onChange({ notifications: { advisor_comment: v } })}
+          />
+          <ToggleRow
+            id="notify-report"
+            title="Khi báo cáo phân tích hoặc phỏng vấn sẵn sàng"
+            description="Hữu ích khi bạn rời trang trong lúc hệ thống đang chấm điểm."
+            checked={n.report_ready}
+            onChange={(v) => onChange({ notifications: { report_ready: v } })}
+          />
+          <ToggleRow
+            id="notify-weekly"
+            title="Nhắc luyện tập hằng tuần"
+            description="Nhắc bạn khi chưa luyện phỏng vấn trong 7 ngày và còn lượt trong tuần."
+            checked={n.weekly_reminder}
+            onChange={(v) => onChange({ notifications: { weekly_reminder: v } })}
+          />
+          <ToggleRow
+            id="notify-email"
+            title="Gửi thêm qua email"
+            description={`Gửi bản sao các thông báo đang bật tới ${settings.email}.`}
+            checked={n.email}
+            onChange={(v) => onChange({ notifications: { email: v } })}
+          />
+        </ul>
+      </Panel>
+    </SettingsBlock>
   )
 }
 
@@ -639,94 +449,85 @@ export function PasswordCard({
   }
 
   return (
-    <Panel className="grid gap-5">
-      <SectionHeader
-        icon={KeyRound}
-        title="Đổi mật khẩu"
-        description={
-          updatedAt
-            ? `Lần đổi gần nhất: ${formatRelativeTime(updatedAt).toLowerCase()} (${formatDate(updatedAt)}).`
-            : "Bạn chưa đổi mật khẩu kể từ khi tạo tài khoản."
-        }
-      />
-      <form onSubmit={submit} noValidate className="grid gap-4 md:grid-cols-2 md:gap-x-6">
-        <div className="grid content-start gap-4">
-          <PasswordField
-            label="Mật khẩu hiện tại"
-            value={current}
-            onChange={(v) => {
-              setCurrent(v)
-              if (serverError?.field === "current") setServerError(null)
-            }}
-            autoComplete="current-password"
-            error={fieldError("current")}
-          />
-          <PasswordField
-            label="Mật khẩu mới"
-            value={next}
-            onChange={(v) => {
-              setNext(v)
-              if (serverError?.field === "next") setServerError(null)
-            }}
-            autoComplete="new-password"
-            error={fieldError("next")}
-            describedBy={rulesId}
-          />
-          <PasswordField
-            label="Nhập lại mật khẩu mới"
-            value={confirm}
-            onChange={setConfirm}
-            autoComplete="new-password"
-            error={fieldError("confirm")}
-          />
-        </div>
-        <div className="grid content-between gap-4">
-          <div id={rulesId} className="grid gap-2 rounded-2xl bg-surface p-4">
-            <p className="text-sm font-medium text-ink">Mật khẩu mới cần có</p>
-            <ul className="grid gap-1.5 text-sm">
-              {PASSWORD_RULES.map((rule) => {
-                const ok = rule.test(next)
-                return (
-                  <li key={rule.label} className={cn("flex items-center gap-2", ok ? "text-good" : "text-ink-2")}>
-                    <span
-                      className={cn(
-                        "grid size-4 shrink-0 place-items-center rounded-full",
-                        ok ? "bg-good text-white" : "border border-line bg-card",
-                      )}
-                      aria-hidden
-                    >
-                      {ok && <Check className="size-3" />}
-                    </span>
-                    {rule.label}
-                    <span className="sr-only">{ok ? "(đã đạt)" : "(chưa đạt)"}</span>
-                  </li>
-                )
-              })}
-            </ul>
-            <p className="pt-1 text-xs text-ink-3">Sau khi đổi, các thiết bị khác cần đăng nhập lại bằng mật khẩu mới.</p>
+    <SettingsBlock
+      title="Đổi mật khẩu"
+      description={
+        updatedAt
+          ? `Lần đổi gần nhất: ${formatRelativeTime(updatedAt).toLowerCase()} (${formatDate(updatedAt)}).`
+          : "Bạn chưa đổi mật khẩu kể từ khi tạo tài khoản."
+      }
+    >
+      <Panel>
+        <form onSubmit={submit} noValidate className="grid gap-4 md:grid-cols-2 md:gap-x-6">
+          <div className="grid content-start gap-4">
+            <PasswordField
+              label="Mật khẩu hiện tại"
+              value={current}
+              onChange={(v) => {
+                setCurrent(v)
+                if (serverError?.field === "current") setServerError(null)
+              }}
+              autoComplete="current-password"
+              error={fieldError("current")}
+            />
+            <PasswordField
+              label="Mật khẩu mới"
+              value={next}
+              onChange={(v) => {
+                setNext(v)
+                if (serverError?.field === "next") setServerError(null)
+              }}
+              autoComplete="new-password"
+              error={fieldError("next")}
+              describedBy={rulesId}
+            />
+            <PasswordField
+              label="Nhập lại mật khẩu mới"
+              value={confirm}
+              onChange={setConfirm}
+              autoComplete="new-password"
+              error={fieldError("confirm")}
+            />
           </div>
-          <Button type="submit" className="h-10 justify-self-start px-5" disabled={saving}>
-            {saving && <Loader2 className="animate-spin" aria-hidden />}
-            {saving ? "Đang cập nhật…" : "Cập nhật mật khẩu"}
-          </Button>
-        </div>
-      </form>
-    </Panel>
+          <div className="grid content-between gap-4">
+            <div id={rulesId} className="grid gap-2 rounded-2xl bg-surface p-4">
+              <p className="text-sm font-medium text-ink">Mật khẩu mới cần có</p>
+              <ul className="grid gap-1.5 text-sm">
+                {PASSWORD_RULES.map((rule) => {
+                  const ok = rule.test(next)
+                  return (
+                    <li key={rule.label} className={cn("flex items-center gap-2", ok ? "text-good" : "text-ink-2")}>
+                      <span
+                        className={cn(
+                          "grid size-4 shrink-0 place-items-center rounded-full",
+                          ok ? "bg-good text-white" : "border border-line bg-card",
+                        )}
+                        aria-hidden
+                      >
+                        {ok && <Check className="size-3" />}
+                      </span>
+                      {rule.label}
+                      <span className="sr-only">{ok ? "(đã đạt)" : "(chưa đạt)"}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              <p className="pt-1 text-xs text-ink-3">Sau khi đổi, các thiết bị khác cần đăng nhập lại bằng mật khẩu mới.</p>
+            </div>
+            <Button type="submit" className="h-10 justify-self-start px-5" disabled={saving}>
+              {saving && <Loader2 className="animate-spin" aria-hidden />}
+              {saving ? "Đang cập nhật…" : "Cập nhật mật khẩu"}
+            </Button>
+          </div>
+        </form>
+      </Panel>
+    </SettingsBlock>
   )
 }
 
-// ---------- Tài khoản & vùng nguy hiểm ----------
+// ---------- Tài khoản ----------
 
-export function AccountCard({
-  fullName,
-  settings,
-  onDeleteAll,
-}: {
-  fullName: string
-  settings: StudentSettings
-  onDeleteAll: () => Promise<void>
-}) {
-  const [confirm, setConfirm] = useState(false)
+export function AccountCard({ fullName, settings }: { fullName: string; settings: StudentSettings }) {
   const rows: { label: string; value: string }[] = [
     { label: "Họ và tên", value: fullName },
     { label: "Mã sinh viên", value: settings.student_code },
@@ -734,37 +535,110 @@ export function AccountCard({
     { label: "Email", value: settings.email },
   ]
   return (
-    <>
+    <SettingsBlock title="Tài khoản" description="Thông tin dùng để cố vấn và nhà trường nhận diện bạn.">
       <Panel className="grid gap-5">
-        <SectionHeader icon={UserRound} title="Tài khoản" description="Thông tin dùng để cố vấn và nhà trường nhận diện bạn." />
-        <dl className="grid gap-3 sm:grid-cols-2">
+        <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
           {rows.map((r) => (
-            <div key={r.label} className="grid gap-0.5 rounded-2xl bg-surface px-4 py-3">
+            <div key={r.label} className="grid gap-0.5">
               <dt className="text-xs text-ink-2">{r.label}</dt>
               <dd className="font-medium wrap-anywhere text-ink">{r.value}</dd>
             </div>
           ))}
         </dl>
-        <p className="text-xs text-ink-2">Cần sửa thông tin tài khoản? Hãy liên hệ cố vấn hoặc phòng quản lý đào tạo của trường.</p>
+        <p className="border-t border-line pt-4 text-xs text-ink-2">
+          Cần sửa thông tin tài khoản? Hãy liên hệ cố vấn hoặc phòng quản lý đào tạo của trường.
+        </p>
       </Panel>
+    </SettingsBlock>
+  )
+}
 
-      <section className="flex flex-wrap items-center justify-between gap-5 rounded-[20px] border border-line border-l-4 border-l-bad bg-card p-6 shadow-card">
-        <div className="grid max-w-xl gap-1.5">
-          <h2 className="flex items-center gap-2 font-heading text-lg font-bold text-bad">
-            <TriangleAlert className="size-5" aria-hidden />
-            Vùng nguy hiểm
-            {!features.dataActions && <SoonBadge />}
-          </h2>
-          <p className="text-sm text-ink-2">
-            Xoá vĩnh viễn toàn bộ phiên bản CV, lịch sử phỏng vấn STAR, điểm số và nhận xét của cố vấn.{" "}
-            <span className="font-medium text-bad">Không thể hoàn tác sau khi xác nhận.</span>
-          </p>
-        </div>
-        <Button variant="destructive" size="brand" disabled={!features.dataActions} onClick={() => setConfirm(true)}>
-          <Trash2 aria-hidden />
-          Xoá toàn bộ dữ liệu của tôi
-        </Button>
-      </section>
+// ---------- Dữ liệu cá nhân: dung lượng, tải về, xoá ----------
+
+export function PersonalDataCard({
+  storage,
+  onDeleteAll,
+}: {
+  storage: StudentSettings["storage"]
+  onDeleteAll: () => Promise<void>
+}) {
+  const [exporting, setExporting] = useState(false)
+  const [confirm, setConfirm] = useState(false)
+  const percent = Math.min(100, Math.round((storage.used_bytes / storage.limit_bytes) * 100))
+
+  async function exportAll() {
+    setExporting(true)
+    try {
+      const { download_url } = await api.requestDataExport()
+      if (download_url) window.open(download_url, "_blank", "noopener")
+      else toast.success("Đã tạo gói dữ liệu. Bản demo không có file thật để tải.")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không tạo được gói dữ liệu.")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <SettingsBlock title="Dữ liệu cá nhân" description="Dung lượng đã dùng, tải bản sao và xoá dữ liệu bạn lưu trên CareerX.">
+      <Panel className="grid overflow-hidden p-0">
+        <ul className="divide-y divide-line">
+          <li className="grid gap-3 px-6 py-5">
+            <p className="flex items-center justify-between gap-2">
+              <span className="font-heading font-bold text-ink">Dung lượng lưu trữ</span>
+              <span className="text-sm font-semibold text-blue">{percent}%</span>
+            </p>
+            <div
+              className="h-2 overflow-hidden rounded-full bg-surface"
+              role="progressbar"
+              aria-valuenow={percent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Dung lượng đã dùng"
+            >
+              <div className="h-full rounded-full bg-blue" style={{ width: `${Math.max(percent, 2)}%` }} />
+            </div>
+            <p className="text-xs text-ink-2">
+              Đã dùng {formatBytes(storage.used_bytes)} / {formatBytes(storage.limit_bytes)} · Dung lượng do{" "}
+              {storage.allocated_by} cấp.
+            </p>
+          </li>
+
+          <li className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
+            <div className="grid max-w-xl gap-1">
+              <p className="flex items-center gap-2 font-heading font-bold text-ink">
+                Tải xuống dữ liệu của bạn
+                {!features.dataActions && <SoonBadge />}
+              </p>
+              <p className="text-sm leading-6 text-ink-2">
+                Toàn bộ lịch sử phân tích, báo cáo phỏng vấn và các phiên bản CV trong một gói.
+              </p>
+            </div>
+            <Button variant="outline" className="h-10 bg-card" disabled={!features.dataActions || exporting} onClick={exportAll}>
+              <Download aria-hidden />
+              Tải xuống toàn bộ dữ liệu
+            </Button>
+          </li>
+
+          <li className="flex flex-wrap items-center justify-between gap-4 bg-bad-soft/25 px-6 py-5">
+            <div className="grid max-w-xl gap-1">
+              <p className="flex items-center gap-2 font-heading font-bold text-bad">
+                <TriangleAlert className="size-4" aria-hidden />
+                Xoá toàn bộ dữ liệu
+                {!features.dataActions && <SoonBadge />}
+              </p>
+              <p className="text-sm leading-6 text-ink-2">
+                Xoá vĩnh viễn toàn bộ phiên bản CV, lịch sử phỏng vấn STAR, điểm số và nhận xét của cố vấn.{" "}
+                <span className="font-medium text-bad">Không thể hoàn tác sau khi xác nhận.</span>
+              </p>
+            </div>
+            <Button variant="destructive" className="h-10" disabled={!features.dataActions} onClick={() => setConfirm(true)}>
+              <Trash2 aria-hidden />
+              Xoá toàn bộ dữ liệu của tôi
+            </Button>
+          </li>
+        </ul>
+      </Panel>
 
       <ConfirmDialog
         open={confirm}
@@ -775,6 +649,6 @@ export function AccountCard({
         destructive
         onConfirm={onDeleteAll}
       />
-    </>
+    </SettingsBlock>
   )
 }

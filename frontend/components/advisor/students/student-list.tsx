@@ -7,12 +7,8 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  FileCheck2,
-  Lightbulb,
-  LineChart,
   MessageCircle,
   MessageSquareText,
-  Radar,
   Search,
   UserRound,
   Users,
@@ -152,24 +148,18 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
   }
 
   return (
-    <div className="grid gap-6">
-      <header className="grid gap-2">
-        <h1 className="flex flex-wrap items-center gap-3 font-heading text-[28px] leading-9 font-bold">
-          Sinh viên phụ trách
-          {students && (
-            <Badge variant="blue" className="h-auto px-2.5 py-1 text-sm">
-              {students.length} sinh viên
-            </Badge>
-          )}
-        </h1>
-        <p className="max-w-3xl text-sm text-ink-2">
-          {/* Điểm STAR (0–5) buổi đầu → gần nhất ở vị trí mỗi sinh viên đang luyện. Bấm vào một sinh viên để xem nhanh tiến bộ
-          và gợi ý cho buổi tư vấn tới. Nội dung CV và báo cáo chỉ xem được khi sinh viên bật chia sẻ. */}
-        </p>
+    <div className="grid gap-8">
+      <header className="flex flex-wrap items-center gap-3 py-2">
+        <h1 className="font-heading text-[32px] leading-10 font-bold">Sinh viên phụ trách</h1>
+        {students && (
+          <Badge variant="blue" className="h-auto px-2.5 py-1 text-sm">
+            {students.length} sinh viên
+          </Badge>
+        )}
       </header>
 
-      <Panel className="grid gap-3 p-4">
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
+      <div className="grid gap-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(4,minmax(0,1fr))]">
           <div className="relative md:col-span-2 xl:col-span-1">
             <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
             <Input
@@ -177,7 +167,7 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
               onChange={(e) => resetPage(setQuery)(e.target.value)}
               placeholder="Tìm theo tên, MSSV, email hoặc vị trí…"
               aria-label="Tìm sinh viên"
-              className="h-10 border-transparent bg-surface pl-9"
+              className="h-10 border-line bg-card pl-9"
             />
           </div>
           <FilterSelect
@@ -197,9 +187,9 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
         </div>
         {chips.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-xs font-semibold tracking-wide text-ink-2 uppercase">Đang lọc:</span>
+            <span className="text-xs font-medium text-ink-2">Đang lọc:</span>
             {chips.map((c) => (
-              <span key={c.key} className="flex items-center gap-1 rounded-lg bg-surface py-1 pr-1 pl-2.5 text-ink">
+              <span key={c.key} className="flex items-center gap-1 rounded-lg bg-card py-1 pr-1 pl-2.5 text-ink ring-1 ring-line">
                 {c.label}
                 <button
                   type="button"
@@ -208,7 +198,7 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
                     setPage(0)
                   }}
                   aria-label={`Bỏ lọc ${c.label}`}
-                  className="grid size-5 place-items-center rounded text-ink-2 hover:bg-card hover:text-ink"
+                  className="grid size-5 place-items-center rounded text-ink-2 hover:bg-surface hover:text-ink"
                 >
                   <X className="size-3.5" aria-hidden />
                 </button>
@@ -228,9 +218,9 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
             </button>
           </div>
         )}
-      </Panel>
+      </div>
 
-      <Panel className="grid gap-0 p-0">
+      <Panel className="grid gap-0 overflow-hidden p-0">
         {!students ? (
           <div className="grid gap-2 p-4" aria-busy="true" aria-label="Đang tải danh sách">
             {Array.from({ length: 6 }, (_, i) => (
@@ -240,7 +230,7 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
         ) : (
           <div className="relative overflow-x-auto">
             <table className="w-full min-w-[820px] text-sm">
-              <thead className="bg-blue-soft/40 text-left text-xs font-semibold tracking-wide whitespace-nowrap text-ink-2 uppercase">
+              <thead className="border-b border-line bg-surface/60 text-left text-xs font-semibold whitespace-nowrap text-ink-2">
                 <tr>
                   <th scope="col" className="px-5 py-3">Sinh viên</th>
                   <th scope="col" className="px-3 py-3">Vị trí đang luyện</th>
@@ -320,8 +310,8 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
                           </td>
                         </tr>
                         {open && (
-                          <tr className="bg-surface/50">
-                            <td colSpan={COLUMNS} className="px-5 py-5">
+                          <tr className="bg-surface/40">
+                            <td colSpan={COLUMNS} className="px-5 py-6">
                               <StudentProgressRow student={s} />
                             </td>
                           </tr>
@@ -402,14 +392,13 @@ function StudentProgressRow({ student }: { student: AssignedStudent }) {
   }
   const focus = data.interview_progress.find((g) => g.jd.id === student.target?.id) ?? data.interview_progress[0]
   return (
-    <div className="grid gap-4">
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)_minmax(0,4fr)]">
-        <section className="grid gap-3 rounded-xl bg-card p-4 ring-1 ring-line" aria-label="Tiến bộ phỏng vấn">
-          <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
-            <LineChart className="size-4 text-blue" aria-hidden />
+    <div className="grid gap-5">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,5fr)_minmax(0,3fr)_minmax(0,4fr)] xl:gap-0 xl:divide-x xl:divide-line">
+        <section className="grid gap-3 xl:pr-6" aria-label="Tiến bộ phỏng vấn">
+          <h3 className="font-heading text-sm font-bold">
             Tiến bộ phỏng vấn
             {data.interview_progress.length > 1 && (
-              <span className="font-normal text-ink-2">· {data.interview_progress.length} vị trí</span>
+              <span className="font-normal text-ink-2"> · {data.interview_progress.length} vị trí</span>
             )}
           </h3>
           {focus ? (
@@ -418,31 +407,22 @@ function StudentProgressRow({ student }: { student: AssignedStudent }) {
             <p className="text-sm text-ink-2">Sinh viên chưa luyện phỏng vấn buổi nào.</p>
           )}
         </section>
-        <section className="grid gap-3 rounded-xl bg-card p-4 ring-1 ring-line" aria-label="Tiêu chí STAR">
-          <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
-            <Radar className="size-4 text-violet" aria-hidden />
-            Tiêu chí STAR
-          </h3>
+        <section className="grid gap-3 xl:px-6" aria-label="Tiêu chí STAR">
+          <h3 className="font-heading text-sm font-bold">Tiêu chí STAR</h3>
           <StarAverageBars star={data.star} insight={data.insight} />
         </section>
-        <div className="grid gap-4">
-          <section className="grid gap-3 rounded-xl bg-card p-4 ring-1 ring-line" aria-label="Tiến bộ CV">
-            <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
-              <FileCheck2 className="size-4 text-blue" aria-hidden />
-              Độ khớp CV qua các phiên bản
-            </h3>
+        <div className="grid gap-6 xl:pl-6">
+          <section className="grid gap-3" aria-label="Tiến bộ CV">
+            <h3 className="font-heading text-sm font-bold">Độ khớp CV qua các phiên bản</h3>
             <CvProgressBlock groups={data.cv_progress} />
           </section>
-          <section className="grid gap-3 rounded-xl bg-blue-soft/40 p-4" aria-label="Gợi ý cho buổi tư vấn tới">
-            <h3 className="flex items-center gap-2 font-heading text-sm font-bold">
-              <Lightbulb className="size-4 text-warn" aria-hidden />
-              Gợi ý cho buổi tư vấn tới
-            </h3>
+          <section className="grid gap-3 border-t border-line pt-5" aria-label="Gợi ý cho buổi tư vấn tới">
+            <h3 className="font-heading text-sm font-bold">Gợi ý cho buổi tư vấn tới</h3>
             <SuggestionList items={data.suggestions} />
           </section>
         </div>
       </div>
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-4">
         <Button variant="soft" className="h-9" onClick={() => openChat(student.id)}>
           <MessageCircle aria-hidden />
           Nhắn tin
@@ -469,7 +449,7 @@ function FilterSelect({
 }) {
   return (
     <Select items={items} value={value} onValueChange={(v) => onChange(String(v))}>
-      <SelectTrigger className="h-10 w-full min-w-0 border-transparent bg-surface" aria-label={label}>
+      <SelectTrigger className="h-10 w-full min-w-0 bg-card" aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

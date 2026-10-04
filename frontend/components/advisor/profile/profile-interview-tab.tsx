@@ -6,11 +6,9 @@ import {
   CheckCheck,
   Clock,
   Eye,
-  LineChart,
   Lock,
   MessageSquareText,
   Pencil,
-  Radar,
   Timer,
   TimerOff,
 } from "lucide-react"
@@ -18,7 +16,7 @@ import {
 import { ReportDialog } from "@/components/advisor/profile/report-dialog"
 import { ReviewDialog } from "@/components/advisor/profile/review-dialog"
 import { InterviewProgressBlock, StarAverageBars } from "@/components/advisor/progress-blocks"
-import { Panel, PanelHeader } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatRelativeTime, formatWhen } from "@/lib/format"
@@ -66,85 +64,89 @@ export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileI
   for (const g of groups) g.points.forEach((p, i) => roundOf.set(p.id, i + 1))
 
   return (
-    <div className="grid gap-6">
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-        <Panel className="grid gap-4">
-          <PanelHeader
-            icon={LineChart}
+    <div className="grid gap-10">
+      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
+        <section className="flex min-w-0 flex-col gap-3">
+          <SectionHeader
             title="Tiến bộ theo vị trí"
             aside={<span className="text-xs text-ink-2">Điểm chỉ so sánh trong cùng vị trí</span>}
           />
-          {groups.length > 1 && (
-            <div role="group" aria-label="Chọn vị trí" className="flex flex-wrap gap-1.5">
-              {groups.map((g, i) => (
+          <Panel className="grid flex-1 content-start gap-4">
+            {groups.length > 1 && (
+              <div role="group" aria-label="Chọn vị trí" className="flex flex-wrap gap-1.5">
+                {groups.map((g, i) => (
+                  <button
+                    key={g.jd.id}
+                    type="button"
+                    aria-pressed={g === group}
+                    onClick={() => setPosition(i)}
+                    className={cn(
+                      "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                      g === group ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
+                    )}
+                  >
+                    {g.jd.title} ({g.session_count})
+                  </button>
+                ))}
+              </div>
+            )}
+            {group ? (
+              <InterviewProgressBlock group={group} />
+            ) : (
+              <p className="py-10 text-center text-sm text-ink-2">Sinh viên chưa luyện phỏng vấn buổi nào.</p>
+            )}
+          </Panel>
+        </section>
+        <section className="flex min-w-0 flex-col gap-3">
+          <SectionHeader title="Tiêu chí STAR" />
+          <Panel className="flex-1">
+            <StarAverageBars star={detail.star} insight={detail.insight} />
+          </Panel>
+        </section>
+      </div>
+
+      <section className="grid gap-3" aria-labelledby="sessions-heading">
+        <SectionHeader
+          title={<span id="sessions-heading">Các buổi phỏng vấn thử</span>}
+          aside={
+            <div role="group" aria-label="Lọc buổi phỏng vấn" className="flex flex-wrap gap-1">
+              {FILTERS.map((f) => (
                 <button
-                  key={g.jd.id}
+                  key={f.value}
                   type="button"
-                  aria-pressed={g === group}
-                  onClick={() => setPosition(i)}
+                  aria-pressed={filter === f.value}
+                  onClick={() => setFilter(f.value)}
                   className={cn(
-                    "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                    g === group ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
+                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+                    filter === f.value ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
                   )}
                 >
-                  {g.jd.title} ({g.session_count})
+                  {f.label}
+                  <span className={cn("rounded-full px-1.5 text-[11px]", filter === f.value ? "bg-card/25" : "bg-surface")}>
+                    {counts[f.value]}
+                  </span>
                 </button>
               ))}
             </div>
-          )}
-          {group ? (
-            <InterviewProgressBlock group={group} />
+          }
+        />
+        <Panel className="overflow-hidden p-0">
+          {visible.length === 0 ? (
+            <p className="py-10 text-center text-sm text-ink-2">Không có buổi phỏng vấn nào trong mục này.</p>
           ) : (
-            <p className="rounded-xl bg-surface p-6 text-center text-sm text-ink-2">Sinh viên chưa luyện phỏng vấn buổi nào.</p>
-          )}
-        </Panel>
-        <Panel className="grid gap-4">
-          <PanelHeader icon={Radar} title="Tiêu chí STAR" />
-          <StarAverageBars star={detail.star} insight={detail.insight} />
-        </Panel>
-      </div>
-
-      <section className="grid gap-4" aria-labelledby="sessions-heading">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="sessions-heading" className="font-heading text-lg font-bold">
-            Các buổi phỏng vấn thử
-          </h2>
-          <div role="group" aria-label="Lọc buổi phỏng vấn" className="flex flex-wrap gap-1">
-            {FILTERS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                aria-pressed={filter === f.value}
-                onClick={() => setFilter(f.value)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                  filter === f.value ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
-                )}
-              >
-                {f.label}
-                <span className={cn("rounded-full px-1.5 text-[11px]", filter === f.value ? "bg-card/25" : "bg-surface")}>
-                  {counts[f.value]}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-        {visible.length === 0 ? (
-          <Panel className="py-10 text-center text-sm text-ink-2">Không có buổi phỏng vấn nào trong mục này.</Panel>
-        ) : (
-          <ol className="grid gap-4">
-            {visible.map((item) => (
-              <li key={item.id}>
-                <SessionCard
+            <ol className="divide-y divide-line">
+              {visible.map((item) => (
+                <SessionRow
+                  key={item.id}
                   item={item}
                   round={roundOf.get(item.id) ?? 1}
                   onView={() => setViewing(item)}
                   onReview={() => setReviewing(item)}
                 />
-              </li>
-            ))}
-          </ol>
-        )}
+              ))}
+            </ol>
+          )}
+        </Panel>
       </section>
 
       <ReportDialog studentId={student.id} studentName={student.full_name} item={viewing} onClose={() => setViewing(null)} />
@@ -159,7 +161,7 @@ export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileI
   )
 }
 
-function SessionCard({
+function SessionRow({
   item,
   round,
   onView,
@@ -175,16 +177,19 @@ function SessionCard({
   const minutes = Math.max(1, Math.round(item.duration_seconds / 60))
 
   return (
-    <Panel className={cn("grid gap-4 p-5", state === "private" && "bg-surface/60 shadow-none", state === "pending" && "ring-2 ring-blue/40")}>
+    <li className={cn("grid gap-4 px-6 py-5", state === "private" && "bg-surface/50")}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-soft font-heading text-sm font-bold text-blue">
             {String(round).padStart(2, "0")}
           </span>
           <div className="grid min-w-0 gap-1">
-            <p className="font-heading font-bold text-ink">
-              Buổi {round} · {item.jd.title}
-              {item.jd.company && <span className="font-normal text-ink-2"> · {item.jd.company}</span>}
+            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-heading font-bold text-ink">
+              <span>
+                Buổi {round} · {item.jd.title}
+                {item.jd.company && <span className="font-normal text-ink-2"> · {item.jd.company}</span>}
+              </span>
+              {state === "pending" && <Badge variant="blue">Chờ nhận xét</Badge>}
             </p>
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
               <span className="flex items-center gap-1">
@@ -213,7 +218,7 @@ function SessionCard({
         </span>
       </div>
 
-      <p className="rounded-xl bg-surface px-4 py-3 text-sm leading-6 text-ink">
+      <p className="text-sm leading-6 text-ink sm:pl-12">
         <span className="font-semibold text-ink-2">Tóm tắt: </span>
         {item.summary}
       </p>
@@ -221,12 +226,12 @@ function SessionCard({
       {item.review && <ReviewBlock review={item.review} />}
 
       {state === "private" ? (
-        <p className="flex items-center gap-2 text-sm text-ink-2">
+        <p className="flex items-center gap-2 text-sm text-ink-2 sm:pl-12">
           <Lock className="size-4 shrink-0" aria-hidden />
           Sinh viên chưa chia sẻ báo cáo này: bạn chỉ xem được điểm và tóm tắt ở trên.
         </p>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:pl-12">
           <p className="text-xs text-ink-2">
             {item.review ? "Điểm AI giữ nguyên, nhận xét của bạn hiện trong báo cáo của sinh viên." : "Sinh viên đã chia sẻ báo cáo này và đang chờ nhận xét của bạn."}
           </p>
@@ -242,14 +247,14 @@ function SessionCard({
           </span>
         </div>
       )}
-    </Panel>
+    </li>
   )
 }
 
 function ReviewBlock({ review }: { review: AdvisorReviewInfo }) {
   const edited = review.updated_at !== review.created_at
   return (
-    <div className="grid gap-2 rounded-xl border border-violet/20 bg-violet-soft/40 p-4">
+    <div className="grid gap-2 rounded-xl bg-violet-soft/40 p-4 sm:ml-12">
       <p className="flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="flex items-center gap-1.5 font-semibold text-violet">
           <MessageSquareText className="size-4" aria-hidden />

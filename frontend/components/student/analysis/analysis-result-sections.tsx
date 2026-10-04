@@ -13,14 +13,13 @@ import {
   MessagesSquare,
   Quote,
   ShieldCheck,
-  Sparkles,
   Wand2,
   X,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
-import { Panel } from "@/components/common/panel"
+import { Panel, SectionHeader } from "@/components/common/panel"
 import { IMPORTANCE_META } from "@/components/student/analysis/jd-picker-sections"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -47,10 +46,10 @@ export function ScoreCard({ analysis }: { analysis: GapAnalysis }) {
   const label = MATCH_LABEL_META[analysis.match_label ?? "low"]
 
   return (
-    <Panel className="grid gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="grid gap-2">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.08em] text-ink-3 uppercase">
+    <section className="grid gap-3">
+      <SectionHeader
+        title={
+          <span className="flex items-center gap-1.5">
             CV–JD Matching Score
             <Tooltip>
               <TooltipTrigger
@@ -65,86 +64,88 @@ export function ScoreCard({ analysis }: { analysis: GapAnalysis }) {
                 bằng chứng cụ thể, 0,5 khi chỉ được liệt kê, 0 khi không có trong CV.
               </TooltipContent>
             </Tooltip>
-          </p>
-          <div className="flex items-end gap-3">
-            <span className="font-heading text-5xl leading-none font-extrabold text-ink">{formatNumber(score)}%</span>
-            <Badge variant={label.badge} className="mb-1 h-auto px-2.5 py-0.5">
-              Mức {label.text.toLowerCase()}
-            </Badge>
-          </div>
-        </div>
-        <div className="grid gap-1 text-right text-xs text-ink-2">
-          <span>
+          </span>
+        }
+        aside={
+          <span className="text-right text-xs text-ink-2">
             <strong className="text-good">{analysis.counts.matched}</strong> khớp ·{" "}
             <strong className="text-warn">{analysis.counts.partial}</strong> một phần ·{" "}
-            <strong className="text-bad">{analysis.counts.missing}</strong> thiếu
+            <strong className="text-bad">{analysis.counts.missing}</strong> thiếu trên {analysis.requirements.length} yêu cầu
+            của JD
           </span>
-          <span>trên {analysis.requirements.length} yêu cầu của JD</span>
+        }
+      />
+      <Panel className="grid gap-5">
+        <div className="flex items-end gap-3">
+          <span className="font-heading text-5xl leading-none font-extrabold text-ink">{formatNumber(score)}%</span>
+          <Badge variant={label.badge} className="mb-1 h-auto px-2.5 py-0.5">
+            Mức {label.text.toLowerCase()}
+          </Badge>
         </div>
-      </div>
 
-      <div className="h-2.5 overflow-hidden rounded-full bg-surface" role="img" aria-label={`Độ khớp ${formatNumber(score)}%`}>
-        <div className={cn("h-full rounded-full transition-[width]", label.bar)} style={{ width: `${Math.min(100, score)}%` }} />
-      </div>
+        <div className="h-2.5 overflow-hidden rounded-full bg-surface" role="img" aria-label={`Độ khớp ${formatNumber(score)}%`}>
+          <div className={cn("h-full rounded-full transition-[width]", label.bar)} style={{ width: `${Math.min(100, score)}%` }} />
+        </div>
 
-      {/* PRD mục 8: chỉ diễn giải theo rubric của hệ thống, không nói về khả năng qua ATS hay trúng tuyển */}
-      <p className="text-sm text-ink">
-        CV hiện đáp ứng <strong>{formatNumber(score)}%</strong> tổng trọng số các yêu cầu được hệ thống trích xuất từ JD.
-      </p>
-      {analysis.summary && <p className="rounded-xl bg-surface p-3 text-sm leading-6 text-ink-2">{analysis.summary}</p>}
-      {!analysis.llm_used && (
-        <p className="flex items-start gap-1.5 text-xs text-ink-2">
-          <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-          AI tạm thời không khả dụng nên điểm được chấm bằng quy tắc dự phòng (cùng rubric).
+        {/* PRD mục 8: chỉ diễn giải theo rubric của hệ thống, không nói về khả năng qua ATS hay trúng tuyển */}
+        <p className="text-sm text-ink">
+          CV hiện đáp ứng <strong>{formatNumber(score)}%</strong> tổng trọng số các yêu cầu được hệ thống trích xuất từ JD.
         </p>
-      )}
-
-      <button
-        type="button"
-        onClick={() => setShowMore((v) => !v)}
-        aria-expanded={showMore}
-        className="inline-flex items-center gap-1 justify-self-start text-sm font-medium text-blue hover:underline"
-      >
-        {showMore ? "Thu gọn" : "Xem thêm cách tính điểm"}
-        <ChevronDown className={cn("size-4 transition-transform", showMore && "rotate-180")} aria-hidden />
-      </button>
-
-      {showMore && (
-        <div className="grid gap-3 rounded-xl border border-line p-4">
-          <table className="w-full text-sm">
-            <caption className="sr-only">Phân rã điểm theo mức độ yêu cầu</caption>
-            <thead>
-              <tr className="text-left text-xs text-ink-3">
-                <th className="pb-2 font-medium">Mức độ</th>
-                <th className="pb-2 font-medium">Khớp</th>
-                <th className="pb-2 font-medium">Một phần</th>
-                <th className="pb-2 font-medium">Thiếu</th>
-                <th className="pb-2 text-right font-medium">Điểm đạt</th>
-              </tr>
-            </thead>
-            <tbody>
-              {analysis.breakdown.map((b) => (
-                <tr key={b.importance} className="border-t border-line">
-                  <td className="py-2 font-medium text-ink">
-                    {b.label} <span className="text-xs font-normal text-ink-3">(×{b.weight})</span>
-                  </td>
-                  <td className="py-2 text-good">{b.matched}</td>
-                  <td className="py-2 text-warn">{b.partial}</td>
-                  <td className="py-2 text-bad">{b.missing}</td>
-                  <td className="py-2 text-right text-ink">
-                    {formatNumber(b.earned)} / {formatNumber(b.possible)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text-xs text-ink-2">
-            Tổng: {formatNumber(analysis.breakdown.reduce((s, b) => s + b.earned, 0))} /{" "}
-            {formatNumber(analysis.breakdown.reduce((s, b) => s + b.possible, 0))} điểm trọng số → {formatNumber(score)}%.
+        {analysis.summary && <p className="rounded-xl bg-surface p-3 text-sm leading-6 text-ink-2">{analysis.summary}</p>}
+        {!analysis.llm_used && (
+          <p className="flex items-start gap-1.5 text-xs text-ink-2">
+            <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+            AI tạm thời không khả dụng nên điểm được chấm bằng quy tắc dự phòng (cùng rubric).
           </p>
-        </div>
-      )}
-    </Panel>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setShowMore((v) => !v)}
+          aria-expanded={showMore}
+          className="inline-flex items-center gap-1 justify-self-start text-sm font-medium text-blue hover:underline"
+        >
+          {showMore ? "Thu gọn" : "Xem thêm cách tính điểm"}
+          <ChevronDown className={cn("size-4 transition-transform", showMore && "rotate-180")} aria-hidden />
+        </button>
+
+        {showMore && (
+          <div className="grid gap-3 rounded-xl border border-line p-4">
+            <table className="w-full text-sm">
+              <caption className="sr-only">Phân rã điểm theo mức độ yêu cầu</caption>
+              <thead>
+                <tr className="text-left text-xs text-ink-3">
+                  <th className="pb-2 font-medium">Mức độ</th>
+                  <th className="pb-2 font-medium">Khớp</th>
+                  <th className="pb-2 font-medium">Một phần</th>
+                  <th className="pb-2 font-medium">Thiếu</th>
+                  <th className="pb-2 text-right font-medium">Điểm đạt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {analysis.breakdown.map((b) => (
+                  <tr key={b.importance} className="border-t border-line">
+                    <td className="py-2 font-medium text-ink">
+                      {b.label} <span className="text-xs font-normal text-ink-3">(×{b.weight})</span>
+                    </td>
+                    <td className="py-2 text-good">{b.matched}</td>
+                    <td className="py-2 text-warn">{b.partial}</td>
+                    <td className="py-2 text-bad">{b.missing}</td>
+                    <td className="py-2 text-right text-ink">
+                      {formatNumber(b.earned)} / {formatNumber(b.possible)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="text-xs text-ink-2">
+              Tổng: {formatNumber(analysis.breakdown.reduce((s, b) => s + b.earned, 0))} /{" "}
+              {formatNumber(analysis.breakdown.reduce((s, b) => s + b.possible, 0))} điểm trọng số → {formatNumber(score)}%.
+            </p>
+          </div>
+        )}
+      </Panel>
+    </section>
   )
 }
 
@@ -179,44 +180,47 @@ export function EvidenceList({ requirements }: { requirements: RequirementAssess
   }
 
   return (
-    <Panel className="grid gap-4 p-0">
-      <div className="flex flex-wrap items-start justify-between gap-3 px-6 pt-6">
-        <div className="grid gap-1">
-          <h2 className="font-heading text-lg font-bold">Bằng chứng trong CV</h2>
-          <p className="text-sm text-ink-2">Mỗi yêu cầu của JD kèm câu trích nguyên văn từ CV. Bấm vào dòng để xem chi tiết.</p>
-        </div>
-        <div role="tablist" aria-label="Lọc yêu cầu" className="flex gap-1 rounded-xl bg-surface p-1">
-          {tabs.map((t) => (
-            <button
-              key={t.value}
-              type="button"
-              role="tab"
-              aria-selected={filter === t.value}
-              onClick={() => setFilter(t.value)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                filter === t.value ? "bg-card text-blue shadow-card" : "text-ink-2 hover:text-ink",
-              )}
-            >
-              {t.label} ({t.count})
-            </button>
-          ))}
-        </div>
+    <section className="grid gap-3">
+      <div className="grid gap-1">
+        <SectionHeader
+          title="Bằng chứng trong CV"
+          aside={
+            <div role="tablist" aria-label="Lọc yêu cầu" className="flex gap-1 rounded-xl bg-blue-soft/60 p-1">
+              {tabs.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={filter === t.value}
+                  onClick={() => setFilter(t.value)}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                    filter === t.value ? "bg-card text-blue shadow-card" : "text-ink-2 hover:text-ink",
+                  )}
+                >
+                  {t.label} ({t.count})
+                </button>
+              ))}
+            </div>
+          }
+        />
+        <p className="text-xs text-ink-2">Mỗi yêu cầu của JD kèm câu trích nguyên văn từ CV. Bấm vào dòng để xem chi tiết.</p>
       </div>
-
-      {rows.length === 0 ? (
-        <p className="mx-6 mb-6 flex items-center gap-2 rounded-xl bg-good-soft/60 p-4 text-sm text-good">
-          <CircleCheck className="size-4" aria-hidden />
-          Không có yêu cầu nào thiếu trong CV.
-        </p>
-      ) : (
-        <ul className="grid border-t border-line">
-          {rows.map((r) => (
-            <EvidenceRow key={r.id} row={r} expanded={expanded.has(r.id)} onToggle={() => toggle(r.id)} />
-          ))}
-        </ul>
-      )}
-    </Panel>
+      <Panel className="grid overflow-hidden p-0">
+        {rows.length === 0 ? (
+          <p className="m-5 flex items-center gap-2 rounded-xl bg-good-soft/60 p-4 text-sm text-good">
+            <CircleCheck className="size-4" aria-hidden />
+            Không có yêu cầu nào thiếu trong CV.
+          </p>
+        ) : (
+          <ul className="grid">
+            {rows.map((r) => (
+              <EvidenceRow key={r.id} row={r} expanded={expanded.has(r.id)} onToggle={() => toggle(r.id)} />
+            ))}
+          </ul>
+        )}
+      </Panel>
+    </section>
   )
 }
 
@@ -291,86 +295,82 @@ export function SuggestionList({ analysis }: { analysis: GapAnalysis }) {
   }
 
   return (
-    <Panel className="grid gap-4">
+    <section className="grid gap-3">
       <div className="grid gap-1">
-        <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-          <span className="grid size-8 place-items-center rounded-lg bg-violet-soft text-violet">
-            <Sparkles className="size-4" aria-hidden />
-          </span>
-          Gợi ý cải thiện
-        </h2>
-        <p className="text-sm text-ink-2">
+        <SectionHeader title="Gợi ý cải thiện" />
+        <p className="text-xs text-ink-2">
           Chỉ diễn đạt lại nội dung bạn đã viết, không thêm số liệu hay thành tích. Hãy kiểm tra trước khi dùng.
         </p>
       </div>
-
-      {analysis.suggestions.length === 0 ? (
-        <p className="rounded-xl bg-surface p-4 text-sm text-ink-2">
-          {analysis.llm_used
-            ? "Chưa có câu nào cần diễn đạt lại cho vị trí này."
-            : "AI tạm thời không khả dụng nên chưa có gợi ý viết lại. Điểm và bằng chứng phía trên vẫn được chấm theo rubric."}
-        </p>
-      ) : (
-        <ul className="grid gap-3">
-          {analysis.suggestions.map((s) => (
-            <li key={s.id} className="flex gap-3 rounded-xl border border-line p-4">
-              <span className="mt-2 size-1.5 shrink-0 rounded-full bg-violet" aria-hidden />
-              <div className="grid min-w-0 flex-1 gap-2">
-                <p className="text-[15px] leading-6 font-medium text-ink">{s.suggested_text}</p>
-                <p className="text-xs leading-5 text-ink-2">
-                  <span className="font-medium text-ink">Câu gốc{s.section_label ? ` (${s.section_label})` : ""}:</span>{" "}
-                  {s.original_text}
-                </p>
-                {s.reason && (
+      <Panel className="grid overflow-hidden p-0">
+        {analysis.suggestions.length === 0 ? (
+          <p className="p-5 text-sm text-ink-2">
+            {analysis.llm_used
+              ? "Chưa có câu nào cần diễn đạt lại cho vị trí này."
+              : "AI tạm thời không khả dụng nên chưa có gợi ý viết lại. Điểm và bằng chứng phía trên vẫn được chấm theo rubric."}
+          </p>
+        ) : (
+          <ul className="divide-y divide-line">
+            {analysis.suggestions.map((s) => (
+              <li key={s.id} className="flex gap-3 px-6 py-5">
+                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-violet" aria-hidden />
+                <div className="grid min-w-0 flex-1 gap-2">
+                  <p className="text-[15px] leading-6 font-medium text-ink">{s.suggested_text}</p>
                   <p className="text-xs leading-5 text-ink-2">
-                    <span className="font-medium text-ink">Lý do:</span> {s.reason}
+                    <span className="font-medium text-ink">Câu gốc{s.section_label ? ` (${s.section_label})` : ""}:</span>{" "}
+                    {s.original_text}
                   </p>
-                )}
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-                  <span className="flex flex-wrap items-center gap-1.5">
-                    <Badge variant="good" className="h-auto px-2 py-0.5">
-                      <ShieldCheck aria-hidden />
-                      Có căn cứ trong CV
-                    </Badge>
-                    <Badge variant="neutral" className="h-auto px-2 py-0.5">
-                      {s.skill}
-                    </Badge>
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => void copy(s.suggested_text)}>
-                      <Copy aria-hidden />
-                      Sao chép
-                    </Button>
-                    <FeedbackWidget variant="thumbs" responseId={s.id} />
-                  </span>
+                  {s.reason && (
+                    <p className="text-xs leading-5 text-ink-2">
+                      <span className="font-medium text-ink">Lý do:</span> {s.reason}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant="good" className="h-auto px-2 py-0.5">
+                        <ShieldCheck aria-hidden />
+                        Có căn cứ trong CV
+                      </Badge>
+                      <Badge variant="neutral" className="h-auto px-2 py-0.5">
+                        {s.skill}
+                      </Badge>
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Button variant="ghost" className="h-7 px-2 text-xs" onClick={() => void copy(s.suggested_text)}>
+                        <Copy aria-hidden />
+                        Sao chép
+                      </Button>
+                      <FeedbackWidget variant="thumbs" responseId={s.id} />
+                    </span>
+                  </div>
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      {/* Chống bịa: kỹ năng thiếu không được sinh câu CV mới, chỉ gợi ý tự kiểm tra hoặc học thêm */}
-      {missing.length > 0 && (
-        <section className="grid gap-2 rounded-xl bg-warn-soft/50 p-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <Lightbulb className="size-4 text-warn" aria-hidden />
-            Bạn có thể cân nhắc
-          </h3>
-          <ul className="flex flex-wrap gap-1.5">
-            {missing.map((r) => (
-              <li key={r.id} className="rounded-md bg-card px-2 py-0.5 text-xs font-medium text-ink ring-1 ring-line">
-                {r.skill}
               </li>
             ))}
           </ul>
-          <p className="text-sm leading-6 text-ink-2">
-            Nếu bạn thực sự đã làm việc với các kỹ năng này, hãy bổ sung vào CV kèm mô tả cụ thể; nếu chưa, đây là kỹ năng
-            nên học thêm.
-          </p>
-        </section>
-      )}
-    </Panel>
+        )}
+
+        {/* Chống bịa: kỹ năng thiếu không được sinh câu CV mới, chỉ gợi ý tự kiểm tra hoặc học thêm */}
+        {missing.length > 0 && (
+          <section className="m-5 mt-0 grid gap-2 rounded-xl bg-warn-soft/50 p-4">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <Lightbulb className="size-4 text-warn" aria-hidden />
+              Bạn có thể cân nhắc
+            </h3>
+            <ul className="flex flex-wrap gap-1.5">
+              {missing.map((r) => (
+                <li key={r.id} className="rounded-md bg-card px-2 py-0.5 text-xs font-medium text-ink ring-1 ring-line">
+                  {r.skill}
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm leading-6 text-ink-2">
+              Nếu bạn thực sự đã làm việc với các kỹ năng này, hãy bổ sung vào CV kèm mô tả cụ thể; nếu chưa, đây là kỹ năng
+              nên học thêm.
+            </p>
+          </section>
+        )}
+      </Panel>
+    </section>
   )
 }
 
@@ -379,47 +379,47 @@ export function SuggestionList({ analysis }: { analysis: GapAnalysis }) {
 export function NextActions({ analysis }: { analysis: GapAnalysis }) {
   const optimizeHref = `/student/analysis/${encodeURIComponent(analysis.id)}/optimize`
   return (
-    <Panel className="grid gap-4 bg-gradient-to-r from-card to-violet-soft/50">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="grid gap-1">
-          <h2 className="font-heading text-lg font-bold">Bước tiếp theo</h2>
+    <section className="grid gap-3">
+      <SectionHeader title="Bước tiếp theo" />
+      <Panel className="grid gap-4 bg-gradient-to-r from-card to-violet-soft/50">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <p className="text-sm text-ink-2">Luyện trả lời phỏng vấn theo STAR cho đúng vị trí vừa phân tích.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {OPTIMIZER_AVAILABLE ? (
-            <Button variant="soft" className="h-11 px-4" nativeButton={false} render={<Link href={optimizeHref} />}>
-              <Wand2 aria-hidden />
-              Tối ưu CV
+          <div className="flex flex-wrap items-center gap-2">
+            {OPTIMIZER_AVAILABLE ? (
+              <Button variant="soft" className="h-11 px-4" nativeButton={false} render={<Link href={optimizeHref} />}>
+                <Wand2 aria-hidden />
+                Tối ưu CV
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger render={<span tabIndex={0} className="grid rounded-lg" />}>
+                  <Button variant="soft" className="h-11 px-4" disabled>
+                    <Wand2 aria-hidden />
+                    Tối ưu CV
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Trình tối ưu CV sắp có</TooltipContent>
+              </Tooltip>
+            )}
+            <Button
+              variant="violet"
+              size="brand"
+              nativeButton={false}
+              render={<Link href={`/student/interview/new?jd=${encodeURIComponent(analysis.jd.id)}`} />}
+            >
+              <MessagesSquare aria-hidden />
+              Luyện phỏng vấn cho vị trí này
             </Button>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger render={<span tabIndex={0} className="grid rounded-lg" />}>
-                <Button variant="soft" className="h-11 px-4" disabled>
-                  <Wand2 aria-hidden />
-                  Tối ưu CV
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Trình tối ưu CV sắp có</TooltipContent>
-            </Tooltip>
-          )}
-          <Button
-            variant="violet"
-            size="brand"
-            nativeButton={false}
-            render={<Link href={`/student/interview/new?jd=${encodeURIComponent(analysis.jd.id)}`} />}
-          >
-            <MessagesSquare aria-hidden />
-            Luyện phỏng vấn cho vị trí này
-          </Button>
+          </div>
         </div>
-      </div>
-      {analysis.pending_review_count > 0 && (
-        <p className="flex items-center gap-2 text-sm text-ink-2">
-          <Clock className="size-4 text-warn" aria-hidden />
-          {analysis.pending_review_count} gợi ý đang chờ cố vấn xem lại do chưa đủ căn cứ trong CV.
-        </p>
-      )}
-    </Panel>
+        {analysis.pending_review_count > 0 && (
+          <p className="flex items-center gap-2 text-sm text-ink-2">
+            <Clock className="size-4 text-warn" aria-hidden />
+            {analysis.pending_review_count} gợi ý đang chờ cố vấn xem lại do chưa đủ căn cứ trong CV.
+          </p>
+        )}
+      </Panel>
+    </section>
   )
 }
 
