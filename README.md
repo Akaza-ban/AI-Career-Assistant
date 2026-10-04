@@ -1,196 +1,533 @@
-# AI20K Agent Template
+﻿# Trợ lý Nghề nghiệp X — P-131 (EDU-17)
 
-Template chính thức cho học viên VinUni AI20K Build Phase: cấu trúc dự án, code
-mẫu và hướng dẫn kỹ thuật để xây dựng một AI Agent hoàn chỉnh — từ kiến trúc,
-code, test cho đến deploy và nộp bài Demo Day.
+> **Sinh viên gặp khó khăn khi tự đánh giá CV và chuẩn bị phỏng vấn** → Hệ thống AI phân tích khoảng cách CV–JD, tối ưu CV, luyện phỏng vấn STAR và kết nối cố vấn theo vòng lặp Human-in-the-Loop.
 
-Technical Guidebook: <https://phoenix.note.transformerlabs.ai/technical-book>
+---
 
-## Template có sẵn những gì
+## Mục lục
 
-- **Cấu trúc thư mục tách lớp** — `agents/`, `api/`, `services/`, `models/` đã
-  chia sẵn, không phải bàn lại từ đầu.
-- **Code mẫu chạy được** — LangGraph agent (state, node, tool), FastAPI routes,
-  Pydantic settings, schema.
-- **Docker và CI** — Dockerfile multi-stage, `docker-compose.yml`, workflow
-  GitHub Actions chạy `ruff` + `pytest` khi push lên `main`/`develop` và khi mở
-  pull request vào `main`.
-- **Technical Guidebook 10 chương** trong `docs/guide/`, đồng thời đọc được
-  online.
-- **Checklist 10 deliverables** của Demo Day.
-- **AI usage logging** — hook cài sẵn cho 6 công cụ AI, log tự động gửi lên
-  grading server mỗi lần `git push`.
+- [Vấn đề](#vấn-đề)
+- [Giải pháp](#giải-pháp)
+- [Tính năng chính](#tính-năng-chính)
+- [Tech Stack](#tech-stack)
+- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+- [Cài đặt nhanh](#cài-đặt-nhanh)
+- [Biến môi trường](#biến-môi-trường)
+- [Chạy ứng dụng](#chạy-ứng-dụng)
+- [Cấu trúc thư mục](#cấu-trúc-thư-mục)
+- [API — Ví dụ gọi thử](#api--ví-dụ-gọi-thử)
+- [Chạy bằng Docker](#chạy-bằng-docker)
+- [Kiểm thử](#kiểm-thử)
+- [AI Logging & LangSmith](#ai-logging--langsmith)
+- [Checklist Deliverables](#checklist-deliverables)
+- [Đội nhóm](#đội-nhóm)
 
-## Yêu cầu
+---
 
+## Vấn đề
 
-- Python 3.11 (phiên bản CI đang dùng)
-- Git
-- Docker — tuỳ chọn, chỉ cần nếu chạy `docker compose`
+Sinh viên năm cuối và fresher thường:
 
-## Bắt đầu
+- **Không biết CV của mình thiếu gì** so với JD cụ thể — phải tự đọc, tự so, mất 2–4 giờ mỗi lần.
+- **Không có môi trường luyện phỏng vấn** sát thực tế: các công cụ hiện tại không chấm điểm theo chuẩn STAR, không cho phản hồi chi tiết.
+- **Thiếu kênh phản hồi từ cố vấn** — cố vấn không có dashboard để theo dõi tiến bộ, không thể nhận xét asynchronously.
 
-### 1. Clone repo của đội
+## Giải pháp
 
-Khi đội được chốt, hệ thống tự sinh repo cho đội từ template này, nằm trong org
-GitHub của khoá bạn đang học và đặt tên theo mã đội. Copy URL ở trang đội trên
-Phoenix rồi clone về:
+**Trợ lý Nghề nghiệp X** là web app 2 vai:
+
+| Vai | Giao diện | Chức năng |
+|---|---|---|
+| **Sinh viên** | `/student/*` | Upload CV, phân tích Gap, tối ưu CV, luyện phỏng vấn, chia sẻ với cố vấn |
+| **Cố vấn** | `/advisor/*` | Dashboard tổng quan, xem hồ sơ SV, nhận xét phỏng vấn, nhắn tin |
+
+---
+
+## Tính năng chính
+
+### Dành cho Sinh viên
+
+| Tính năng | Mô tả |
+|---|---|
+| **Gap Analysis** (US-SV-02) | Upload CV (PDF/DOCX) + chọn JD → AI phân tích khoảng cách, chấm Match Score 0–100, trả về danh sách kỹ năng thiếu + bằng chứng từ CV gốc |
+| **CV Optimizer** (US-SV-03) | Gợi ý viết lại từng đoạn CV (accept / edit / reject), xuất file DOCX, audit trail đầy đủ |
+| **Kỹ năng đang học** (US-SV-05) | Đánh dấu kỹ năng đang phát triển, hiển thị riêng trong CV xuất |
+| **Mock Interview** (US-SV-04) | Phỏng vấn 3–4 vòng STAR, bộ đếm giờ, chấm điểm S/T/A/R 0–5, báo cáo chi tiết |
+| **Lịch sử & Tiến bộ** | Xem lại tất cả lượt phân tích, phỏng vấn, biểu đồ tiến bộ theo thời gian |
+| **Chia sẻ với Cố vấn** | Bật/tắt chia sẻ CV và báo cáo phỏng vấn per-item |
+| **Phản hồi AI** (US-SV-06) | Thumb up/down + CSAT 1–5 sao cho từng gợi ý |
+
+### Dành cho Cố vấn
+
+| Tính năng | Mô tả |
+|---|---|
+| **Dashboard Tổng quan** | Số liệu tổng hợp cohort: tổng SV, trung bình match score, lượt phỏng vấn |
+| **Danh sách Sinh viên** | Lọc theo tên, ngành, khoá; xem trạng thái từng SV |
+| **Hồ sơ Sinh viên** | Xem CV được chia sẻ, báo cáo phỏng vấn, viết nhận xét HITL |
+| **Ghi chú nội bộ** | Ghi chú riêng (SV không thấy), gắn tag hành vi/kỹ năng, ghim |
+| **Nhắn tin** | Chat text với SV được phân công |
+
+---
+
+## Tech Stack
+
+| Lớp | Công nghệ | Phiên bản |
+|---|---|---|
+| **Frontend** | Next.js (App Router) + TypeScript | 16.x / React 19 |
+| **Styling** | Tailwind CSS v4 + shadcn/ui + Base UI | — |
+| **Backend** | FastAPI + Uvicorn | 0.115+ |
+| **ORM** | SQLAlchemy 2.0 | — |
+| **Database** | SQLite (dev) | `./data/app.db` |
+| **Vector Store** | ChromaDB | `./data/chroma` |
+| **AI Orchestration** | LangGraph (StateGraph) | 0.2+ |
+| **LLM Client** | langchain-openai (ChatOpenAI) | 0.3+ |
+| **LLM Providers** | Groq / OpenRouter / OpenAI | configurable |
+| **Observability** | LangSmith | — |
+| **CV Parsing** | pypdf + python-docx | — |
+| **Lint / Format** | ruff | 0.8+ |
+| **Test** | pytest + pytest-asyncio + httpx | — |
+| **Container** | Docker + Docker Compose | — |
+| **CI** | GitHub Actions | — |
+
+---
+
+## Yêu cầu hệ thống
+
+- **Python** 3.11
+- **Node.js** 18+ và npm
+- **Git**
+- **Docker** (tùy chọn, chỉ cần nếu chạy bằng Docker Compose)
+- API key của ít nhất một LLM provider: [Groq](https://console.groq.com/), [OpenRouter](https://openrouter.ai/), hoặc [OpenAI](https://platform.openai.com/)
+
+---
+
+## Cài đặt nhanh
+
+### Backend (FastAPI)
 
 ```bash
-git clone https://github.com/<ORG-CỦA-KHOÁ>/<MÃ-ĐỘI>.git
-cd <MÃ-ĐỘI>
-```
-
-Không cần `rm -rf .git`, `git init` hay `git remote add`: repo sinh từ template
-đã bắt đầu bằng lịch sử riêng của đội và remote trỏ sẵn đúng chỗ. Chưa thấy repo
-của đội thì báo BTC — repo tự tạo nằm ngoài org sẽ không được chấm.
-
-### 2. Cài môi trường
-
-```bash
+# 1. Tạo và kích hoạt virtual environment
 python3.11 -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+source .venv/bin/activate          # Linux / macOS
+.\.venv\Scripts\Activate.ps1       # Windows PowerShell
+
+# 2. Cài thư viện Python
 pip install -r requirements.txt
-```
 
-### 3. Cấu hình biến môi trường
-
-```bash
+# 3. Sao chép file biến môi trường
 cp .env.example .env
+# Mở .env và điền API key (xem phần Biến môi trường bên dưới)
+
+# 4. Khởi động backend
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Mở `.env` và điền `OPENAI_API_KEY`. Riêng `AI_LOG_API_KEY`, mỗi thành viên tự
-tạo key riêng tại [dashboard Phoenix](https://phoenix.note.transformerlabs.ai/api-keys)
-rồi thay vào chỗ `<get-your-api-key-from-dashboard-phoenix>` — giá trị trong
-`.env.example` chỉ là placeholder, để nguyên thì log không vào được hệ thống chấm.
+Swagger UI sẽ mở tại: **http://localhost:8000/docs**
 
-### 4. Cài hook ghi log AI
+### Frontend (Next.js)
 
 ```bash
-bash scripts/setup_hooks.sh                                      # Linux / macOS / Git Bash
-powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1 # Windows PowerShell
+cd frontend
+
+# 1. Cài thư viện Node
+npm install
+
+# 2. Sao chép biến môi trường frontend
+cp .env.example .env.local
+# Điền NEXT_PUBLIC_API_URL nếu backend chạy ở cổng khác
+
+# 3. Khởi động dev server
+npm run dev
 ```
 
-Chạy một lần sau khi clone. Hook ghi lại prompt khi bạn dùng Claude Code, Cursor,
-Codex CLI, Gemini CLI, Antigravity hoặc GitHub Copilot, và cài pre-push hook để
-đẩy log lên server.
+Giao diện sẽ mở tại: **http://localhost:3000**
 
-### 5. Chạy server
+> **Gợi ý:** Mở 2 terminal riêng — một cho backend, một cho frontend.
+
+---
+
+## Biến môi trường
+
+### Backend — `.env` (copy từ `.env.example`)
+
+#### LLM Provider (bắt buộc — điền ít nhất 1 key)
+
+| Biến | Ví dụ | Mô tả |
+|---|---|---|
+| `LLM_PROVIDER` | `groq` | Provider đang dùng: `groq` / `openrouter` / `openai` |
+| `GROQ_API_KEY` | `gsk_xxx` | API key từ [console.groq.com](https://console.groq.com/) |
+| `OPENROUTER_API_KEY` | `sk-or-v1-xxx` | API key từ [openrouter.ai](https://openrouter.ai/) |
+| `OPENAI_API_KEY` | `sk-xxx` | API key từ [platform.openai.com](https://platform.openai.com/) |
+| `MODEL_NAME` | `llama-3.3-70b-versatile` | Tên model (xem gợi ý bên dưới) |
+| `LLM_TEMPERATURE` | `0.7` | Độ ngẫu nhiên (0.0 – 2.0) |
+| `LLM_BASE_URL` | *(để trống)* | Custom endpoint nếu dùng proxy |
+
+**Gợi ý model theo provider:**
+- **Groq:** `llama-3.3-70b-versatile`, `llama-3.1-8b-instant`
+- **OpenRouter:** `meta-llama/llama-3.3-70b-instruct`, `qwen/qwen-2.5-72b-instruct`
+- **OpenAI:** `gpt-4o-mini`, `gpt-4o`
+- **Gemini** (qua OpenAI-compat): đặt `LLM_PROVIDER=openai`, `OPENAI_API_KEY=<gemini_key>`, `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `MODEL_NAME=gemini-2.5-flash`
+
+#### LangSmith — Observability (tùy chọn)
+
+| Biến | Giá trị | Mô tả |
+|---|---|---|
+| `LANGCHAIN_TRACING_V2` | `true` / `false` | Bật tracing (chỉ bật khi có key thật) |
+| `LANGCHAIN_API_KEY` | `lsv2_pt_xxx` | Key từ [smith.langchain.com](https://smith.langchain.com/) |
+| `LANGCHAIN_PROJECT` | `ai20k-p131` | Tên project trên LangSmith |
+| `LANGCHAIN_ENDPOINT` | `https://api.smith.langchain.com` | Endpoint (giữ nguyên) |
+
+#### App & Database
+
+| Biến | Mặc định | Mô tả |
+|---|---|---|
+| `APP_ENV` | `development` | `development` / `production` / `test` |
+| `APP_PORT` | `8000` | Cổng backend |
+| `CORS_ORIGINS` | `http://localhost:3000` | Domain frontend (nhiều URL cách nhau bởi dấu phẩy) |
+| `DATABASE_URL` | `sqlite:///./data/app.db` | URL database |
+| `UPLOAD_DIR` | `./data/uploads` | Thư mục lưu file CV gốc |
+| `CHROMA_PERSIST_DIR` | `./data/chroma` | Thư mục ChromaDB |
+| `SEED_DEMO_COHORT` | `true` | Tự tạo dữ liệu demo cố vấn khi khởi động |
+| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` |
+
+#### AI Hook Logging
+
+| Biến | Mô tả |
+|---|---|
+| `AI_LOG_API_KEY` | Key cá nhân từ [Phoenix Dashboard](https://phoenix.note.transformerlabs.ai/api-keys) — mỗi thành viên một key riêng |
+| `AI_LOG_SERVER` | Endpoint gửi log (giữ nguyên mặc định) |
+| `AI_LOG_DIR` | Thư mục log local (`.ai-log/`) |
+
+---
+
+### Frontend — `frontend/.env.local` (copy từ `frontend/.env.example`)
+
+| Biến | Mặc định | Mô tả |
+|---|---|---|
+| `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | URL backend |
+| `NEXT_PUBLIC_LIVE_APIS` | *(để trống)* | Nhóm API gọi backend thật; để trống = toàn bộ mock. Dùng `all` để bật hết |
+| `NEXT_PUBLIC_MOCK_SCENARIO` | `default` | Kịch bản mock: `default` / `new_student` |
+| `NEXT_PUBLIC_FEATURE_MULTI_JD` | `false` | Tính năng ngoài Gate 1 (không bật trong demo) |
+
+---
+
+## Chạy ứng dụng
+
+### Lệnh `make` (Linux / macOS / Git Bash)
 
 ```bash
-uvicorn src.main:app --reload --port 8000
+make run        # Khởi động backend (uvicorn --reload :8000)
+make test       # Chạy pytest
+make lint       # ruff check
+make format     # ruff format
+make check      # lint + format + test
+make clean      # Xóa __pycache__, .pytest_cache, .ruff_cache
 ```
 
-Swagger UI ở <http://localhost:8000/docs>. Hoặc dùng `make run`, `make test`,
-`make lint` — xem `Makefile`.
+### Chạy thủ công (Windows / cross-platform)
+
+```bash
+# Backend
+uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+
+# Frontend (terminal riêng)
+cd frontend && npm run dev
+
+# Typecheck frontend
+cd frontend && npm run typecheck
+
+# Test
+pytest tests/ -v
+
+# Lint / Format
+ruff check src/ tests/
+ruff format src/ tests/
+```
+
+---
 
 ## Cấu trúc thư mục
 
 ```
-src/
-  agents/            LangGraph agent
-    graph.py         State graph (nodes + edges)
-    state.py         State schema (TypedDict)
-    nodes/           Node functions
-    tools/           Agent tools (@tool)
-  api/routes.py      FastAPI endpoints
-  models/schemas.py  Pydantic schemas
-  services/llm.py    LLM client
-  config.py          Pydantic Settings
-  main.py            App entry point
-tests/               pytest suite
-scripts/             Hook ghi log AI + installer
-docs/
-  guide/             Technical Guidebook (nguồn của bản online)
-  architecture_diagram.md
-eval/                Kết quả evaluation
-presentation/        Slide và video Demo Day
-.claude/ .codex/ .cursor/ .gemini/ .agents/ .github/hooks/
-                     Config hook cho từng công cụ
-.github/workflows/   CI
-Dockerfile           Multi-stage build
-docker-compose.yml   Chạy backend bằng Docker
-README_boilerplate.md  Khung README cho dự án của đội
+P-131/
+├── src/                            # Backend Python (FastAPI)
+│   ├── main.py                     # Entry point — khởi động app
+│   ├── config.py                   # Pydantic Settings (biến môi trường)
+│   ├── api/                        # FastAPI routes
+│   │   ├── routes.py               # Router tổng hợp /api/v1/*
+│   │   ├── cv.py                   # Upload, list, delete, export CV
+│   │   ├── analysis.py             # Bắt đầu & xem kết quả Gap Analysis
+│   │   ├── optimizer.py            # Phiên tối ưu CV (decisions, finalize)
+│   │   ├── interviews.py           # Bắt đầu, trả lời, báo cáo phỏng vấn
+│   │   ├── advisor.py              # Dashboard & hồ sơ cố vấn
+│   │   ├── messages.py             # Nhắn tin SV ↔ cố vấn
+│   │   ├── feedback.py             # Thumb / CSAT feedback
+│   │   ├── sharing.py              # Share grants (bật/tắt chia sẻ)
+│   │   ├── students.py             # Danh sách sinh viên
+│   │   └── deps.py                 # Dependency injection (auth header)
+│   ├── agents/                     # LangGraph Agents
+│   │   ├── gap_analysis/
+│   │   │   ├── graph.py            # StateGraph: parse→retrieve→compare→generate→verify
+│   │   │   ├── state.py            # GapAnalysisState (TypedDict)
+│   │   │   └── nodes/              # Node functions
+│   │   ├── interview/
+│   │   │   ├── graph.py            # Conditional: route→score_answer→ask_question
+│   │   │   ├── state.py            # InterviewState (TypedDict)
+│   │   │   └── nodes/
+│   │   └── graph.py                # General chat agent
+│   ├── services/                   # Business logic
+│   │   ├── gap_analysis.py         # Orchestrate gap analysis pipeline
+│   │   ├── cv_optimizer.py         # Xử lý phiên tối ưu CV
+│   │   ├── cv_files.py             # Upload, parse, lưu file CV
+│   │   ├── interview.py            # Orchestrate phỏng vấn
+│   │   ├── advisor.py              # Truy vấn dữ liệu cố vấn
+│   │   ├── progress.py             # Tính toán tiến bộ sinh viên
+│   │   ├── rag.py                  # ChromaDB — tìm kiếm embedding JD
+│   │   ├── skill_matching.py       # So khớp kỹ năng CV–JD
+│   │   ├── guardrails.py           # Output validation (grounding check)
+│   │   └── llm.py                  # LLM client wrapper
+│   ├── db/
+│   │   ├── database.py             # SQLAlchemy engine + session
+│   │   ├── models.py               # ORM Models (14 bảng)
+│   │   └── seed.py                 # Seed dữ liệu ban đầu
+│   └── models/
+│       └── schemas.py              # Pydantic schemas (request / response)
+│
+├── frontend/                       # Frontend Next.js 16 (App Router)
+│   ├── app/
+│   │   ├── student/
+│   │   │   ├── (workspace)/        # Các trang có nav bar
+│   │   │   │   ├── cv/             # CV của tôi
+│   │   │   │   ├── analysis/       # Phân tích CV & JD
+│   │   │   │   ├── interview/      # Luyện phỏng vấn
+│   │   │   │   ├── history/        # Lịch sử & Tiến bộ
+│   │   │   │   ├── share/          # Chia sẻ với Cố vấn
+│   │   │   │   └── settings/       # Cài đặt & Quyền riêng tư
+│   │   │   └── (focus)/            # Trang không có nav (session phỏng vấn)
+│   │   └── advisor/
+│   │       └── students/           # Danh sách & hồ sơ sinh viên
+│   ├── components/
+│   │   ├── student/                # Components của sinh viên
+│   │   ├── advisor/                # Components của cố vấn
+│   │   ├── shell/                  # App shell (nav, topbar, breadcrumb)
+│   │   ├── common/                 # Panel, HintPopover, ...
+│   │   └── ui/                     # shadcn/ui primitives
+│   └── lib/                        # Utilities, API client, types
+│
+├── tests/                          # pytest test suite
+├── eval/results/report.md          # Báo cáo evaluation
+├── docs/
+│   ├── architecture_diagrams.md    # Sơ đồ kiến trúc (8 diagrams Mermaid)
+│   └── dev/                        # Ghi chú phát triển nội bộ
+├── presentation/                   # Slide và video Demo Day
+├── data/                           # Dữ liệu local (gitignored)
+│   ├── app.db                      # SQLite database
+│   ├── chroma/                     # ChromaDB vector store
+│   └── uploads/                    # File CV gốc của sinh viên
+├── .env.example                    # Template biến môi trường backend
+├── frontend/.env.example           # Template biến môi trường frontend
+├── Dockerfile                      # Multi-stage Docker build
+├── docker-compose.yml              # Chạy backend bằng Docker
+├── Makefile                        # Lệnh tắt
+├── requirements.txt                # Python dependencies
+├── JOURNAL.md                      # Nhật ký phát triển theo tuần
+└── WORKLOG.md                      # Worklog từng thành viên
 ```
 
-## Technical Guidebook
+---
 
-| Chương | Nội dung | Thời gian |
-|---|---|---|
-| 1 | Lời mở đầu — mục tiêu, cách sử dụng | 15 phút |
-| 2 | Khởi tạo dự án — clone, setup, git workflow | 4 giờ |
-| 3 | Thiết kế kiến trúc — 3-tier, diagram, ADR | 6 giờ |
-| 4 | LangGraph Agent — state, node, edge, tool, RAG | 8 giờ |
-| 5 | FastAPI — routes, validation, error handling, streaming | 6 giờ |
-| 6 | Giao diện — Next.js và Streamlit | 6 giờ |
-| 7 | DevOps — Docker, CI/CD, deploy, logging | 6 giờ |
-| 8 | Kiểm thử — unit test, integration test, RAGAS | 4 giờ |
-| 9 | Demo Day — 10 deliverables, checklist | 2 giờ |
-| 10 | Tài nguyên — khoá học, tài liệu, BMAD method | tham khảo |
+## API — Ví dụ gọi thử
 
-Đọc online tại <https://phoenix.note.transformerlabs.ai/technical-book>: đăng
-nhập bằng GitHub (đúng account đã được BTC mời vào org của khoá), chọn tab
-**Technical Book** ở sidebar trái. Bản offline nằm trong `docs/guide/`, mở được
-bằng bất kỳ markdown viewer nào.
+> **Auth:** Dùng header `X-Demo-Role: student` hoặc `X-Demo-Role: advisor` (demo mode).  
+> Swagger UI đầy đủ tại **http://localhost:8000/docs**
 
-## 10 deliverables cho Demo Day
+### Kiểm tra sức khỏe hệ thống
 
-| # | Deliverable | Vị trí | Template lo tới đâu |
-|---|---|---|---|
-| 1 | Source code | `src/` | Khung sẵn |
-| 2 | README | copy `README_boilerplate.md` thành `README.md` | Khung sẵn |
-| 3 | Architecture diagram | `docs/architecture_diagram.md` | Khung sẵn |
-| 4 | AI logs | LangSmith (3 biến môi trường) + auto AI usage logging | Cấu hình sẵn |
-| 5 | Live URL | deploy lên Render/Vercel | CI/CD sẵn |
-| 6 | Video demo | `presentation/` | Đội tự làm |
-| 7 | Pitch deck | `presentation/` | Đội tự làm |
-| 8 | Development journal | `JOURNAL.md` | Khung sẵn |
-| 9 | Worklog | `WORKLOG.md` | Khung sẵn |
-| 10 | Evaluation evidence | `eval/` | Đội tự làm |
+```bash
+curl http://localhost:8000/health
+# {"status":"ok","env":"development","version":"1.0.0"}
 
-## Tech stack
+curl http://localhost:8000/api/v1/status
+# {"status":"ready","llm_provider":"groq","model_name":"llama-3.3-70b-versatile",...}
+```
 
-| Lớp | Công nghệ |
-|---|---|
-| Agent | LangGraph + LangChain 0.3 |
-| Backend | FastAPI 0.115 + Uvicorn |
-| LLM | OpenAI, mặc định `gpt-4o-mini` (đổi trong `src/config.py`) |
-| Giao diện | Next.js hoặc Streamlit (đội tự chọn, hướng dẫn ở chương 6) |
-| Lint / test | ruff + pytest 8 |
-| DevOps | Docker + GitHub Actions |
+### Xem thông tin người dùng đang đăng nhập
 
-## AI usage logging
+```bash
+curl http://localhost:8000/api/v1/me \
+  -H "X-Demo-Role: student"
+# {"id":"sv-001","role":"student","full_name":"Nguyễn Văn A",...}
+```
 
-Mọi prompt được ghi vào `.ai-log/session.jsonl` và tự động gửi lên grading server
-ở bước pre-push.
+### Upload CV (PDF/DOCX)
+
+```bash
+curl -X POST http://localhost:8000/api/v1/cv/upload \
+  -H "X-Demo-Role: student" \
+  -F "file=@/path/to/cv.pdf"
+# {"id":"cv-xxx","file_name":"cv.pdf","version":1,"major":1,"minor":0,...}
+```
+
+### Phân tích Gap — bắt đầu
+
+```bash
+curl -X POST http://localhost:8000/api/v1/analysis \
+  -H "X-Demo-Role: student" \
+  -H "Content-Type: application/json" \
+  -d '{"cv_version_id": "cv-xxx", "jd_id": "jd-yyy"}'
+# {"id":"ga-zzz","status":"processing","current_step":"parse"}
+```
+
+### Phân tích Gap — polling kết quả
+
+```bash
+curl http://localhost:8000/api/v1/analysis/ga-zzz \
+  -H "X-Demo-Role: student"
+# {"id":"ga-zzz","status":"completed","match_score":72.5,"result":{...}}
+```
+
+### Bắt đầu phỏng vấn STAR
+
+```bash
+curl -X POST http://localhost:8000/api/v1/interviews \
+  -H "X-Demo-Role: student" \
+  -H "Content-Type: application/json" \
+  -d '{"jd_id": "jd-yyy", "cv_version_id": "cv-xxx"}'
+# {"id":"sess-aaa","status":"in_progress","current_question":"Hãy kể về...","deadline":"..."}
+```
+
+### Gửi câu trả lời phỏng vấn
+
+```bash
+curl -X POST http://localhost:8000/api/v1/interviews/sess-aaa/answer \
+  -H "X-Demo-Role: student" \
+  -H "Content-Type: application/json" \
+  -d '{"answer": "Trong dự án X, tôi đã..."}'
+# {"situation":4.0,"task":3.5,"action":4.5,"result":3.0,"feedback":"...","next_question":"..."}
+```
+
+### Chat tổng quát
+
+```bash
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Tôi cần làm gì để chuẩn bị cho vị trí Backend Developer?"}'
+# {"response":"...","conversation_id":"..."}
+```
+
+### Dashboard cố vấn
+
+```bash
+curl http://localhost:8000/api/v1/advisor/overview \
+  -H "X-Demo-Role: advisor"
+# {"total_students":12,"avg_match_score":68.3,"total_interviews":45,...}
+```
+
+---
+
+## Chạy bằng Docker
+
+```bash
+# Build và chạy backend
+docker compose up --build
+
+# Chạy nền
+docker compose up -d
+
+# Xem log
+docker compose logs -f backend
+
+# Dừng
+docker compose down
+```
+
+> **Lưu ý:** `docker-compose.yml` hiện chỉ bao gồm backend. Frontend chạy riêng bằng `npm run dev` hoặc deploy lên Vercel.
+
+---
+
+## Kiểm thử
+
+```bash
+# Chạy toàn bộ test suite
+pytest tests/ -v
+
+# Chạy một file cụ thể
+pytest tests/test_api.py -v
+
+# Với coverage
+pytest tests/ --cov=src --cov-report=html
+```
+
+CI tự động chạy `ruff` + `pytest` khi push lên `main`/`develop` và khi mở Pull Request vào `main`.
+
+---
+
+## AI Logging & LangSmith
+
+### AI Usage Logging (Deliverable #4)
+
+Mọi prompt được ghi vào `.ai-log/session.jsonl` và tự động đẩy lên grading server khi `git push`.
+
+```bash
+# Cài hook (chạy một lần sau khi clone)
+bash scripts/setup_hooks.sh                                       # Linux / macOS
+powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1  # Windows
+```
 
 | Công cụ | Cấu hình | Thời điểm ghi |
 |---|---|---|
-| Claude Code | `.claude/settings.json` | mỗi prompt (`UserPromptSubmit`) |
-| Cursor | `.cursor/hooks.json` | mỗi prompt và khi dừng |
-| OpenAI Codex CLI | `.codex/hooks.json` | mỗi prompt và khi dừng |
-| Gemini CLI | `.gemini/settings.json` | mỗi lượt agent chạy |
-| GitHub Copilot | `.github/hooks/hooks.json` | mỗi prompt và cuối session |
-| Antigravity IDE | `.agents/hooks.json` | mỗi prompt, kèm lần quét lại lúc `git push` |
+| Claude Code | `.claude/settings.json` | Mỗi prompt |
+| Cursor | `.cursor/hooks.json` | Mỗi prompt và khi dừng |
+| OpenAI Codex CLI | `.codex/hooks.json` | Mỗi prompt |
+| Gemini CLI / Antigravity | `.gemini/settings.json` | Mỗi lượt agent |
+| GitHub Copilot | `.github/hooks/hooks.json` | Mỗi prompt |
 
-Dùng ChatGPT hay công cụ web khác thì log thủ công:
+Ghi log thủ công (ChatGPT, Gemini Web, ...):
 
 ```bash
-bash scripts/_pyrun.sh scripts/log_manual.py --tool chatgpt --prompt "What you asked"
+python scripts/log_antigravity.py --tool chatgpt --prompt "Prompt bạn đã dùng"
 ```
 
-## Đóng góp
+### LangSmith Tracing
 
-Repo này là open source. Đọc [CONTRIBUTING.md](CONTRIBUTING.md) trước khi mở PR.
+1. Tạo account tại [smith.langchain.com](https://smith.langchain.com/)
+2. Lấy API key và điền vào `.env`:
 
-Nội dung trong `docs/guide/` là nguồn của Technical Book và được đồng bộ lên bản
-online, nên mọi thay đổi ở đó cần review của
-[@AI20K-Build-Phase/book-maintainers](https://github.com/orgs/AI20K-Build-Phase/teams/book-maintainers)
-— xem [.github/CODEOWNERS](.github/CODEOWNERS).
+```env
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=lsv2_pt_your_key_here
+LANGCHAIN_PROJECT=ai20k-p131
+```
 
-Báo lỗ hổng bảo mật theo [SECURITY.md](SECURITY.md), đừng mở public issue.
+3. Khởi động lại backend — mọi LangGraph agent call sẽ xuất hiện trên dashboard LangSmith.
+
+---
+
+## Checklist Deliverables
+
+| # | Deliverable | Trạng thái | Vị trí |
+|---|---|---|---|
+| 1 | Source code | ✅ | `src/`, `frontend/` |
+| 2 | README.md | ✅ | `README.md` |
+| 3 | Architecture diagram | ✅ | `docs/architecture_diagrams.md` |
+| 4 | AI logs | ✅ | LangSmith + `.ai-log/` |
+| 5 | Live URL | ⬜ | — |
+| 6 | Video demo | ⬜ | `presentation/` |
+| 7 | Pitch deck | ⬜ | `presentation/` |
+| 8 | Development journal | ⬜ | `JOURNAL.md` |
+| 9 | Worklog | ⬜ | `WORKLOG.md` |
+| 10 | Evaluation evidence | ⬜ | `eval/results/` |
+
+---
+
+## Đội nhóm
+
+| Thành viên | Vai trò | GitHub |
+|---|---|---|
+| — | — | — |
+
+---
 
 ## License
 
-
-[MIT](LICENSE) — dùng tự do cho mục đích giáo dục.
+[MIT](LICENSE) — Dùng tự do cho mục đích giáo dục.
