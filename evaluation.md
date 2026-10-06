@@ -1,6 +1,6 @@
 # Kế hoạch Evaluation — 5 Test Case
 
-> Tài liệu này mô tả 5 test case dùng để đánh giá các năng lực chính của hệ thống: Gap Analysis, CV Optimizer và Mock Interview. Đây là kế hoạch đánh giá; chưa có output thực tế hoặc kết luận PASS/FAIL.
+> Tài liệu này gồm kế hoạch và kết quả chạy thực tế của 5 test case dùng để đánh giá các năng lực chính của hệ thống: Gap Analysis, CV Optimizer và Mock Interview. Mỗi case nêu rõ đầu vào, kết quả kỳ vọng, điều kiện PASS và bằng chứng PASS/FAIL thu được từ lần chạy hiện tại.
 
 ## EV-01 — Chấm CV–JD theo trọng số và dẫn chứng
 
@@ -384,4 +384,3 @@ Hai lần gọi LLM đều lỗi kết nối. Hệ thống kích hoạt bộ ch�
 ## Kết luận sau evaluation
 
 Hệ thống đạt tốt các phần có logic xác định: Match Score, capability checks, STAR fallback và Audit Trail. Khoảng trống rõ nhất là trải nghiệm sau khi guardrail chặn suggestion bịa đặt: hệ thống phát hiện đúng nhưng chưa tạo phương án thay thế an toàn hoặc hỏi người dùng cung cấp evidence. Cấu hình LLM cũng cần được kiểm tra lại trước khi dùng kết quả này làm bằng chứng cho chất lượng AI production.
-
