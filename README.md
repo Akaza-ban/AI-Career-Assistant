@@ -8,6 +8,7 @@
 
 - [Vấn đề](#vấn-đề)
 - [Giải pháp](#giải-pháp)
+- [Nguyên tắc sản phẩm](#nguyên-tắc-sản-phẩm)
 - [Tính năng chính](#tính-năng-chính)
 - [Tech Stack](#tech-stack)
 - [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
@@ -21,6 +22,7 @@
 - [AI Logging & LangSmith](#ai-logging--langsmith)
 - [Checklist Deliverables](#checklist-deliverables)
 - [Đội nhóm](#đội-nhóm)
+- [Tài liệu liên quan](#tài-liệu-liên-quan)
 
 ---
 
@@ -40,6 +42,16 @@ Sinh viên năm cuối và fresher thường:
 |---|---|---|
 | **Sinh viên** | `/student/*` | Upload CV, phân tích Gap, tối ưu CV, luyện phỏng vấn, chia sẻ với cố vấn |
 | **Cố vấn** | `/advisor/*` | Dashboard tổng quan, xem hồ sơ SV, nhận xét phỏng vấn, nhắn tin |
+
+---
+
+## Nguyên tắc sản phẩm
+
+- Gợi ý tối ưu CV chỉ dựa trên thông tin đã có; hệ thống không tự tạo kỹ năng, kinh nghiệm, thành tích hoặc số liệu.
+- Sinh viên là người quyết định cuối cùng và có thể **Accept**, **Reject** hoặc **Edit** mọi đề xuất trước khi áp dụng.
+- Cố vấn chỉ được truy cập dữ liệu của sinh viên được phân công và can thiệp khi cần theo mô hình Human-in-the-Loop.
+
+Chi tiết phạm vi và guardrail được mô tả trong [Product Requirements Document](docs/PRD.md).
 
 ---
 
@@ -505,6 +517,8 @@ LANGCHAIN_PROJECT=ai20k-p131
 
 ## Checklist Deliverables
 
+Trạng thái ✅ trong bảng dưới đây xác nhận artifact đã tồn tại trong repository; không đồng nghĩa artifact đã được duyệt, sản phẩm đã production-ready hoặc KPI đã đạt. Trạng thái ⬜ nghĩa là chưa có artifact hoàn chỉnh trong repository.
+
 | # | Deliverable | Trạng thái | Vị trí |
 |---|---|---|---|
 | 1 | Source code | ✅ | `src/`, `frontend/` |
@@ -514,17 +528,31 @@ LANGCHAIN_PROJECT=ai20k-p131
 | 5 | Live URL | ⬜ | — |
 | 6 | Video demo | ⬜ | `presentation/` |
 | 7 | Pitch deck | ⬜ | `presentation/` |
-| 8 | Development journal | ⬜ | `JOURNAL.md` |
-| 9 | Worklog | ⬜ | `WORKLOG.md` |
-| 10 | Evaluation evidence | ⬜ | `eval/results/` |
+| 8 | Development journal | ✅ | `JOURNAL.md` |
+| 9 | Worklog | ✅ | `WORKLOG.md` |
+| 10 | Evaluation evidence | ✅ | `eval/eval-evidence.md`, `eval/star-consistency-check.md`, `eval/results/report.md` |
 
 ---
 
 ## Đội nhóm
 
-| Thành viên | Vai trò | GitHub |
-|---|---|---|
-| — | — | — |
+| Thành viên | Vai trò | MSSV | GitHub |
+|---|---|---|---|
+| Đào Trọng Khang | Chưa cập nhật | 2A202602974 | — |
+| Vũ Minh Trí | Chưa cập nhật | 2A202602629 | — |
+| Trịnh Quốc Hoàng | Chưa cập nhật | 2A202602847 | — |
+| Vũ Quốc Bảo | Chưa cập nhật | 2A202602829 | — |
+
+---
+
+## Tài liệu liên quan
+
+- [Project Brief](docs/BRIEF.md)
+- [Product Requirements Document](docs/PRD.md)
+- [Architecture](ARCHITECTURE.md)
+- [Architecture Diagram](docs/architecture_diagram.md)
+- [Architecture Diagrams](docs/architecture_diagrams.md)
+- [Evaluation Evidence](eval/eval-evidence.md)
 
 ---
 
