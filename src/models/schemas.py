@@ -199,6 +199,50 @@ class RecommendJDsResponse(BaseModel):
     advice: CareerAdvice | None = Field(default=None, description="Lời khuyên tư vấn nghề nghiệp được sinh bởi LLM")
 
 
+class JDComparisonItem(BaseModel):
+    """Kết quả đối sánh của 1 JD trong bảng so sánh đa JD sau khi phân tích qua LLM."""
+
+    rank: int = Field(..., description="Thứ hạng phù hợp (1 là cao nhất)")
+    jd_id: str
+    title: str
+    company: str | None = None
+    industry: str | None = None
+    level: str | None = None
+    match_score: float = Field(..., description="Điểm phù hợp CV–JD theo trọng số PRD 5.2 (0-100)")
+    match_label: Literal["low", "medium", "high"] = Field(
+        ..., description="Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75)"
+    )
+    matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
+    partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
+    missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
+    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
+    llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
+
+
+class CompareJDsRequest(BaseModel):
+    """Yêu cầu so sánh CV với 2-3 JD do sinh viên chủ động chọn."""
+
+    cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
+    cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
+    jd_ids: list[str] = Field(..., min_length=2, max_length=3, description="Danh sách 2 đến 3 JD ID cần so sánh")
+
+
+class CompareJDsResponse(BaseModel):
+    """Kết quả bảng so sánh 2-3 JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
+
+    cv_version_id: str | None = None
+    cv_label: str | None = None
+    cv_name: str | None = None
+    total_compared: int = Field(default=0, description="Số lượng JD đã so sánh")
+    comparisons: list[JDComparisonItem] = Field(
+        ..., description="Danh sách kết quả đối soát các JD, sắp xếp giảm dần theo match_score"
+    )
+    common_missing_skills: list[str] = Field(
+        default_factory=list, description="Các kỹ năng còn thiếu chung ở tất cả các JD được chọn"
+    )
+
+
 class CreateGapAnalysisRequest(BaseModel):
     """Tạo lượt phân tích: chọn một phiên bản CV và một JD (từ thư viện hoặc dán nội dung)."""
 

@@ -1,5 +1,6 @@
 """Service gợi ý JD phù hợp từ CV (Task A3: Two-Stage Retrieval & Scoring Pipeline)."""
 
+import asyncio
 import json
 import re
 from pathlib import Path
@@ -258,3 +259,158 @@ async def generate_career_advice_with_llm(
 
         logging.getLogger(__name__).warning("Không thể gọi LLM sinh Career Advice: %s. Dùng fallback.", e)
         return fallback_advice
+
+
+async def compare_single_jd_with_llm(
+    cv_lines: list[dict[str, Any]],
+    jd_info: dict[str, Any],
+) -> dict[str, Any]:
+    """
+    So khớp CV với một JD bằng LLM (sử dụng score_with_llm từ node compare_gap).
+    - Gọi LLM phân tích ngữ nghĩa sâu từng yêu cầu kỹ năng của JD đối chiếu với CV.
+    - Có kiểm tra chéo và fallback an toàn theo bộ quy tắc nếu LLM không cấu hình hoặc timeout.
+    """
+    raw_skills = jd_info.get("skills") or []
+    requirements = normalize_requirements(raw_skills)
+    rule_results = {r["id"]: assess_by_rules(r, cv_lines) for r in requirements}
+
+    llm_data: dict[str, Any] | None = None
+    from src.services.llm import llm_configured
+
+    if requirements and llm_configured():
+        try:
+            from src.agents.gap_analysis.nodes.compare_gap import score_with_llm
+
+            llm_data = await score_with_llm(cv_lines, requirements, [])
+        except Exception as e:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "Gọi LLM so khớp JD %s thất bại: %s. Dùng fallback quy tắc.",
+                jd_info.get("jd_id"),
+                e,
+            )
+
+    from src.agents.gap_analysis.nodes.compare_gap import _merge
+
+    lines_by_no = {line["line_no"]: line for line in cv_lines}
+    llm_items = {}
+    if llm_data:
+        for item in llm_data.get("requirements") or []:
+            if isinstance(item, dict) and item.get("id"):
+                llm_items[str(item["id"])] = item
+
+    assessments = [_merge(r, rule_results[r["id"]], llm_items.get(r["id"]), lines_by_no) for r in requirements]
+    match_score, breakdown = compute_score(assessments)
+
+    return {
+        "jd_id": jd_info["jd_id"],
+        "title": jd_info["title"],
+        "company": jd_info.get("company"),
+        "industry": jd_info.get("industry"),
+        "level": jd_info.get("level"),
+        "match_score": match_score,
+        "match_label": match_label(match_score),
+        "matched_skills": [a["skill"] for a in assessments if a["status"] == "matched"],
+        "partial_skills": [a["skill"] for a in assessments if a["status"] == "partial"],
+        "missing_skills": [a["skill"] for a in assessments if a["status"] == "missing"],
+        "breakdown": breakdown,
+        "llm_summary": (llm_data or {}).get("summary"),
+        "llm_used": llm_data is not None,
+    }
+
+
+async def compare_selected_jds_with_llm(
+    cv_text: str,
+    jd_ids: list[str],
+    db: Session | None = None,
+) -> dict[str, Any]:
+    """
+    So sánh một CV với 2–3 JD bằng LLM (Multi-JD LLM Matching Pipeline):
+    1. Lấy thông tin chi tiết từng JD từ DB hoặc fixture.
+    2. Chạy so khớp ngữ nghĩa sâu qua LLM song song cho từng JD bằng asyncio.gather.
+    3. Sắp xếp danh sách kết quả theo match_score giảm dần.
+    4. Gán thứ hạng rank (1, 2, 3...) sau khi sắp xếp.
+    5. Tổng hợp common_missing_skills (kỹ năng mà tất cả các JD được chọn đều yêu cầu nhưng CV còn thiếu).
+    """
+    if not cv_text or not cv_text.strip():
+        return {
+            "comparisons": [],
+            "common_missing_skills": [],
+        }
+
+    cv_lines = split_cv_lines(cv_text)
+
+    # 1. Lấy thông tin JD từ DB hoặc fixtures
+    db_jds: dict[str, Any] = {}
+    if db is not None and jd_ids:
+        db_records = db.scalars(select(JobDescription).where(JobDescription.id.in_(jd_ids))).all()
+        db_jds = {jd.id: jd for jd in db_records}
+
+    fixtures = _get_fixture_jds()
+    jd_items: list[dict[str, Any]] = []
+
+    for jd_id in jd_ids:
+        jd_obj = db_jds.get(jd_id)
+        if jd_obj:
+            jd_items.append(
+                {
+                    "jd_id": jd_id,
+                    "title": jd_obj.title,
+                    "company": jd_obj.company or "",
+                    "industry": jd_obj.industry or "",
+                    "level": jd_obj.level or "",
+                    "skills": jd_obj.skills or [],
+                }
+            )
+        elif jd_id in fixtures:
+            fix_item = fixtures[jd_id]
+            jd_items.append(
+                {
+                    "jd_id": jd_id,
+                    "title": fix_item.get("title", ""),
+                    "company": fix_item.get("company", ""),
+                    "industry": fix_item.get("industry", ""),
+                    "level": fix_item.get("level", ""),
+                    "skills": fix_item.get("skills", []),
+                }
+            )
+
+    if not jd_items:
+        return {
+            "comparisons": [],
+            "common_missing_skills": [],
+        }
+
+    # 2. Chạy LLM đối soát song song cho tất cả các JD được chọn
+    tasks = [compare_single_jd_with_llm(cv_lines, jd_info) for jd_info in jd_items]
+    scored_items = await asyncio.gather(*tasks)
+    scored_items = list(scored_items)
+
+    # 3. Sắp xếp theo Match Score (%) giảm dần
+    scored_items.sort(
+        key=lambda x: (x["match_score"] if x["match_score"] is not None else -1),
+        reverse=True,
+    )
+
+    # 4. Gán rank 1, 2, 3...
+    for rank, item in enumerate(scored_items, start=1):
+        item["rank"] = rank
+
+    # 5. Tìm common_missing_skills
+    common_missing_skills: list[str] = []
+    if scored_items:
+        first_missing = scored_items[0]["missing_skills"]
+        for skill in first_missing:
+            skill_lower = skill.strip().lower()
+            if all(
+                any(other.strip().lower() == skill_lower for other in item["missing_skills"])
+                for item in scored_items[1:]
+            ):
+                if skill not in common_missing_skills:
+                    common_missing_skills.append(skill)
+
+    return {
+        "comparisons": scored_items,
+        "common_missing_skills": common_missing_skills,
+    }
