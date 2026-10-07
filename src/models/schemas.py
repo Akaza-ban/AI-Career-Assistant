@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
 
@@ -153,6 +153,94 @@ class JobDescriptionResponse(BaseModel):
     content: str = Field(..., description="Toàn văn JD")
     skills: list[JdSkill] = Field(default_factory=list, description="Yêu cầu kỹ năng theo mức độ")
     source: Literal["library", "pasted"]
+
+
+class JDRecommendationItem(BaseModel):
+    """Một vị trí JD được đề xuất dựa trên CV (Task A3)."""
+
+    jd_id: str
+    title: str
+    company: str | None = None
+    industry: str | None = None
+    level: str | None = None
+    semantic_score: float = Field(..., description="Độ tương đồng ngữ nghĩa từ Vector Store (0-1)")
+    match_score: float | None = Field(default=None, description="Điểm phù hợp CV–JD theo trọng số PRD 5.2 (0-100)")
+    match_label: Literal["low", "medium", "high"] | None = Field(
+        default=None, description="Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75)"
+    )
+    matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
+    partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
+    missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
+    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+
+
+class CareerAdvice(BaseModel):
+    """Lời khuyên tư vấn nghề nghiệp từ AI dựa trên kết quả đối sánh (RAG Generation)."""
+
+    summary: str = Field(..., description="Nhận xét tổng quan về mức độ phù hợp nghề nghiệp")
+    top_position_advice: str = Field(..., description="Lời khuyên chi tiết cho vị trí phù hợp nhất")
+    action_plan: list[str] = Field(default_factory=list, description="Kế hoạch hành động cải thiện kỹ năng còn thiếu")
+
+
+class RecommendJDsRequest(BaseModel):
+    """Yêu cầu gợi ý Top-N JD phù hợp từ CV."""
+
+    cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
+    cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
+    top_n: int = Field(default=3, ge=1, le=10, description="Số lượng JD tối đa cần gợi ý (1–10)")
+    generate_advice: bool = Field(default=True, description="Có gọi LLM sinh lời khuyên nghề nghiệp hay không")
+
+
+class RecommendJDsResponse(BaseModel):
+    """Phản hồi danh sách các JD được gợi ý phù hợp nhất."""
+
+    cv_version_id: str | None = None
+    recommendations: list[JDRecommendationItem]
+    advice: CareerAdvice | None = Field(default=None, description="Lời khuyên tư vấn nghề nghiệp được sinh bởi LLM")
+
+
+class JDComparisonItem(BaseModel):
+    """Kết quả đối sánh của 1 JD trong bảng so sánh đa JD sau khi phân tích qua LLM."""
+
+    rank: int = Field(..., description="Thứ hạng phù hợp (1 là cao nhất)")
+    jd_id: str
+    title: str
+    company: str | None = None
+    industry: str | None = None
+    level: str | None = None
+    match_score: float = Field(..., description="Điểm phù hợp CV–JD theo trọng số PRD 5.2 (0-100)")
+    match_label: Literal["low", "medium", "high"] = Field(
+        ..., description="Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75)"
+    )
+    matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
+    partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
+    missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
+    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
+    llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
+
+
+class CompareJDsRequest(BaseModel):
+    """Yêu cầu so sánh CV với 2-3 JD do sinh viên chủ động chọn."""
+
+    cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
+    cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
+    jd_ids: list[str] = Field(..., min_length=2, max_length=3, description="Danh sách 2 đến 3 JD ID cần so sánh")
+
+
+class CompareJDsResponse(BaseModel):
+    """Kết quả bảng so sánh 2-3 JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
+
+    cv_version_id: str | None = None
+    cv_label: str | None = None
+    cv_name: str | None = None
+    total_compared: int = Field(default=0, description="Số lượng JD đã so sánh")
+    comparisons: list[JDComparisonItem] = Field(
+        ..., description="Danh sách kết quả đối soát các JD, sắp xếp giảm dần theo match_score"
+    )
+    common_missing_skills: list[str] = Field(
+        default_factory=list, description="Các kỹ năng còn thiếu chung ở tất cả các JD được chọn"
+    )
 
 
 class CreateGapAnalysisRequest(BaseModel):
