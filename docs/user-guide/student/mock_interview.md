@@ -25,9 +25,9 @@ Route `/student/interview` trong frontmatter theo hợp đồng Assistant. Giao 
 
 ## Các nút và thành phần giao diện
 
-Selector nút bắt đầu được quy định trong SPEC-03, Task 3.2. Các selector còn lại là đề xuất cho phòng phỏng vấn và báo cáo. Frontend hiện chưa gắn các thuộc tính này.
+Selector nút bắt đầu đã được gắn vào trang thiết lập phỏng vấn. Các selector còn lại là đề xuất cho phòng phỏng vấn và báo cáo, chưa được gắn trên giao diện.
 
-- **Nút "Bắt đầu phỏng vấn"**: Selector `[data-agent-target="btn-start-interview"]`. Tạo phiên theo CV và vị trí đã chọn; không khả dụng khi đang tạo phiên, thiếu thông tin hoặc hết lượt.
+- **Nút "Bắt đầu phỏng vấn"**: Selector `[data-agent-target="btn-start-interview"]`. Mở phòng chờ với CV và vị trí đã chọn; bấm **Sẵn sàng** trong phòng chờ mới tạo phiên. Nút không khả dụng khi thiếu thông tin hoặc hết lượt.
 - **Vùng câu hỏi** (đề xuất): Selector `[data-agent-target="interview-question"]`. Hiển thị câu hiện tại để đọc trước khi trả lời.
 - **Ô trả lời** (đề xuất): Selector `[data-agent-target="interview-answer-input"]`. Nhập câu trả lời với đủ bốn phần STAR.
 - **Nút gửi câu trả lời** (đề xuất): Selector `[data-agent-target="btn-submit-interview-answer"]`. Gửi nội dung đã kiểm tra để tiếp tục phiên.

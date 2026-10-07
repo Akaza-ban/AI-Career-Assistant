@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import type { AgentAction } from "@/types/assistant"
 
 export function ActionBadges({ actions }: { actions: AgentAction[] }) {
-  const { executeAction, activeAction, isThinking } = useAssistant()
+  const { executeAction, activeAction, isThinking, isExecutingAction } = useAssistant()
   if (!actions.length) return null
 
   return (
@@ -23,7 +23,7 @@ export function ActionBadges({ actions }: { actions: AgentAction[] }) {
           <button
             type="button"
             key={action.id}
-            disabled={isThinking}
+            disabled={isThinking || isExecutingAction}
             onClick={() => { void executeAction(action) }}
             title={action.description_vi}
             className={cn(

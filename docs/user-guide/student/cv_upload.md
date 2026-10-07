@@ -22,7 +22,7 @@ Trang **CV của tôi** giúp sinh viên tải lên, xem lại và chọn phiên
 
 ## Các nút và thành phần giao diện
 
-Các selector dưới đây được quy định trong SPEC-03, Task 3.2; frontend hiện chưa gắn các thuộc tính này. Chúng là mục tiêu tích hợp UI Agent, chưa bảo đảm khả năng highlight trên giao diện hiện tại.
+Các selector dưới đây đã được gắn vào giao diện để trợ lý chỉ vị trí nút và danh sách CV. Trợ lý có thể mở hộp thoại tải CV; sinh viên vẫn tự chọn tệp từ máy.
 
 - **Nút "Tải lên CV"**: Selector `[data-agent-target="btn-upload-cv"]`. Mở bộ chọn tệp để tải CV lên; sinh viên phải tự chọn tệp từ máy.
 - **Danh sách CV**: Selector `[data-agent-target="cv-list"]`. Hiển thị các phiên bản đã tải để kiểm tra tên tệp, thời gian và trạng thái xử lý; từ mỗi bản có thể mở chi tiết hoặc bắt đầu phân tích.

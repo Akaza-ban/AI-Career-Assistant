@@ -46,7 +46,7 @@ export function ScoreCard({ analysis }: { analysis: GapAnalysis }) {
   const label = MATCH_LABEL_META[analysis.match_label ?? "low"]
 
   return (
-    <section className="grid gap-3">
+    <section data-agent-target="match-score-badge" className="grid gap-3">
       <SectionHeader
         title={
           <span className="flex items-center gap-1.5">

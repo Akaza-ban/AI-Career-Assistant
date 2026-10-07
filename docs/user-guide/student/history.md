@@ -23,12 +23,13 @@ Trang **Lịch sử & Tiến bộ** tổng hợp các phiên phỏng vấn và p
 
 ## Các nút và thành phần giao diện
 
-Selector tìm kiếm và danh sách phiên được quy định trong SPEC-03, Task 3.2. Frontend hiện chưa gắn các thuộc tính này và chưa có ô tìm kiếm lịch sử; việc tìm phiên hiện dùng bộ lọc vị trí, thời gian và các bảng. Các selector khác dưới đây là đề xuất.
+Các selector dưới đây đã được gắn vào giao diện. Có thể tìm theo từ khóa, loại phiên, vị trí và khoảng thời gian. Chọn **Mock Interview** để chỉ xem bảng phiên phỏng vấn; các biểu đồ vẫn thể hiện tiến bộ theo vị trí và thời gian đã chọn.
 
-- **Ô tìm kiếm lịch sử** (theo đặc tả, chưa có trên trang hiện tại): Selector `[data-agent-target="history-search-input"]`. Mục tiêu tích hợp tìm phiên bằng từ khóa.
+- **Ô tìm kiếm lịch sử**: Selector `[data-agent-target="history-search-input"]`. Tìm phiên theo vị trí, CV hoặc loại phiên.
 - **Danh sách phiên**: Selector `[data-agent-target="history-session-list"]`. Vùng chứa lịch sử phỏng vấn và phân tích để mở chi tiết.
-- **Bộ lọc vị trí** (đề xuất): Selector `[data-agent-target="history-position-filter"]`. Chọn vị trí hoặc tất cả vị trí.
-- **Bộ lọc thời gian** (đề xuất): Selector `[data-agent-target="history-date-filter"]`. Chọn khoảng 30 ngày, 90 ngày hoặc toàn bộ quá trình.
+- **Bộ lọc loại phiên**: Selector `[data-agent-target="history-type-filter"]`. Chọn tất cả phiên, Mock Interview hoặc phân tích CV–JD.
+- **Bộ lọc vị trí**: Selector `[data-agent-target="history-position-filter"]`. Chọn vị trí hoặc tất cả vị trí.
+- **Bộ lọc thời gian**: Selector `[data-agent-target="history-date-filter"]`. Chọn khoảng 30 ngày, 90 ngày hoặc toàn bộ quá trình.
 
 ## Câu hỏi thường gặp (FAQ)
 

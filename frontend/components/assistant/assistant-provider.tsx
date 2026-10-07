@@ -13,9 +13,12 @@ import {
 } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
-
 import { confirmAction, sendMessage as sendAssistantMessage } from "@/lib/assistant-api"
-import { resolveAssistantRoute } from "@/lib/assistant-navigation"
+import { dispatchAgentAction } from "@/lib/action-dispatcher"
+import { AgentActionRunner } from "@/lib/agent-action-runner"
+import type { AgentPageContext } from "@/lib/use-agent-actions"
+import { ActionConfirmationDialog } from "@/components/assistant/action-confirmation-dialog"
+import { ElementHighlighter } from "@/components/assistant/element-highlighter"
 import type { AgentAction, ChatMessage, ClientPageContext, UserRole } from "@/types/assistant"
 
 export interface AssistantContextValue {
@@ -24,6 +27,7 @@ export interface AssistantContextValue {
   conversationId: string | null
   isThinking: boolean
   activeAction: AgentAction | null
+  isExecutingAction: boolean
   pathname: string
   userRole: UserRole
   error: string | null
@@ -31,7 +35,6 @@ export interface AssistantContextValue {
   clearChat: () => void
   toggleChat: () => void
   executeAction: (action: AgentAction) => void
-  setActiveAction: (action: AgentAction | null) => void
 }
 
 export const AssistantContext = createContext<AssistantContextValue | null>(null)
@@ -90,52 +93,69 @@ function AssistantSession({ children, pathname, userRole }: {
   )
   const [isThinking, setIsThinking] = useState(false)
   const [activeAction, setActiveAction] = useState<AgentAction | null>(null)
+  const [isExecutingAction, setIsExecutingAction] = useState(false)
+  const [confirmationError, setConfirmationError] = useState<string | null>(null)
+  const [highlight, setHighlight] = useState<{ id: string; selector: string; tooltip?: string; durationMs?: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pendingRequest = useRef<AbortController | null>(null)
+
+  const toggleChat = useCallback(() => setIsOpen((open) => !open), [])
+  const dismissHighlight = useCallback(() => setHighlight(null), [])
+  const setHighlightSelector = useCallback((selector: string | null, tooltip?: string, durationMs?: number) => {
+    setHighlight(selector ? { id: crypto.randomUUID(), selector, tooltip, durationMs } : null)
+  }, [])
+  const runner = useMemo(() => new AgentActionRunner({
+    execute: (action, confirmed, signal) => dispatchAgentAction(action, router, setHighlightSelector, { role: userRole, confirmed, signal }),
+    report: confirmAction,
+    onPending: (action) => { setActiveAction(action); setConfirmationError(null) },
+    onBusy: setIsExecutingAction,
+  }), [router, setHighlightSelector, userRole])
 
   useEffect(() => () => {
     pendingRequest.current?.abort()
     pendingRequest.current = null
-  }, [])
+    runner.reset()
+  }, [runner])
 
-  const toggleChat = useCallback(() => setIsOpen((open) => !open), [])
+  const confirmActiveAction = useCallback(async () => {
+    setConfirmationError(null)
+    try {
+      await runner.confirm()
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") return
+      setConfirmationError(cause instanceof Error ? cause.message : "Không thể xác nhận hành động. Hãy thử lại.")
+    }
+  }, [runner])
+
+  const rejectActiveAction = useCallback(async () => {
+    setConfirmationError(null)
+    try {
+      await runner.reject()
+    } catch (cause) {
+      if (cause instanceof Error && cause.name === "AbortError") return
+      setConfirmationError(cause instanceof Error ? cause.message : "Không thể huỷ hành động. Hãy thử lại.")
+    }
+  }, [runner])
 
   const clearChat = useCallback(() => {
     pendingRequest.current?.abort()
     pendingRequest.current = null
+    runner.reset()
     conversation.set(null)
     setMessages([])
     setIsThinking(false)
     setActiveAction(null)
+    setHighlight(null)
     setError(null)
-  }, [conversation])
+  }, [conversation, runner])
 
   const executeAction = useCallback((action: AgentAction) => {
-    // Stateful actions and DOM actions are handed to the Day 3 dialog / dispatcher.
-    if (action.requires_confirmation || action.action_type !== "NAVIGATE_PAGE") {
-      setActiveAction(action)
-      return
-    }
-    const route = resolveAssistantRoute(action.params.route, userRole)
-    if (!route) {
-      toast.error("Trang được đề xuất chưa khả dụng cho vai trò hiện tại.")
-      return
-    }
-    const query = new URLSearchParams()
-    if (typeof action.params.query === "object" && action.params.query !== null) {
-      for (const [key, value] of Object.entries(action.params.query)) {
-        if (typeof value === "string") query.set(key, value)
-      }
-    }
-    router.push(`${route}${query.size ? `?${query.toString()}` : ""}`)
-    void confirmAction(action.id, "executed").catch(() => {
-      toast.error("Đã chuyển trang nhưng chưa cập nhật được trạng thái hành động.")
-    })
-  }, [router, userRole])
+    void runner.enqueue([action], true).catch(() => toast.error("Không thể thực hiện hành động tự động."))
+  }, [runner])
 
   const sendMessage = useCallback(async (text: string): Promise<void> => {
     const content = text.trim()
-    if (!content || pendingRequest.current) return
+    if (!content || pendingRequest.current || runner.activeAction || runner.isBusy) return
 
     const controller = new AbortController()
     pendingRequest.current = controller
@@ -148,10 +168,13 @@ function AssistantSession({ children, pathname, userRole }: {
       created_at: new Date().toISOString(),
     }])
 
+    const pageContext: AgentPageContext = {}
+    window.dispatchEvent(new CustomEvent("agent:page_context", { detail: pageContext }))
     const context: ClientPageContext = {
       current_url: `${pathname}${window.location.search}`,
       route: pathname,
       user_role: userRole,
+      ...pageContext,
     }
 
     try {
@@ -173,9 +196,7 @@ function AssistantSession({ children, pathname, userRole }: {
         actions: response.actions,
         sources: response.sources,
       }])
-      setActiveAction((current) => current ?? response.actions.find((action) => action.requires_confirmation) ?? null)
-      const navigation = response.actions.find((action) => action.action_type === "NAVIGATE_PAGE" && !action.requires_confirmation)
-      if (navigation) executeAction(navigation)
+      await runner.enqueue(response.actions)
     } catch (cause) {
       if (pendingRequest.current !== controller || controller.signal.aborted) return
       setError(cause instanceof Error ? cause.message : "Không thể gửi tin nhắn. Vui lòng thử lại.")
@@ -185,17 +206,23 @@ function AssistantSession({ children, pathname, userRole }: {
         setIsThinking(false)
       }
     }
-  }, [conversation, executeAction, pathname, userRole])
+  }, [conversation, pathname, runner, userRole])
 
   const value = useMemo<AssistantContextValue>(() => ({
-    isOpen, messages, conversationId, isThinking, activeAction, pathname, userRole, error,
-    sendMessage, clearChat, toggleChat, executeAction, setActiveAction,
+    isOpen, messages, conversationId, isThinking, activeAction, isExecutingAction, pathname, userRole, error,
+    sendMessage, clearChat, toggleChat, executeAction,
   }), [
-    isOpen, messages, conversationId, isThinking, activeAction, pathname, userRole, error,
+    isOpen, messages, conversationId, isThinking, activeAction, isExecutingAction, pathname, userRole, error,
     sendMessage, clearChat, toggleChat, executeAction,
   ])
 
-  return <AssistantContext.Provider value={value}>{children}</AssistantContext.Provider>
+  return (
+    <AssistantContext.Provider value={value}>
+      {children}
+      {highlight && <ElementHighlighter key={highlight.id} {...highlight} onDismiss={dismissHighlight} />}
+      <ActionConfirmationDialog action={activeAction} busy={isExecutingAction} error={confirmationError} onConfirm={confirmActiveAction} onReject={rejectActiveAction} />
+    </AssistantContext.Provider>
+  )
 }
 
 export function AssistantProvider({ children }: { children: ReactNode }) {

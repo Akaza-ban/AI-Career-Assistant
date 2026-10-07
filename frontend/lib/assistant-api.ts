@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api-error"
 import { API_BASE_URL } from "@/lib/config"
-import type { ChatMessage, ChatRequestPayload, ChatResponsePayload, UserRole } from "@/types/assistant"
+import type { ActionStatus, ChatMessage, ChatRequestPayload, ChatResponsePayload, UserRole } from "@/types/assistant"
 
 function currentRole(): UserRole {
   const pathname = typeof window === "undefined" ? "" : window.location.pathname
@@ -50,10 +50,11 @@ export async function sendMessage(payload: ChatRequestPayload, signal?: AbortSig
   return (await response.json()) as ChatResponsePayload
 }
 
-export async function confirmAction(actionId: string, status: "executed" | "rejected" | "failed"): Promise<void> {
+export async function confirmAction(actionId: string, status: ActionStatus, signal?: AbortSignal): Promise<void> {
   await request("/action/confirm", {
     method: "POST",
     body: JSON.stringify({ action_id: actionId, status }),
+    signal,
   })
 }
 

@@ -25,11 +25,13 @@ Route `/student/analysis` trong frontmatter theo hợp đồng Assistant. Giao d
 
 ## Các nút và thành phần giao diện
 
-Các selector dưới đây được quy định trong SPEC-03, Task 3.2; frontend hiện chưa gắn các thuộc tính này. Selector Match Score thuộc trang kết quả, còn nút chạy và vùng chọn CV thuộc luồng tạo phân tích.
+Các selector dưới đây đã được gắn vào giao diện. Selector Match Score thuộc trang kết quả, còn nút chạy và vùng chọn CV thuộc luồng tạo phân tích. Khi trợ lý chỉ nút chạy từ bước chọn CV, giao diện mở bước chọn JD với CV đang chọn; phân tích chỉ bắt đầu khi đã có JD hợp lệ và người dùng đồng ý thực hiện.
 
 - **Nút "Bắt đầu phân tích" / "Phân tích CV với JD"**: Selector `[data-agent-target="btn-start-analysis"]`. Gửi CV và JD đã chọn để tạo phiên; nút chưa khả dụng khi thiếu JD hợp lệ hoặc đang gửi.
 - **Vùng chọn CV**: Selector `[data-agent-target="select-cv"]`. Chọn phiên bản CV làm đầu vào; giao diện hiện tại dùng bước chọn CV thay vì bắt buộc một dropdown.
 - **Thẻ Match Score**: Selector `[data-agent-target="match-score-badge"]`. Hiển thị mức độ phù hợp 0–100% sau khi phân tích hoàn tất.
+
+Khi yêu cầu trợ lý bắt đầu phân tích với CV và JD thư viện đang chọn, hộp thoại **Yêu cầu xác nhận hành động** xuất hiện. Bấm **Đồng ý** để chạy hoặc **Huỷ bỏ** để giữ nguyên; trợ lý không chạy phân tích chỉ vì bạn hỏi vị trí nút.
 
 ## Câu hỏi thường gặp (FAQ)
 

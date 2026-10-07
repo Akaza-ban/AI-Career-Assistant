@@ -13,12 +13,14 @@ import {
 } from "@/components/student/history/history-sections"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import { formatWhen } from "@/lib/format"
 import type { ProgressRange } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
+import { useAgentActions } from "@/lib/use-agent-actions"
 import { cn } from "@/lib/utils"
 
 const RANGES: { value: ProgressRange; label: string }[] = [
@@ -27,15 +29,54 @@ const RANGES: { value: ProgressRange; label: string }[] = [
   { value: "all", label: "Toàn bộ quá trình" },
 ]
 const ALL_POSITIONS = "all"
+const SESSION_TYPES = [
+  { value: "all", label: "Tất cả phiên" },
+  { value: "interview", label: "Mock Interview" },
+  { value: "analysis", label: "Phân tích CV–JD" },
+] as const
+type SessionType = typeof SESSION_TYPES[number]["value"]
 
 // Figma: frame "Lịch sử & Tiến bộ" (18:3779). Điểm STAR thang 0–5, so sánh trong từng vị trí (PRD mục 5.1).
 export function StudentHistory() {
   const [range, setRange] = useState<ProgressRange>("all")
   const [jdId, setJdId] = useState<string | null>(null)
+  const [query, setQuery] = useState("")
+  const [sessionType, setSessionType] = useState<SessionType>("all")
   const fetchProgress = useCallback(() => api.getProgress(range, jdId), [range, jdId])
   const { data: progress, error, reload } = useApi(fetchProgress)
   // Giữ dữ liệu bộ lọc cũ trên màn hình trong lúc tải bộ lọc mới, tránh nháy skeleton.
   const stale = progress !== undefined && (progress.range !== range || progress.jd_id !== jdId)
+
+  useAgentActions({
+    fillFilter: (name, value) => {
+      const text = String(value)
+      if (name === "keyword") { setQuery(text); return true }
+      if (name === "type" || name === "active_tab") {
+        const aliases: Record<string, SessionType> = { all: "all", interview: "interview", interviews: "interview", mock_interview: "interview", "mock interview": "interview", analysis: "analysis", analyses: "analysis", gap_analysis: "analysis" }
+        const type = aliases[text.toLowerCase()]
+        if (!type) return false
+        setSessionType(type)
+        return true
+      }
+      if (name === "date_range" && RANGES.some((item) => item.value === text)) {
+        setRange(text as ProgressRange)
+        return true
+      }
+      if (name === "position") {
+        const position = progress?.positions.find((p) => p.jd.id === text || p.jd.title.toLowerCase() === text.toLowerCase())
+        if (text !== ALL_POSITIONS && !position) return false
+        setJdId(position?.jd.id ?? null)
+        return true
+      }
+      return false
+    },
+    resetView: ({ clear_filters }) => {
+      if (clear_filters) { setQuery(""); setSessionType("all"); setRange("all"); setJdId(null) }
+    },
+  })
+  const keyword = query.trim().toLocaleLowerCase("vi")
+  const interviews = progress?.interviews.filter((row) => `Mock Interview phỏng vấn ${row.jd.title} ${row.jd.company ?? ""}`.toLocaleLowerCase("vi").includes(keyword)) ?? []
+  const analyses = progress?.analyses.filter((row) => `Phân tích CV JD ${row.jd.title} ${row.jd.company ?? ""} ${row.cv_file_name}`.toLocaleLowerCase("vi").includes(keyword)) ?? []
 
   if (error) {
     return (
@@ -79,7 +120,7 @@ export function StudentHistory() {
               value={jdId ?? ALL_POSITIONS}
               onValueChange={(v) => setJdId(v === ALL_POSITIONS ? null : String(v))}
             >
-              <SelectTrigger className="h-10 min-w-52 bg-card" aria-label="Lọc theo vị trí">
+              <SelectTrigger data-agent-target="history-position-filter" className="h-10 min-w-52 bg-card" aria-label="Lọc theo vị trí">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -90,7 +131,7 @@ export function StudentHistory() {
                 ))}
               </SelectContent>
             </Select>
-            <div role="group" aria-label="Khoảng thời gian" className="flex rounded-xl bg-blue-soft/60 p-1">
+            <div data-agent-target="history-date-filter" role="group" aria-label="Khoảng thời gian" className="flex rounded-xl bg-blue-soft/60 p-1">
               {RANGES.map((r) => (
                 <button
                   key={r.value}
@@ -110,17 +151,25 @@ export function StudentHistory() {
         )}
       </header>
 
+      <div className="flex flex-wrap items-center gap-3">
+        <Input data-agent-target="history-search-input" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Tìm kiếm phiên luyện tập" placeholder="Tìm theo vị trí, CV hoặc loại phiên…" className="h-10 min-w-56 flex-1 bg-card" />
+        <Select items={SESSION_TYPES} value={sessionType} onValueChange={(value) => setSessionType(value as SessionType)}>
+          <SelectTrigger data-agent-target="history-type-filter" aria-label="Loại phiên" className="h-10 min-w-44 bg-card"><SelectValue /></SelectTrigger>
+          <SelectContent>{SESSION_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+
       {!progress ? (
         <HistorySkeleton />
       ) : noActivity ? (
         <EmptyHistory />
       ) : (
-        <div className={cn("grid gap-10 transition-opacity", stale && "pointer-events-none opacity-60")} aria-busy={stale}>
+        <div data-agent-target="history-session-list" className={cn("grid gap-10 transition-opacity", stale && "pointer-events-none opacity-60")} aria-busy={stale}>
           <InterviewProgressSection groups={progress.interview_progress} />
           <CvProgressSection groups={progress.cv_progress} />
           {/* key: về trang 1 khi đổi bộ lọc */}
-          <InterviewTable key={`iv-${progress.range}-${progress.jd_id}`} rows={progress.interviews} />
-          <AnalysisTable key={`ga-${progress.range}-${progress.jd_id}`} rows={progress.analyses} />
+          {sessionType !== "analysis" && <InterviewTable key={`iv-${progress.range}-${progress.jd_id}-${keyword}`} rows={interviews} />}
+          {sessionType !== "interview" && <AnalysisTable key={`ga-${progress.range}-${progress.jd_id}-${keyword}`} rows={analyses} />}
         </div>
       )}
 

@@ -25,13 +25,19 @@ def save_bm25_corpus(store: AssistantVectorStore, chunks: list[DocChunk]) -> Non
     target = corpus_path(store)
     payload = {"version": 1, "chunks": [chunk.model_dump() for chunk in chunks]}
     target.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as handle:
-        temporary = Path(handle.name)
+    temp_target = target.with_suffix(".tmp")
+    with open(temp_target, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, ensure_ascii=False, indent=2)
     try:
-        temporary.replace(target)
+        if target.exists():
+            target.unlink()
+        temp_target.rename(target)
+    except Exception:
+        # Fallback to direct write if rename fails
+        with open(target, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
     finally:
-        temporary.unlink(missing_ok=True)
+        temp_target.unlink(missing_ok=True)
 
 
 class AssistantHybridRetriever:

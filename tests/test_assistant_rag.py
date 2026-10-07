@@ -324,6 +324,15 @@ async def test_start_analysis_requires_selected_ids_and_confirmation(knowledge_b
 
 
 @pytest.mark.asyncio
+async def test_open_analysis_and_show_start_button(knowledge_base: AssistantHybridRetriever) -> None:
+    ctx = context().model_copy(update={"route": "/student", "current_url": "/student"})
+    response = await AssistantAgent(knowledge_base).respond("Mở trang phân tích CV và chỉ tôi nút bắt đầu", ctx)
+    assert [action.action_type for action in response.actions] == ["NAVIGATE_PAGE", "HIGHLIGHT_ELEMENT"]
+    assert response.actions[0].params.route == "/student/analysis"
+    assert response.actions[1].params.selector == '[data-agent-target="btn-start-analysis"]'
+
+
+@pytest.mark.asyncio
 async def test_advisor_can_select_only_assigned_students(knowledge_base: AssistantHybridRetriever) -> None:
     llm, _ = fake_llm(
         {
@@ -522,6 +531,28 @@ async def test_action_status_is_persisted_and_idempotent(
     with SessionLocal() as db:
         assert db.get(AgentActionLog, action_id).client_executed_at == timestamp
     body["status"] = "failed" if status != "failed" else "executed"
+    assert (await client.post(f"{API}/action/confirm", json=body, headers=STUDENT)).status_code == 409
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("final_status", ["executed", "rejected", "failed"])
+async def test_action_confirmation_precedes_terminal_status(
+    client: AsyncClient, api_agent: AssistantAgent, final_status: str
+) -> None:
+    chat = (await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json()
+    action_id = chat["actions"][0]["id"]
+    body = {"action_id": action_id, "status": "confirmed"}
+    for _ in range(2):
+        response = await client.post(f"{API}/action/confirm", json=body, headers=STUDENT)
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "confirmed"
+    with SessionLocal() as db:
+        action = db.get(AgentActionLog, action_id)
+        assert action.status == "confirmed"
+        assert action.client_executed_at is None
+    body["status"] = final_status
+    assert (await client.post(f"{API}/action/confirm", json=body, headers=STUDENT)).status_code == 200
+    body["status"] = "confirmed"
     assert (await client.post(f"{API}/action/confirm", json=body, headers=STUDENT)).status_code == 409
 
 

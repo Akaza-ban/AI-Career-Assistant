@@ -23,6 +23,7 @@ import { api } from "@/lib/api"
 import { countWords } from "@/lib/text"
 import { JD_MIN_WORDS, type JobDescription } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
+import { useAgentActions } from "@/lib/use-agent-actions"
 import { cn } from "@/lib/utils"
 
 const EMPTY_PASTE: PastedJd = { title: "", company: "", text: "" }
@@ -54,6 +55,27 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
     if (!cvs?.length) return undefined
     return cvs.find((cv) => cv.id === cvId) ?? cvs.find((cv) => cv.is_active) ?? cvs[0]
   }, [cvs, cvId])
+
+  useAgentActions({
+    prepareHighlight: (selector) => {
+      if (step === 0 && selectedCv && /^\[data-agent-target=["']btn-start-analysis["']\]$/.test(selector)) {
+        setCvId(selectedCv.id)
+        setStep(1)
+      }
+    },
+    getContext: () => ({
+      selected_cv_id: selectedCv?.id,
+      page_state: { active_step: step, active_tab: tab, selected_jd_id: tab === "library" ? libraryJd?.id : undefined },
+    }),
+    resetView: ({ clear_filters }) => {
+      if (!clear_filters || submitting) return
+      setCvId(initialCvId)
+      setStep(initialCvId ? 1 : 0)
+      setTab("library")
+      setPaste(EMPTY_PASTE)
+      setLibraryJd(null)
+    },
+  })
 
   const pasteTouched = paste.title.trim() !== "" || paste.text.trim() !== ""
   const pasteReady = paste.title.trim() !== "" && countWords(paste.text) >= JD_MIN_WORDS
@@ -200,7 +222,7 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
             <Button variant="ghost" className="h-10 px-4 text-ink-2" onClick={reset} disabled={submitting}>
               Huỷ & Chọn lại
             </Button>
-            <Button className="h-10 px-6 shadow-md" onClick={submit} disabled={submitting || !ready}>
+            <Button data-agent-target="btn-start-analysis" className="h-10 px-6 shadow-md" onClick={submit} disabled={submitting || !ready}>
               {submitting ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
               {submitting ? "Đang gửi…" : "Phân tích CV với JD"}
               {!submitting && <ArrowRight aria-hidden />}

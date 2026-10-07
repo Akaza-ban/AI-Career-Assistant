@@ -1,4 +1,5 @@
 export type UserRole = "student" | "advisor"
+export type ActionStatus = "confirmed" | "executed" | "rejected" | "failed"
 
 export type ActionType =
   | "NAVIGATE_PAGE"

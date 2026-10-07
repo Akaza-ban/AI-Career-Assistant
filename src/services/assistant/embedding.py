@@ -42,11 +42,22 @@ class AssistantEmbeddingService:
             try:
                 from sentence_transformers import SentenceTransformer
 
-                self._model = SentenceTransformer(self.model_name, device=settings.assistant_embedding_device)
-                dimension = self._model.get_sentence_embedding_dimension()
-                if dimension is None:
-                    raise ValueError("Embedding model did not report a dimension")
-                self.dimension = int(dimension)
+                try:
+                    self._model = SentenceTransformer(
+                        self.model_name,
+                        device=settings.assistant_embedding_device,
+                        local_files_only=True,
+                    )
+                except Exception:
+                    self._model = SentenceTransformer(
+                        self.model_name,
+                        device=settings.assistant_embedding_device,
+                    )
+                dimension = getattr(self._model, "get_embedding_dimension", None)
+                if callable(dimension):
+                    self.dimension = int(dimension())
+                else:
+                    self.dimension = int(self._model.get_sentence_embedding_dimension())
             except Exception as exc:
                 self._model = None
                 logger.warning("E5 unavailable (%s); using deterministic hashing embeddings", type(exc).__name__)

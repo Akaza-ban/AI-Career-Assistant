@@ -234,13 +234,13 @@ class ChatResponse(AssistantResponse):
 
 class ActionConfirmationRequest(StrictModel):
     action_id: str = Field(min_length=1, max_length=64)
-    status: Literal["executed", "rejected", "failed"]
+    status: Literal["confirmed", "executed", "rejected", "failed"]
     error_message: str | None = Field(default=None, max_length=2000)
 
 
 class ActionConfirmationResponse(StrictModel):
     action_id: str
-    status: Literal["executed", "rejected", "failed"]
+    status: Literal["confirmed", "executed", "rejected", "failed"]
 
 
 class AssistantFeedbackRequest(StrictModel):

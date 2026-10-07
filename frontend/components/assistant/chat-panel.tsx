@@ -21,7 +21,8 @@ function suggestionsFor(pathname: string): string[] {
 }
 
 export function ChatPanel() {
-  const { isOpen, messages, isThinking, pathname, userRole, error, sendMessage, clearChat, toggleChat } = useAssistant()
+  const { isOpen, messages, isThinking, isExecutingAction, activeAction, pathname, userRole, error, sendMessage, clearChat, toggleChat } = useAssistant()
+  const busy = isThinking || isExecutingAction || activeAction !== null
   const [draft, setDraft] = useState("")
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
@@ -49,7 +50,7 @@ export function ChatPanel() {
   }, [messages, isThinking, error, isOpen])
 
   const submitMessage = () => {
-    if (!draft.trim() || isThinking) return
+    if (!draft.trim() || busy) return
     const text = draft.trim()
     setDraft("")
     void sendMessage(text)
@@ -85,7 +86,7 @@ export function ChatPanel() {
           <p className="mt-1 truncate text-[11px] text-ink-2" title={`Trang: ${pathname}`}>Trang: {pathname}</p>
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Xoá lịch sử chat" title="Xoá lịch sử chat" onClick={() => { clearChat(); setDraft(""); inputRef.current?.focus() }}>
+          <Button type="button" variant="ghost" size="icon-sm" disabled={isExecutingAction} aria-label="Xoá lịch sử chat" title="Xoá lịch sử chat" onClick={() => { clearChat(); setDraft(""); inputRef.current?.focus() }}>
             <Trash2 aria-hidden />
           </Button>
           <Button type="button" variant="ghost" size="icon-sm" aria-label="Thu nhỏ trợ lý" title="Thu nhỏ" onClick={toggleChat}><Minus aria-hidden /></Button>
@@ -123,12 +124,12 @@ export function ChatPanel() {
 
       <footer className="shrink-0 border-t border-line bg-surface/40 px-4 pb-3 pt-3">
         <div className="mb-3 flex flex-wrap gap-2" aria-label="Câu hỏi gợi ý">
-          {suggestionsFor(pathname).map((suggestion) => <button key={suggestion} type="button" disabled={isThinking} onClick={() => { void sendMessage(suggestion) }} className="rounded-full border border-line bg-card px-3 py-1.5 text-left text-[11px] text-ink-2 transition-colors hover:border-blue/30 hover:bg-blue-soft hover:text-blue disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}
+          {suggestionsFor(pathname).map((suggestion) => <button key={suggestion} type="button" disabled={busy} onClick={() => { void sendMessage(suggestion) }} className="rounded-full border border-line bg-card px-3 py-1.5 text-left text-[11px] text-ink-2 transition-colors hover:border-blue/30 hover:bg-blue-soft hover:text-blue disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}
         </div>
         <form onSubmit={(event) => { event.preventDefault(); submitMessage() }} className="flex items-end gap-2 rounded-xl border border-line bg-card p-2 focus-within:border-blue/40 focus-within:ring-2 focus-within:ring-blue/10">
           <label htmlFor="assistant-chat-input" className="sr-only">Tin nhắn cho trợ lý</label>
           <Textarea ref={inputRef} id="assistant-chat-input" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleKeyDown} rows={1} maxLength={8000} placeholder="Hỏi trợ lý một câu…" className="max-h-36 min-h-10 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0" />
-          <Button type="submit" size="icon-lg" disabled={!draft.trim() || isThinking} aria-label="Gửi tin nhắn" className="rounded-lg"><SendHorizontal className="size-4" aria-hidden /></Button>
+          <Button type="submit" size="icon-lg" disabled={!draft.trim() || busy} aria-label="Gửi tin nhắn" className="rounded-lg"><SendHorizontal className="size-4" aria-hidden /></Button>
         </form>
         <p className="mt-2 text-center text-[10px] text-ink-3">Enter để gửi · Shift + Enter để xuống dòng</p>
       </footer>
