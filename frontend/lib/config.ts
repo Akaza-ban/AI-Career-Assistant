@@ -20,10 +20,9 @@ export type ApiGroup =
   | "advisor"
   | "messages"
 
-// NEXT_PUBLIC_LIVE_APIS: danh sách nhóm gọi backend thật, cách nhau bởi dấu phẩy (ví dụ "me,cv"),
-// hoặc "all" cho tất cả. Để trống = toàn bộ dùng mock.
+// NEXT_PUBLIC_LIVE_APIS: danh sách nhóm gọi backend thật, mặc định "all" để gọi backend thật.
 const LIVE_APIS = new Set(
-  (process.env.NEXT_PUBLIC_LIVE_APIS ?? "")
+  (process.env.NEXT_PUBLIC_LIVE_APIS || "all")
     .split(",")
     .map((name) => name.trim())
     .filter(Boolean),
