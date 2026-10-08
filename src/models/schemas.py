@@ -171,7 +171,9 @@ class JDRecommendationItem(BaseModel):
     matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
     partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
     missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
-    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    breakdown: list[dict[str, Any]] = Field(
+        default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
+    )
 
 
 class CareerAdvice(BaseModel):
@@ -215,7 +217,9 @@ class JDComparisonItem(BaseModel):
     matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
     partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
     missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
-    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    breakdown: list[dict[str, Any]] = Field(
+        default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
+    )
     llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
     llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
 
@@ -282,6 +286,18 @@ class RequirementAssessment(BaseModel):
     status: Literal["matched", "partial", "missing"]
     evidence: Evidence | None = Field(default=None, description="None khi không tìm thấy trong CV — không tự điền")
     note: str | None = Field(default=None, description="Ghi chú, ví dụ 'FastAPI → tính là Python (taxonomy)'")
+    roadmap_url: str | None = Field(
+        default=None,
+        description="Đường dẫn lộ trình học kỹ năng trên roadmap.sh",
+    )
+
+
+class SkillRoadmapResponse(BaseModel):
+    """Thông tin đường dẫn lộ trình học tập roadmap.sh cho một kỹ năng."""
+
+    skill: str
+    roadmap_url: str
+    is_matched: bool
 
 
 class ScoreBreakdown(BaseModel):

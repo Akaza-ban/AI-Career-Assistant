@@ -12,6 +12,7 @@ import re
 from functools import lru_cache
 from typing import Any, Literal
 
+from src.services.roadmap import get_roadmap_url
 from src.services.taxonomy import get_child_skills, get_parent_skill
 
 Importance = Literal["required", "preferred", "additional"]
@@ -168,6 +169,7 @@ def assessment(
         "status": "matched" if match == 1 else "partial" if match == 0.5 else "missing",
         "evidence": evidence_of(evidence_line) if evidence_line and match > 0 else None,
         "note": note,
+        "roadmap_url": get_roadmap_url(requirement["name"]),
         "source": source,
     }
 

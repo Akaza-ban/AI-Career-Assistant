@@ -13,6 +13,7 @@ from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
 from src.services import cv_versions
+from src.services.roadmap import get_roadmap_url
 from src.services.skill_matching import match_label
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,13 @@ def _fail(analysis_id: str, message: str) -> None:
 
 
 def _build_result(final: dict[str, Any]) -> dict[str, Any]:
-    requirements = [{k: v for k, v in a.items() if k != "source"} for a in final.get("assessments", [])]
+    requirements = [
+        {
+            **{k: v for k, v in a.items() if k != "source"},
+            "roadmap_url": a.get("roadmap_url") or get_roadmap_url(a.get("skill")),
+        }
+        for a in final.get("assessments", [])
+    ]
     suggestions = [
         {
             "id": s["id"],
@@ -181,7 +188,13 @@ async def run_analysis(analysis_id: str) -> None:
 
 def to_response(analysis: GapAnalysis, jd: JobDescription) -> GapAnalysisResponse:
     result = analysis.result or {}
-    requirements = result.get("requirements", [])
+    requirements = [
+        {
+            **r,
+            "roadmap_url": r.get("roadmap_url") or get_roadmap_url(r.get("skill")),
+        }
+        for r in result.get("requirements", [])
+    ]
     return GapAnalysisResponse(
         id=analysis.id,
         response_id=analysis.id,
