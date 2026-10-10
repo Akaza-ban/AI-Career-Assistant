@@ -7,7 +7,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load .env file explicitly so os.environ is populated early
-load_dotenv()
+load_dotenv(override=True)
 
 
 class Settings(BaseSettings):

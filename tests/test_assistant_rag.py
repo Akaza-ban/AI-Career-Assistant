@@ -11,10 +11,12 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
+from xml.etree import ElementTree
 
 import pytest
 from httpx import AsyncClient
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import HumanMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import func, select
 
@@ -33,11 +35,18 @@ from src.db.models import (
     User,
 )
 from src.main import app
-from src.models.assistant import AgentAction, ClientPageContext
+from src.models.assistant import (
+    AgentAction,
+    AssistantLlmOutput,
+    ClientPageContext,
+    FlatLlmAction,
+    SourceCitation,
+    validate_llm_actions,
+)
 from src.services.assistant.agent import AssistantAgent, classify_intent, get_assistant_agent
 from src.services.assistant.chunker import MarkdownDocChunker
 from src.services.assistant.embedding import AssistantEmbeddingService
-from src.services.assistant.hybrid_search import AssistantHybridRetriever, corpus_path
+from src.services.assistant.hybrid_search import AssistantHybridRetriever, corpus_path, select_citation_chunks
 from src.services.assistant.indexer import build_assistant_index
 from src.services.assistant.vector_store import AssistantVectorStore
 from tests.helpers import ADVISOR, STUDENT
@@ -165,13 +174,109 @@ def test_hybrid_finds_upload_target_and_computes_rrf(knowledge_base: AssistantHy
     assert any(item["selector"] == UPLOAD_SELECTOR for item in results)
     for item in results:
         expected = sum(1 / (60 + item[key]) for key in ("vector_rank", "bm25_rank") if key in item)
-        assert item["score"] == pytest.approx(expected)
+        assert item["rrf_score"] == pytest.approx(expected)
+        assert item["score"] >= 0.7 * results[0]["score"]
         assert item["role"] in ("student", "all")
     advisors = knowledge_base.search("nhận xét sinh viên báo cáo", "advisor")
     assert advisors and all(item["role"] in ("advisor", "all") for item in advisors)
     assert knowledge_base.search("CV", "unknown") == []
     assert knowledge_base.search("", "student") == []
     assert knowledge_base.search("CV", "student", top_k=0) == []
+
+
+@pytest.mark.parametrize(
+    ("scores", "expected_ids"),
+    [
+        ([], []),
+        ([0.249, 0.2], []),
+        ([0.25], []),
+        ([0.419], []),
+        ([0.42], ["0"]),
+        ([0.5, 0.419], ["0"]),
+        ([0.8, 0.56, 0.559, 0.25], ["0", "1"]),
+        ([0.8, 0.79, 0.78, 0.77, 0.76], ["0", "1", "2"]),
+    ],
+)
+def test_dynamic_cutoff_threshold_ratio_and_cap(scores: list[float], expected_ids: list[str]) -> None:
+    chunks = [{"chunk_id": str(i), "score": score} for i, score in enumerate(scores)]
+    selected = select_citation_chunks(list(reversed(chunks)))
+    assert [chunk["chunk_id"] for chunk in selected] == expected_ids
+
+
+def dense_retriever(distances: list[float], routes: list[str] | None = None) -> AssistantHybridRetriever:
+    """Exercise real fusion/cutoff with controlled absolute vector evidence."""
+    retriever = object.__new__(AssistantHybridRetriever)
+    retriever.vector_store = MagicMock()
+    retriever.chunks = []
+    retriever._indexes = {}
+    retriever.vector_store.search_vector.return_value = [
+        {
+            "chunk_id": str(i),
+            "content": "Tải CV PDF DOCX.",
+            "title": "Hướng dẫn CV",
+            "section": "Tải CV",
+            "role": "student",
+            "route": routes[i] if routes else "/student/cv",
+            "distance": distance,
+        }
+        for i, distance in enumerate(distances)
+    ]
+    return retriever
+
+
+def test_route_prior_boosts_rrf_by_fifteen_percent_without_overriding_relevance() -> None:
+    retriever = dense_retriever([0.1, 0.12, 0.9], ["/student/analysis", "/student/cv", "/student/cv"])
+    baseline = {chunk["chunk_id"]: chunk for chunk in retriever.search("CV", "student")}
+    boosted = retriever.retrieve("CV", "student", route="/student/cv")
+    assert boosted[0]["chunk_id"] == "1"
+    assert "2" not in {chunk["chunk_id"] for chunk in boosted}
+    for chunk in boosted:
+        multiplier = 1.15 if chunk["route"] == "/student/cv" else 1.0
+        assert chunk["rrf_score"] == pytest.approx(baseline[chunk["chunk_id"]]["rrf_score"] * multiplier)
+        assert chunk["score"] == pytest.approx(baseline[chunk["chunk_id"]]["score"] * multiplier)
+
+
+@pytest.mark.parametrize("quote", ['"', "'"])
+def test_source_snippet_removes_selectors_and_preserves_action_metadata(quote: str) -> None:
+    selector = f"[data-agent-target={quote}btn-upload-cv{quote}]"
+    source = SourceCitation(
+        chunk_id="upload",
+        title="CV",
+        route="/student/cv",
+        section="Tải CV",
+        snippet=f"Nút Tải CV `{selector}` chọn PDF. {selector}",
+        selector=selector,
+    )
+    assert source.snippet == "Nút Tải CV chọn PDF."
+    assert source.selector == selector
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("message", ["Công thức nấu bánh pizza?", "Tốc độ ánh sáng trong chân không là bao nhiêu?"])
+async def test_unrelated_question_is_refused_without_sources(
+    knowledge_base: AssistantHybridRetriever, message: str
+) -> None:
+    llm, structured = fake_llm()
+    agent = AssistantAgent(knowledge_base, llm)
+    state = agent._retrieve({"message": message, "context": context()})
+    assert state["confidence"] == "low" and state["sources"] == []
+    response = await agent.respond(message, context())
+    assert response.sources == []
+    assert response.message.startswith("Xin lỗi,") and "CareerX" in response.message
+    assert response.actions == []
+    structured.ainvoke.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_precise_question_returns_one_to_three_relevant_sources(
+    knowledge_base: AssistantHybridRetriever,
+) -> None:
+    response = await AssistantAgent(knowledge_base).respond("nút tải lên CV PDF DOCX ở đâu?", context())
+    assert 1 <= len(response.sources) <= 3
+    assert all(source.route == "/student/cv" for source in response.sources)
+    assert any(source.selector == UPLOAD_SELECTOR for source in response.sources)
+    assert all("data-agent-target" not in source.snippet for source in response.sources)
+    assert "data-agent-target" not in response.message
 
 
 @pytest.mark.parametrize(
@@ -238,7 +343,11 @@ def fake_llm(result: Any = None, error: Exception | None = None) -> tuple[MagicM
     llm = MagicMock()
     structured = AsyncMock()
     llm.with_structured_output.return_value = structured
-    structured.ainvoke.return_value = result
+    structured.ainvoke.return_value = (
+        AssistantLlmOutput.model_validate({"thought": "Thuộc phạm vi; có tài liệu trực tiếp.", **result})
+        if isinstance(result, dict)
+        else result
+    )
     structured.ainvoke.side_effect = error
     return llm, structured
 
@@ -279,11 +388,52 @@ async def test_llm_receives_history_and_returns_only_grounded_safe_actions(
         history=[{"role": "user", "content": "Tôi có CV"}, {"role": "assistant", "content": "Bạn có thể tải lên"}],
     )
     assert response.sources
+    assert response.message == "Bạn có thể tải CV PDF hoặc DOCX."
+    llm.with_structured_output.assert_called_once_with(AssistantLlmOutput, method="function_calling")
     assert len(response.actions) == 1 and response.actions[0].action_type == "HIGHLIGHT_ELEMENT"
     messages = structured.ainvoke.call_args.args[0]
-    assert isinstance(messages[1], HumanMessage) and messages[1].content == "Tôi có CV"
-    assert isinstance(messages[2], AIMessage)
-    assert json.loads(messages[-1].content)["context"]["current_url"] == "/student/cv"
+    assert len(messages) == 2 and isinstance(messages[1], HumanMessage)
+    data = ElementTree.fromstring(f"<data>{messages[-1].content}</data>")
+    history = json.loads(data.findtext("untrusted_chat_history"))
+    assert history == [{"role": "user", "content": "Tôi có CV"}, {"role": "assistant", "content": "Bạn có thể tải lên"}]
+    assert json.loads(data.findtext("untrusted_page_context"))["current_url"] == "/student/cv"
+    evidence = json.loads(data.findtext("retrieved_documents"))
+    assert all("data-agent-target" not in source["snippet"] for source in evidence)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Xin lỗi, tài liệu hướng dẫn hiện tại chưa có thông tin chi tiết về nội dung này.",
+        "Xin lỗi, hiện tại tài liệu hướng dẫn chưa có thông tin chi tiết về nội dung này. "
+        "Bạn vui lòng nêu rõ thao tác cần hỗ trợ.",
+        "Tôi chỉ hỗ trợ tính năng CareerX và không thể trả lời chủ đề đó.",
+    ],
+)
+@pytest.mark.parametrize("refusal_flag", [True, False, None])
+async def test_llm_refusal_omits_retrieved_sources_and_actions(
+    knowledge_base: AssistantHybridRetriever, answer: str, refusal_flag: bool | None
+) -> None:
+    llm, structured = fake_llm(
+        {
+            **({"is_refusal": refusal_flag} if refusal_flag is not None else {}),
+            "message": answer,
+            "intent": "qa",
+            "actions": [
+                {
+                    "action_type": "NAVIGATE_PAGE",
+                    "params": {"route": "/student/cv"},
+                    "description_vi": "Mở trang CV",
+                }
+            ],
+        }
+    )
+    response = await AssistantAgent(knowledge_base, llm).respond("Nút tải lên CV PDF DOCX ở đâu?", context())
+    structured.ainvoke.assert_awaited_once()
+    assert response.message == answer
+    assert response.sources == []
+    assert response.actions == []
 
 
 @pytest.mark.asyncio
@@ -296,21 +446,32 @@ async def test_llm_failure_uses_grounded_fallback(knowledge_base: AssistantHybri
 
 @pytest.mark.asyncio
 async def test_low_cosine_does_not_use_rrf_as_similarity() -> None:
-    retriever = MagicMock()
-    retriever.search.return_value = [
-        {
-            "role": "student",
-            "route": "/student/cv",
-            "distance": 0.9,
-            "score": 0.99,
-            "bm25_score": 0.0,
-        }
-    ]
+    retriever = dense_retriever([0.9])
     llm, structured = fake_llm()
     result = await AssistantAgent(retriever, llm).respond("Một chủ đề không có trong hướng dẫn", context())
     assert result.sources == []
-    assert result.actions[0].action_type == "NAVIGATE_PAGE"
+    assert result.actions == []
     structured.ainvoke.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("distances", "count"), [([0.0, 0.1, 0.2, 0.3, 0.9], 3), ([0.0, 0.9], 1)])
+async def test_agent_applies_cutoff_instead_of_padding_sources(distances: list[float], count: int) -> None:
+    agent = AssistantAgent(dense_retriever(distances))
+    result = await agent.respond("Tải CV PDF DOCX", context())
+    assert len(result.sources) == count
+    assert [source.chunk_id for source in result.sources] == [str(i) for i in range(count)]
+
+
+@pytest.mark.asyncio
+async def test_selector_crossing_snippet_length_limit_is_cleaned_before_truncation() -> None:
+    retriever = dense_retriever([0.0])
+    chunk = retriever.vector_store.search_vector.return_value[0]
+    chunk.update(content="CV " * 160 + f"`{UPLOAD_SELECTOR}` PDF", selector=UPLOAD_SELECTOR)
+    response = await AssistantAgent(retriever).respond("Tải CV PDF", context())
+    assert response.sources[0].snippet.endswith("PDF")
+    assert "data-agent-target" not in response.sources[0].snippet
+    assert response.sources[0].selector == UPLOAD_SELECTOR
 
 
 @pytest.mark.asyncio
@@ -623,3 +784,134 @@ async def test_reindex_failure_is_sanitized(client: AsyncClient, monkeypatch: py
     response = await client.post(f"{API}/reindex", headers=ADVISOR)
     assert response.status_code == 503 and response.json()["code"] == "assistant_index_unavailable"
     assert "internal details" not in response.text
+
+
+def test_llm_tool_schema_has_flat_actions_without_polymorphic_union() -> None:
+    schema = convert_to_openai_tool(AssistantLlmOutput)["function"]["parameters"]
+    action = schema["properties"]["actions"]["items"]
+    assert action["type"] == "object"
+    assert action["properties"]["action_type"]["type"] == "string"
+    assert action["properties"]["params"]["type"] == "object"
+    assert "discriminator" not in json.dumps(schema)
+    assert "oneOf" not in json.dumps(schema)
+    assert "thought" in schema["required"]
+    assert "sources" not in schema["properties"]
+
+
+def test_flat_actions_keep_valid_peers_and_enforce_confirmation() -> None:
+    actions = [
+        FlatLlmAction(action_type="NAVIGATE_PAGE", params={"route": "/student/history"}, description_vi="Mở lịch sử"),
+        FlatLlmAction(action_type="RUN_JS", params={"script": "alert(1)"}, description_vi="Lệnh không hợp lệ"),
+        FlatLlmAction(action_type="NAVIGATE_PAGE", params={"route": "https://evil.example"}, description_vi="Route lạ"),
+        FlatLlmAction(action_type="START_ANALYSIS", params={"cv_id": "cv-1"}, description_vi="Thiếu JD"),
+        FlatLlmAction(
+            action_type="START_ANALYSIS",
+            params={"cv_id": "cv-1", "jd_id": "jd-1"},
+            description_vi="Phân tích chưa xác nhận",
+            requires_confirmation=False,
+        ),
+        FlatLlmAction(
+            action_type="START_ANALYSIS", params={"cv_id": "cv-1", "jd_id": "jd-1"}, description_vi="Phân tích CV"
+        ),
+    ]
+    validated = validate_llm_actions(actions)
+    assert [action.action_type for action in validated] == ["NAVIGATE_PAGE", "START_ANALYSIS"]
+    assert validated[1].requires_confirmation is True and validated[1].confirmation_message
+
+
+@pytest.mark.parametrize("query", ["thời tiết ngày mai như thế nào", "ngày hôm nay", "astronomy", "cvx"])
+def test_dense_similarity_cannot_replace_topic_keyword_overlap(query: str) -> None:
+    retriever = dense_retriever([0.0])
+    assert retriever.search(query, "student", route="/student/cv") == []
+
+
+@pytest.mark.parametrize("matched_field", ["title", "content", "tags"])
+def test_topic_overlap_accepts_title_content_or_tags(matched_field: str) -> None:
+    retriever = dense_retriever([0.0])
+    chunk = retriever.vector_store.search_vector.return_value[0]
+    chunk.update(title="Hướng dẫn", content="Tài liệu", tags=[])
+    chunk[matched_field] = ["history"] if matched_field == "tags" else "history"
+    assert retriever.search("history", "student")
+
+
+@pytest.mark.asyncio
+async def test_low_confidence_with_stale_sources_never_echoes_documents() -> None:
+    llm, structured = fake_llm()
+    result = await AssistantAgent(llm=llm)._generate(
+        {
+            "message": "Nội dung chưa có tài liệu",
+            "context": context(),
+            "intent": "qa",
+            "confidence": "low",
+            "sources": [
+                SourceCitation(
+                    chunk_id="stale",
+                    title="Lịch sử",
+                    route="/student/history",
+                    section="Bộ lọc thời gian",
+                    snippet="Chọn khoảng 30 ngày.",
+                )
+            ],
+        }
+    )
+    response = result["response"]
+    assert (
+        response.message == "Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerX."
+    )
+    assert response.actions == [] and response.sources == []
+    structured.ainvoke.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("message", ["thời tiết ngày mai như thế nào", "hôm nay ăn gì"])
+async def test_chat_api_refuses_out_of_scope_without_actions_or_sources(
+    client: AsyncClient, api_agent: AssistantAgent, monkeypatch: pytest.MonkeyPatch, message: str
+) -> None:
+    retriever = MagicMock()
+    llm, structured = fake_llm()
+    monkeypatch.setattr(api_agent, "_retriever", retriever)
+    monkeypatch.setattr(api_agent, "_llm", llm)
+    result = await client.post(f"{API}/chat", json=payload(message), headers=STUDENT)
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert data["message"].startswith("Xin lỗi,") and "CareerX" in data["message"]
+    assert data["actions"] == [] and data["sources"] == []
+    assert "Bộ lọc thời gian" not in data["message"]
+    assert "thought" not in data
+    retriever.search.assert_not_called()
+    structured.ainvoke.assert_not_called()
+    with SessionLocal() as db:
+        turn = db.get(AssistantTurn, data["turn_id"])
+        assert turn.sources_json == [] and turn.assistant_message == data["message"]
+        assert db.scalar(select(func.count()).select_from(AgentActionLog).where(AgentActionLog.turn_id == turn.id)) == 0
+
+
+@pytest.mark.asyncio
+async def test_chat_history_question_uses_history_document_and_flat_schema(
+    client: AsyncClient,
+    api_agent: AssistantAgent,
+    knowledge_base: AssistantHybridRetriever,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    question = "Làm sao để xem lịch sử phỏng vấn?"
+    # Earlier API reindex tests replace the collection; refresh the handle.
+    chunks = AssistantHybridRetriever().search(question, "student", route="/student/cv")
+    assert any(chunk["source"].endswith("history.md") for chunk in chunks)
+    answer = (
+        "Mở [Lịch sử & Tiến bộ](/student/history), chọn vị trí và khoảng thời gian, "
+        "chọn Mock Interview rồi chọn phiên phỏng vấn để mở báo cáo."
+    )
+    llm, structured = fake_llm({"message": answer, "intent": "qa", "actions": []})
+    monkeypatch.setattr(api_agent, "_llm", llm)
+    with caplog.at_level("DEBUG", logger="src.services.assistant.agent"):
+        result = await client.post(f"{API}/chat", json=payload(question), headers=STUDENT)
+    assert result.status_code == 200, result.text
+    data = result.json()
+    assert data["message"] == answer
+    assert any(source["route"] == "/student/history" for source in data["sources"])
+    assert "thought" not in data
+    assert "Assistant scope/evidence decision" in caplog.text
+    assert "Assistant generation unavailable" not in caplog.text
+    llm.with_structured_output.assert_called_once_with(AssistantLlmOutput, method="function_calling")
+    structured.ainvoke.assert_awaited_once()

@@ -2,7 +2,6 @@
 
 import json
 import logging
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +10,35 @@ from rank_bm25 import BM25Okapi
 from src.config import get_settings
 from src.services.assistant.chunker import DocChunk
 from src.services.assistant.embedding import tokenize
+from src.services.assistant.guardrails import has_careerx_topic
 from src.services.assistant.vector_store import AssistantVectorStore
 
 logger = logging.getLogger(__name__)
+MIN_RETRIEVAL_SCORE = 0.42
+CITATION_SCORE_RATIO = 0.7
+MAX_CITATIONS = 3
+RRF_K = 60
+MAX_RRF_SCORE = 2.0 / (RRF_K + 1)
+# Vietnamese function words and generic help phrasing are not topic evidence.
+QUERY_STOP_WORDS = frozenset(
+    "và là gì ở đâu tôi có thể cho với trong các những được không nào sao thế này một bạn "
+    "bao nhiêu hãy giúp làm của để về cách hướng dẫn trang nút mở đừng chỉ "
+    "thời tiết ngày mai nay hôm giờ tuần tháng năm bảo biết nào "
+    "cảm thấy chào ơi khỏe tên hôm nay nhỉ ạ nhé vui buồn thế nào "
+    "cam thay chao oi khoe ten hom nhi a nhe the nao hello hi".split()
+)
+
+
+def select_citation_chunks(chunks: list[dict[str, Any]], limit: int = MAX_CITATIONS) -> list[dict[str, Any]]:
+    """Gate absolute relevance before applying the relative citation cutoff."""
+    if not chunks or limit <= 0:
+        return []
+    ranked = sorted(chunks, key=lambda item: (-item["score"], item["chunk_id"]))
+    max_score = ranked[0]["score"]
+    if max_score < MIN_RETRIEVAL_SCORE:
+        return []
+    cutoff = max(MIN_RETRIEVAL_SCORE, CITATION_SCORE_RATIO * max_score)
+    return [item for item in ranked if item["score"] >= cutoff][: min(limit, MAX_CITATIONS)]
 
 
 def corpus_path(store: AssistantVectorStore) -> Path:
@@ -68,16 +93,20 @@ class AssistantHybridRetriever:
             self._indexes[role] = (chunks, BM25Okapi(texts) if chunks else None)
         return self._indexes[role]
 
-    def search(self, query: str, role: str, top_k: int | None = None) -> list[dict[str, Any]]:
+    def search(
+        self, query: str, role: str, top_k: int | None = None, *, route: str | None = None
+    ) -> list[dict[str, Any]]:
         limit = get_settings().assistant_top_k if top_k is None else top_k
-        if limit <= 0 or not tokenize(query):
+        query_terms = set(tokenize(query)) - QUERY_STOP_WORDS
+        if limit <= 0 or not query_terms:
             return []
+        has_topic = has_careerx_topic(query)
         candidates = max(limit * 4, 20)
         dense = self.vector_store.search_vector(query, role, candidates)
         chunks, bm25 = self._role_index(role)
         sparse: list[dict[str, Any]] = []
         if bm25 is not None:
-            scores = bm25.get_scores(tokenize(query))
+            scores = bm25.get_scores(sorted(query_terms))
             ranked = sorted(range(len(chunks)), key=lambda i: (-float(scores[i]), chunks[i].chunk_id))
             # Zero-score documents must not gain arbitrary reciprocal-rank credit.
             sparse = [
@@ -88,13 +117,38 @@ class AssistantHybridRetriever:
             for rank, item in enumerate(results, start=1):
                 chunk_id = item["chunk_id"]
                 if chunk_id not in fused:
-                    fused[chunk_id] = {**item, "score": 0.0}
+                    fused[chunk_id] = {**item, "rrf_score": 0.0}
                 record = fused[chunk_id]
                 record[f"{name}_rank"] = rank
                 if name == "bm25":
                     record["bm25_score"] = item["bm25_score"]
-                record["score"] += 1.0 / (60 + rank)
-        return sorted(fused.values(), key=lambda item: (-item["score"], item["chunk_id"]))[:limit]
+                record["rrf_score"] += 1.0 / (RRF_K + rank)
+        for record in fused.values():
+            cosine = max(0.0, min(1.0, 1.0 - record.get("distance", 1.0)))
+            bm25_score = max(0.0, record.get("bm25_score", 0.0))
+            # Use a fixed RRF upper bound, never the query's best score: even
+            # unrelated queries have a rank-1 result. Bound BM25's unscaled
+            # evidence separately so ranks cannot masquerade as confidence.
+            document_terms = set(
+                tokenize(f"{record.get('title', '')} {' '.join(record.get('tags', []))} {record.get('content', '')}")
+            )
+            matched_terms = query_terms & document_terms
+            coverage = len(matched_terms) / len(query_terms)
+            # A single coincidental keyword must not turn a large BM25 score
+            # into strong evidence for an otherwise unrelated question.
+            sparse_relevance = bm25_score / (1.0 + bm25_score) * coverage
+            # Domain queries can use semantic matches (e.g. "tải" vs "upload").
+            # Generic queries need lexical coverage as well as a dense score.
+            relevance = max(cosine if has_topic else cosine * coverage, sparse_relevance)
+            record["score"] = record["rrf_score"] / MAX_RRF_SCORE * relevance
+            if route is not None and record.get("route") == route:
+                record["rrf_score"] *= 1.15
+                record["score"] *= 1.15
+            if not matched_terms or (len(query_terms) <= 3 and len(matched_terms) <= 1 and not has_topic):
+                record["score"] = 0.0
+        return select_citation_chunks(list(fused.values()), limit)
 
-    def retrieve(self, query: str, role: str, top_k: int | None = None) -> list[dict[str, Any]]:
-        return self.search(query, role, top_k)
+    def retrieve(
+        self, query: str, role: str, top_k: int | None = None, *, route: str | None = None
+    ) -> list[dict[str, Any]]:
+        return self.search(query, role, top_k, route=route)

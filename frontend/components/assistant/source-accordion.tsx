@@ -3,7 +3,9 @@
 import Link from "next/link"
 import { BookOpen, ChevronDown, ArrowUpRight } from "lucide-react"
 
+import { AssistantMarkdown } from "@/components/assistant/assistant-markdown"
 import { resolveAssistantRoute } from "@/lib/assistant-navigation"
+import { sourcePageTitle } from "@/lib/assistant-response"
 import type { SourceCitation, UserRole } from "@/types/assistant"
 
 export function SourceAccordion({ sources, userRole }: { sources: SourceCitation[]; userRole: UserRole }) {
@@ -19,15 +21,16 @@ export function SourceAccordion({ sources, userRole }: { sources: SourceCitation
       <ul className="space-y-3 border-t border-line px-3 py-3">
         {sources.map((source, index) => {
           const route = resolveAssistantRoute(source.route, userRole)
+          const title = sourcePageTitle(source.title)
           return (
             <li key={source.chunk_id ?? `${source.title}-${index}`} className="space-y-1">
               {route ? (
                 <Link href={route} className="inline-flex items-start gap-1 font-medium text-blue hover:underline">
-                  {source.title}<ArrowUpRight className="mt-0.5 size-3 shrink-0" aria-hidden />
+                  {title}<ArrowUpRight className="mt-0.5 size-3 shrink-0" aria-hidden />
                 </Link>
-              ) : <p className="font-medium text-ink">{source.title}</p>}
+              ) : <p className="font-medium text-ink">{title}</p>}
               {source.section && <p className="text-ink-3">{source.section}</p>}
-              {source.snippet && <p className="leading-relaxed text-ink-2">{source.snippet}</p>}
+              {source.snippet && <AssistantMarkdown content={source.snippet} userRole={userRole} />}
             </li>
           )
         })}

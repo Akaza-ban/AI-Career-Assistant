@@ -2,6 +2,14 @@ import { ApiError } from "@/lib/api-error"
 import { API_BASE_URL } from "@/lib/config"
 import type { ActionStatus, ChatMessage, ChatRequestPayload, ChatResponsePayload, UserRole } from "@/types/assistant"
 
+export interface AssistantStatusResponse {
+  is_live: boolean
+  status: "live" | "offline"
+  provider: string
+  model: string
+  message?: string
+}
+
 function currentRole(): UserRole {
   const pathname = typeof window === "undefined" ? "" : window.location.pathname
   return pathname === "/advisor" || pathname.startsWith("/advisor/") ? "advisor" : "student"
@@ -48,6 +56,11 @@ export async function sendMessage(payload: ChatRequestPayload, signal?: AbortSig
     payload.context.user_role,
   )
   return (await response.json()) as ChatResponsePayload
+}
+
+export async function getAssistantStatus(signal?: AbortSignal): Promise<AssistantStatusResponse> {
+  const response = await request("/status", { method: "GET", cache: "no-store", signal })
+  return (await response.json()) as AssistantStatusResponse
 }
 
 export async function confirmAction(actionId: string, status: ActionStatus, signal?: AbortSignal): Promise<void> {

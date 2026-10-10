@@ -30,6 +30,7 @@ from src.models.assistant import (
     AgentAction,
     AssistantFeedbackRequest,
     AssistantFeedbackResponse,
+    AssistantStatusResponse,
     ChatRequest,
     ChatResponse,
     ReindexResponse,
@@ -37,10 +38,17 @@ from src.models.assistant import (
 )
 from src.services.assistant.agent import ASSISTANT_INDEX_LOCK, AssistantAgent, get_assistant_agent
 from src.services.assistant.indexer import build_assistant_index
+from src.services.llm import check_llm_health
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 AgentDependency = Annotated[AssistantAgent, Depends(get_assistant_agent)]
+
+
+@router.get("/status", response_model=AssistantStatusResponse)
+async def get_assistant_status(user: CurrentUser) -> AssistantStatusResponse:
+    """Report live LLM connectivity independently of retrieval fallback readiness."""
+    return AssistantStatusResponse.model_validate(await check_llm_health())
 
 
 def _owned_conversation(db: DbSession, conversation_id: str, user: User) -> AssistantConversation:

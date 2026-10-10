@@ -5,7 +5,17 @@ import re
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictFloat,
+    StrictInt,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 Role = Literal["student", "advisor"]
 Intent = Literal["qa", "action", "hybrid"]
@@ -196,6 +206,50 @@ AgentAction = Annotated[
 ]
 
 
+class FlatLlmAction(BaseModel):
+    """Provider-facing action without the API's discriminated union."""
+
+    action_type: str = Field(
+        description="Một trong các loại: NAVIGATE_PAGE, HIGHLIGHT_ELEMENT, FILL_FILTER, OPEN_MODAL, "
+        "START_ANALYSIS, SELECT_STUDENT, SCROLL_TO, RESET_VIEW"
+    )
+    description_vi: str
+    params: dict[str, Any] = Field(default_factory=dict)
+    requires_confirmation: bool = False
+    confirmation_message: str | None = None
+
+
+class AssistantLlmOutput(BaseModel):
+    """Internal model output; citations and action IDs remain server-owned."""
+
+    thought: str = Field(description="Ghi chú ngắn về phạm vi, bằng chứng trực tiếp và quyết định trả lời/từ chối.")
+    is_refusal: bool = Field(
+        default=False,
+        description="True nếu từ chối trả lời vì ngoài phạm vi hoặc thiếu bằng chứng trực tiếp trong tài liệu.",
+    )
+    message: str = Field(
+        min_length=1,
+        max_length=16000,
+        description="Trả lời Markdown bằng tiếng Việt. Từ chối lịch sự nếu ngoài phạm vi hoặc thiếu tài liệu.",
+    )
+    intent: Intent
+    actions: list[FlatLlmAction] = Field(default_factory=list, max_length=8)
+
+
+def validate_llm_actions(actions: list[FlatLlmAction]) -> list[AgentAction]:
+    """Validate actions independently so a malformed one cannot discard safe peers."""
+    adapter = TypeAdapter(AgentAction)
+    validated: list[AgentAction] = []
+    for action in actions:
+        # Preserve protocol defaults when the model omits optional fields.
+        payload = action.model_dump(exclude_unset=True)
+        try:
+            validated.append(adapter.validate_python(payload))
+        except ValidationError:
+            continue
+    return validated
+
+
 class ClientPageContext(StrictModel):
     current_url: str = Field(min_length=1, max_length=1000)
     route: str = Field(min_length=1, max_length=200)
@@ -211,6 +265,12 @@ class ChatRequest(StrictModel):
     context: ClientPageContext
 
 
+def clean_citation_snippet(value: str) -> str:
+    """Keep UI selectors in metadata, away from human-readable evidence."""
+    value = re.sub(r"`?\[\s*data-agent-target\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\]\s]+)\s*\]`?", "", value)
+    return re.sub(r"[ \t]+", " ", value).strip()
+
+
 class SourceCitation(StrictModel):
     chunk_id: str
     title: str
@@ -218,6 +278,11 @@ class SourceCitation(StrictModel):
     section: str
     snippet: str
     selector: str | None = None
+
+    @field_validator("snippet")
+    @classmethod
+    def clean_snippet(cls, value: str) -> str:
+        return clean_citation_snippet(value)
 
 
 class AssistantResponse(StrictModel):
@@ -230,6 +295,14 @@ class AssistantResponse(StrictModel):
 class ChatResponse(AssistantResponse):
     conversation_id: str
     turn_id: str
+
+
+class AssistantStatusResponse(StrictModel):
+    is_live: bool
+    status: Literal["live", "offline"]
+    provider: str
+    model: str
+    message: str = ""
 
 
 class ActionConfirmationRequest(StrictModel):

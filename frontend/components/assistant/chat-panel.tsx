@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { AlertCircle, Bot, LoaderCircle, Minus, SendHorizontal, Sparkles, Trash2, X } from "lucide-react"
+import { AlertCircle, Bot, LoaderCircle, Minus, SendHorizontal, Sparkles, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react"
+import { toast } from "sonner"
 
 import { ActionBadges } from "@/components/assistant/action-badges"
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown"
@@ -9,6 +10,8 @@ import { useAssistant } from "@/components/assistant/assistant-provider"
 import { SourceAccordion } from "@/components/assistant/source-accordion"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { getAssistantStatus, submitFeedback, type AssistantStatusResponse } from "@/lib/assistant-api"
+import { isAssistantRefusal } from "@/lib/assistant-response"
 import { cn } from "@/lib/utils"
 
 function suggestionsFor(pathname: string): string[] {
@@ -20,10 +23,54 @@ function suggestionsFor(pathname: string): string[] {
   return ["Làm sao để bắt đầu phân tích CV?", "Hướng dẫn phỏng vấn thử"]
 }
 
+function AssistantConnectionStatus() {
+  const [llmStatus, setLlmStatus] = useState<AssistantStatusResponse | null>(null)
+
+  useEffect(() => {
+    let disposed = false
+    let pending = false
+    let controller: AbortController | null = null
+    const refreshStatus = async () => {
+      if (pending) return
+      pending = true
+      controller = new AbortController()
+      const timeout = window.setTimeout(() => controller?.abort(), 8000)
+      try {
+        const status = await getAssistantStatus(controller.signal)
+        if (!disposed) setLlmStatus(status)
+      } catch {
+        if (!disposed) setLlmStatus({ is_live: false, status: "offline", provider: "none", model: "" })
+      } finally {
+        window.clearTimeout(timeout)
+        pending = false
+      }
+    }
+    void refreshStatus()
+    const interval = window.setInterval(() => { void refreshStatus() }, 35000)
+    return () => {
+      disposed = true
+      window.clearInterval(interval)
+      controller?.abort()
+    }
+  }, [])
+
+  const statusLabel = llmStatus?.is_live ? "Live" : "Offline"
+
+  return (
+    <p role="status" aria-live="polite" aria-label={statusLabel} title={statusLabel} className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-ink-2">
+      <span aria-hidden className={cn("size-2 shrink-0 rounded-full ring-2", llmStatus?.is_live ? "bg-emerald-500 ring-emerald-500/20" : "bg-amber-500 ring-amber-500/20")} />
+      <span className="truncate">{statusLabel}</span>
+    </p>
+  )
+}
+
 export function ChatPanel() {
   const { isOpen, messages, isThinking, isExecutingAction, activeAction, pathname, userRole, error, sendMessage, clearChat, toggleChat } = useAssistant()
   const busy = isThinking || isExecutingAction || activeAction !== null
   const [draft, setDraft] = useState("")
+  const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 1 | -1 | undefined>>({})
+  const [pendingFeedback, setPendingFeedback] = useState<Record<string, boolean | undefined>>({})
+  const feedbackRequests = useRef(new Set<string>())
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -64,6 +111,22 @@ export function ChatPanel() {
     }
   }
 
+  const handleFeedback = async (turnId: string, rating: 1 | -1): Promise<void> => {
+    if (feedbackRequests.current.has(turnId) || feedbackRatings[turnId] === rating) return
+    feedbackRequests.current.add(turnId)
+    setPendingFeedback((previous) => ({ ...previous, [turnId]: true }))
+    try {
+      await submitFeedback(turnId, rating)
+      setFeedbackRatings((previous) => ({ ...previous, [turnId]: rating }))
+      toast.success("Cảm ơn bạn đã phản hồi!")
+    } catch {
+      toast.error("Không thể gửi phản hồi. Vui lòng thử lại.")
+    } finally {
+      feedbackRequests.current.delete(turnId)
+      setPendingFeedback((previous) => ({ ...previous, [turnId]: false }))
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -82,8 +145,8 @@ export function ChatPanel() {
           <Bot className="size-5" aria-hidden />
         </span>
         <div className="min-w-0 flex-1">
-          <h2 id="assistant-chat-title" className="font-heading text-sm font-bold leading-snug">Trợ lý hướng dẫn EDU-17</h2>
-          <p className="mt-1 truncate text-[11px] text-ink-2" title={`Trang: ${pathname}`}>Trang: {pathname}</p>
+          <h2 id="assistant-chat-title" className="font-heading text-sm font-bold leading-snug">Trợ lý hướng dẫn</h2>
+          <AssistantConnectionStatus />
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
           <Button type="button" variant="ghost" size="icon-sm" disabled={isExecutingAction} aria-label="Xoá lịch sử chat" title="Xoá lịch sử chat" onClick={() => { clearChat(); setDraft(""); inputRef.current?.focus() }}>
@@ -110,11 +173,41 @@ export function ChatPanel() {
                 {message.sender === "user" ? <p className="whitespace-pre-wrap">{message.content}</p> : (
                   <>
                     <AssistantMarkdown content={message.content} userRole={userRole} />
-                    {message.sources && <SourceAccordion sources={message.sources} userRole={userRole} />}
+                    {message.sources && !isAssistantRefusal(message.content) && <SourceAccordion sources={message.sources} userRole={userRole} />}
                     {message.actions && <ActionBadges actions={message.actions} />}
                   </>
                 )}
               </div>
+              {message.sender === "assistant" && (
+                <div role="group" aria-label="Đánh giá câu trả lời của trợ lý" aria-busy={!!pendingFeedback[message.id]} className="flex items-center gap-1 px-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Câu trả lời hữu ích"
+                    title="Hữu ích"
+                    aria-pressed={feedbackRatings[message.id] === 1}
+                    disabled={!!pendingFeedback[message.id] || !!message.is_streaming}
+                    onClick={() => { void handleFeedback(message.id, 1) }}
+                    className={cn("text-ink-3", feedbackRatings[message.id] === 1 && "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700")}
+                  >
+                    <ThumbsUp className="size-3.5" aria-hidden />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Câu trả lời chưa hữu ích"
+                    title="Chưa hữu ích"
+                    aria-pressed={feedbackRatings[message.id] === -1}
+                    disabled={!!pendingFeedback[message.id] || !!message.is_streaming}
+                    onClick={() => { void handleFeedback(message.id, -1) }}
+                    className={cn("text-ink-3", feedbackRatings[message.id] === -1 && "bg-bad-soft text-bad hover:bg-bad-soft hover:text-bad")}
+                  >
+                    <ThumbsDown className="size-3.5" aria-hidden />
+                  </Button>
+                </div>
+              )}
             </article>
           ))}
         </div>

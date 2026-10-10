@@ -28,7 +28,7 @@ class AgentStatusResponse(BaseModel):
     status: str = Field(default="ready", description="Trạng thái agent")
     agent: str = Field(default="LangGraph Agent v1.0", description="Tên agent")
     llm_provider: str = Field(default="groq", description="Provider đang kích hoạt (groq / openrouter / openai)")
-    model_name: str = Field(default="llama-3.3-70b-versatile", description="Tên model đang dùng")
+    model_name: str = Field(default="openai/gpt-oss-120b", description="Tên model đang dùng")
     langsmith_tracing: bool = Field(default=True, description="Trạng thái LangSmith tracing")
 
 
