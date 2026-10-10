@@ -175,3 +175,60 @@ async def test_feedback_first_submission_wins(client):
 async def test_feedback_validation(client, body):
     response = await client.post("/api/v1/feedback", json=body, headers=STUDENT)
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_recommend_jds_by_cv_version_id(client):
+    """Test API POST /api/v1/jd/recommend gợi ý JD từ cv_version_id đã lưu."""
+    cv = await create_cv(client)
+    cv_version_id = cv["id"]
+
+    response = await client.post(
+        "/api/v1/jd/recommend",
+        json={"cv_version_id": cv_version_id, "top_n": 3},
+        headers=STUDENT,
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["cv_version_id"] == cv_version_id
+    assert "recommendations" in data
+    assert len(data["recommendations"]) > 0
+
+    top_rec = data["recommendations"][0]
+    assert "title" in top_rec
+    assert "match_score" in top_rec
+    assert "semantic_score" in top_rec
+
+
+@pytest.mark.asyncio
+async def test_recommend_jds_by_cv_text(client):
+    """Test API POST /api/v1/jd/recommend gợi ý trực tiếp từ văn bản cv_text."""
+    response = await client.post(
+        "/api/v1/jd/recommend",
+        json={"cv_text": "Kỹ sư Backend Python thành thạo FastAPI, PostgreSQL, Docker", "top_n": 2},
+        headers=STUDENT,
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["recommendations"]) <= 2
+    assert "Backend" in data["recommendations"][0]["title"]
+
+
+@pytest.mark.asyncio
+async def test_recommend_jds_errors(client):
+    """Kiểm tra các trường hợp lỗi: thiếu CV hoặc không tìm thấy CV."""
+    # Thiếu cả cv_version_id và cv_text
+    res_missing = await client.post("/api/v1/jd/recommend", json={}, headers=STUDENT)
+    assert res_missing.status_code == 400
+
+    # ID không tồn tại
+    res_not_found = await client.post(
+        "/api/v1/jd/recommend", json={"cv_version_id": "non-existent-id"}, headers=STUDENT
+    )
+    assert res_not_found.status_code == 404
+
+    # Cố vấn không được gọi endpoint dành riêng cho sinh viên
+    res_advisor = await client.post(
+        "/api/v1/jd/recommend", json={"cv_text": "Python Developer"}, headers=ADVISOR
+    )
+    assert res_advisor.status_code == 403

@@ -7,11 +7,14 @@ dist/
 build/
 .eggs/
 
-# Virtual environments
+# Virtual environments & Tools
 venv/
 .venv/
 .tools/
 env/
+.tools/
+.pytest_cache/
+.ruff_cache/
 
 # Environment variables
 .env

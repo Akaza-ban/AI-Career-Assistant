@@ -5,11 +5,149 @@ from sqlalchemy import select
 
 from src.api.deps import CurrentStudent, CurrentUser, DbSession
 from src.api.errors import AppError
-from src.db.models import GapAnalysis, JobDescription
-from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse, JobDescriptionResponse
+from src.db.models import CvVersion, GapAnalysis, JobDescription
+from src.models.schemas import (
+    CareerAdvice,
+    CompareJDsRequest,
+    CompareJDsResponse,
+    CreateGapAnalysisRequest,
+    GapAnalysisResponse,
+    JobDescriptionResponse,
+    RecommendJDsRequest,
+    RecommendJDsResponse,
+)
 from src.services import gap_analysis
+from src.services.jd_recommendation import (
+    compare_selected_jds_with_llm,
+    generate_career_advice_with_llm,
+    recommend_top_jds_from_cv,
+)
 
 router = APIRouter()
+
+
+@router.post(
+    "/jd/compare",
+    response_model=CompareJDsResponse,
+    tags=["Gap Analysis"],
+)
+@router.post(
+    "/gap-analysis/compare",
+    response_model=CompareJDsResponse,
+    tags=["Gap Analysis"],
+    include_in_schema=False,
+)
+async def compare_jds(
+    body: CompareJDsRequest,
+    user: CurrentStudent,
+    db: DbSession,
+) -> CompareJDsResponse:
+    """
+    So sánh các JD được chọn (2-3 JD) với CV của sinh viên bằng LLM:
+    - Sinh viên chọn 2-3 vị trí JD mục tiêu.
+    - Gọi LLM phân tích ngữ nghĩa sâu từng JD đối chiếu với CV theo bảng rubric PRD 5.2.
+    - Sắp xếp kết quả theo điểm match_score (%) giảm dần.
+    - Hiển thị bảng so sánh chi tiết: kỹ năng đã đáp ứng, kỹ năng chỉ mới liệt kê, kỹ năng còn thiếu, nhận xét của LLM.
+    - Tổng hợp danh sách kỹ năng còn thiếu chung (common missing skills) ở tất cả các JD.
+    """
+    cv_text = ""
+    cv_label = None
+    cv_name = None
+    if body.cv_version_id:
+        cv = db.get(CvVersion, body.cv_version_id)
+        if cv is None or cv.owner_id != user.id:
+            raise AppError(404, "Không tìm thấy CV.", "cv_not_found")
+        cv_text = cv.content_text
+        cv_label = f"v{cv.major}.{cv.minor}" if cv.major is not None and cv.minor is not None else None
+        cv_name = cv.file_name
+    elif body.cv_text and body.cv_text.strip():
+        cv_text = body.cv_text
+    else:
+        raise AppError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
+
+    unique_jd_ids = list(dict.fromkeys(body.jd_ids))
+    if len(unique_jd_ids) < 2 or len(unique_jd_ids) > 3:
+        raise AppError(400, "Vui lòng chọn từ 2 đến 3 vị trí JD khác nhau để so sánh.", "invalid_jd_selection")
+
+    # Kiểm tra bảo mật: nếu là JD tự dán, phải thuộc quyền sở hữu của chính sinh viên
+    pasted_jds = db.scalars(
+        select(JobDescription).where(
+            JobDescription.id.in_(unique_jd_ids),
+            JobDescription.source == "pasted",
+        )
+    ).all()
+    for pjd in pasted_jds:
+        if pjd.owner_id != user.id:
+            raise AppError(403, "Bạn không có quyền truy cập vị trí JD này.", "jd_forbidden")
+
+    result = await compare_selected_jds_with_llm(
+        cv_text=cv_text,
+        jd_ids=unique_jd_ids,
+        db=db,
+    )
+
+    found_ids = {c["jd_id"] for c in result.get("comparisons", [])}
+    missing_ids = [jid for jid in unique_jd_ids if jid not in found_ids]
+    if missing_ids:
+        raise AppError(404, f"Không tìm thấy thông tin JD: {', '.join(missing_ids)}.", "jd_not_found")
+
+    return CompareJDsResponse(
+        cv_version_id=body.cv_version_id,
+        cv_label=cv_label,
+        cv_name=cv_name,
+        total_compared=len(result["comparisons"]),
+        comparisons=result["comparisons"],
+        common_missing_skills=result["common_missing_skills"],
+    )
+
+
+@router.post(
+    "/jd/recommend",
+    response_model=RecommendJDsResponse,
+    tags=["Gap Analysis"],
+)
+async def recommend_jds(
+    body: RecommendJDsRequest,
+    user: CurrentStudent,
+    db: DbSession,
+) -> RecommendJDsResponse:
+    """
+    (Task A3) Gợi ý Top-N JD phù hợp nhất với CV đã chọn kèm Matching Score từng JD (Full RAG):
+    - Stage 1: Dense Retrieval tìm ứng viên qua Chroma Vector Store.
+    - Stage 2: ATS Rule Scorer chấm điểm và sắp xếp theo Matching Score (PRD 5.2).
+    - Stage 3: LLM Generation sinh lời khuyên nghề nghiệp và kế hoạch hành động cá nhân hóa.
+    Sinh viên có thể truyền cv_version_id hoặc cv_text trực tiếp.
+    """
+    cv_text = ""
+    if body.cv_version_id:
+        cv = db.get(CvVersion, body.cv_version_id)
+        if cv is None or cv.owner_id != user.id:
+            raise AppError(404, "Không tìm thấy CV.", "cv_not_found")
+        cv_text = cv.content_text
+    elif body.cv_text and body.cv_text.strip():
+        cv_text = body.cv_text
+    else:
+        raise AppError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
+
+    results = recommend_top_jds_from_cv(
+        cv_text=cv_text,
+        db=db,
+        top_n=body.top_n,
+    )
+
+    advice = None
+    if body.generate_advice:
+        advice_data = await generate_career_advice_with_llm(
+            cv_summary=cv_text[:800],
+            recommendations=results,
+        )
+        advice = CareerAdvice(**advice_data)
+
+    return RecommendJDsResponse(
+        cv_version_id=body.cv_version_id,
+        recommendations=results,
+        advice=advice,
+    )
 
 
 @router.get("/jd/library", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
