@@ -25,6 +25,7 @@ import { api } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 import { QUESTION_COUNT, SECONDS_PER_QUESTION } from "@/lib/interview"
 import { useApi } from "@/lib/use-api"
+import { useAgentActions } from "@/lib/use-agent-actions"
 import { cn } from "@/lib/utils"
 
 const MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
@@ -43,6 +44,13 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
   const [starting, setStarting] = useState(false)
   const [introOpen, setIntroOpen] = useState(() => !interviewIntroHidden())
   const [tourOpen, setTourOpen] = useState(false)
+
+  useAgentActions({
+    resetView: ({ clear_filters, close_modals }) => {
+      if (clear_filters) { setJdId(initialJdId); setCvId(initialCvId) }
+      if (close_modals) { setIntroOpen(false); setTourOpen(false) }
+    },
+  })
 
   const activeCv = cvs?.find((cv) => cv.id === cvId) ?? cvs?.find((cv) => cv.is_active) ?? cvs?.[0]
   // Vị trí điền sẵn từ trang kết quả phân tích (?jd=), nếu không thì vị trí đang gắn với CV, cuối cùng là mục đầu.
@@ -118,7 +126,7 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Vị trí ứng tuyển" icon={Briefcase}>
               <Select items={jdItems} value={jd?.id ?? null} onValueChange={(v) => setJdId(String(v))}>
-                <SelectTrigger className="h-10 w-full min-w-0 bg-surface" aria-label="Vị trí ứng tuyển">
+                <SelectTrigger data-agent-target="select-jd" className="h-10 w-full min-w-0 bg-surface" aria-label="Vị trí ứng tuyển">
                   <SelectValue className="min-w-0 truncate" />
                 </SelectTrigger>
                 <SelectContent>
@@ -132,7 +140,7 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
             </Field>
             <Field label="CV dùng làm bối cảnh" icon={FileText}>
               <Select items={cvItems} value={activeCv?.id ?? null} onValueChange={(v) => setCvId(String(v))}>
-                <SelectTrigger className="h-10 w-full min-w-0 bg-surface" aria-label="CV dùng làm bối cảnh">
+                <SelectTrigger data-agent-target="select-cv" className="h-10 w-full min-w-0 bg-surface" aria-label="CV dùng làm bối cảnh">
                   <SelectValue className="min-w-0 truncate" />
                 </SelectTrigger>
                 <SelectContent>
@@ -199,7 +207,7 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
               </div>
             </div>
             <div className="grid gap-2 lg:w-72">
-              <Button variant="violet" size="brand" disabled={starting || !jd || !activeCv || !quota || exhausted} onClick={start}>
+              <Button data-agent-target="btn-start-interview" variant="violet" size="brand" disabled={starting || !jd || !activeCv || !quota || exhausted} onClick={start}>
                 {starting ? <Loader2 className="animate-spin" aria-hidden /> : null}
                 Bắt đầu phỏng vấn
                 {!starting && <ArrowRight aria-hidden />}

@@ -3,19 +3,20 @@
 Shared AI hook logger — works with Claude Code, Gemini CLI, Codex, Cursor, Copilot.
 Reads JSON from stdin, normalizes to common format, appends to .ai-log/session.jsonl
 """
+
 import json
 import os
-import sys
 import subprocess
-from datetime import datetime, timezone, timedelta
+import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 VN_TZ = timezone(timedelta(hours=7))
 
 
-def git(cmd):
+def git(cmd: str, cwd: Path | None = None) -> str:
     try:
-        return subprocess.check_output(cmd, shell=True, text=True, stderr=subprocess.DEVNULL).strip()
+        return subprocess.check_output(cmd, shell=True, cwd=cwd, text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
         return ""
 
@@ -59,7 +60,8 @@ def normalize(data: dict, tool: str) -> dict | None:
     # origin isn't set), skip the event entirely — these entries can't be
     # tied back to a team on the server and would just clutter the pending
     # queue forever.
-    origin = git("git remote get-url origin")
+    cwd = Path(data.get("cwd") or Path.cwd())
+    origin = git("git remote get-url origin", cwd)
     if not origin:
         return None
     repo = origin.rstrip("/").split("/")[-1]
@@ -70,16 +72,12 @@ def normalize(data: dict, tool: str) -> dict | None:
         "ts": ts,
         "tool": tool,
         "event": event,
-        "session_id": (
-            data.get("session_id") or
-            data.get("conversation_id") or
-            data.get("generation_id") or ""
-        ),
+        "session_id": (data.get("session_id") or data.get("conversation_id") or data.get("generation_id") or ""),
         "model": data.get("model", ""),
         "repo": repo,
-        "branch": git("git rev-parse --abbrev-ref HEAD"),
-        "commit": git("git rev-parse --short HEAD"),
-        "student": git("git config user.email"),
+        "branch": git("git rev-parse --abbrev-ref HEAD", cwd),
+        "commit": git("git rev-parse --short HEAD", cwd),
+        "student": git("git config user.email", cwd),
     }
 
     if tool == "claude":
@@ -90,12 +88,14 @@ def normalize(data: dict, tool: str) -> dict | None:
         # PostToolUse: extract from tool_input
         elif isinstance(data.get("tool_input"), dict):
             prompt = data["tool_input"].get("prompt") or data["tool_input"].get("content") or ""
-        base.update({
-            "prompt": prompt,
-            "tool_name": data.get("tool_name", ""),
-            "tool_input": data.get("tool_input") if event != "UserPromptSubmit" else None,
-            "tool_response": str(data.get("tool_response", ""))[:500],
-        })
+        base.update(
+            {
+                "prompt": prompt,
+                "tool_name": data.get("tool_name", ""),
+                "tool_input": data.get("tool_input") if event != "UserPromptSubmit" else None,
+                "tool_response": str(data.get("tool_response", ""))[:500],
+            }
+        )
 
     elif tool == "gemini":
         if event == "BeforeAgent":
@@ -121,41 +121,48 @@ def normalize(data: dict, tool: str) -> dict | None:
             base.update({"prompt": prompt, "response_summary": answer})
 
     elif tool == "codex":
-        base.update({
-            "prompt": data.get("prompt", "")[:1000],
-            "turn_id": data.get("turn_id", ""),
-            "transcript_path": data.get("transcript_path", ""),
-        })
+        base.update(
+            {
+                "prompt": data.get("prompt", ""),
+                "turn_id": data.get("turn_id", ""),
+                "transcript_path": data.get("transcript_path", ""),
+            }
+        )
+        if event == "Stop":
+            base["response_summary"] = (data.get("last_assistant_message") or "")[:500]
 
     elif tool == "cursor":
-        base.update({
-            "prompt": data.get("prompt", "")[:1000],
-            "files_context": data.get("attachments", []),
-        })
+        base.update(
+            {
+                "prompt": data.get("prompt", "")[:1000],
+                "files_context": data.get("attachments", []),
+            }
+        )
 
     elif tool == "copilot":
-        base.update({
-            "prompt": data.get("prompt", "")[:1000],
-            "tool_name": data.get("toolName", ""),
-            "tool_args": data.get("toolArgs"),
-        })
+        base.update(
+            {
+                "prompt": data.get("prompt", "")[:1000],
+                "tool_name": data.get("toolName", ""),
+                "tool_args": data.get("toolArgs"),
+            }
+        )
 
     # Skip only true noise: no prompt AND no tool-specific payload (tool_input,
     # response_summary, tool_response, tool_args, files_context). Previously
     # this only checked `prompt`, which dropped Claude Bash/Edit events (their
     # tool_input has `command` / `file_path`, not `prompt` or `content`) and
     # any Gemini/Cursor/Copilot turn that carried context but no plain prompt.
-    _PAYLOAD_KEYS = ("prompt", "tool_input", "response_summary",
-                     "tool_response", "tool_args", "files_context")
-    _LIFECYCLE_EVENTS = ("Stop", "stop", "SessionEnd", "sessionEnd", "AfterModel")
-    has_payload = any(base.get(k) for k in _PAYLOAD_KEYS)
-    if not has_payload and event not in _LIFECYCLE_EVENTS:
+    payload_keys = ("prompt", "tool_input", "response_summary", "tool_response", "tool_args", "files_context")
+    lifecycle_events = ("Stop", "stop", "SessionEnd", "sessionEnd", "AfterModel")
+    has_payload = any(base.get(k) for k in payload_keys)
+    if not has_payload and event not in lifecycle_events:
         return None
 
     return base
 
 
-def main():
+def main() -> None:
     # Read stdin as UTF-8 explicitly. On Windows, sys.stdin defaults to the
     # system code page (e.g. cp1252), which corrupts non-Latin1 prompts
     # (Vietnamese, CJK, emoji) into mojibake. The hook payload is always UTF-8.
@@ -167,6 +174,8 @@ def main():
         data = json.loads(raw)
     except json.JSONDecodeError:
         sys.exit(0)
+    if not isinstance(data, dict):
+        sys.exit(0)
 
     tool = detect_tool(data)
     entry = normalize(data, tool)
@@ -174,14 +183,18 @@ def main():
         sys.exit(0)
 
     log_dir = Path(os.environ.get("AI_LOG_DIR", ".ai-log"))
-    log_dir.mkdir(exist_ok=True)
+    if not log_dir.is_absolute():
+        cwd = Path(data.get("cwd") or Path.cwd())
+        root = git("git rev-parse --show-toplevel", cwd)
+        log_dir = Path(root or cwd) / log_dir
+    log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "session.jsonl"
 
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
     # Output valid JSON (required by some tools like Gemini)
-    print(json.dumps({"status": "logged"}))
+    print(json.dumps({} if tool == "codex" else {"status": "logged"}))
 
 
 if __name__ == "__main__":
