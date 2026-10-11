@@ -28,6 +28,8 @@ import { draftDocument } from "@/lib/cv-document"
 import { mockAnalysisSeeds, mockInterviewRows } from "@/lib/mocks/progress"
 import { buildOverview, buildProgress } from "@/lib/mocks/student-progress"
 import { mockAdvisorContact, mockInitialReviews, mockInitialShared, mockSettings } from "@/lib/mocks/sharing"
+import { adviceFor, recommendFromProfile, skillProfileOf } from "@/lib/mocks/library"
+import { buildPastedJd, compareFromProfile } from "@/lib/mocks/compare"
 import type {
   AdvisorFeedback,
   AdvisorInterviewReport,
@@ -48,10 +50,13 @@ import type {
   ChangePasswordResponse,
   ChatMessage,
   ChatParticipant,
+  CompareJdsRequest,
+  CompareJdsResponse,
   Conversation,
   ConversationSummary,
   CreateGapAnalysisRequest,
   CreateInterviewRequest,
+  CreatePastedJdRequest,
   CvDocument,
   CvVersion,
   ExportCvRequest,
@@ -70,8 +75,11 @@ import type {
   JobDescription,
   OptimizerSession,
   ProgressRange,
+  RecommendJdsRequest,
+  RecommendJdsResponse,
   ReviewInterviewRequest,
   Role,
+  SavedJd,
   SharedItem,
   SharingOverview,
   StarCriterion,
@@ -86,7 +94,7 @@ import type {
   UpdateSettingsRequest,
   UpdateSharingRequest,
 } from "@/lib/types"
-import { JD_MIN_WORDS } from "@/lib/types"
+import { COMPARE_MAX_JDS, COMPARE_MIN_JDS, JD_MIN_WORDS } from "@/lib/types"
 import { ApiError } from "@/lib/api-error"
 import { MOCK_SCENARIO } from "@/lib/config"
 
@@ -97,6 +105,17 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 const isNewStudent = MOCK_SCENARIO === "new_student"
 const submittedFeedback = new Map<string, number>()
 let cvVersions = isNewStudent ? [] : clone(mockCvVersions)
+// Vị trí đã lưu ("Đã lưu" ở Thư viện JD); backend chưa có endpoint nên chỉ sống trong phiên mock.
+let savedJds: SavedJd[] = isNewStudent
+  ? []
+  : [
+      { jd_id: "jd-mkt-analyst", saved_at: new Date(Date.now() - 2 * 86_400_000).toISOString() },
+      { jd_id: "jd-fe-junior", saved_at: new Date(Date.now() - 5 * 86_400_000).toISOString() },
+    ]
+// JD SV tự dán (backend lưu lại theo chủ sở hữu, GET /jd trả về cùng thư viện). Mất khi tải lại trang.
+let pastedJds: JobDescription[] = []
+const findJd = (id: string) => mockJdLibrary.find((j) => j.id === id) ?? pastedJds.find((j) => j.id === id)
+const countJdWords = (text: string) => text.split(/\s+/).filter(Boolean).length
 
 // ---- Phiên bản CV theo từng CV (mô phỏng src/services/cv_versions.py) ----
 // cvVersions giữ mọi phiên bản của mọi CV; các phiên bản cùng family_id là một CV.
@@ -707,6 +726,11 @@ export const mockApi = {
     return clone(notifications[role])
   },
 
+  async markNotificationRead(role: Role, id: string) {
+    await delay(150)
+    notifications[role] = notifications[role].map((n) => (n.id === id ? { ...n, read: true } : n))
+  },
+
   async markAllNotificationsRead(role: Role) {
     await delay(200)
     notifications[role] = notifications[role].map((n) => ({ ...n, read: true }))
@@ -854,6 +878,80 @@ export const mockApi = {
     return clone(mockJdLibrary)
   },
 
+  /** Mô phỏng POST /jd/recommend: chấm theo quy tắc, tối đa top_n vị trí, lời khuyên cho vị trí #1. */
+  async recommendJds(body: RecommendJdsRequest): Promise<RecommendJdsResponse> {
+    await delay(body.generate_advice === false ? 500 : 1100)
+    if (!body.cv_version_id) throw new ApiError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
+    const cv = cvFamilyOf(body.cv_version_id)[0]
+    if (cv.status !== "ready") throw new ApiError(409, "CV chưa sẵn sàng để gợi ý vị trí.", "cv_not_ready")
+    const topN = Math.min(10, Math.max(1, body.top_n ?? 3))
+    const recommendations = recommendFromProfile(mockJdLibrary, skillProfileOf(cv.family_id), topN)
+    return {
+      cv_version_id: body.cv_version_id,
+      recommendations,
+      advice: body.generate_advice === false ? null : adviceFor(recommendations[0]),
+    }
+  },
+
+  /** GET /jd: thư viện JD và các JD SV đã tự dán. */
+  async listMyJds(): Promise<JobDescription[]> {
+    await delay(300)
+    return clone([...mockJdLibrary, ...pastedJds])
+  },
+
+  async createPastedJd(body: CreatePastedJdRequest): Promise<JobDescription> {
+    await delay(300)
+    if (!body.title.trim()) throw new ApiError(422, "Hãy nhập tiêu đề vị trí tuyển dụng.", "jd_title_required")
+    const words = countJdWords(body.text)
+    if (words < JD_MIN_WORDS) {
+      throw new ApiError(422, `Nội dung JD quá ngắn (${words} từ). Hãy bổ sung tối thiểu ${JD_MIN_WORDS} từ.`, "jd_too_short")
+    }
+    const jd = buildPastedJd(`jd-p-${Date.now().toString(36)}${pastedJds.length}`, body, mockJdLibrary)
+    pastedJds = [jd, ...pastedJds]
+    return clone(jd)
+  },
+
+  /** Mô phỏng POST /jd/compare: 2–3 JD khác nhau, chấm theo hồ sơ kỹ năng của CV, sắp giảm dần. */
+  async compareJds(body: CompareJdsRequest): Promise<CompareJdsResponse> {
+    await delay(3600)
+    if (!body.cv_version_id) throw new ApiError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
+    const cv = cvVersions.find((c) => c.id === body.cv_version_id)
+    if (!cv) throw new ApiError(404, "Không tìm thấy CV.", "cv_not_found")
+    const ids = [...new Set(body.jd_ids)]
+    if (ids.length < COMPARE_MIN_JDS || ids.length > COMPARE_MAX_JDS) {
+      throw new ApiError(400, "Vui lòng chọn từ 2 đến 3 vị trí JD khác nhau để so sánh.", "invalid_jd_selection")
+    }
+    const missing = ids.filter((id) => !findJd(id))
+    if (missing.length) {
+      throw new ApiError(404, `Không tìm thấy thông tin JD: ${missing.join(", ")}.`, "jd_not_found")
+    }
+    return compareFromProfile(
+      ids.map((id) => findJd(id)!),
+      cv.family_id,
+      cv,
+    )
+  },
+
+  async listSavedJds(): Promise<SavedJd[]> {
+    await delay(250)
+    return clone(savedJds)
+  },
+
+  async saveJd(jdId: string): Promise<SavedJd> {
+    await delay(200)
+    if (!findJd(jdId)) throw new ApiError(404, "Không tìm thấy vị trí.", "jd_not_found")
+    const existing = savedJds.find((s) => s.jd_id === jdId)
+    if (existing) return clone(existing)
+    const saved = { jd_id: jdId, saved_at: new Date().toISOString() }
+    savedJds = [saved, ...savedJds]
+    return clone(saved)
+  },
+
+  async unsaveJd(jdId: string): Promise<void> {
+    await delay(200)
+    savedJds = savedJds.filter((s) => s.jd_id !== jdId)
+  },
+
   // US-SV-02 AC2: JD dán vào phải có ít nhất JD_MIN_WORDS từ. SV chỉ chọn một nguồn JD.
   async createGapAnalysis(body: CreateGapAnalysisRequest): Promise<GapAnalysis> {
     await delay(500)
@@ -863,7 +961,7 @@ export const mockApi = {
     }
     if (!body.jd_id) {
       if (!pasted) throw new ApiError(422, "Hãy chọn một JD trong thư viện hoặc dán nội dung JD.", "jd_required")
-      const words = pasted.split(/s+/).filter(Boolean).length
+      const words = countJdWords(pasted)
       if (words < JD_MIN_WORDS) {
         throw new ApiError(422, `Nội dung JD quá ngắn (${words} từ). Hãy bổ sung tối thiểu ${JD_MIN_WORDS} từ.`, "jd_too_short")
       }
@@ -871,7 +969,8 @@ export const mockApi = {
     }
     const cv = cvVersions.find((c) => c.id === body.cv_version_id)
     if (!cv) throw new ApiError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
-    const libraryJd = body.jd_id ? mockJdLibrary.find((j) => j.id === body.jd_id) : undefined
+    // jd_id có thể là JD thư viện hoặc JD SV đã tự dán trước đó.
+    const libraryJd = body.jd_id ? findJd(body.jd_id) : undefined
     if (body.jd_id && !libraryJd) throw new ApiError(404, "Không tìm thấy JD đã chọn.", "jd_not_found")
     const id = `ga-${Date.now().toString(36)}`
     // Kết quả gắn đúng cặp (phiên bản CV, JD) đã chọn (US-SV-02 AC1). Nội dung kỹ năng vẫn là dữ liệu mẫu.
@@ -892,7 +991,7 @@ export const mockApi = {
             company: libraryJd.company,
             industry: libraryJd.industry,
             level: libraryJd.level,
-            source: "library",
+            source: libraryJd.source,
           }
         : {
             id: `jd-${id}`,
@@ -905,6 +1004,13 @@ export const mockApi = {
     }
     analyses[id] = analysis
     analysisStartedAt[id] = Date.now()
+    if (!libraryJd) {
+      // Như backend: JD tự dán được lưu lại để chạy lại, so sánh hoặc lưu vào "Đã lưu".
+      pastedJds = [
+        buildPastedJd(analysis.jd.id, { title: body.jd_title!, company: body.jd_company, text: pasted }, mockJdLibrary),
+        ...pastedJds,
+      ]
+    }
     cv.latest_analysis_id = id
     cv.target_title = analysis.jd.title
     cv.match_score = Math.round(analysis.match_score ?? 0)

@@ -2,17 +2,15 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useState } from "react"
-import { ChevronRight, CircleHelp, LogOut, Menu, Settings } from "lucide-react"
+import { useEffect, useState } from "react"
+import { ChevronRight, Repeat2, Search } from "lucide-react"
 import { toast } from "sonner"
 
 import { ChatLauncher } from "@/components/chat/chat-launcher"
 import { advisorShell, getBreadcrumb, studentShell } from "@/components/shell/nav-config"
-import { NotificationMenu } from "@/components/shell/notification-menu"
+import { floatingSurface, NotificationMenu } from "@/components/shell/notification-menu"
 import { useProfile } from "@/components/shell/profile-context"
-import { SidebarNav } from "@/components/shell/sidebar-nav"
 import { UserAvatar } from "@/components/shell/user-avatar"
-import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,114 +20,121 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
+const searchSoon = () => toast.info("Tìm kiếm nhanh đang được xây dựng.")
+
+/** Ở đầu trang header trong suốt để thấy dải pastel; cuộn xuống thì có nền mờ và đường kẻ. */
+function useScrolled(threshold = 4) {
+  const [scrolled, setScrolled] = useState(false)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > threshold)
+    onScroll()
+    window.addEventListener("scroll", onScroll, { passive: true })
+    return () => window.removeEventListener("scroll", onScroll)
+  }, [threshold])
+  return scrolled
+}
+
+/** Header chuẩn, giống nhau trên mọi trang (DESIGN.md 5.3). Điện thoại: tiêu đề trang thay cho ô tìm kiếm. */
 export function AppTopbar({ role }: { role: Role }) {
   const pathname = usePathname()
   const config = role === "advisor" ? advisorShell : studentShell
   const profile = useProfile()
-  const [menuOpen, setMenuOpen] = useState(false)
   const crumbs = getBreadcrumb(config, pathname)
+  const pageTitle = crumbs[crumbs.length - 1]?.label
+  const scrolled = useScrolled()
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line/60 bg-card/80 backdrop-blur-md">
-      <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-            <SheetTrigger
-              render={<Button variant="ghost" size="icon-lg" className="-ml-2 lg:hidden" aria-label="Mở menu" />}
+    <header
+      className={cn(
+        "sticky top-0 z-30 flex h-16 items-center gap-2.5 border-b px-4 transition-[background-color,border-color] duration-200 sm:px-6 lg:h-[72px] lg:px-10 xl:px-12",
+        scrolled ? "border-line bg-background/85 backdrop-blur-md" : "border-transparent",
+      )}
+    >
+      <button
+        type="button"
+        onClick={searchSoon}
+        className="glass hidden h-10 max-w-[520px] flex-1 items-center gap-2.5 rounded-[10px] px-3.5 text-sm text-ink-3 shadow-xs transition-colors hover:text-ink-2 lg:flex"
+      >
+        <Search className="size-4" strokeWidth={1.75} aria-hidden />
+        Tìm vị trí, thao tác…
+        <kbd className="ml-auto rounded-md bg-surface px-1.5 py-px font-sans text-xs text-ink-2">Ctrl K</kbd>
+      </button>
+      <div className="min-w-0 flex-1 truncate font-heading text-2xl font-semibold tracking-[-0.02em] lg:hidden">
+        {pageTitle}
+      </div>
+      <div className="hidden flex-1 lg:block" />
+
+      <div className="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          onClick={searchSoon}
+          aria-label="Tìm kiếm"
+          className="grid size-10 place-items-center rounded-full text-ink-2 transition-colors hover:bg-surface hover:text-ink lg:hidden"
+        >
+          <Search className="size-[19px]" strokeWidth={1.75} aria-hidden />
+        </button>
+        <ChatLauncher />
+        <NotificationMenu role={role} />
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<button type="button" className="ml-1 rounded-full" aria-label="Tài khoản" />}>
+            <UserAvatar name={profile?.full_name} src={profile?.avatar_url} className="size-[34px]" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={10} className={cn("w-72 p-2", floatingSurface)}>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="flex items-center gap-3 px-3 pt-2.5 pb-3">
+                <UserAvatar name={profile?.full_name} src={profile?.avatar_url} className="size-10" />
+                <span className="grid min-w-0">
+                  <span className="truncate text-[15px] font-semibold text-ink">{profile?.full_name ?? "…"}</span>
+                  <span className="truncate text-[13px] font-normal text-ink-3">{profile?.subtitle}</span>
+                </span>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator className="mx-1 my-1 bg-line" />
+            <DropdownMenuItem
+              render={<Link href="/" />}
+              className="h-10 gap-2.5 rounded-xl px-3 text-sm font-medium text-ink-2 focus:bg-panel focus:text-ink [&_svg]:text-ink-3"
             >
-              <Menu className="size-5" aria-hidden />
-            </SheetTrigger>
-            <SheetContent side="left" className="w-60 p-0" showCloseButton={false}>
-              <SheetTitle className="sr-only">Menu điều hướng</SheetTitle>
-              <SidebarNav role={role} onNavigate={() => setMenuOpen(false)} />
-            </SheetContent>
-          </Sheet>
-
-          <nav aria-label="Breadcrumb" className="min-w-0">
-            <ol className="flex min-w-0 items-center gap-1 text-sm font-medium whitespace-nowrap">
-              {crumbs.map((crumb, index) => (
-                <li
-                  key={crumb.label}
-                  className={cn(
-                    "flex items-center gap-1",
-                    crumb.href ? "shrink-0" : "min-w-0",
-                    // Màn hình hẹp: chỉ giữ mục cha gần nhất và trang hiện tại
-                    crumb.href && index < crumbs.length - 2 && "hidden sm:flex",
-                  )}
-                >
-                  {index > 0 && (
-                    <ChevronRight className="size-3.5 shrink-0 text-ink-3" aria-hidden />
-                  )}
-                  {crumb.href ? (
-                    <Link href={crumb.href} className="truncate text-ink-2 transition-colors hover:text-blue">
-                      {crumb.label}
-                    </Link>
-                  ) : (
-                    <span className="truncate text-ink" aria-current="page">
-                      {crumb.label}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </nav>
-        </div>
-
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-          <div className="flex items-center gap-1">
-            <ChatLauncher />
-            <NotificationMenu role={role} />
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-lg"
-                    className="rounded-lg text-ink-2 hover:text-ink"
-                    aria-label="Trợ giúp"
-                    onClick={() => toast.info("Trung tâm trợ giúp đang được xây dựng.")}
-                  />
-                }
-              >
-                <CircleHelp className="size-5" aria-hidden />
-              </TooltipTrigger>
-              <TooltipContent>Trợ giúp</TooltipContent>
-            </Tooltip>
-          </div>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<button type="button" className="rounded-full" aria-label="Tài khoản" />}
-            >
-              <UserAvatar name={profile?.full_name} src={profile?.avatar_url} />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuGroup>
-                <DropdownMenuLabel className="grid gap-0.5 py-1.5">
-                  <span className="truncate text-sm font-semibold text-ink">{profile?.full_name ?? "…"}</span>
-                  <span className="truncate text-xs font-normal">{profile?.subtitle}</span>
-                </DropdownMenuLabel>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              {config.settingsHref && (
-                <DropdownMenuItem render={<Link href={config.settingsHref} />}>
-                  <Settings aria-hidden />
-                  Cài đặt & Quyền riêng tư
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem render={<Link href="/" />}>
-                <LogOut aria-hidden />
-                Đổi vai trò
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+              <Repeat2 className="size-4" strokeWidth={1.75} aria-hidden />
+              Đổi vai trò
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
+  )
+}
+
+/** Breadcrumb ở dòng riêng dưới header, chỉ hiện ở trang con (có ít nhất một bước cha). */
+export function PageCrumbs({ role }: { role: Role }) {
+  const pathname = usePathname()
+  const config = role === "advisor" ? advisorShell : studentShell
+  const crumbs = getBreadcrumb(config, pathname)
+  if (crumbs.length < 2) return null
+
+  return (
+    <nav aria-label="Breadcrumb" className="relative z-10 pt-1">
+      <ol className="flex min-w-0 flex-wrap items-center gap-1 text-sm">
+        {crumbs.map((crumb, index) => (
+          <li
+            key={crumb.label}
+            className={cn("flex min-w-0 items-center gap-1", crumb.href && index < crumbs.length - 2 && "hidden sm:flex")}
+          >
+            {index > 0 && <ChevronRight className="size-3.5 shrink-0 text-ink-3" aria-hidden />}
+            {crumb.href ? (
+              <Link href={crumb.href} className="truncate text-ink-3 transition-colors hover:text-ink">
+                {crumb.label}
+              </Link>
+            ) : (
+              <span className="truncate font-semibold text-ink" aria-current="page">
+                {crumb.label}
+              </span>
+            )}
+          </li>
+        ))}
+      </ol>
+    </nav>
   )
 }

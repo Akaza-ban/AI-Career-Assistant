@@ -3,21 +3,15 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { ArrowLeft } from "lucide-react"
+import { ArrowLeft, LogOut } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { runLeaveAction, useLeaveGuard } from "@/lib/leave-guard"
 
-/** Nút "Rời phòng" ở header khung tập trung; hỏi xác nhận nếu phòng phỏng vấn đang làm dở. */
-export function LeaveRoomLink({ href = "/student" }: { href?: string }) {
+/**
+ * Nút "Rời phòng" ở header khung tập trung: về trang Luyện phỏng vấn; hỏi xác nhận nếu phòng phỏng vấn đang làm dở.
+ */
+export function LeaveRoomLink({ href = "/student/interview/new" }: { href?: string }) {
   const router = useRouter()
   const guard = useLeaveGuard()
   const [open, setOpen] = useState(false)
@@ -37,29 +31,20 @@ export function LeaveRoomLink({ href = "/student" }: { href?: string }) {
         <ArrowLeft className="size-4" aria-hidden />
         Rời phòng
       </Link>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rời phòng phỏng vấn?</DialogTitle>
-            <DialogDescription>{guard}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="soft" onClick={() => setOpen(false)}>
-              Tiếp tục phỏng vấn
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={async () => {
-                setOpen(false)
-                await runLeaveAction()
-                router.push(href)
-              }}
-            >
-              Rời phòng
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        destructive
+        icon={LogOut}
+        title="Rời phòng phỏng vấn?"
+        description={guard}
+        cancelLabel="Tiếp tục phỏng vấn"
+        confirmLabel="Rời phòng"
+        onConfirm={async () => {
+          await runLeaveAction()
+          router.push(href)
+        }}
+      />
     </>
   )
 }

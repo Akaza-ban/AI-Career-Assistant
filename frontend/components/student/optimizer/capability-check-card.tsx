@@ -1,10 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { CircleCheck, CircleX, Info, Loader2, Pencil, ShieldCheck, Sprout } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 import { IMPORTANCE_META } from "@/components/student/analysis/jd-picker-sections"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import type { CapabilityAnswerRequest, CapabilityCheck } from "@/lib/types"
@@ -14,6 +13,21 @@ import { cn } from "@/lib/utils"
 const MAX_CONTEXT_CHARS = 500
 const MAX_LEARNING_NOTE_CHARS = 120
 
+type Choice = "yes" | "learning" | "no"
+
+const OPTIONS: { value: Choice; label: string }[] = [
+  { value: "yes", label: "Có, đã dùng" },
+  { value: "learning", label: "Đang học" },
+  { value: "no", label: "Chưa có" },
+]
+
+/** "Đang học" và "Chưa có" đều là chưa có kinh nghiệm; khác nhau ở ghi chú đang học (vào mục Kỹ năng đang phát triển). */
+function savedChoice(check: CapabilityCheck): Choice | null {
+  if (check.status === "has_experience") return "yes"
+  if (check.status === "no_experience") return check.learning_note ? "learning" : "no"
+  return null
+}
+
 interface CapabilityCheckCardProps {
   check: CapabilityCheck
   /** false khi đã "Hoàn tất": chỉ xem. */
@@ -21,176 +35,127 @@ interface CapabilityCheckCardProps {
   onAnswer: (body: CapabilityAnswerRequest) => Promise<void>
 }
 
-// Figma: thẻ "Kiểm tra tính xác thực kinh nghiệm". PRD US-SV-05: AI không tự thêm kỹ năng còn thiếu vào CV.
+// Bản vẽ ToiUu: "Kỹ năng JD cần mà CV chưa thể hiện". PRD US-SV-05: AI không tự thêm kỹ năng còn thiếu vào CV.
 export function CapabilityCheckCard({ check, editable, onAnswer }: CapabilityCheckCardProps) {
-  const answered = check.status !== "pending"
-  const [changing, setChanging] = useState(false)
-  const [choice, setChoice] = useState<"yes" | "no" | null>(
-    check.status === "has_experience" ? "yes" : check.status === "no_experience" ? "no" : null,
-  )
+  const saved = savedChoice(check)
+  const [choice, setChoice] = useState<Choice | null>(saved)
   const [context, setContext] = useState(check.context ?? "")
   const [learningNote, setLearningNote] = useState(check.learning_note ?? "")
   const [busy, setBusy] = useState(false)
-  const importance = IMPORTANCE_META[check.importance]
-  const showForm = editable && (!answered || changing)
 
-  async function submit() {
+  const text = choice === "yes" ? context.trim() : learningNote.trim()
+  const savedText = choice === "yes" ? (check.context ?? "") : (check.learning_note ?? "")
+  const dirty = choice !== saved || text !== savedText
+
+  async function submit(next: Choice) {
     setBusy(true)
     try {
       await onAnswer(
-        choice === "yes"
+        next === "yes"
           ? { has_experience: true, context: context.trim() }
-          : { has_experience: false, learning_note: learningNote.trim() || undefined },
+          : { has_experience: false, learning_note: next === "learning" ? learningNote.trim() : undefined },
       )
-      setChanging(false)
     } catch {
-      // Nơi gọi đã báo lỗi; giữ nguyên nội dung để SV sửa lại.
+      // Nơi gọi đã báo lỗi; giữ nguyên nội dung để SV sửa lại, riêng "Chưa có" (lưu ngay) thì trả về lựa chọn cũ.
+      if (next === "no") setChoice(saved)
     } finally {
       setBusy(false)
     }
   }
 
-  return (
-    <article className="grid gap-3 rounded-[20px] border border-t-4 border-line border-t-navy bg-card p-4 shadow-card">
-      <header className="grid gap-1">
-        <span className="flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.06em] text-blue uppercase">
-          <ShieldCheck className="size-3.5" aria-hidden />
-          Kiểm tra tính xác thực kinh nghiệm
-        </span>
-        <h3 className="flex flex-wrap items-center gap-2 font-heading text-sm font-bold text-ink">
-          Kỹ năng CV chưa thể hiện: {check.skill}
-          <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", importance.chip)}>{importance.label}</span>
-        </h3>
-      </header>
+  function pick(next: Choice) {
+    setChoice(next)
+    // "Chưa có" không cần nhập gì thêm nên lưu ngay.
+    if (next === "no" && saved !== "no") void submit("no")
+  }
 
-      <div className="grid gap-1.5 rounded-xl bg-blue-soft/50 p-3 text-[13px] leading-5">
-        <p className="text-ink">{check.jd_requirement}</p>
-        {showForm && (
-          <p className="font-medium text-ink">Bạn đã từng có kinh nghiệm thực tế hoặc làm bài tập lớn với kỹ năng này chưa?</p>
-        )}
+  return (
+    <article className="rounded-card border border-line bg-card px-[18px] py-4">
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-2">
+        <h3 className="font-semibold text-ink">{check.skill}</h3>
+        <span className="text-xs text-ink-3">· {IMPORTANCE_META[check.importance].label}</span>
+      </div>
+      <p className="mb-2.5 text-sm text-ink-2">Bạn đã từng dùng {check.skill} trong dự án hoặc bài tập lớn chưa?</p>
+
+      <div role="radiogroup" aria-label={`Kinh nghiệm với ${check.skill}`} className="flex flex-wrap gap-1.5">
+        {OPTIONS.map((o) => {
+          const on = choice === o.value
+          return (
+            <button
+              key={o.value}
+              type="button"
+              role="radio"
+              aria-checked={on}
+              disabled={!editable || busy}
+              onClick={() => pick(o.value)}
+              className={cn(
+                "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-[transform,background-color,color] active:scale-[0.97] disabled:cursor-default",
+                on ? "border-ink bg-ink text-white" : "border-line-strong bg-card text-ink hover:bg-panel",
+                !editable && !on && "opacity-60",
+              )}
+            >
+              {o.label}
+            </button>
+          )
+        })}
       </div>
 
-      {showForm ? (
-        <>
-          <div role="radiogroup" aria-label={`Kinh nghiệm với ${check.skill}`} className="grid gap-2">
-            <OptionButton selected={choice === "yes"} onClick={() => setChoice("yes")} icon={CircleCheck} tone="good">
-              Tôi đã từng học / làm dự án với kỹ năng này
-            </OptionButton>
-            {choice === "yes" && (
-              <div className="grid gap-1.5 pl-2">
-                <Textarea
-                  value={context}
-                  onChange={(e) => setContext(e.target.value)}
-                  maxLength={MAX_CONTEXT_CHARS}
-                  placeholder="Mô tả ngắn: bạn dùng trong môn học / dự án nào, làm những gì, kết quả ra sao…"
-                  aria-label="Mô tả kinh nghiệm"
-                  className="min-h-20 text-sm"
-                />
-                <p className="text-xs text-ink-2">
-                  AI không tự thêm kỹ năng này vào CV. Sau khi ghi nhận, hãy tự bổ sung kinh nghiệm này vào CV gốc rồi
-                  phân tích lại để hệ thống đối chiếu bằng chứng.
-                </p>
-              </div>
-            )}
-            <OptionButton selected={choice === "no"} onClick={() => setChoice("no")} icon={CircleX} tone="bad">
-              Tôi chưa có kinh nghiệm với kỹ năng này
-            </OptionButton>
-            {choice === "no" && (
-              <div className="grid gap-2 rounded-xl bg-good-soft/60 p-3 text-[13px] leading-5">
-                <p className="font-semibold text-good">Cảm ơn sự trung thực của bạn!</p>
-                <p className="text-ink">
-                  Kỹ năng này <strong>không</strong> được thêm vào CV như đã thành thạo, tránh rủi ro khi bị hỏi sâu ở vòng
-                  phỏng vấn. Khoảng trống này vẫn được giữ để bạn và cố vấn lên kế hoạch học thêm.
-                </p>
-                <label className="grid gap-1 text-xs text-ink-2">
-                  Nếu bạn đang học, có thể ghi vào mục &quot;Kỹ năng đang phát triển&quot; của CV (tuỳ chọn):
-                  <Input
-                    value={learningNote}
-                    onChange={(e) => setLearningNote(e.target.value)}
-                    maxLength={MAX_LEARNING_NOTE_CHARS}
-                    placeholder="Ví dụ: Đang học chứng chỉ Microsoft PL-300"
-                    className="h-9 bg-card text-sm"
-                  />
-                </label>
-              </div>
-            )}
-          </div>
-          {choice && (
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={busy || (choice === "yes" && !context.trim())} onClick={submit}>
-                {busy && <Loader2 className="animate-spin" aria-hidden />}
-                Xác nhận
-              </Button>
-              {changing && (
-                <Button size="sm" variant="ghost" disabled={busy} onClick={() => setChanging(false)}>
-                  Huỷ
-                </Button>
-              )}
-            </div>
+      {choice === "yes" && (
+        <div className="mt-2.5 animate-in duration-300 fade-in slide-in-from-bottom-1">
+          {editable ? (
+            <Textarea
+              value={context}
+              onChange={(e) => setContext(e.target.value)}
+              maxLength={MAX_CONTEXT_CHARS}
+              placeholder="Bạn dùng trong môn học hoặc dự án nào, làm những gì, kết quả ra sao…"
+              aria-label={`Mô tả kinh nghiệm với ${check.skill}`}
+              className="min-h-[72px] rounded-[10px] px-3 py-2.5 text-sm"
+            />
+          ) : (
+            <p className="rounded-[10px] bg-panel px-3 py-2.5 text-sm text-ink-2">{check.context}</p>
           )}
-        </>
-      ) : (
-        <div className="grid gap-2">
-          <p className="flex items-start gap-2 rounded-xl bg-surface p-3 text-[13px] leading-5 text-ink">
-            {check.status === "has_experience" ? (
-              <>
-                <Info className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
-                <span>
-                  Đã ghi nhận kinh nghiệm của bạn: &ldquo;{check.context}&rdquo;. Hãy tự bổ sung vào CV gốc rồi phân tích lại.
-                </span>
-              </>
-            ) : check.learning_note ? (
-              <>
-                <Sprout className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
-                <span>
-                  Ghi vào mục Kỹ năng đang phát triển: &ldquo;{check.learning_note}&rdquo;. Không ghi là thành thạo.
-                </span>
-              </>
-            ) : (
-              <>
-                <Info className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
-                <span>Đã xác nhận chưa có kinh nghiệm. Kỹ năng này không được thêm vào CV.</span>
-              </>
-            )}
+          <p className="mt-1.5 text-xs text-ink-3">
+            AI không tự thêm kỹ năng này vào CV. Hãy tự bổ sung kinh nghiệm vào CV gốc rồi phân tích lại.
           </p>
-          {editable && (
-            <Button size="sm" variant="ghost" className="justify-self-start text-ink-2" onClick={() => setChanging(true)}>
-              <Pencil aria-hidden />
-              Đổi câu trả lời
-            </Button>
-          )}
         </div>
       )}
-    </article>
-  )
-}
 
-function OptionButton({
-  selected,
-  onClick,
-  icon: Icon,
-  tone,
-  children,
-}: {
-  selected: boolean
-  onClick: () => void
-  icon: typeof CircleCheck
-  tone: "good" | "bad"
-  children: React.ReactNode
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onClick}
-      className={cn(
-        "flex items-center gap-2.5 rounded-xl border p-3 text-left text-[13px] font-medium transition-colors",
-        selected ? "border-blue bg-blue-soft/40 text-ink" : "border-line bg-surface/60 text-ink hover:border-blue/40",
+      {choice === "learning" && (
+        <div className="mt-2.5 animate-in duration-300 fade-in slide-in-from-bottom-1">
+          {editable ? (
+            <Input
+              value={learningNote}
+              onChange={(e) => setLearningNote(e.target.value)}
+              maxLength={MAX_LEARNING_NOTE_CHARS}
+              placeholder="Ví dụ: Đang học chứng chỉ Microsoft PL-300"
+              aria-label={`Bạn đang học ${check.skill} ở đâu`}
+              className="h-10 rounded-[10px] px-3 text-sm"
+            />
+          ) : (
+            <p className="rounded-[10px] bg-panel px-3 py-2.5 text-sm text-ink-2">{check.learning_note}</p>
+          )}
+          <p className="mt-1.5 text-xs text-ink-3">Sẽ thêm vào mục &ldquo;Kỹ năng đang phát triển&rdquo;, không ghi là thành thạo.</p>
+        </div>
       )}
-    >
-      <Icon className={cn("size-4 shrink-0", tone === "good" ? "text-good" : "text-bad")} aria-hidden />
-      {children}
-    </button>
+
+      {choice === "no" && (
+        <p className="mt-2.5 animate-in text-[13px] text-good duration-300 fade-in">
+          Cảm ơn sự trung thực của bạn. Kỹ năng này không được thêm vào CV.
+        </p>
+      )}
+
+      {editable && (choice === "yes" || choice === "learning") && dirty && (
+        <button
+          type="button"
+          disabled={busy || !text}
+          onClick={() => submit(choice)}
+          className="mt-2.5 inline-flex h-9 items-center gap-2 rounded-full bg-ink px-4 text-[13px] font-semibold text-white transition-[transform,background-color] hover:bg-ink/85 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
+        >
+          {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+          Lưu câu trả lời
+        </button>
+      )}
+      {busy && choice === "no" && <Loader2 className="mt-2 size-4 animate-spin text-ink-3" aria-label="Đang lưu" />}
+    </article>
   )
 }

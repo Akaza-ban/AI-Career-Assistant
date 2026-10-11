@@ -26,7 +26,7 @@ export default function Home() {
         <span className="rounded-full bg-blue-soft px-3 py-1 font-heading text-[13px] font-semibold text-blue">
           {/* CareerX {!ALL_LIVE} */}
         </span>
-        <h1 className="font-heading text-4xl font-extrabold leading-tight sm:text-5xl">
+        <h1 className="font-heading text-4xl font-semibold leading-tight sm:text-5xl">
           Chọn vai trò để <span className="text-grad">bắt đầu</span>
         </h1>
         <p className="max-w-xl text-ink-2">

@@ -2,67 +2,65 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
-import {
-  AlertCircle,
-  CircleCheck,
-  Clock,
-  Home,
-  ListChecks,
-  MessageSquareHeart,
-  MessageSquareText,
-  Mic2,
-  RotateCcw,
-  ShieldCheck,
-  Timer,
-  TimerOff,
-  TrendingUp,
-} from "lucide-react"
+import { AlertCircle, ChevronDown, ChevronRight, MessageSquareHeart, TimerOff, UserPlus } from "lucide-react"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
-import { Panel, SectionHeader } from "@/components/common/panel"
-import { ResultDisclaimer } from "@/components/student/analysis/analysis-result-sections"
+import { EmptyState } from "@/components/common/empty-state"
+import { PageHeader } from "@/components/common/page-header"
+import { Panel } from "@/components/common/panel"
+import { Zone, ZoneLink } from "@/components/common/zone"
 import { CsatDialog } from "@/components/student/interview/csat-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
-import { formatDate, formatRelativeTime } from "@/lib/format"
-import { LABEL_META, STAR_META, STAR_ORDER, formatScore, trendOf } from "@/lib/interview"
-import type { InterviewReport as Report, InterviewTurn, ReportAdvisorReview } from "@/lib/types"
+import { formatDate } from "@/lib/format"
+import { STAR_META, STAR_ORDER, TREND_THRESHOLD } from "@/lib/interview"
+import type { InterviewReport as Report, InterviewTurn, ReportAdvisorReview, StarCriterion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
-// Figma: frame "Báo cáo Phỏng vấn STAR" (18:1335). PRD US-SV-04 / US-SV-06, S7 + S7b.
+/** Điểm phỏng vấn luôn một chữ số thập phân: "3,8" (DESIGN.md 8.1, không gắn nhãn). */
+const score1 = (n: number) => n.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+const signed = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${score1(Math.abs(n))}`
+/** "09/10" */
+const shortDate = (iso: string) => formatDate(iso).slice(0, 5)
+
+// Bản vẽ "Báo cáo phỏng vấn" (WIREFRAMES A14). PRD US-SV-04 / US-SV-06, S7 + S7b.
 export function InterviewReport({ sessionId }: { sessionId: string }) {
   const fetchReport = useCallback(() => api.getInterviewReport(sessionId), [sessionId])
   const { data: report, error, reload } = useApi(fetchReport)
 
   if (error) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">Không tải được kết quả phỏng vấn</p>
-        <p className="text-sm text-ink-2">{error.message}</p>
-        <Button variant="soft" onClick={reload}>
-          Thử lại
-        </Button>
+      <Panel className="mx-auto mt-10 w-full max-w-lg p-0">
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được báo cáo phỏng vấn"
+          description={error.message}
+          action={
+            <Button size="brand" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
       </Panel>
     )
   }
 
   if (!report) {
     return (
-      <div className="grid gap-8" aria-busy="true" aria-label="Đang tải kết quả">
-        <div className="grid gap-3">
-          <Skeleton className="h-6 w-72" />
-          <Skeleton className="h-10 w-96 max-w-full" />
-          <Skeleton className="h-5 w-80 max-w-full" />
+      <div className="grid gap-14 md:gap-16" aria-busy="true" aria-label="Đang tải báo cáo">
+        <div className="grid gap-3 pt-8 pb-2 md:pt-12">
+          <Skeleton className="h-9 w-2/3 max-w-md rounded-xl md:h-[46px]" />
+          <Skeleton className="h-6 w-1/2 max-w-sm rounded-lg" />
         </div>
-        <div className="grid gap-8 lg:grid-cols-2">
-          <Skeleton className="h-72 rounded-[20px]" />
-          <Skeleton className="h-72 rounded-[20px]" />
-        </div>
-        <Skeleton className="h-[480px] rounded-[20px]" />
+        {[160, 220, 320].map((h) => (
+          <div key={h} className="grid gap-7">
+            <Skeleton className="h-8 w-56 rounded-lg" />
+            <Skeleton className="rounded-card" style={{ height: h }} />
+          </div>
+        ))}
       </div>
     )
   }
@@ -70,241 +68,283 @@ export function InterviewReport({ sessionId }: { sessionId: string }) {
   return <ReportView report={report} />
 }
 
-// Thiết kế như trang Tổng quan: đầu trang nằm thẳng trên nền, tiêu đề mục đặt ngoài ô, ô chỉ chứa nội dung.
+// Bố cục vùng và khối kiểu Stripe (DESIGN.md 3.6): tiêu đề trang, các vùng cách nhau 56–72px, không thẻ bao.
 function ReportView({ report }: { report: Report }) {
   const retryHref = `/student/interview/new?jd=${encodeURIComponent(report.jd.id)}`
-  const label = LABEL_META[report.label]
+  const minutes = Math.max(1, Math.round(report.duration_seconds / 60))
+  const meta = [
+    report.jd.company,
+    shortDate(report.completed_at),
+    `${report.turns.length} câu`,
+    `${minutes} phút`,
+    report.timed_out_count > 0 ? `${report.timed_out_count} câu hết giờ` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
 
   return (
-    <div className="grid gap-8">
-      <div className="grid gap-3 py-2">
-        <div className="flex flex-wrap gap-2">
-          <Badge variant="violet" className="h-auto px-2.5 py-0.5">
-            <Mic2 aria-hidden />
-            Mô phỏng AI STAR
-          </Badge>
-          <Badge variant="blue" className="h-auto px-2.5 py-0.5">
-            Vị trí: {report.jd.title}
-          </Badge>
-        </div>
-        <h1 className="font-heading text-[32px] leading-10 font-bold">Kết quả phỏng vấn thử</h1>
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">
-          <span className="flex items-center gap-1">
-            <Clock className="size-4" aria-hidden />
-            Hoàn thành {formatRelativeTime(report.completed_at).toLowerCase()}
-          </span>
-          <span className="flex items-center gap-1">
-            <Timer className="size-4" aria-hidden />
-            Thời lượng: {Math.max(1, Math.round(report.duration_seconds / 60))} phút
-          </span>
-          <span className="flex items-center gap-1">
-            <ListChecks className="size-4" aria-hidden />
-            {report.turns.length} câu hỏi
-            {report.timed_out_count > 0 && ` · ${report.timed_out_count} câu hết giờ`}
-          </span>
-        </p>
-      </div>
+    <div className="grid gap-14 md:gap-[72px]">
+      <PageHeader
+        title={report.jd.title}
+        description={meta}
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="brand"
+              className="glass text-ink shadow-xs hover:bg-card"
+              nativeButton={false}
+              render={<Link href="/student/share" />}
+            >
+              <UserPlus strokeWidth={1.75} aria-hidden />
+              Chia sẻ với cố vấn
+            </Button>
+            <Button size="brand" nativeButton={false} render={<Link href={retryHref} />}>
+              Luyện lại vị trí này
+              <ChevronRight aria-hidden />
+            </Button>
+          </>
+        }
+      />
 
-      <div className="grid gap-x-8 gap-y-8 lg:grid-cols-2">
-        {/* Điểm tổng + so sánh với buổi đầu tiên cùng vị trí */}
-        <section className="flex min-w-0 flex-col gap-3">
-          <SectionHeader title="Điểm tổng"/>
-          <Panel className="grid flex-1 content-start gap-4">
-            <div className="flex items-end gap-3">
-              <span className={cn("font-heading text-5xl leading-none font-extrabold", label.className)}>
-                {formatScore(report.overall_score)}
-              </span>
-              <span className="pb-1 text-lg font-semibold text-ink-3">/5</span>
-              <Badge variant="neutral" className={cn("mb-1 h-auto px-2.5 py-0.5", label.badge)}>
-                {label.text}
-              </Badge>
-            </div>
-            <p className="text-sm text-ink-2">Điểm tổng là trung bình điểm STAR của {report.turns.length} câu trả lời.</p>
-            {report.comparison ? (
-              <Comparison report={report} />
-            ) : (
-              <p className="rounded-xl bg-surface p-3 text-sm text-ink-2">
-                Đây là buổi đầu tiên cho vị trí này. Hoàn thành thêm buổi để theo dõi tiến bộ.
-              </p>
-            )}
-            <p className="flex items-center gap-1.5 text-xs text-ink-2">
-              <ShieldCheck className="size-3.5 text-blue" aria-hidden />
-              Đây là luyện tập, không tính điểm chính thức.
-            </p>
-          </Panel>
-        </section>
+      <ScoreZone report={report} />
 
-        {/* 4 thanh S/T/A/R, đánh dấu tiêu chí yếu nhất */}
-        <section className="flex min-w-0 flex-col gap-3">
-          <SectionHeader title="Điểm theo tiêu chí STAR" />
-          <Panel className="grid flex-1 content-start gap-4">
-            <ul className="grid gap-3.5">
-              {STAR_ORDER.map((key) => {
-                const score = report.star[key]
-                const weakest = key === report.weakest
-                return (
-                  <li key={key} className="grid gap-1.5">
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <span className="flex items-center gap-2 font-medium text-ink">
-                        <span className="grid size-6 place-items-center rounded-md bg-blue-soft text-xs font-bold text-blue">
-                          {STAR_META[key].letter}
-                        </span>
-                        {STAR_META[key].label}
-                        {weakest && <Badge variant="warn">Yếu nhất</Badge>}
-                      </span>
-                      <span className="font-heading font-bold text-ink">{formatScore(score)}/5</span>
-                    </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-surface" aria-hidden>
-                      <div
-                        className={cn("h-full rounded-full", weakest ? "bg-warn" : "bg-blue")}
-                        style={{ width: `${(score / 5) * 100}%` }}
-                      />
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          </Panel>
-        </section>
-      </div>
-
-      {report.advisor_review && <AdvisorReviewCard review={report.advisor_review} />}
-
-      {/* Hướng dẫn cải thiện: chỉ khung trả lời, không viết sẵn câu trả lời chứa thành tích SV chưa nêu */}
-      <section className="grid gap-3">
-        <SectionHeader title="Hướng dẫn cải thiện" />
-        <Panel className="grid gap-3">
-          <ul className="grid gap-2">
-            {report.guidance.map((g) => (
-              <li key={g} className="flex gap-2.5 rounded-xl bg-surface p-3 text-sm leading-6 text-ink">
-                <CircleCheck className="mt-1 size-4 shrink-0 text-violet" aria-hidden />
-                {g}
+      <div className="grid gap-14 lg:grid-cols-2 lg:gap-16">
+        {/* Chỉ gợi ý khung trả lời, không viết sẵn câu trả lời chứa thành tích SV chưa nêu */}
+        <Zone id="guidance-title" title="Hướng dẫn cải thiện" className="min-w-0 [&>div:last-child]:pt-2">
+          <ol>
+            {report.guidance.map((g, i) => (
+              <li key={g} className="flex gap-3.5 border-b border-line py-4">
+                <span className="grid size-[26px] shrink-0 place-items-center rounded-full bg-blue-soft text-[13px] font-semibold text-accent-strong tabular-nums">
+                  {i + 1}
+                </span>
+                <p className="min-w-0 pt-0.5 leading-6 text-ink">{g}</p>
               </li>
             ))}
-          </ul>
-          <p className="text-xs text-ink-2">Hệ thống chỉ gợi ý cách trình bày, không viết sẵn câu trả lời cho bạn.</p>
-        </Panel>
-      </section>
+          </ol>
+          <p className="mt-3.5 text-[13px] text-ink-3">Hệ thống chỉ gợi ý cách trình bày, không viết sẵn câu trả lời.</p>
+        </Zone>
 
-      <section className="grid gap-3">
-        <SectionHeader title="Chi tiết từng câu" />
-        <div className="grid gap-4">
-          {report.turns.map((turn) => (
-            <TurnCard key={turn.id} turn={turn} />
-          ))}
-        </div>
-      </section>
+        <Zone id="advisor-title" title="Nhận xét của cố vấn" className="min-w-0 [&>div:last-child]:pt-[22px]">
+          {report.advisor_review ? (
+            <AdvisorReview review={report.advisor_review} />
+          ) : (
+            <div className="grid gap-3">
+              <p className="text-ink-2">
+                Chưa có nhận xét. Chia sẻ báo cáo này với cố vấn để nhận góp ý về cách trả lời.
+              </p>
+              <ZoneLink href="/student/share">Chia sẻ với cố vấn</ZoneLink>
+            </div>
+          )}
+        </Zone>
+      </div>
 
-      <Actions report={report} retryHref={retryHref} />
-      <ResultDisclaimer />
+      <Zone id="turns-title" title="Chi tiết từng câu" className="[&>div:last-child]:pt-1.5">
+        <TurnList turns={report.turns} />
+      </Zone>
+
+      <Csat report={report} />
     </div>
   )
 }
 
+// ---------- Điểm buổi phỏng vấn ----------
+
+function ScoreZone({ report }: { report: Report }) {
+  const c = report.comparison
+  const delta = c?.delta ?? null
+  const deltaClass =
+    delta === null
+      ? ""
+      : delta >= TREND_THRESHOLD
+        ? "border-good-line bg-good-soft text-good"
+        : delta <= -TREND_THRESHOLD
+          ? "border-warn-line bg-warn-soft text-warn"
+          : "border-line-strong bg-surface text-ink-2"
+
+  return (
+    <Zone id="score-title" title="Điểm buổi phỏng vấn">
+      <div className="flex flex-wrap gap-x-16 gap-y-10">
+        <div className="min-w-[200px] flex-none">
+          <div className="flex h-[22px] items-center gap-2">
+            <h3 className="text-base font-semibold text-ink">Điểm trung bình</h3>
+            {delta !== null && (
+              <span
+                className={cn("rounded-badge border px-1.5 text-xs leading-5 font-semibold tabular-nums", deltaClass)}
+                title="So với buổi đầu tiên của vị trí này"
+              >
+                {signed(delta)}
+              </span>
+            )}
+          </div>
+          <p className="mt-1.5 text-5xl leading-[56px] font-semibold tracking-[-0.02em] text-ink tabular-nums">
+            {score1(report.overall_score)}
+            <span className="text-xl font-medium text-ink-3"> / 5</span>
+          </p>
+          <p className="mt-1 text-sm text-ink-3">
+            {c
+              ? `Buổi đầu tiên ${score1(c.first_score)} · ${shortDate(c.first_completed_at)}`
+              : "Buổi đầu tiên của vị trí này"}
+          </p>
+        </div>
+
+        <ul className="grid min-w-0 flex-[1_1_560px] grid-cols-2 gap-x-6 gap-y-8 sm:gap-x-10 md:grid-cols-4 lg:border-l lg:border-line lg:pl-10">
+          {STAR_ORDER.map((key) => (
+            <StarColumn key={key} criterion={key} score={report.star[key]} weakest={key === report.weakest} />
+          ))}
+        </ul>
+      </div>
+    </Zone>
+  )
+}
+
+function StarColumn({ criterion, score, weakest }: { criterion: StarCriterion; score: number; weakest: boolean }) {
+  const meta = STAR_META[criterion]
+  return (
+    <li className="min-w-0">
+      <div className="flex h-[22px] items-center gap-2">
+        <h3 className="truncate text-base font-semibold text-ink">{meta.label}</h3>
+        <span className="text-[13px] text-ink-3">{meta.letter}</span>
+      </div>
+      {/* Badge "Yếu nhất" đặt cạnh số để 4 cột luôn thẳng hàng khi cột hẹp */}
+      <p className="mt-2 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="text-[26px] leading-8 font-medium text-ink tabular-nums">{score1(score)}</span>
+        {weakest && <Badge variant="warn">Yếu nhất</Badge>}
+      </p>
+      <div
+        className="h-1.5 overflow-hidden rounded-full bg-surface"
+        role="meter"
+        aria-label={`${meta.label}: ${score1(score)} trên 5`}
+        aria-valuemin={0}
+        aria-valuemax={5}
+        aria-valuenow={score}
+      >
+        <div className={cn("h-full rounded-full", weakest ? "bg-gold" : "bg-blue")} style={{ width: `${(score / 5) * 100}%` }} />
+      </div>
+    </li>
+  )
+}
+
+// ---------- Nhận xét của cố vấn ----------
+
+const initials = (name: string) =>
+  name
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("")
+
 /** Nhận xét của cố vấn phụ trách; mở báo cáo là tính đã xem (cố vấn thấy "SV đã xem"). */
-function AdvisorReviewCard({ review }: { review: ReportAdvisorReview }) {
+function AdvisorReview({ review }: { review: ReportAdvisorReview }) {
   useEffect(() => {
     if (!review.read) void api.markAdvisorFeedbackRead(review.id).catch(() => undefined)
   }, [review.id, review.read])
 
   return (
-    <section className="grid gap-3">
-      <SectionHeader
-        title="Nhận xét của cố vấn"
-        aside={
-          <span className="text-xs text-ink-2">
-            {review.advisor_name} · {formatRelativeTime(review.updated_at).toLowerCase()}
-          </span>
-        }
-      />
-      <Panel className="grid gap-3 border-violet/25 bg-violet-soft/40">
-        <blockquote className="flex gap-3 text-sm leading-6 whitespace-pre-line text-ink">
-          <MessageSquareText className="mt-0.5 size-5 shrink-0 text-violet" aria-hidden />
-          <span>&ldquo;{review.comment}&rdquo;</span>
-        </blockquote>
-        <p className="text-xs text-ink-2">Điểm AI của buổi này giữ nguyên; nhận xét giúp bạn biết nên luyện gì tiếp.</p>
-      </Panel>
-    </section>
-  )
-}
-
-function Comparison({ report }: { report: Report }) {
-  const c = report.comparison!
-  const trend = trendOf(c.delta)
-  return (
-    <div className="grid gap-1 rounded-xl bg-surface p-3 text-sm">
-      <p className="flex flex-wrap items-center gap-1.5 text-ink">
-        <TrendingUp className="size-4 text-blue" aria-hidden />
-        So với buổi đầu tiên ({formatDate(c.first_completed_at)}):
-        <strong>
-          {formatScore(c.first_score)} → {formatScore(report.overall_score)}
-        </strong>
-        <span className={cn("font-semibold", trend.className)}>
-          ({c.delta > 0 ? "+" : ""}
-          {formatScore(c.delta)})
+    <div>
+      <div className="flex gap-3.5">
+        <span
+          className="grid size-10 shrink-0 place-items-center rounded-full bg-good-soft text-[13px] font-semibold text-good"
+          aria-hidden
+        >
+          {initials(review.advisor_name)}
         </span>
-      </p>
-      <p className={cn("text-xs font-medium", trend.className)}>{trend.text}</p>
+        <div className="min-w-0">
+          <p className="text-sm">
+            <span className="font-semibold text-ink">{review.advisor_name}</span>
+            <span className="text-ink-3"> · {shortDate(review.updated_at)}</span>
+          </p>
+          <p className="mt-1.5 break-words whitespace-pre-line text-ink-2">{review.comment}</p>
+        </div>
+      </div>
+      <p className="mt-[18px] text-[13px] text-ink-3">Điểm AI giữ nguyên. Nhận xét giúp bạn biết nên luyện gì tiếp.</p>
     </div>
   )
 }
 
-function TurnCard({ turn }: { turn: InterviewTurn }) {
-  const [showAnswer, setShowAnswer] = useState(false)
+// ---------- Chi tiết từng câu ----------
+
+/** Mỗi lúc chỉ mở một câu: mở câu khác thì câu đang mở tự đóng lại. Mặc định mở câu đầu tiên. */
+function TurnList({ turns }: { turns: InterviewTurn[] }) {
+  const [openId, setOpenId] = useState<string | null>(turns[0]?.id ?? null)
   return (
-    <Panel className="grid gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-heading font-bold text-ink">
-          Câu {turn.index} · {turn.theme}
-        </p>
-        <span className="flex items-center gap-2">
+    <div>
+      {turns.map((turn) => (
+        <TurnItem
+          key={turn.id}
+          turn={turn}
+          open={openId === turn.id}
+          onToggle={() => setOpenId((id) => (id === turn.id ? null : turn.id))}
+        />
+      ))}
+    </div>
+  )
+}
+
+function TurnItem({ turn, open, onToggle }: { turn: InterviewTurn; open: boolean; onToggle: () => void }) {
+  const panelId = `turn-${turn.id}`
+  const lowest = turn.star ? STAR_ORDER.reduce((a, b) => (turn.star![b] < turn.star![a] ? b : a)) : null
+
+  return (
+    <div className="border-b border-line">
+      <h3>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggle}
+          className="-mx-2.5 flex w-[calc(100%+20px)] items-center gap-3.5 rounded-lg px-2.5 py-4 text-left transition-colors hover:bg-panel"
+        >
+          <span className="w-5 shrink-0 text-sm font-semibold text-ink-3 tabular-nums">{turn.index}</span>
+          <span className="min-w-0 flex-1 font-medium text-ink">{turn.question}</span>
           {turn.timed_out && (
-            <Badge variant="warn">
+            <Badge variant="warn" className="hidden sm:inline-flex">
               <TimerOff aria-hidden />
               Hết giờ
             </Badge>
           )}
-          <Badge variant="blue" className="h-auto px-2.5 py-0.5 text-sm">
-            {formatScore(turn.score ?? 0)}/5
-          </Badge>
-        </span>
-      </div>
-      <p className="text-sm leading-6 font-medium text-ink">{turn.question}</p>
-      <div className="grid gap-1 rounded-xl bg-blue-soft/40 p-3">
-        <p className="text-xs font-semibold text-ink-2">Câu trả lời của bạn</p>
-        {turn.answer ? (
-          <>
-            <p className={cn("text-sm leading-6 whitespace-pre-line text-ink", !showAnswer && "line-clamp-3")}>{turn.answer}</p>
-            {turn.answer.length > 240 && (
-              <button
-                type="button"
-                onClick={() => setShowAnswer((v) => !v)}
-                className="justify-self-start text-xs font-medium text-blue hover:underline"
-              >
-                {showAnswer ? "Thu gọn" : "Xem toàn bộ câu trả lời"}
-              </button>
+          <span className="shrink-0 font-semibold text-ink tabular-nums">{score1(turn.score ?? 0)}</span>
+          <ChevronDown
+            className={cn("size-[18px] shrink-0 text-ink-3 transition-transform duration-200", open && "rotate-180")}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
+      </h3>
+      {open && (
+        <div id={panelId} className="grid gap-8 pt-1 pb-6 md:grid-cols-2 md:pl-9">
+          <div className="min-w-0">
+            <p className="mb-2 text-[13px] text-ink-3">Câu trả lời của bạn · {turn.theme}</p>
+            {turn.answer ? (
+              <p className="break-words whitespace-pre-line text-ink-2">{turn.answer}</p>
+            ) : (
+              <p className="text-ink-3 italic">Hết giờ khi chưa có câu trả lời.</p>
             )}
-          </>
-        ) : (
-          <p className="text-sm text-ink-2 italic">Hết giờ khi chưa có câu trả lời.</p>
-        )}
-      </div>
-      {turn.star && (
-        <div className="flex flex-wrap gap-1.5">
-          {STAR_ORDER.map((key) => (
-            <span key={key} className="rounded-md bg-surface px-2 py-0.5 text-xs text-ink ring-1 ring-line">
-              <strong className="text-blue">{STAR_META[key].letter}</strong> {STAR_META[key].label}: {formatScore(turn.star![key])}
-            </span>
-          ))}
+          </div>
+          <div className="min-w-0">
+            <p className="mb-2 text-[13px] text-ink-3">Nhận xét</p>
+            {turn.feedback && <p className="mb-3.5 text-ink-2">{turn.feedback}</p>}
+            {turn.star && (
+              <div className="flex flex-wrap gap-2">
+                {STAR_ORDER.map((key) => (
+                  <Badge key={key} variant={key === lowest ? "warn" : "neutral"} className="tabular-nums">
+                    {STAR_META[key].letter} {score1(turn.star![key])}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <FeedbackWidget variant="thumbs" responseId={turn.id} className="mt-4" />
+          </div>
         </div>
       )}
-      {turn.feedback && <p className="text-sm leading-6 text-ink-2">{turn.feedback}</p>}
-      <FeedbackWidget variant="thumbs" responseId={turn.id} />
-    </Panel>
+    </div>
   )
 }
 
-function Actions({ report, retryHref }: { report: Report; retryHref: string }) {
+// ---------- Khảo sát CSAT (US-SV-06) ----------
+
+function Csat({ report }: { report: Report }) {
   const [open, setOpen] = useState(false)
   const [submitted, setSubmitted] = useState<number | null>(null)
   const fetchCsat = useCallback(() => api.getFeedback(report.response_id, "csat"), [report.response_id])
@@ -312,34 +352,21 @@ function Actions({ report, retryHref }: { report: Report; retryHref: string }) {
   const rated = submitted ?? saved?.value ?? null
 
   return (
-    <section className="grid gap-3">
-      <SectionHeader title="Bước tiếp theo" />
-      <Panel className="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-card to-violet-soft/50">
-        <p className="text-sm text-ink-2">
-          {rated ? `Bạn đã đánh giá buổi này ${rated} sao. Cảm ơn bạn!` : "Luyện thêm để cải thiện tiêu chí yếu nhất, hoặc cho chúng tôi biết cảm nhận của bạn."}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="soft" className="h-10" nativeButton={false} render={<Link href="/student" />}>
-            <Home aria-hidden />
-            Về trang chủ
-          </Button>
-          <Button variant="soft" className="h-10" nativeButton={false} render={<Link href={retryHref} />}>
-            <RotateCcw aria-hidden />
-            Luyện lại
-          </Button>
-          <Button variant="violet" className="h-10 px-5" onClick={() => setOpen(true)} disabled={rated !== null}>
-            <MessageSquareHeart aria-hidden />
-            {rated ? "Đã đánh giá" : "Đánh giá"}
-          </Button>
-        </div>
-        <CsatDialog
-          responseId={report.response_id}
-          activity="interview"
-          open={open}
-          onOpenChange={setOpen}
-          onSubmitted={setSubmitted}
-        />
-      </Panel>
-    </section>
+    <div className="-mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-8 md:-mt-6">
+      <p className="text-ink-2">
+        {rated ? `Bạn đã đánh giá buổi này ${rated} sao. Cảm ơn bạn!` : "Bạn thấy buổi luyện phỏng vấn này thế nào?"}
+      </p>
+      <Button variant="soft" size="brand" onClick={() => setOpen(true)} disabled={rated !== null}>
+        <MessageSquareHeart strokeWidth={1.75} aria-hidden />
+        {rated ? "Đã đánh giá" : "Đánh giá buổi này"}
+      </Button>
+      <CsatDialog
+        responseId={report.response_id}
+        activity="interview"
+        open={open}
+        onOpenChange={setOpen}
+        onSubmitted={setSubmitted}
+      />
+    </div>
   )
 }

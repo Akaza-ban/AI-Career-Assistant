@@ -7,7 +7,7 @@ import { DeltaLine, StarCompare } from "@/components/student/history/history-sec
 import { Badge } from "@/components/ui/badge"
 import { formatPercent } from "@/lib/analysis"
 import { formatDate } from "@/lib/format"
-import { LABEL_META, STAR_META, STAR_ORDER, formatScore, labelOf } from "@/lib/interview"
+import { STAR_META, STAR_ORDER, formatScore } from "@/lib/interview"
 import type { CvProgress, InterviewProgress, StarSummary } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils"
 
 /** Điểm 0–5 của một vị trí qua các buổi, chênh lệch theo PRD 5.1 và S/T/A/R buổi trước so với gần nhất. */
 export function InterviewProgressBlock({ group, compact = false }: { group: InterviewProgress; compact?: boolean }) {
-  const label = LABEL_META[labelOf(group.latest_score)]
   const points: ScorePoint[] = group.points.map((p, i) => ({
     label: `Buổi ${i + 1}`,
     sub: formatDate(p.completed_at).slice(0, 5),
@@ -27,20 +26,15 @@ export function InterviewProgressBlock({ group, compact = false }: { group: Inte
       <div className="grid content-start gap-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <p className="grid">
-            <span className="font-heading font-bold text-ink">{group.jd.title}</span>
+            <span className="font-semibold text-ink">{group.jd.title}</span>
             {group.jd.company && <span className="text-xs text-ink-2">{group.jd.company}</span>}
           </p>
           <Badge variant="neutral">{group.session_count} buổi</Badge>
         </div>
         <div className="flex flex-wrap items-end gap-x-5 gap-y-1">
-          <p className="flex items-end gap-1.5">
-            <span className={cn("font-heading text-3xl leading-none font-extrabold", label.className)}>
-              {formatScore(group.latest_score)}
-            </span>
-            <span className="text-sm font-semibold text-ink-3">/5</span>
-            <Badge variant="neutral" className={label.badge}>
-              {label.text}
-            </Badge>
+          <p className="flex items-baseline gap-1.5 tabular-nums">
+            <span className="text-[26px] leading-8 text-ink">{formatScore(group.latest_score)}</span>
+            <span className="text-[15px] text-ink-3">/ 5</span>
           </p>
           {group.delta_from_previous !== null ? (
             <div className="grid gap-0.5">
@@ -69,36 +63,45 @@ export function InterviewProgressBlock({ group, compact = false }: { group: Inte
 /** Độ khớp CV–JD qua các phiên bản CV, mỗi JD một nhóm. */
 export function CvProgressBlock({ groups }: { groups: CvProgress[] }) {
   if (groups.length === 0) {
-    return <p className="text-sm text-ink-2">Sinh viên chưa có lượt phân tích CV–JD nào.</p>
+    return <p className="py-3 text-sm text-ink-3">Sinh viên chưa có lượt phân tích CV–JD nào.</p>
   }
-  // Mỗi JD một nhóm, ngăn bằng đường kẻ (không lồng ô trong ô).
+  // Mỗi JD một nhóm; các dòng phiên bản ngăn bằng đường kẻ mảnh, bản mới nhất tô màu nhấn.
   return (
-    <ul className="grid divide-y divide-line">
+    <ul className="grid gap-6">
       {groups.map((group) => (
-        <li key={group.jd.id} className="grid gap-2 py-3 first:pt-0 last:pb-0">
-          <p className="flex flex-wrap items-center justify-between gap-2 text-sm">
-            <span className="font-medium text-ink">{group.jd.title}</span>
-            {group.delta !== null && (
-              <Badge variant={group.delta > 0 ? "good" : group.delta < 0 ? "bad" : "neutral"}>
-                {group.delta === 0 ? "Không đổi" : `${group.delta > 0 ? "+" : ""}${formatPercent(group.delta)} điểm`}
-              </Badge>
-            )}
-          </p>
-          <ul className="grid gap-1.5">
+        <li key={group.jd.id} className="grid">
+          {groups.length > 1 && (
+            <p className="flex flex-wrap items-center justify-between gap-2 pb-1 text-sm">
+              <span className="font-medium text-ink">{group.jd.title}</span>
+              {group.delta !== null && group.delta !== 0 && (
+                <span
+                  className={cn(
+                    "rounded-badge border px-1.5 text-xs leading-5 font-semibold tabular-nums",
+                    group.delta > 0 ? "border-good-line bg-good-soft text-good" : "border-warn-line bg-warn-soft text-warn",
+                  )}
+                >
+                  {group.delta > 0 ? "+" : ""}
+                  {formatPercent(group.delta)}
+                </span>
+              )}
+            </p>
+          )}
+          <ul className="grid">
             {group.points.map((p, i) => {
               const last = i === group.points.length - 1
               return (
-                <li key={p.analysis_id} className="grid grid-cols-[56px_minmax(0,1fr)_52px] items-center gap-2 text-xs">
-                  <span className={cn(last ? "font-semibold text-ink" : "text-ink-2")}>CV {p.cv_label}</span>
-                  <span className="h-1.5 overflow-hidden rounded-full bg-surface">
+                <li
+                  key={p.analysis_id}
+                  className="grid grid-cols-[52px_minmax(0,1fr)_52px] items-center gap-3 border-b border-line py-[11px] text-sm"
+                >
+                  <span className={cn("tabular-nums", last ? "font-medium text-ink" : "text-ink-3")}>{p.cv_label}</span>
+                  <span className="h-1.5 overflow-hidden rounded-full bg-surface" aria-hidden>
                     <span
-                      className={cn("block h-full rounded-full", last ? "bg-blue" : "bg-blue/35")}
+                      className={cn("block h-full rounded-full", last ? "bg-blue" : "bg-line-strong")}
                       style={{ width: `${p.match_score}%` }}
                     />
                   </span>
-                  <span className={cn("text-right font-heading", last ? "font-bold text-ink" : "text-ink-2")}>
-                    {formatPercent(p.match_score)}%
-                  </span>
+                  <span className="text-right font-semibold text-ink tabular-nums">{formatPercent(p.match_score)}%</span>
                 </li>
               )
             })}
@@ -109,7 +112,7 @@ export function CvProgressBlock({ groups }: { groups: CvProgress[] }) {
   )
 }
 
-/** Điểm trung bình S/T/A/R (mặc định: tối đa 5 buổi gần nhất của một SV), đánh dấu tiêu chí yếu nhất. */
+/** Điểm trung bình S/T/A/R (mặc định: tối đa 5 buổi gần nhất của một SV), tiêu chí yếu nhất tô màu cảnh báo. */
 export function StarAverageBars({
   star,
   insight,
@@ -120,38 +123,41 @@ export function StarAverageBars({
   /** null: không hiện chú thích (trang đã đặt chú thích dưới tiêu đề mục). */
   caption?: string | null
 }) {
-  if (!star) return <p className="text-sm text-ink-2">Chưa có buổi phỏng vấn nào.</p>
+  if (!star) return <p className="py-3 text-sm text-ink-3">Chưa có buổi phỏng vấn nào.</p>
   return (
-    <div className="grid gap-3">
-      {caption !== null && (
-        <p className="text-xs text-ink-2">{caption ?? `Trung bình ${star.session_count} buổi gần nhất (mọi vị trí), thang 0–5`}</p>
-      )}
-      <ul className="grid gap-2.5">
+    <div className="grid">
+      <ul className="grid">
         {STAR_ORDER.map((key) => {
           const score = star.average[key]
           const weak = key === star.weakest
           return (
-            <li key={key} className="grid gap-1">
-              <p className="flex items-center justify-between gap-2 text-sm">
-                <span className="flex items-center gap-2 text-ink">
-                  <span className="grid size-5 place-items-center rounded-md bg-blue-soft text-[11px] font-bold text-blue">
-                    {STAR_META[key].letter}
-                  </span>
-                  {STAR_META[key].label}
-                  {weak && <Badge variant="warn">Yếu nhất</Badge>}
-                </span>
-                <span className="font-heading font-semibold text-ink">{formatScore(score)}/5</span>
-              </p>
-              <div className="h-1.5 overflow-hidden rounded-full bg-surface" aria-hidden>
-                <div className={cn("h-full rounded-full", weak ? "bg-warn" : "bg-blue")} style={{ width: `${(score / 5) * 100}%` }} />
-              </div>
+            <li
+              key={key}
+              className="grid grid-cols-[minmax(92px,110px)_minmax(0,1fr)_40px] items-center gap-3 border-b border-line py-2.5"
+            >
+              <span className="flex items-center gap-1.5">
+                <span className="font-medium text-ink">{STAR_META[key].label}</span>
+                <span className="text-xs text-ink-3">{STAR_META[key].letter}</span>
+              </span>
+              <span className="h-1.5 overflow-hidden rounded-full bg-surface" aria-hidden>
+                <span className={cn("block h-full rounded-full", weak ? "bg-warn/70" : "bg-blue")} style={{ width: `${(score / 5) * 100}%` }} />
+              </span>
+              <span className={cn("text-right font-semibold tabular-nums", weak ? "text-warn" : "text-ink")}>
+                {formatScore1(score)}
+                {weak && <span className="sr-only"> (yếu nhất)</span>}
+              </span>
             </li>
           )
         })}
       </ul>
+      {caption !== null && (
+        <p className="mt-2.5 text-[13px] text-ink-3">
+          {caption ?? (star.session_count ? `Trung bình ${star.session_count} buổi gần nhất, thang 0–5.` : "Thang 0–5.")}
+        </p>
+      )}
       {insight && (
-        <p className="flex gap-2 rounded-xl bg-violet-soft/60 p-3 text-xs leading-5 text-ink">
-          <Sparkles className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
+        <p className="mt-3 flex gap-2 text-sm leading-6 text-ink-2">
+          <Sparkles className="mt-1 size-4 shrink-0 text-ink-3" strokeWidth={1.75} aria-hidden />
           <span>{insight}</span>
         </p>
       )}
@@ -161,13 +167,25 @@ export function StarAverageBars({
 
 /** Gợi ý cho buổi tư vấn tới, ghép từ số liệu của SV theo quy tắc (không dùng AI). */
 export function SuggestionList({ items }: { items: string[] }) {
-  if (items.length === 0) return <p className="text-sm text-ink-2">Chưa có gợi ý nào: sinh viên đang tiến triển ổn định.</p>
+  if (items.length === 0) return <p className="py-3 text-sm text-ink-3">Chưa có gợi ý nào: sinh viên đang tiến triển ổn định.</p>
   return (
-    <ol className="grid list-decimal gap-2 pl-5 text-sm leading-6 text-ink">
-      {items.map((s) => (
-        <li key={s}>{s}</li>
+    <ol className="grid">
+      {items.map((s, i) => (
+        <li key={s} className="flex gap-3 border-b border-line py-3.5">
+          <span
+            className="grid size-6 shrink-0 place-items-center rounded-full bg-blue-soft text-xs font-semibold text-accent-strong tabular-nums"
+            aria-hidden
+          >
+            {i + 1}
+          </span>
+          <span className="text-[15px] leading-6 text-ink-2">{s}</span>
+        </li>
       ))}
     </ol>
   )
 }
 
+/** Điểm thang 5 luôn một chữ số thập phân: "4,0", "3,8". */
+function formatScore1(n: number) {
+  return n.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+}

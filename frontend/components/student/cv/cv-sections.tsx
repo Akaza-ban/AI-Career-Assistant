@@ -4,20 +4,14 @@ import Link from "next/link"
 import { useEffect, useState, type DragEvent } from "react"
 import {
   AlertCircle,
-  CircleCheck,
-  Clock,
-  CloudUpload,
+  ChevronDown,
   Download,
   Eye,
-  FilePen,
   History,
-  Lightbulb,
   Loader2,
-  MoreVertical,
-  RotateCcw,
+  MoreHorizontal,
   ScanText,
   Search,
-  Sparkles,
   Star,
   Trash2,
   Upload,
@@ -26,9 +20,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { HintPopover } from "@/components/common/hint-popover"
-import { Panel } from "@/components/common/panel"
-import { ScoreRing } from "@/components/common/score-ring"
+import { MatchBadge } from "@/components/common/match-badge"
 import { CV_MAX_MB, type UploadState } from "@/components/student/cv/use-cv-upload"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,337 +33,30 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { formatPercent } from "@/lib/analysis"
 import { OPTIMIZER_AVAILABLE } from "@/lib/config"
 import { downloadCv } from "@/lib/download"
 import { features } from "@/lib/features"
-import { formatBytes, formatRelativeTime } from "@/lib/format"
-import type { CvVersion } from "@/lib/types"
+import { formatBytes } from "@/lib/format"
+import type { CvVersion, MatchLabel } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-// ---------- Banner trạng thái tải lên ----------
+/** Trung bình (< 50) / Khá (50–74) / Cao (≥ 75), DESIGN.md mục 8.2. */
+export const matchLabelOf = (score: number): MatchLabel => (score >= 75 ? "high" : score >= 50 ? "medium" : "low")
 
-export function UploadStatusBanner({ state, onDismiss }: { state: UploadState; onDismiss: () => void }) {
-  if (state.status === "idle") return null
-  const uploading = state.status === "uploading"
-  return (
-    <Panel
-      className={cn("relative flex flex-wrap items-center justify-between gap-4 overflow-hidden p-4 pl-5")}
-      role="status"
-      aria-live="polite"
-    >
-      <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1.5", uploading ? "bg-violet" : "bg-bad")} />
-      <div className="flex min-w-0 items-center gap-4">
-        <span
-          className={cn(
-            "grid size-11 shrink-0 place-items-center rounded-lg",
-            uploading ? "bg-violet-soft text-violet" : "bg-bad-soft text-bad",
-          )}
-        >
-          {uploading ? <Loader2 className="size-5 animate-spin" aria-hidden /> : <AlertCircle className="size-5" aria-hidden />}
-        </span>
-        <div className="grid min-w-0 gap-0.5">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <p className="truncate font-semibold text-ink">{state.fileName}</p>
-            <Badge variant={uploading ? "violet" : "bad"}>{uploading ? "Đang xử lý" : "Tải lên thất bại"}</Badge>
-            <span className="text-xs text-ink-2">{formatBytes(state.size)}</span>
-          </div>
-          <p className={cn("flex items-center gap-1 text-xs", uploading ? "text-violet" : "text-bad")}>
-            {uploading ? (
-              <>
-                <Sparkles className="size-3.5 shrink-0" aria-hidden />
-                Đang tải lên và trích xuất nội dung CV…
-              </>
-            ) : (
-              state.message
-            )}
-          </p>
-        </div>
-      </div>
-      {uploading ? (
-        <div className="h-2 w-64 overflow-hidden rounded-full bg-blue-soft" aria-hidden>
-          <div className="h-full w-1/3 animate-[cv-progress_1.2s_ease-in-out_infinite] rounded-full bg-violet" />
-        </div>
-      ) : (
-        <Button variant="ghost" size="icon" onClick={onDismiss} aria-label="Đóng thông báo lỗi">
-          <X aria-hidden />
-        </Button>
-      )}
-    </Panel>
-  )
+export const cvDetailHref = (cv: CvVersion) => `/student/cv/${encodeURIComponent(cv.family_id)}`
+export const cvAnalyzeHref = (cv: CvVersion) => `/student/analysis/new?cv=${encodeURIComponent(cv.id)}`
+
+/** "v2.1 · 3 phiên bản" */
+export function versionMeta(cv: CvVersion): string {
+  return cv.version_count > 1 ? `${cv.label} · ${cv.version_count} phiên bản` : cv.label
 }
 
-// ---------- Thanh tìm kiếm / sắp xếp ----------
-
-export type CvSort = "recent" | "match" | "name"
-
-const sortItems = [
-  { value: "recent", label: "Cập nhật gần nhất" },
-  { value: "match", label: "Độ khớp cao nhất" },
-  { value: "name", label: "Tên file A–Z" },
-]
-
-interface CvToolbarProps {
-  query: string
-  onQueryChange: (value: string) => void
-  sort: CvSort
-  onSortChange: (value: CvSort) => void
-}
-
-export function CvToolbar({ query, onQueryChange, sort, onSortChange }: CvToolbarProps) {
-  return (
-    <Panel className="flex flex-wrap items-center gap-2 p-2">
-      <div className="relative min-w-60 flex-1">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
-        <Input
-          value={query}
-          onChange={(e) => onQueryChange(e.target.value)}
-          placeholder="Tìm theo tên file…"
-          aria-label="Tìm kiếm CV theo tên file"
-          className="h-9 border-transparent bg-surface pl-9"
-        />
-      </div>
-      <Select items={sortItems} value={sort} onValueChange={(v) => onSortChange(v as CvSort)}>
-        <SelectTrigger className="h-9 min-w-44 border-transparent bg-surface" aria-label="Sắp xếp">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {sortItems.map((item) => (
-            <SelectItem key={item.value} value={item.value}>
-              {item.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </Panel>
-  )
-}
-
-// ---------- Thẻ CV ----------
-
-function statusBadge(cv: CvVersion) {
-  if (cv.is_active) return { icon: CircleCheck, label: "Phiên bản đang dùng", variant: "good" as const }
-  if (cv.is_draft) return { icon: FilePen, label: "Bản nháp", variant: "neutral" as const }
-  if (cv.origin === "optimized") return { icon: Wand2, label: "Đã tối ưu", variant: "blue" as const }
-  if (cv.origin === "restored") return { icon: RotateCcw, label: "Đã khôi phục", variant: "neutral" as const }
-  return { icon: Upload, label: "Bản tải lên", variant: "neutral" as const }
-}
-
-// Độ dài các dòng giả lập trong ảnh thu nhỏ (chỉ để trang trí).
-const previewLines = [
-  ["w-3/4", "w-1/2", "w-full", "w-11/12", "w-4/5", "w-full", "w-5/6"],
-  ["w-2/3", "w-1/2", "w-full", "w-5/6", "w-3/4", "w-2/3"],
-  ["w-1/2", "w-1/3", "w-4/5", "w-2/3"],
-]
-
-function CvPreview({ cv, index, onPreview }: { cv: CvVersion; index: number; onPreview: (cv: CvVersion) => void }) {
-  const lines = previewLines[index % previewLines.length]
-  return (
-    <div className="flex h-44 flex-col justify-between rounded-lg bg-surface p-3.5 shadow-[inset_0_2px_4px_rgb(11_27_58/0.05)]">
-      <div className="flex items-start justify-between" aria-hidden>
-        <span className={cn("h-1.5 w-12 rounded", cv.is_active ? "bg-blue" : "bg-ink-3/60")} />
-        <span className="size-2 rounded-full bg-line" />
-      </div>
-      <div className="grid gap-1.5" aria-hidden>
-        {lines.map((w, i) => (
-          <span
-            key={i}
-            className={cn(
-              "rounded",
-              w,
-              i === 0 ? "h-2 bg-ink/20" : i === 1 ? "h-1.5 bg-ink/15" : "h-1 bg-ink/10",
-              cv.is_active && i === 4 && "h-1.5 bg-blue/30",
-            )}
-          />
-        ))}
-      </div>
-      <div className="flex items-center justify-between text-xs">
-        <button
-          type="button"
-          onClick={() => onPreview(cv)}
-          className={cn("inline-flex items-center gap-1 font-medium hover:underline", cv.is_active ? "text-blue" : "text-ink")}
-        >
-          <Eye className="size-3.5" aria-hidden />
-          Xem nhanh
-        </button>
-        <span className="text-ink-3">
-          {cv.page_count ? `${cv.page_count} trang ` : ""}
-          {cv.file_type.toUpperCase()}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-/** Tối ưu dựa trên lần phân tích gần nhất; chưa phân tích (hoặc trình tối ưu chưa sẵn sàng) thì làm mờ nút và giải thích lý do. */
-function OptimizeButton({ cv }: { cv: CvVersion }) {
-  const variant = cv.is_active ? "default" : "secondary"
-  const className = cn("h-9 w-full", !cv.is_active && "bg-blue-soft")
-  if (cv.latest_analysis_id && OPTIMIZER_AVAILABLE) {
-    return (
-      <Button
-        variant={variant}
-        className={className}
-        nativeButton={false}
-        render={<Link href={`/student/analysis/${encodeURIComponent(cv.latest_analysis_id)}/optimize`} />}
-      >
-        <Wand2 aria-hidden />
-        Tối ưu
-      </Button>
-    )
-  }
-  return (
-    <Tooltip>
-      <TooltipTrigger render={<span tabIndex={0} className="grid rounded-lg" />}>
-        <Button variant={variant} className={className} disabled>
-          <Wand2 aria-hidden />
-          Tối ưu
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>
-        {OPTIMIZER_AVAILABLE ? "Cần phân tích CV với một JD trước khi tối ưu" : "Trình tối ưu CV sắp có"}
-      </TooltipContent>
-    </Tooltip>
-  )
-}
-
-interface CvCardProps {
-  cv: CvVersion
-  index: number
-  onSetActive: (cv: CvVersion) => void
-  onPreview: (cv: CvVersion) => void
-  onDelete: (cv: CvVersion) => void
-  /** CV đang dùng khi còn CV khác: backend không cho xoá (409 cv_active), nên chặn sẵn ở menu. */
-  deleteBlocked: boolean
-}
-
-/** Một thẻ = một CV, hiển thị phiên bản mới nhất; các bản trước xem ở trang Chi tiết CV. */
-export function CvCard({ cv, index, onSetActive, onPreview, onDelete, deleteBlocked }: CvCardProps) {
-  const badge = statusBadge(cv)
-  const BadgeIcon = badge.icon
-  const analyzeHref = `/student/analysis/new?cv=${encodeURIComponent(cv.id)}`
-  const detailHref = `/student/cv/${encodeURIComponent(cv.family_id)}`
-  const meta = [`Cập nhật ${formatRelativeTime(cv.uploaded_at).toLowerCase()}`, formatBytes(cv.size_bytes)]
-  if (cv.page_count) meta.push(`${cv.page_count} trang`)
-
-  return (
-    <Panel
-      className={cn(
-        "relative flex flex-col gap-4 overflow-hidden p-4",
-        cv.is_active && "shadow-[0_4px_6px_-1px_rgb(11_27_58/0.1),0_2px_4px_-2px_rgb(11_27_58/0.1)]",
-      )}
-    >
-      {cv.is_active && <span aria-hidden className="absolute inset-x-0 top-0 h-1 bg-good" />}
-
-      <div className="flex items-center justify-between gap-2">
-        <Badge variant={badge.variant} className="h-auto px-2.5 py-0.5">
-          <BadgeIcon aria-hidden />
-          {badge.label}
-        </Badge>
-        <div className="flex items-center gap-1">
-          <span className="rounded-md bg-blue-soft px-2 py-0.5 text-xs font-semibold text-ink-2">
-            {cv.label}
-            {cv.is_draft && " (Nháp)"}
-          </span>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={<Button variant="ghost" size="icon-sm" aria-label={`Tuỳ chọn cho ${cv.file_name}`} />}
-            >
-              <MoreVertical aria-hidden />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-max">
-              <DropdownMenuItem render={<Link href={detailHref} />}>
-                <History aria-hidden />
-                Chi tiết & lịch sử phiên bản
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={cv.is_active} onClick={() => onSetActive(cv)}>
-                <Star aria-hidden />
-                Đặt làm phiên bản đang dùng
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => void downloadCv(cv)}>
-                <Download aria-hidden />
-                Tải xuống
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem variant="destructive" disabled={deleteBlocked} onClick={() => onDelete(cv)}>
-                <Trash2 aria-hidden />
-                <span className="grid">
-                  Xoá CV
-                  {deleteBlocked && (
-                    <span className="text-xs text-ink-2">Đặt CV khác làm bản đang dùng trước khi xoá</span>
-                  )}
-                </span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-
-      <CvPreview cv={cv} index={index} onPreview={onPreview} />
-
-      <div className="grid gap-1">
-        <h2 className="truncate font-heading text-base font-bold" title={cv.file_name}>
-          <Link href={detailHref} className="hover:text-blue hover:underline">
-            {cv.file_name}
-          </Link>
-        </h2>
-        {cv.target_title ? (
-          <Badge variant="blue" className="h-auto px-2.5 py-0.5">
-            {cv.target_title}
-          </Badge>
-        ) : (
-          <Badge variant="neutral" className="h-auto px-2.5 py-0.5">
-            Chưa gắn vị trí
-          </Badge>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2.5 rounded-lg bg-surface p-2.5">
-        {cv.match_score !== null ? (
-          <>
-            <ScoreRing score={cv.match_score} />
-            <div className="grid min-w-0">
-              <span className="text-xs font-semibold text-ink">Độ khớp JD gần nhất</span>
-              <span className="truncate text-xs text-ink-2" title={cv.target_title ?? undefined}>
-                {cv.target_title ?? "Theo lần phân tích gần nhất"}
-              </span>
-            </div>
-          </>
-        ) : (
-          <>
-            <span className="grid size-11 place-items-center rounded-full border-4 border-blue-soft text-sm font-bold text-ink-3">
-              —
-            </span>
-            <div className="grid">
-              <span className="text-xs font-semibold text-ink">Chưa phân tích</span>
-              <span className="text-xs text-ink-2">Phân tích với một JD để xem độ khớp</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      <p className="flex flex-wrap items-center gap-1 text-xs text-ink-2">
-        <Clock className="size-3 shrink-0" aria-hidden />
-        {meta.join(" • ")}
-        {cv.version_count > 1 && (
-          <>
-            {" • "}
-            <Link href={detailHref} className="font-medium text-blue hover:underline">
-              {cv.version_count} phiên bản
-            </Link>
-          </>
-        )}
-      </p>
-
-      <div className="mt-auto grid grid-cols-2 gap-2 pt-2">
-        <Button variant="secondary" className="h-9 bg-blue-soft" nativeButton={false} render={<Link href={analyzeHref} />}>
-          <ScanText aria-hidden />
-          Phân tích
-        </Button>
-        <OptimizeButton cv={cv} />
-      </div>
-    </Panel>
-  )
+/** Nội dung hộp xác nhận xoá CV. */
+export function deleteDescription(cv: CvVersion | null): string {
+  const kept = "Các báo cáo phân tích đã tạo từ CV này vẫn được giữ trong lịch sử."
+  if (cv && cv.version_count > 1) return `CV này có ${cv.version_count} phiên bản; tất cả sẽ bị xoá vĩnh viễn. ${kept}`
+  return `Tệp CV sẽ bị xoá vĩnh viễn. ${kept}`
 }
 
 // ---------- Vùng kéo thả ----------
@@ -379,15 +64,21 @@ export function CvCard({ cv, index, onSetActive, onPreview, onDelete, deleteBloc
 interface CvDropzoneProps {
   onFile: (file: File) => void
   onBrowse: () => void
-  disabled: boolean
+  state: UploadState
+  onDismiss: () => void
   /** Dạng lớn khi chưa có CV nào; ngược lại là dạng gọn một dòng phía trên danh sách. */
   prominent?: boolean
 }
 
 const hasFiles = (e: globalThis.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files")
 
-export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzoneProps) {
+/**
+ * Vùng kéo thả nét đứt: viền sáng lên màu nhấn khi rê chuột hoặc kéo file vào. Khi đang tải lên, nội dung vùng đổi
+ * thành tên file + thanh chạy; lỗi hiện ngay bên dưới.
+ */
+export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: CvDropzoneProps) {
   const [dragging, setDragging] = useState(false)
+  const uploading = state.status === "uploading"
 
   // Thả file lệch ra ngoài vùng thì trình duyệt sẽ mở file và rời trang; chặn lại khi đang ở trang này.
   useEffect(() => {
@@ -404,8 +95,8 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
-    e.dataTransfer.dropEffect = disabled ? "none" : "copy"
-    if (!disabled) setDragging(true)
+    e.dataTransfer.dropEffect = uploading ? "none" : "copy"
+    if (!uploading) setDragging(true)
   }
 
   function handleDragLeave(e: DragEvent<HTMLDivElement>) {
@@ -416,7 +107,7 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault()
     setDragging(false)
-    if (disabled) return
+    if (uploading) return
     const files = Array.from(e.dataTransfer.files)
     if (files.length === 0) {
       toast.info("Hãy kéo thả file PDF hoặc DOCX (ví dụ từ thư mục trên máy), không phải liên kết hay đoạn văn bản.")
@@ -426,82 +117,383 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
     onFile(files[0])
   }
 
-  const dropHandlers = { onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }
-  const limitNote = `PDF hoặc DOCX, tối đa ${CV_MAX_MB}MB mỗi file`
-  const heading = dragging ? "Thả file vào đây để tải lên" : null
-  const browseButton = (
-    <Button
-      variant="secondary"
-      className="h-9 bg-blue-soft px-4 font-semibold text-blue"
+  const browse = (
+    <button
+      type="button"
       onClick={onBrowse}
-      disabled={disabled}
+      disabled={uploading}
+      className="inline-flex h-8 items-center justify-center rounded-full bg-card px-3 text-[13px] font-semibold text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] transition-[background-color,transform] duration-150 hover:bg-panel active:scale-[.97] disabled:pointer-events-none disabled:opacity-50"
     >
-      Chọn file từ máy tính
-    </Button>
+      Chọn file
+    </button>
+  )
+  const icon = (
+    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-card text-ink-2 shadow-xs">
+      {uploading ? (
+        <Loader2 className="size-4 animate-spin" strokeWidth={1.75} aria-hidden />
+      ) : (
+        <Upload className="size-4" strokeWidth={1.75} aria-hidden />
+      )}
+    </span>
   )
 
-  if (!prominent) {
-    return (
+  return (
+    <div className="grid gap-2.5">
       <div
-        {...dropHandlers}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        aria-busy={uploading || undefined}
         className={cn(
-          "flex flex-wrap items-center gap-4 rounded-[20px] border-2 border-dashed bg-card px-5 py-4 shadow-card transition-colors",
-          dragging ? "border-blue bg-blue-soft/40" : "border-line",
+          "rounded-card border-[1.5px] border-dashed px-5 text-center transition-colors duration-150",
+          prominent ? "py-14" : "py-[26px]",
+          dragging ? "border-blue bg-blue-soft" : "border-line-strong bg-white/60",
+          !uploading && "hover:border-blue hover:bg-blue-soft",
         )}
       >
-        <span className="grid size-11 shrink-0 place-items-center rounded-full bg-blue-soft text-blue">
-          <CloudUpload className="size-5" aria-hidden />
-        </span>
-        <div className="grid min-w-0 flex-1 gap-0.5">
-          <h2 className="font-heading text-[15px] font-bold">{heading ?? "Kéo thả CV vào đây để tạo phiên bản mới"}</h2>
-          <p className="text-[13px] text-ink-2">{limitNote}</p>
-        </div>
-        {browseButton}
+        {uploading ? (
+          <div className="mx-auto grid max-w-md justify-items-center gap-3" role="status" aria-live="polite">
+            {icon}
+            <p className="max-w-full min-w-0 text-sm text-ink">
+              <span className="font-semibold [overflow-wrap:anywhere]">{state.fileName}</span>
+              <span className="text-ink-3"> · {formatBytes(state.size)}</span>
+            </p>
+            <p className="text-sm text-ink-2">Đang tải lên và trích xuất nội dung CV…</p>
+            <div className="h-1.5 w-full max-w-64 overflow-hidden rounded-full bg-surface" aria-hidden>
+              <div className="ai-run h-full w-full rounded-full" />
+            </div>
+          </div>
+        ) : prominent ? (
+          <div className="mx-auto grid max-w-md justify-items-center gap-1.5">
+            {icon}
+            <p className="mt-2 text-base font-semibold text-ink">
+              {dragging ? "Thả file vào đây để tải lên" : "Tải CV đầu tiên của bạn lên"}
+            </p>
+            <p className="text-sm text-ink-2">
+              Kéo thả file PDF hoặc DOCX vào đây, hoặc chọn từ máy tính. Tối đa {CV_MAX_MB} MB.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2.5">
+              {browse}
+              {features.driveImport && <span className="text-[13px] text-ink-3">hoặc nhập từ Google Drive</span>}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5">
+            {icon}
+            <span className="font-medium text-ink">
+              {dragging ? "Thả file vào đây để tải lên" : "Kéo thả file PDF hoặc DOCX vào đây"}
+            </span>
+            <span className="text-ink-3">hoặc</span>
+            {browse}
+            <span className="text-[13px] text-ink-3">Tối đa {CV_MAX_MB} MB</span>
+          </div>
+        )}
       </div>
-    )
-  }
 
-  return (
-    <div
-      {...dropHandlers}
-      className={cn(
-        "grid justify-items-center gap-1 rounded-[20px] border-2 border-dashed bg-card px-6 py-16 text-center shadow-card transition-colors",
-        dragging ? "border-blue bg-blue-soft/40" : "border-line",
+      {state.status === "error" && (
+        <div
+          role="alert"
+          className="flex items-start gap-3 rounded-card border border-bad/20 bg-bad-soft px-4 py-3 text-sm"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0 text-bad" strokeWidth={1.75} aria-hidden />
+          <p className="min-w-0 flex-1 text-ink-2">
+            <span className="font-semibold text-bad">Tải lên thất bại</span>
+            <span className="[overflow-wrap:anywhere]">
+              {" "}
+              · {state.fileName} ({formatBytes(state.size)}).
+            </span>{" "}
+            {state.message}
+          </p>
+          <button
+            type="button"
+            onClick={onDismiss}
+            aria-label="Đóng thông báo lỗi"
+            className="-my-1 -mr-1.5 grid size-7 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-white hover:text-ink"
+          >
+            <X className="size-4" strokeWidth={1.75} aria-hidden />
+          </button>
+        </div>
       )}
-    >
-      <span className="mb-2 grid size-16 place-items-center rounded-full bg-blue-soft text-blue">
-        <CloudUpload className="size-7" aria-hidden />
-      </span>
-      <h2 className="font-heading text-base font-bold">{heading ?? "Tải CV đầu tiên của bạn lên"}</h2>
-      <p className="max-w-md text-[13px] leading-[18px] text-ink-2">
-        Kéo thả file vào đây hoặc chọn từ máy tính. {limitNote}. Khuyến khích cấu trúc đề mục rõ ràng để AI trích xuất
-        tốt nhất.
-      </p>
-      <div className="flex flex-wrap items-center justify-center gap-2 pt-4">
-        {browseButton}
-        {features.driveImport && <span className="text-xs text-ink-3">hoặc nhập từ Google Drive</span>}
-      </div>
     </div>
   )
 }
 
-// ---------- Mẹo ----------
+// ---------- Tìm kiếm / sắp xếp ----------
+
+export type CvSort = "recent" | "match" | "name"
+
+const sortItems = [
+  { value: "recent", label: "Cập nhật gần nhất" },
+  { value: "match", label: "Độ khớp cao nhất" },
+  { value: "name", label: "Tên file A–Z" },
+]
+
+interface CvToolbarProps {
+  query: string
+  onQueryChange: (value: string) => void
+  sort: CvSort
+  onSortChange: (value: CvSort) => void
+}
+
+/** Ô tìm kiếm + sắp xếp, đặt ở góc phải tiêu đề vùng "Tất cả CV". */
+export function CvToolbar({ query, onQueryChange, sort, onSortChange }: CvToolbarProps) {
+  return (
+    <div className="flex w-full min-w-0 flex-wrap items-center gap-2.5 sm:w-auto">
+      <div className="relative min-w-0 flex-1 sm:w-[260px] sm:flex-none">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
+        <Input
+          type="search"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Tìm CV"
+          aria-label="Tìm CV theo tên file"
+          className="h-[38px] rounded-[10px] border-line-strong bg-card pr-3 pl-9 text-sm"
+        />
+      </div>
+      <Select items={sortItems} value={sort} onValueChange={(v) => onSortChange(v as CvSort)}>
+        <SelectTrigger
+          className="h-[38px] min-w-0 rounded-[10px] border-line-strong bg-card px-3 text-sm text-ink shadow-xs"
+          aria-label="Sắp xếp"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          {sortItems.map((item) => (
+            <SelectItem key={item.value} value={item.value}>
+              {item.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}
+
+// ---------- Thẻ CV ----------
+
+/** Ảnh thu nhỏ: một trang giấy trắng với các dòng giả lập (chỉ để trang trí). */
+function CvThumb() {
+  const line = "rounded bg-line"
+  return (
+    <div className="h-full rounded-t-md bg-card px-[18px] py-4 shadow-card" aria-hidden>
+      <div className="h-[7px] w-[46%] rounded bg-ink opacity-80" />
+      <div className="mt-1.5 h-[5px] w-[32%] rounded bg-line-strong" />
+      <div className="mt-4 h-[5px] w-[24%] rounded bg-ink-3 opacity-60" />
+      <div className={cn("mt-2 h-1 w-[92%]", line)} />
+      <div className={cn("mt-1.5 h-1 w-[84%]", line)} />
+      <div className={cn("mt-1.5 h-1 w-[88%]", line)} />
+      <div className="mt-3.5 h-[5px] w-[24%] rounded bg-ink-3 opacity-60" />
+      <div className={cn("mt-2 h-1 w-[90%]", line)} />
+    </div>
+  )
+}
+
+interface CvActionsMenuProps {
+  cv: CvVersion
+  onSetActive: (cv: CvVersion) => void
+  onDelete: (cv: CvVersion) => void
+  /** CV đang dùng khi còn CV khác: backend không cho xoá (409 cv_active), nên chặn sẵn ở menu. */
+  deleteBlocked: boolean
+  onPreview?: (cv: CvVersion) => void
+  /** Ẩn mục "Chi tiết & lịch sử phiên bản" khi đang ở chính trang đó. */
+  showDetail?: boolean
+  className?: string
+}
+
+/** Menu ⋯ của một CV: dùng ở thẻ CV và ở trang Chi tiết CV. */
+export function CvActionsMenu({
+  cv,
+  onSetActive,
+  onDelete,
+  deleteBlocked,
+  onPreview,
+  showDetail = true,
+  className,
+}: CvActionsMenuProps) {
+  const canOptimize = cv.latest_analysis_id !== null && OPTIMIZER_AVAILABLE
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`Thao tác khác cho ${cv.file_name}`}
+            className={cn(
+              "grid size-[34px] shrink-0 place-items-center rounded-full text-ink-3 transition-colors hover:bg-surface hover:text-ink aria-expanded:bg-surface aria-expanded:text-ink",
+              className,
+            )}
+          />
+        }
+      >
+        <MoreHorizontal className="size-[18px]" strokeWidth={1.75} aria-hidden />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-max">
+        {showDetail && (
+          <DropdownMenuItem render={<Link href={cvDetailHref(cv)} />}>
+            <History aria-hidden />
+            Chi tiết & lịch sử phiên bản
+          </DropdownMenuItem>
+        )}
+        {onPreview && (
+          <DropdownMenuItem onClick={() => onPreview(cv)}>
+            <Eye aria-hidden />
+            Xem nhanh
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem render={<Link href={cvAnalyzeHref(cv)} />}>
+          <ScanText aria-hidden />
+          Phân tích với vị trí
+        </DropdownMenuItem>
+        {canOptimize ? (
+          <DropdownMenuItem
+            render={<Link href={`/student/analysis/${encodeURIComponent(cv.latest_analysis_id!)}/optimize`} />}
+          >
+            <Wand2 aria-hidden />
+            Tối ưu CV
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem disabled>
+            <Wand2 aria-hidden />
+            <span className="grid">
+              Tối ưu CV
+              <span className="text-xs text-ink-3">
+                {OPTIMIZER_AVAILABLE ? "Cần phân tích CV với một vị trí trước" : "Trình tối ưu CV sắp có"}
+              </span>
+            </span>
+          </DropdownMenuItem>
+        )}
+        <DropdownMenuItem disabled={cv.is_active} onClick={() => onSetActive(cv)}>
+          <Star aria-hidden />
+          {cv.is_active ? "Đang là CV đang dùng" : "Đặt làm CV đang dùng"}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => void downloadCv(cv)}>
+          <Download aria-hidden />
+          Tải file gốc
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" disabled={deleteBlocked} onClick={() => onDelete(cv)}>
+          <Trash2 aria-hidden />
+          <span className="grid">
+            Xoá CV
+            {deleteBlocked && <span className="text-xs text-ink-3">Đặt CV khác làm CV đang dùng trước khi xoá</span>}
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+interface CvCardProps {
+  cv: CvVersion
+  onSetActive: (cv: CvVersion) => void
+  onPreview: (cv: CvVersion) => void
+  onDelete: (cv: CvVersion) => void
+  deleteBlocked: boolean
+}
+
+/** Một thẻ = một CV, hiển thị phiên bản mới nhất; các bản trước xem ở trang Chi tiết CV. */
+export function CvCard({ cv, onSetActive, onPreview, onDelete, deleteBlocked }: CvCardProps) {
+  const detailHref = cvDetailHref(cv)
+  return (
+    <article className="flex min-w-0 flex-col gap-3.5 rounded-card border border-line bg-card p-4 shadow-card transition-[transform,box-shadow] duration-200 ease-out-soft motion-safe:hover:-translate-y-[3px] motion-safe:hover:shadow-float">
+      <Link
+        href={detailHref}
+        tabIndex={-1}
+        aria-hidden
+        className="block h-[150px] overflow-hidden rounded-xl bg-panel px-[22px] pt-[18px]"
+      >
+        <CvThumb />
+      </Link>
+
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="min-w-0 truncate text-[15px] leading-6 font-semibold" title={cv.file_name}>
+              <Link href={detailHref} className="text-ink hover:text-accent-strong">
+                {cv.file_name}
+              </Link>
+            </h3>
+            {cv.is_active && (
+              <Badge variant="good" className="h-[22px] px-2">
+                <span className="size-1.5 rounded-full bg-current" aria-hidden />
+                Đang dùng
+              </Badge>
+            )}
+            {cv.is_draft && (
+              <Badge variant="neutral" className="h-[22px] px-2">
+                Bản nháp
+              </Badge>
+            )}
+          </div>
+          <p className="text-sm text-ink-3">{versionMeta(cv)}</p>
+        </div>
+        <CvActionsMenu
+          cv={cv}
+          onSetActive={onSetActive}
+          onPreview={onPreview}
+          onDelete={onDelete}
+          deleteBlocked={deleteBlocked}
+          className="-mt-1 -mr-1"
+        />
+      </div>
+
+      <div className="mt-auto flex min-h-[26px] items-center gap-2.5 border-t border-line pt-3 text-sm">
+        {cv.match_score !== null ? (
+          <>
+            <span className="min-w-0 truncate text-ink-3" title={cv.target_title ?? undefined}>
+              Lần phân tích gần nhất
+            </span>
+            <span className="flex-1" />
+            <b className="font-semibold text-ink tabular-nums">{formatPercent(cv.match_score)}%</b>
+            <MatchBadge label={matchLabelOf(cv.match_score)} />
+          </>
+        ) : (
+          <>
+            <span className="text-ink-3">Chưa phân tích</span>
+            <Link href={cvAnalyzeHref(cv)} className="ml-auto font-semibold text-blue hover:text-accent-strong">
+              Phân tích ngay
+            </Link>
+          </>
+        )}
+      </div>
+    </article>
+  )
+}
+
+// ---------- Mẹo (dạng gập) ----------
 
 const CV_TIPS = [
-  "Giữ mỗi vị trí mục tiêu một phiên bản CV riêng để đối chiếu chính xác với kỹ năng trong JD.",
-  "Độ khớp JD cao cho thấy CV đã thể hiện rõ yêu cầu của vị trí, nhưng không đảm bảo vượt qua vòng lọc hồ sơ.",
+  "Mỗi vị trí nên có một phiên bản CV riêng để đối chiếu đúng kỹ năng trong JD.",
+  "Đưa số liệu vào kết quả của dự án và bài tập lớn.",
+  "Giữ CV trong 1 trang nếu chưa có kinh nghiệm làm việc.",
   "Nội dung CV phải phản ánh đúng kinh nghiệm thật của bạn.",
 ]
 
-/** Mẹo gọn trong một nút ở góc tiêu đề trang (rê chuột mới hiện). */
 export function CvTips() {
   return (
-    <HintPopover
-      label="Mẹo tối ưu CV"
-      icon={Lightbulb}
-      iconClassName="text-gold"
-      title="Mẹo tối ưu CV cho sinh viên"
-      items={CV_TIPS.map((tip) => ({ content: tip }))}
-    />
+    <details className="group border-y border-line">
+      <summary className="-mx-2.5 flex cursor-pointer list-none items-center gap-3.5 rounded-lg px-2.5 py-4 transition-colors hover:bg-panel [&::-webkit-details-marker]:hidden">
+        <span className="flex-1 font-semibold text-ink">Mẹo tối ưu CV cho sinh viên</span>
+        <ChevronDown
+          className="size-4 shrink-0 text-ink-3 transition-transform duration-200 group-open:rotate-180"
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      </summary>
+      <ul className="mb-[18px] grid list-disc gap-1.5 pl-5 text-ink-2">
+        {CV_TIPS.map((tip) => (
+          <li key={tip}>{tip}</li>
+        ))}
+      </ul>
+    </details>
+  )
+}
+
+/** Nút "Thử lại" khi không tải được dữ liệu. */
+export function RetryButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button variant="soft" className="h-9 rounded-full px-4" onClick={onClick}>
+      Thử lại
+    </Button>
   )
 }

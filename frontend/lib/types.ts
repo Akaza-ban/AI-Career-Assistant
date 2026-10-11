@@ -102,6 +102,118 @@ export interface CreateGapAnalysisRequest {
   jd_company?: string
 }
 
+// ---------- Gợi ý vị trí & JD đã lưu (Thư viện JD) ----------
+
+/** POST /jd/recommend (RecommendJDsRequest). Backend cho top_n 1–10; giao diện dùng tối đa 6. */
+export interface RecommendJdsRequest {
+  cv_version_id?: string
+  cv_text?: string
+  top_n?: number
+  generate_advice?: boolean
+}
+
+/**
+ * Một vị trí được gợi ý (JDRecommendationItem). Chấm theo quy tắc, không qua LLM: giao diện chỉ hiện match_label,
+ * không hiện match_score (DESIGN.md 8.1).
+ */
+export interface JdRecommendationItem {
+  jd_id: string
+  title: string
+  company: string | null
+  industry: string | null
+  level: string | null
+  /** Độ tương đồng ngữ nghĩa từ vector store (0–1). */
+  semantic_score: number
+  match_score: number | null
+  match_label: MatchLabel | null
+  /** Có bằng chứng sử dụng trong CV. */
+  matched_skills: string[]
+  /** Chỉ được liệt kê trong CV. */
+  partial_skills: string[]
+  missing_skills: string[]
+  breakdown: ScoreBreakdown[]
+}
+
+/** Lời khuyên nghề nghiệp do LLM viết cho vị trí #1 (CareerAdvice). */
+export interface CareerAdvice {
+  summary: string
+  top_position_advice: string
+  action_plan: string[]
+}
+
+export interface RecommendJdsResponse {
+  cv_version_id: string | null
+  /** Đã sắp theo mức phù hợp giảm dần; phần tử đầu là gợi ý #1. */
+  recommendations: JdRecommendationItem[]
+  advice: CareerAdvice | null
+}
+
+/** Vị trí SV đã lưu ("Đã lưu"). Backend chưa có endpoint (DESIGN.md mục 12), hiện chỉ có ở mock. */
+export interface SavedJd {
+  jd_id: string
+  saved_at: ISODateString
+}
+
+/**
+ * Tạo một JD tự dán để dùng lại (ví dụ khi so sánh nhiều vị trí, POST /jd/compare chỉ nhận jd_ids).
+ * Backend hiện chỉ tạo JD tự dán bên trong POST /gap-analysis; đây là endpoint đề xuất, mới có ở mock.
+ */
+export interface CreatePastedJdRequest {
+  title: string
+  company?: string
+  level?: JobLevel
+  industry?: string
+  /** Toàn văn JD (≥ JD_MIN_WORDS từ). */
+  text: string
+}
+
+// ---------- So sánh nhiều vị trí (POST /jd/compare) ----------
+
+/** Giới hạn số JD so sánh một lần của backend (CompareJDsRequest). */
+export const COMPARE_MIN_JDS = 2
+export const COMPARE_MAX_JDS = 3
+
+/** CompareJDsRequest: cv_version_id hoặc cv_text, cùng 2–3 JD khác nhau. */
+export interface CompareJdsRequest {
+  cv_version_id?: string
+  cv_text?: string
+  jd_ids: string[]
+}
+
+/** Kết quả đối sánh của một JD (JDComparisonItem), chấm qua LLM theo PRD 5.2. */
+export interface JdComparisonItem {
+  /** 1 là phù hợp nhất. */
+  rank: number
+  jd_id: string
+  title: string
+  company: string | null
+  industry: string | null
+  level: string | null
+  /** 0–100. */
+  match_score: number
+  match_label: MatchLabel
+  /** Có bằng chứng sử dụng trong CV. */
+  matched_skills: string[]
+  /** Chỉ được liệt kê trong CV. */
+  partial_skills: string[]
+  missing_skills: string[]
+  breakdown: ScoreBreakdown[]
+  llm_summary: string | null
+  llm_used: boolean
+}
+
+export interface CompareJdsResponse {
+  cv_version_id: string | null
+  /** Ví dụ "v2.1". */
+  cv_label: string | null
+  cv_name: string | null
+  total_compared: number
+  /** Đã sắp theo match_score giảm dần. */
+  comparisons: JdComparisonItem[]
+  /** Kỹ năng còn thiếu ở tất cả các JD đã chọn. */
+  common_missing_skills: string[]
+}
+
 // ---------- Phân tích khoảng cách (US-SV-02, US-SV-05, PRD mục 5.2) ----------
 
 export type AnalysisStatus = "processing" | "completed" | "failed"

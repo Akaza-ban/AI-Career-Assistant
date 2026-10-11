@@ -20,7 +20,7 @@ export function UserAvatar({ name, src, className }: UserAvatarProps) {
   return (
     <Avatar className={cn("size-8", className)}>
       {src && <AvatarImage src={src} alt="" />}
-      <AvatarFallback className="bg-blue-soft font-heading text-xs font-bold text-blue">
+      <AvatarFallback className="bg-ink font-heading text-xs font-bold text-white">
         {name ? initials(name) : ""}
       </AvatarFallback>
     </Avatar>

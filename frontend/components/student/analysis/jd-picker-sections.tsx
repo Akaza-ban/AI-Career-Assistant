@@ -1,34 +1,30 @@
 "use client"
 
-import { useState } from "react"
-import {
-  ArrowLeftRight,
-  Building2,
-  ChevronDown,
-  CircleCheck,
-  ClipboardPaste,
-  FileText,
-  Info,
-  Library,
-  ShieldCheck,
-} from "lucide-react"
+import Link from "next/link"
+import { useMemo, useState } from "react"
+import { AlertCircle, ChevronDown, ClipboardPaste, Heart, Library, Plus } from "lucide-react"
 
-import { Panel } from "@/components/common/panel"
+import { EmptyState } from "@/components/common/empty-state"
+import { MatchBadge } from "@/components/common/match-badge"
+import { useRecommendations, useSavedJds, levelText, metaLine } from "@/components/student/library/library-data"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Textarea } from "@/components/ui/textarea"
-import { formatBytes } from "@/lib/format"
+import { api } from "@/lib/api"
 import { countWords } from "@/lib/text"
 import {
   JD_MIN_WORDS,
-  type CvVersion,
   type JobDescription,
   type JobLevel,
+  type MatchLabel,
   type RequirementImportance,
 } from "@/lib/types"
+import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
 export const LEVEL_LABEL: Record<JobLevel, string> = { intern: "Thực tập sinh", fresher: "Fresher", junior: "Junior" }
@@ -40,292 +36,536 @@ export const IMPORTANCE_META: Record<RequirementImportance, { label: string; wei
   additional: { label: "Bổ trợ", weight: 1, chip: "bg-surface text-ink-2 ring-1 ring-line" },
 }
 
-// ---------- Cột trái ----------
+/** Hai nguồn chọn vị trí, dùng chung cho chế độ 1 vị trí và khung "Thêm vị trí" (WIREFRAMES A4, A5). */
+export type JdSource = "list" | "paste"
 
-interface SelectedCvCardProps {
-  selected: CvVersion
-  /** Quay lại bước 1 để chọn CV khác. */
-  onChangeCv: () => void
+export const SOURCE_OPTIONS: { value: JdSource; label: string }[] = [
+  { value: "list", label: "Gợi ý & đã lưu" },
+  { value: "paste", label: "Dán JD" },
+]
+
+// ---------- Danh sách gợi ý & đã lưu ----------
+
+export interface PickItem {
+  id: string
+  title: string
+  company: string | null
+  level: string | null
+  /** Nhãn mức phù hợp khi vị trí nằm trong gợi ý theo CV (chỉ hiện nhãn, DESIGN.md 8.1). */
+  label: MatchLabel | null
+  saved: boolean
+  pasted: boolean
 }
 
-export function SelectedCvCard({ selected, onChangeCv }: SelectedCvCardProps) {
+export interface PickItemsState {
+  items: PickItem[] | undefined
+  /** Mọi vị trí SV chọn được (thư viện và JD tự dán), để tra theo id. */
+  jds: JobDescription[] | undefined
+  /** Lỗi tải gợi ý; vị trí đã lưu vẫn hiện. */
+  recError: Error | undefined
+  retryRecs: () => void
+  error: Error | undefined
+  retry: () => void
+}
+
+/**
+ * Gợi ý theo CV (giữ thứ tự gợi ý) rồi vị trí đã lưu; vị trí truyền qua `extraIds` (ví dụ ?jd=) được thêm lên đầu
+ * nếu chưa có trong danh sách.
+ */
+export function usePickItems(cvId: string | null, extraIds: string[]): PickItemsState {
+  const jds = useApi(api.listMyJds)
+  const recs = useRecommendations(cvId, false)
+  const saved = useSavedJds()
+
+  const items = useMemo(() => {
+    if (!jds.data || saved.loading || (recs.loading && !recs.error)) return undefined
+    const byId = new Map(jds.data.map((jd) => [jd.id, jd]))
+    const labels = new Map((recs.data?.recommendations ?? []).map((r) => [r.jd_id, r.match_label]))
+    const toItem = (jd: JobDescription): PickItem => ({
+      id: jd.id,
+      title: jd.title,
+      company: jd.company,
+      level: jd.level,
+      label: labels.get(jd.id) ?? null,
+      saved: saved.savedIds.has(jd.id),
+      pasted: jd.source === "pasted",
+    })
+    const order = [
+      ...extraIds,
+      ...(recs.data?.recommendations ?? []).map((r) => r.jd_id),
+      ...[...saved.savedIds],
+    ]
+    const seen = new Set<string>()
+    const list: PickItem[] = []
+    for (const id of order) {
+      const jd = byId.get(id)
+      if (!jd || seen.has(id)) continue
+      seen.add(id)
+      list.push(toItem(jd))
+    }
+    return list
+  }, [jds.data, recs.data, recs.loading, recs.error, saved.loading, saved.savedIds, extraIds])
+
+  return {
+    items,
+    jds: jds.data,
+    recError: recs.error,
+    retryRecs: recs.reload,
+    error: jds.error,
+    retry: jds.reload,
+  }
+}
+
+function ItemText({ item }: { item: PickItem }) {
   return (
-    <Panel className="grid min-w-0 gap-4">
-      <h2 className="flex items-center gap-2 font-heading text-sm font-bold tracking-wide uppercase">
-        <FileText className="size-4 text-blue" aria-hidden />
-        CV đã chọn
-      </h2>
-      <div className="grid gap-1 rounded-xl bg-surface p-3">
-        <p className="truncate font-semibold text-ink" title={selected.file_name}>
-          {selected.file_name}
-        </p>
-        <p className="text-xs text-ink-2">
-          {selected.label} · {selected.file_type.toUpperCase()} · {formatBytes(selected.size_bytes)}
-        </p>
-      </div>
-      <Button variant="secondary" className="h-9 bg-blue-soft text-blue" onClick={onChangeCv}>
-        <ArrowLeftRight aria-hidden />
-        Đổi tệp CV khác
+    <span className="min-w-0 flex-1">
+      <span className="block truncate font-medium text-ink">{item.title}</span>
+      <span className="block truncate text-sm text-ink-3">
+        {metaLine(item.company, levelText(item.level)) || (item.pasted ? "Không ghi công ty" : "")}
+      </span>
+    </span>
+  )
+}
+
+/** Nhãn bên phải một dòng: mức phù hợp (gợi ý), trái tim (đã lưu) hoặc "JD tự dán". */
+export function ItemTags({ item }: { item: PickItem }) {
+  return (
+    <span className="flex shrink-0 items-center gap-2.5">
+      {item.label && <MatchBadge label={item.label} />}
+      {item.pasted && !item.label && <Badge variant="neutral">JD tự dán</Badge>}
+      {item.saved && (
+        <span className="inline-flex items-center gap-1.5 text-[13px] text-blue">
+          <Heart className="size-4 fill-current" strokeWidth={1.75} aria-hidden />
+          <span className={cn(item.label && "sr-only sm:not-sr-only")}>Đã lưu</span>
+        </span>
+      )}
+    </span>
+  )
+}
+
+function ListSkeleton({ rows = 4 }: { rows?: number }) {
+  return (
+    <div className="grid" aria-busy="true" aria-label="Đang tải danh sách vị trí">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="flex items-center gap-3.5 border-b border-line py-4 last:border-0">
+          <Skeleton className="size-[18px] rounded-full" />
+          <div className="grid flex-1 gap-1.5">
+            <Skeleton className="h-4 w-1/2 max-w-64 rounded" />
+            <Skeleton className="h-3.5 w-1/3 max-w-40 rounded" />
+          </div>
+          <Skeleton className="h-[22px] w-14 rounded-badge" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function RecError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-2 text-sm text-ink-2">
+      <AlertCircle className="size-4 shrink-0 text-bad" aria-hidden />
+      Không tải được vị trí gợi ý.
+      <button type="button" onClick={onRetry} className="font-semibold text-blue hover:text-accent-strong">
+        Thử lại
+      </button>
+    </p>
+  )
+}
+
+function LoadError({ onRetry }: { onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-wrap items-center gap-3 border-b border-line py-6 text-sm text-ink-2">
+      <AlertCircle className="size-4 shrink-0 text-bad" aria-hidden />
+      Không tải được danh sách vị trí.
+      <Button variant="soft" className="h-9 rounded-full px-4" onClick={onRetry}>
+        Thử lại
       </Button>
-    </Panel>
+    </div>
   )
 }
 
-export function IntegrityBox() {
+function NoItems({ onPaste }: { onPaste: () => void }) {
   return (
-    <section className="grid gap-2 rounded-[20px] bg-blue-soft/60 p-5">
-      <h2 className="flex items-center gap-2 font-heading text-sm font-bold">
-        <ShieldCheck className="size-4 text-blue" aria-hidden />
-        Nguyên tắc đối soát minh bạch
-      </h2>
-      <p className="text-sm leading-6 text-ink-2">
-        AI chỉ diễn đạt lại kinh nghiệm bạn đã có, không thêm thành tích. Mỗi đánh giá đều trích nguyên văn câu trong CV
-        làm bằng chứng.
-      </p>
-    </section>
+    <EmptyState
+      icon={Library}
+      title="Chưa có vị trí gợi ý hay đã lưu"
+      description="Mở Thư viện JD để tìm vị trí, hoặc dán JD bạn đang nhắm tới."
+      action={
+        <div className="flex flex-wrap justify-center gap-2">
+          <Button variant="soft" className="h-10 rounded-full px-4" nativeButton={false} render={<Link href="/student/library" />}>
+            <Library aria-hidden />
+            Mở Thư viện JD
+          </Button>
+          <Button variant="soft" className="h-10 rounded-full px-4" onClick={onPaste}>
+            <ClipboardPaste aria-hidden />
+            Dán JD
+          </Button>
+        </div>
+      }
+    />
   )
 }
 
-// ---------- Tab thư viện JD ----------
-
-interface JdLibraryPickerProps {
-  items: JobDescription[] | undefined
-  selected: JobDescription | null
-  onSelect: (jd: JobDescription) => void
+function LibraryLink() {
+  return (
+    <Link href="/student/library" className="mt-3.5 inline-block text-sm font-semibold text-blue hover:text-accent-strong">
+      Tìm thêm trong Thư viện JD
+    </Link>
+  )
 }
 
-/** Chọn JD bằng dropdown; chọn xong hiển thị ngay thông tin JD để SV biết vị trí đó yêu cầu gì. */
-export function JdLibraryPicker({ items, selected, onSelect }: JdLibraryPickerProps) {
-  const options = (items ?? []).map((jd) => ({
-    value: jd.id,
-    label: `${jd.title}${jd.company ? ` – ${jd.company}` : ""}`,
-  }))
+interface ListProps {
+  state: PickItemsState
+  onPaste: () => void
+}
 
+/** Chọn một vị trí (radio). Dòng đang chọn có nền panel và viền mực mảnh (bản vẽ PhanTich1). */
+export function JdRadioList({
+  state,
+  value,
+  onChange,
+  onPaste,
+}: ListProps & { value: string | null; onChange: (item: PickItem) => void }) {
+  const { items, error, retry, recError, retryRecs } = state
+  if (error) return <LoadError onRetry={retry} />
+  if (!items) return <ListSkeleton />
   return (
-    <Panel className="grid min-w-0 gap-5">
-      <div className="grid gap-1">
-        <h2 className="font-heading text-lg font-bold">Chọn vị trí từ thư viện JD</h2>
-        <p className="text-sm text-ink-2">Bộ JD chuẩn hoá cho sinh viên mới ra trường, đã gắn mức độ cho từng yêu cầu.</p>
-      </div>
-
-      {!items ? (
-        <Skeleton className="h-10 rounded-lg" />
+    <div>
+      {recError && <RecError onRetry={retryRecs} />}
+      {items.length === 0 ? (
+        <NoItems onPaste={onPaste} />
       ) : (
-        <div className="grid gap-1.5">
-          <Label htmlFor="jd-library-select" className="text-xs font-semibold">
-            Vị trí ứng tuyển <span className="text-bad">*</span>
-          </Label>
-          <Select
-            items={options}
-            value={selected?.id ?? null}
-            onValueChange={(value) => {
-              const jd = items.find((j) => j.id === value)
-              if (jd) onSelect(jd)
-            }}
-          >
-            <SelectTrigger id="jd-library-select" className="h-11 w-full min-w-0 bg-surface" aria-label="Vị trí ứng tuyển">
-              <SelectValue className="min-w-0 truncate" placeholder={`Chọn một trong ${items.length} vị trí…`} />
-            </SelectTrigger>
-            <SelectContent>
-              {items.map((jd) => (
-                <SelectItem key={jd.id} value={jd.id}>
-                  <span className="grid">
-                    <span className="font-medium">{jd.title}</span>
-                    <span className="text-xs text-ink-2">
-                      {[jd.company, jd.level && LEVEL_LABEL[jd.level]].filter(Boolean).join(" · ")}
-                    </span>
+        <div role="radiogroup" aria-label="Vị trí gợi ý và đã lưu">
+          {items.map((item, i) => {
+            const checked = item.id === value
+            return (
+              <div key={item.id}>
+                {i > 0 && <div className="h-px bg-line" aria-hidden />}
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={checked}
+                  onClick={() => onChange(item)}
+                  className={cn(
+                    "-mx-2 flex w-[calc(100%+1rem)] items-center gap-3.5 rounded-xl px-2 py-3.5 text-left transition-[background-color,box-shadow] duration-150 hover:bg-panel sm:-mx-3.5 sm:w-[calc(100%+1.75rem)] sm:px-3.5",
+                    checked && "bg-panel shadow-[inset_0_0_0_1.5px_var(--ink)]",
+                  )}
+                >
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "grid size-[18px] shrink-0 place-items-center rounded-full border-[1.5px] bg-card",
+                      checked ? "border-ink" : "border-line-strong",
+                    )}
+                  >
+                    {checked && <span className="size-2 rounded-full bg-ink" />}
                   </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                  <ItemText item={item} />
+                  <ItemTags item={item} />
+                </button>
+              </div>
+            )
+          })}
         </div>
       )}
-
-      {selected ? (
-        <JdDetails jd={selected} />
-      ) : (
-        items && (
-          <p className="flex items-center gap-2 rounded-xl bg-surface p-4 text-sm text-ink-2">
-            <Library className="size-4 shrink-0 text-ink-3" aria-hidden />
-            Chọn một vị trí để xem mô tả công việc và các kỹ năng yêu cầu.
-          </p>
-        )
-      )}
-    </Panel>
+      <LibraryLink />
+    </div>
   )
 }
 
-function JdDetails({ jd }: { jd: JobDescription }) {
-  const [expanded, setExpanded] = useState(false)
-  const groups = (Object.keys(IMPORTANCE_META) as RequirementImportance[])
-    .map((importance) => ({ importance, skills: jd.skills.filter((s) => s.importance === importance) }))
-    .filter((g) => g.skills.length > 0)
-
+/** Danh sách trong khung "Thêm vị trí": mỗi dòng có nút "+ Chọn"; ẩn các vị trí đã nằm trong danh sách so sánh. */
+export function JdAddList({ state, exclude, onPick, onPaste }: ListProps & { exclude: Set<string>; onPick: (item: PickItem) => void }) {
+  const { items, error, retry, recError, retryRecs } = state
+  if (error) return <LoadError onRetry={retry} />
+  if (!items) return <ListSkeleton rows={3} />
+  const rest = items.filter((item) => !exclude.has(item.id))
   return (
-    <section className="grid gap-4 rounded-2xl border border-line p-4" aria-label={`Thông tin JD ${jd.title}`}>
-      <div className="grid gap-1">
-        <h3 className="font-heading text-base font-bold text-ink">{jd.title}</h3>
-        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-2">
-          {jd.company && (
-            <span className="flex items-center gap-1">
-              <Building2 className="size-3.5" aria-hidden />
-              {jd.company}
-            </span>
-          )}
-          {jd.industry && <span>· {jd.industry}</span>}
-          {jd.level && <span className="font-medium text-blue">· {LEVEL_LABEL[jd.level]}</span>}
-        </p>
-      </div>
-
-      <div className="grid gap-2.5">
-        {groups.map(({ importance, skills }) => {
-          const meta = IMPORTANCE_META[importance]
-          return (
-            <div key={importance} className="grid gap-1.5 sm:grid-cols-[120px_1fr] sm:items-start">
-              <p className="pt-1 text-xs font-semibold text-ink">
-                {meta.label} <span className="font-normal text-ink-3">(×{meta.weight})</span>
-              </p>
-              <ul className="flex flex-wrap gap-1.5">
-                {skills.map((s) => (
-                  <li key={s.name} className={cn("rounded-md px-2 py-0.5 text-xs font-medium", meta.chip)}>
-                    {s.name}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="grid gap-2 border-t border-line pt-3">
-        <p className={cn("text-sm leading-6 whitespace-pre-line text-ink-2", !expanded && "line-clamp-6")}>{jd.content}</p>
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          className="inline-flex items-center gap-1 justify-self-start text-sm font-medium text-blue hover:underline"
-        >
-          {expanded ? "Thu gọn" : "Xem toàn bộ JD"}
-          <ChevronDown className={cn("size-4 transition-transform", expanded && "rotate-180")} aria-hidden />
-        </button>
-      </div>
-    </section>
+    <div>
+      {recError && <RecError onRetry={retryRecs} />}
+      {items.length === 0 ? (
+        <NoItems onPaste={onPaste} />
+      ) : rest.length === 0 ? (
+        <p className="py-4 text-sm text-ink-2">Bạn đã thêm mọi vị trí gợi ý và đã lưu. Tìm thêm trong Thư viện JD hoặc dán JD.</p>
+      ) : (
+        <ul>
+          {rest.map((item) => (
+            <li key={item.id} className="flex items-center gap-3 border-b border-line py-3.5 last:border-0 sm:gap-4">
+              <ItemText item={item} />
+              <span className="hidden sm:flex">
+                <ItemTags item={item} />
+              </span>
+              <Button
+                variant="outline"
+                className="h-9 shrink-0 rounded-full border-line-strong bg-card px-3.5 text-[13px] font-semibold"
+                onClick={() => onPick(item)}
+                aria-label={`Chọn ${item.title}`}
+              >
+                <Plus aria-hidden />
+                Chọn
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <LibraryLink />
+    </div>
   )
 }
 
-// ---------- Tab dán JD ----------
+// ---------- Form dán JD ----------
 
 export interface PastedJd {
   title: string
   company: string
-  text: string
+  level: JobLevel | null
+  industry: string | null
+  description: string
+  requirements: string
+  benefits: string
+  /** "Lưu JD này vào mục Đã lưu để dùng lại". */
+  save: boolean
+}
+
+export const EMPTY_PASTE: PastedJd = {
+  title: "",
+  company: "",
+  level: null,
+  industry: null,
+  description: "",
+  requirements: "",
+  benefits: "",
+  save: true,
+}
+
+const LEVEL_OPTIONS: { value: JobLevel; label: string }[] = [
+  { value: "intern", label: "Thực tập" },
+  { value: "fresher", label: "Fresher" },
+  { value: "junior", label: "Junior" },
+]
+
+export const pasteWords = (v: PastedJd) => countWords(v.description) + countWords(v.requirements)
+
+/** Lỗi của từng ô; rỗng nghĩa là đủ để gửi. */
+export function pasteErrors(v: PastedJd): Partial<Record<"title" | "description" | "requirements" | "length", string>> {
+  const errors: ReturnType<typeof pasteErrors> = {}
+  if (!v.title.trim()) errors.title = "Hãy nhập tên vị trí."
+  if (!v.description.trim()) errors.description = "Hãy dán phần mô tả công việc."
+  if (!v.requirements.trim()) errors.requirements = "Hãy dán phần yêu cầu ứng viên."
+  if (v.description.trim() && v.requirements.trim() && pasteWords(v) < JD_MIN_WORDS) {
+    errors.length = `JD còn ngắn (${pasteWords(v)} từ). Hãy bổ sung tối thiểu ${JD_MIN_WORDS} từ ở phần mô tả và yêu cầu.`
+  }
+  return errors
+}
+
+/** Câu ngắn nói còn thiếu gì, đặt cạnh nút chính khi nút đang tắt. */
+export function pasteMissingHint(v: PastedJd): string {
+  const e = pasteErrors(v)
+  const missing = [e.title && "tên vị trí", e.description && "mô tả công việc", e.requirements && "yêu cầu ứng viên"].filter(
+    Boolean,
+  )
+  if (missing.length) return `Còn thiếu ${missing.join(", ")}.`
+  return e.length ? `JD cần tối thiểu ${JD_MIN_WORDS} từ.` : ""
+}
+
+/** Ghép các mục thành toàn văn JD với tiêu đề từng mục, để backend tách kỹ năng như JD dán một khối. */
+export function composeJdText(v: PastedJd): string {
+  const meta = [
+    v.level && `Cấp bậc: ${LEVEL_OPTIONS.find((o) => o.value === v.level)?.label}`,
+    v.industry && `Ngành: ${v.industry}`,
+  ].filter(Boolean)
+  return [
+    meta.join("\n"),
+    `Mô tả công việc:\n${v.description.trim()}`,
+    `Yêu cầu ứng viên:\n${v.requirements.trim()}`,
+    v.benefits.trim() && `Quyền lợi:\n${v.benefits.trim()}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+const fieldClass =
+  "h-[42px] rounded-[10px] border-line-strong bg-card px-3.5 text-[15px] text-ink placeholder:text-ink-3 focus-visible:border-ink focus-visible:ring-4 focus-visible:ring-surface"
+const areaClass =
+  "min-h-[110px] rounded-[10px] border-line-strong bg-card px-3.5 py-2.5 text-[15px] leading-[1.55] text-ink placeholder:text-ink-3 focus-visible:border-ink focus-visible:ring-4 focus-visible:ring-surface"
+
+function FieldError({ id, children }: { id: string; children?: string }) {
+  if (!children) return null
+  return (
+    <p id={id} className="mt-1.5 text-[13px] text-bad">
+      {children}
+    </p>
+  )
 }
 
 interface JdPasteFormProps {
   value: PastedJd
   onChange: (value: PastedJd) => void
-  /** Hiện lỗi sau khi SV đã bắt đầu nhập. */
+  /** Hiện lỗi dưới mọi ô (sau khi SV bấm nút chính); nếu không, lỗi hiện sau khi rời từng ô. */
   showErrors: boolean
+  /** Ngành có trong thư viện, làm lựa chọn cho ô Ngành. */
+  industries: string[]
+  /** Tiền tố id để dùng hai form trên cùng trang. */
+  idPrefix: string
 }
 
-export function JdPasteForm({ value, onChange, showErrors }: JdPasteFormProps) {
-  const words = countWords(value.text)
-  const enough = words >= JD_MIN_WORDS
-  const titleError = showErrors && !value.title.trim()
-  const textError = showErrors && value.text.trim() !== "" && !enough
+/** Form "Dán JD" chia mục (WIREFRAMES A4): Tổng quan, Mô tả*, Yêu cầu*, Quyền lợi gập lại, ô lưu JD. */
+export function JdPasteForm({ value, onChange, showErrors, industries, idPrefix }: JdPasteFormProps) {
+  const [benefitsOpen, setBenefitsOpen] = useState(value.benefits.trim() !== "")
+  // Lỗi của một ô chỉ hiện sau khi SV rời ô đó, hoặc khi bấm nút chính (showErrors).
+  const [touched, setTouched] = useState<Set<string>>(() => new Set())
+  const all = pasteErrors(value)
+  const shown = (key: string) => showErrors || touched.has(key)
+  const errors = {
+    title: shown("title") ? all.title : undefined,
+    description: shown("description") ? all.description : undefined,
+    requirements: shown("requirements") ? all.requirements : undefined,
+    length: shown("requirements") ? all.length : undefined,
+  }
+  const touch = (key: string) => () => setTouched((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
+  const words = pasteWords(value)
+  const id = (name: string) => `${idPrefix}-${name}`
+  const set = <K extends keyof PastedJd>(key: K, v: PastedJd[K]) => onChange({ ...value, [key]: v })
+  const industryItems = industries.map((name) => ({ value: name, label: name }))
 
   return (
-    <Panel className="grid gap-5">
-      <div className="grid gap-1">
-        <h2 className="font-heading text-lg font-bold">Dán bản mô tả công việc (JD) của bạn</h2>
-        <p className="text-sm text-ink-2">
-          Cung cấp tiêu đề và nội dung yêu cầu công việc để AI bóc tách chính xác bộ kỹ năng.
+    <div className="grid gap-[18px]">
+      <div className="grid gap-x-6 gap-y-[18px] sm:grid-cols-2">
+        <div>
+          <Label htmlFor={id("title")} className="mb-1.5 text-sm font-medium text-ink">
+            Vị trí <span className="text-bad">*</span>
+          </Label>
+          <Input
+            id={id("title")}
+            value={value.title}
+            onChange={(e) => set("title", e.target.value)}
+            onBlur={touch("title")}
+            placeholder="Ví dụ: Business Analyst Intern"
+            aria-invalid={errors.title ? true : undefined}
+            aria-describedby={errors.title ? id("title-err") : undefined}
+            className={fieldClass}
+          />
+          <FieldError id={id("title-err")}>{errors.title}</FieldError>
+        </div>
+        <div>
+          <Label htmlFor={id("company")} className="mb-1.5 text-sm font-medium text-ink">
+            Công ty
+          </Label>
+          <Input
+            id={id("company")}
+            value={value.company}
+            onChange={(e) => set("company", e.target.value)}
+            placeholder="Ví dụ: FPT Software"
+            className={fieldClass}
+          />
+        </div>
+        <div>
+          <Label id={id("level-label")} className="mb-1.5 text-sm font-medium text-ink">
+            Cấp bậc
+          </Label>
+          <Select items={LEVEL_OPTIONS} value={value.level} onValueChange={(v) => set("level", (v as JobLevel) ?? null)}>
+            <SelectTrigger aria-labelledby={id("level-label")} className={cn(fieldClass, "w-full min-w-0 data-[size=default]:h-[42px] data-placeholder:text-ink-3")}>
+              <SelectValue className="min-w-0 truncate" placeholder="Chọn cấp bậc" />
+            </SelectTrigger>
+            <SelectContent>
+              {LEVEL_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label id={id("industry-label")} className="mb-1.5 text-sm font-medium text-ink">
+            Ngành
+          </Label>
+          <Select items={industryItems} value={value.industry} onValueChange={(v) => set("industry", v ? String(v) : null)}>
+            <SelectTrigger aria-labelledby={id("industry-label")} className={cn(fieldClass, "w-full min-w-0 data-[size=default]:h-[42px] data-placeholder:text-ink-3")}>
+              <SelectValue className="min-w-0 truncate" placeholder="Chọn ngành" />
+            </SelectTrigger>
+            <SelectContent>
+              {industryItems.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="mt-1">
+        <Label htmlFor={id("desc")} className="mb-1.5 text-sm font-medium text-ink">
+          Mô tả công việc <span className="text-bad">*</span>
+        </Label>
+        <Textarea
+          id={id("desc")}
+          value={value.description}
+          onChange={(e) => set("description", e.target.value)}
+          onBlur={touch("description")}
+          placeholder="Dán phần mô tả công việc"
+          aria-invalid={errors.description ? true : undefined}
+          aria-describedby={errors.description ? id("desc-err") : undefined}
+          className={areaClass}
+        />
+        <FieldError id={id("desc-err")}>{errors.description}</FieldError>
+      </div>
+
+      <div>
+        <Label htmlFor={id("req")} className="mb-1.5 text-sm font-medium text-ink">
+          Yêu cầu ứng viên <span className="text-bad">*</span>
+        </Label>
+        <Textarea
+          id={id("req")}
+          value={value.requirements}
+          onChange={(e) => set("requirements", e.target.value)}
+          onBlur={touch("requirements")}
+          placeholder="Dán phần yêu cầu"
+          aria-invalid={errors.requirements || errors.length ? true : undefined}
+          aria-describedby={id("req-help")}
+          className={areaClass}
+        />
+        <FieldError id={id("req-err")}>{errors.requirements ?? errors.length}</FieldError>
+        <p id={id("req-help")} className="mt-1.5 text-[13px] text-ink-3">
+          <span className={cn("tabular-nums", words >= JD_MIN_WORDS && "text-good")}>{words}</span> / tối thiểu{" "}
+          {JD_MIN_WORDS} từ ở phần mô tả và yêu cầu
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <Label htmlFor="jd-title" className="text-xs font-semibold">
-            Tiêu đề vị trí tuyển dụng <span className="text-bad">*</span>
-          </Label>
-          <Input
-            id="jd-title"
-            value={value.title}
-            onChange={(e) => onChange({ ...value, title: e.target.value })}
-            placeholder="Ví dụ: Business Analyst Intern"
-            aria-invalid={titleError || undefined}
-            className="h-10 bg-surface"
-          />
-          {titleError && <p className="text-xs text-bad">Hãy nhập tiêu đề vị trí.</p>}
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="jd-company" className="text-xs font-semibold">
-            Tên công ty / Doanh nghiệp <span className="font-normal text-ink-3">(Tuỳ chọn)</span>
-          </Label>
-          <Input
-            id="jd-company"
-            value={value.company}
-            onChange={(e) => onChange({ ...value, company: e.target.value })}
-            placeholder="Ví dụ: Công ty Công nghệ A"
-            className="h-10 bg-surface"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-1.5">
-        <div className="flex items-center justify-between gap-2">
-          <Label htmlFor="jd-text" className="text-xs font-semibold">
-            Nội dung mô tả & yêu cầu chi tiết <span className="text-bad">*</span>
-          </Label>
-          {enough && (
-            <span className="flex items-center gap-1 text-xs font-medium text-good">
-              <CircleCheck className="size-3.5" aria-hidden />
-              Đủ độ dài
-            </span>
-          )}
-        </div>
-        <Textarea
-          id="jd-text"
-          value={value.text}
-          onChange={(e) => onChange({ ...value, text: e.target.value })}
-          placeholder={"VỊ TRÍ: ...\nMô tả công việc:\n- ...\nYêu cầu ứng viên:\n- ..."}
-          aria-invalid={textError || undefined}
-          aria-describedby="jd-text-help"
-          className="min-h-64 bg-surface text-sm leading-6"
-        />
-        <div id="jd-text-help" className="flex flex-wrap items-center justify-between gap-2 text-xs">
-          <span
-            className={cn(
-              "rounded-md px-2 py-1 font-medium",
-              enough ? "bg-good-soft text-good" : textError ? "bg-bad-soft text-bad" : "bg-blue-soft text-blue",
-            )}
-          >
-            {words} từ {enough ? "(đạt yêu cầu)" : `/ tối thiểu ${JD_MIN_WORDS} từ`}
+      <div className="border-y border-line">
+        <button
+          type="button"
+          onClick={() => setBenefitsOpen((o) => !o)}
+          aria-expanded={benefitsOpen}
+          aria-controls={id("benefits-panel")}
+          className="-mx-2.5 flex w-[calc(100%+1.25rem)] items-center gap-3.5 rounded-lg px-2.5 py-4 text-left transition-colors hover:bg-panel"
+        >
+          <span className="flex-1 font-medium text-ink">
+            Quyền lợi và thông tin khác <span className="font-normal text-ink-3">(không bắt buộc)</span>
           </span>
-          <span className="text-ink-2">JD càng chi tiết, kết quả đối chiếu càng chính xác.</span>
-        </div>
-        {textError && (
-          <p className="text-xs text-bad" role="alert">
-            Nội dung JD quá ngắn. Hãy bổ sung JD đầy đủ hơn (tối thiểu {JD_MIN_WORDS} từ) trước khi phân tích.
-          </p>
+          <ChevronDown className={cn("size-4 text-ink-3 transition-transform", benefitsOpen && "rotate-180")} aria-hidden />
+        </button>
+        {benefitsOpen && (
+          <div id={id("benefits-panel")} className="pb-4">
+            <Textarea
+              aria-label="Quyền lợi và thông tin khác"
+              value={value.benefits}
+              onChange={(e) => set("benefits", e.target.value)}
+              placeholder="Dán phần quyền lợi, địa điểm, thời gian làm việc"
+              className={areaClass}
+            />
+          </div>
         )}
       </div>
 
-      <p className="flex gap-2 rounded-xl bg-blue-soft/60 p-3 text-xs leading-5 text-ink">
-        <Info className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
-        <span>
-          <strong className="font-semibold text-blue">Mẹo:</strong> Hãy dán đầy đủ phần &quot;Yêu cầu ứng viên&quot; và
-          &quot;Ưu tiên&quot; để AI xác định đúng kỹ năng bắt buộc và kỹ năng ưu tiên.
-        </span>
-      </p>
-    </Panel>
+      <label className="flex cursor-pointer items-center gap-2.5 text-sm text-ink-2">
+        <Checkbox
+          checked={value.save}
+          onCheckedChange={(checked) => set("save", checked === true)}
+          className="size-[17px] border-line-strong data-checked:border-ink data-checked:bg-ink data-checked:text-white"
+        />
+        Lưu JD này vào mục Đã lưu để dùng lại
+      </label>
+    </div>
   )
 }
-
-export const JD_TABS = [
-  { value: "library", label: "Chọn từ thư viện JD", icon: Library },
-  { value: "paste", label: "Dán JD của bạn", icon: ClipboardPaste },
-] as const
-
-export type JdTab = (typeof JD_TABS)[number]["value"]

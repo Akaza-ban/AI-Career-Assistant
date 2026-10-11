@@ -2,31 +2,37 @@ import type { ReactNode } from "react"
 
 import { ChatProvider } from "@/components/chat/chat-context"
 import { ChatPanel } from "@/components/chat/chat-panel"
-import { AppTopbar } from "@/components/shell/app-topbar"
+import { AppTopbar, PageCrumbs } from "@/components/shell/app-topbar"
+import { MobileTabBar } from "@/components/shell/mobile-tab-bar"
 import { ProfileProvider } from "@/components/shell/profile-context"
 import { SidebarNav } from "@/components/shell/sidebar-nav"
 import type { Role } from "@/lib/types"
 
 /**
- * Khung giao diện chính: sidebar cố định (desktop), topbar dính trên cùng,
- * vùng nội dung và khung chat SV ↔ cố vấn. Dưới 1024px sidebar chuyển vào menu trượt.
- *
- * Sidebar desktop thu gọn thành rail 72px (logo, icon, avatar). Rê chuột (sau 150ms, tránh bung khi chuột
- * chỉ lướt qua) hoặc Tab bằng bàn phím thì mở ra 240px, phủ lên nội dung chứ không đẩy nội dung sang phải.
- * Dùng :focus-visible thay vì :focus-within để bấm chuột vào một mục rồi rời đi thì sidebar vẫn thu lại.
+ * Khung giao diện chính (DESIGN.md mục 5): sidebar 252px cố định từ 1024px trở lên, dưới 1024px thay bằng thanh tab
+ * dưới đáy. Nội dung trải hết chiều rộng còn lại (chỉ có lề), header dính trên cùng khi cuộn.
+ * Dải pastel nằm ở đầu vùng nội dung, phía sau header và phần đầu trang.
+ * --tabbar-h để các thanh dính đáy (BottomActionBar) nằm trên thanh tab điện thoại.
  */
 export function AppShell({ role, children }: { role: Role; children: ReactNode }) {
   return (
     <ProfileProvider role={role}>
       <ChatProvider role={role}>
-        <div className="min-h-screen bg-surface">
-          <aside className="group/sidebar fixed inset-y-0 left-0 z-40 hidden w-18 overflow-hidden border-r border-line/60 bg-card shadow-[0_1px_4px_rgb(11_27_58/0.04)] transition-[width,box-shadow] duration-200 ease-out hover:w-60 hover:shadow-[8px_0_24px_-12px_rgb(11_27_58/0.18)] hover:delay-150 has-[:focus-visible]:w-60 has-[:focus-visible]:shadow-[8px_0_24px_-12px_rgb(11_27_58/0.18)] lg:block">
-            <SidebarNav role={role} collapsible />
+        <div className="min-h-screen bg-background [--tabbar-h:68px] lg:[--tabbar-h:0px]">
+          <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] overflow-y-auto border-r border-line bg-card lg:block">
+            <SidebarNav role={role} />
           </aside>
-          <div className="flex min-h-screen flex-col lg:pl-18">
-            <AppTopbar role={role} />
-            <main className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+          <div className="flex min-h-screen flex-col overflow-x-clip pb-[var(--tabbar-h)] lg:pl-[252px]">
+            <div className="relative flex flex-1 flex-col">
+              <div className="aurora-band" aria-hidden />
+              <AppTopbar role={role} />
+              <div className="relative flex w-full flex-1 flex-col px-4 sm:px-6 lg:px-10 xl:px-12">
+                <PageCrumbs role={role} />
+                <main className="relative z-[1] flex-1 pt-4 pb-10">{children}</main>
+              </div>
+            </div>
           </div>
+          <MobileTabBar role={role} />
         </div>
         <ChatPanel />
       </ChatProvider>

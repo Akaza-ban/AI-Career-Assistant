@@ -3,24 +3,18 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react"
-import { AlertCircle, Circle, CircleCheck, ListChecks, LogOut, Pause, Play, Timer, TimerOff, UserRound } from "lucide-react"
+import { AlertCircle, Circle, CircleCheck, LogOut, Pause, Play, Timer, TimerOff } from "lucide-react"
 import { toast } from "sonner"
 
-import { InterviewChat, type Rejection } from "@/components/InterviewChat"
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
+import { EmptyState } from "@/components/common/empty-state"
 import { Panel } from "@/components/common/panel"
+import { InterviewChat, type Rejection } from "@/components/student/interview/interview-chat"
 import { useProfile } from "@/components/shell/profile-context"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, ApiError } from "@/lib/api"
-import { PAUSE_MAX_SECONDS, QUESTION_THEMES, SECONDS_PER_QUESTION, mmss } from "@/lib/interview"
+import { PAUSE_MAX_SECONDS, QUESTION_THEMES, SECONDS_PER_QUESTION, STAR_META, STAR_ORDER, mmss } from "@/lib/interview"
 import { setLeaveGuard } from "@/lib/leave-guard"
 import type { InterviewSession, InterviewTurn } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
@@ -38,19 +32,23 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
     // 404: buổi đã bị huỷ/không tồn tại; 410: SV rời phòng quá lâu nên buổi đã bị huỷ.
     const gone = error instanceof ApiError && (error.status === 404 || error.status === 410)
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">{gone ? "Buổi phỏng vấn không còn" : "Không mở được phòng phỏng vấn"}</p>
-        <p className="max-w-md text-sm text-ink-2">{error.message}</p>
-        {gone ? (
-          <Button nativeButton={false} render={<Link href="/student/interview/new" />}>
-            Thiết lập buổi mới
-          </Button>
-        ) : (
-          <Button variant="soft" onClick={reload}>
-            Thử lại
-          </Button>
-        )}
+      <Panel className="mx-auto mt-10 w-full max-w-lg p-0">
+        <EmptyState
+          icon={AlertCircle}
+          title={gone ? "Buổi phỏng vấn không còn" : "Không mở được phòng phỏng vấn"}
+          description={error.message}
+          action={
+            gone ? (
+              <Button size="brand" nativeButton={false} render={<Link href="/student/interview/new" />}>
+                Thiết lập buổi mới
+              </Button>
+            ) : (
+              <Button size="brand" onClick={reload}>
+                Thử lại
+              </Button>
+            )
+          }
+        />
       </Panel>
     )
   }
@@ -58,10 +56,10 @@ export function InterviewRoom({ sessionId }: { sessionId: string }) {
   if (!session) {
     return (
       <div className="grid gap-6" aria-busy="true" aria-label="Đang chuẩn bị phòng phỏng vấn">
-        <Skeleton className="h-20 rounded-[20px]" />
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Skeleton className="h-[520px] rounded-[20px]" />
-          <Skeleton className="h-[420px] rounded-[20px]" />
+        <Skeleton className="h-16 rounded-xl" />
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <Skeleton className="h-[480px] rounded-card" />
+          <Skeleton className="h-[360px] rounded-card" />
         </div>
       </div>
     )
@@ -198,7 +196,7 @@ function Room({ initial }: { initial: InterviewSession }) {
       return
     }
     setLeaveGuard(
-      `Bạn đã trả lời ${turns.length}/${total} câu. Nếu rời phòng bây giờ, buổi phỏng vấn sẽ không được lưu và không tính lượt.`,
+      `Đã trả lời ${turns.length}/${total} câu. Buổi này sẽ không được lưu và không tính lượt.`,
       () => api.abandonInterview(initial.id),
     )
     const warn = (e: BeforeUnloadEvent) => e.preventDefault()
@@ -226,7 +224,7 @@ function Room({ initial }: { initial: InterviewSession }) {
   const urgent = active && !paused && secondsLeft <= 60
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-8">
       <RoomHeader
         title={initial.jd.title}
         tone={finished ? "done" : paused ? "paused" : "live"}
@@ -236,51 +234,60 @@ function Room({ initial }: { initial: InterviewSession }) {
           total={total}
           answered={answeredIndexes}
           currentIndex={current?.index ?? null}
-          label={`Câu ${Math.min(turns.length + (finished ? 0 : 1), total)}/${total}`}
-        >
-          {active && (
+          label={`Câu ${Math.min(turns.length + (finished ? 0 : 1), total)} / ${total}`}
+        />
+
+        {active && (
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <span
               role="timer"
               aria-label={`Còn ${secondsLeft} giây cho câu này`}
               className={cn(
-                "flex items-center gap-1 border-l border-line pl-4 font-heading text-base font-bold tabular-nums",
+                "inline-flex h-[38px] items-center gap-1.5 rounded-full px-3 text-[15px] font-semibold tabular-nums sm:gap-2 sm:px-3.5",
+                urgent ? "bg-warn-soft" : "bg-surface",
                 secondsLeft <= 10 && !paused ? "animate-pulse text-bad" : urgent ? "text-warn" : "text-ink",
               )}
             >
-              <Timer className="size-4" aria-hidden />
+              <Timer className="size-4" strokeWidth={1.75} aria-hidden />
               {mmss(secondsLeft)}
             </span>
-          )}
-        </RoomProgress>
-
-        {active && (
-          <div className="flex items-center gap-2">
             {paused ? (
-              <Button variant="soft" className="h-9" onClick={() => void resume()}>
+              <Button
+                variant="dark"
+                className="h-[38px] rounded-full px-3 font-semibold sm:px-3.5"
+                aria-label="Tiếp tục"
+                onClick={() => void resume()}
+              >
                 <Play aria-hidden />
-                Tiếp tục
+                <span className="hidden sm:inline">Tiếp tục</span>
               </Button>
             ) : (
               <Button
                 variant="soft"
-                className="h-9"
+                className="h-[38px] rounded-full px-3 font-semibold sm:px-3.5"
+                aria-label={pauseUsed ? "Đã dùng tạm dừng" : "Tạm dừng"}
                 onClick={() => void pause()}
                 disabled={pauseUsed || sending}
                 title={pauseUsed ? "Mỗi buổi chỉ được tạm dừng 1 lần" : `Tạm dừng tối đa ${PAUSE_MAX_SECONDS} giây`}
               >
                 <Pause aria-hidden />
-                {pauseUsed ? "Đã dùng tạm dừng" : "Tạm dừng"}
+                <span className="hidden sm:inline">{pauseUsed ? "Đã dùng tạm dừng" : "Tạm dừng"}</span>
               </Button>
             )}
-            <Button variant="ghost" className="h-9 text-bad hover:bg-bad-soft hover:text-bad" onClick={() => setConfirmEnd(true)}>
+            <Button
+              variant="ghost"
+              className="h-[38px] rounded-full px-3 font-semibold text-bad hover:bg-bad-soft hover:text-bad sm:px-3.5"
+              aria-label="Kết thúc sớm"
+              onClick={() => setConfirmEnd(true)}
+            >
               <LogOut aria-hidden />
-              Kết thúc sớm
+              <span className="hidden sm:inline">Kết thúc sớm</span>
             </Button>
           </div>
         )}
       </RoomHeader>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid items-start gap-x-12 gap-y-10 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0">
           <InterviewChat
             total={total}
@@ -295,50 +302,47 @@ function Room({ initial }: { initial: InterviewSession }) {
             sending={sending}
             paused={paused}
             finished={finished}
-            onViewReport={() => router.push(`/student/interview/${encodeURIComponent(initial.id)}/report`)}
+            reportHref={`/student/interview/${encodeURIComponent(initial.id)}/report`}
           />
         </div>
 
-        <aside className="min-w-0 lg:sticky lg:top-52">
+        <aside className="grid min-w-0 gap-10 lg:sticky lg:top-44">
           <QuestionRoadmap total={total} turns={turns} currentIndex={finished ? null : (current?.index ?? null)} />
+          {!finished && <StarGuide />}
         </aside>
       </div>
 
-      <Dialog open={confirmEnd} onOpenChange={setConfirmEnd}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Kết thúc buổi phỏng vấn sớm?</DialogTitle>
-            <DialogDescription>
-              Bạn đã trả lời {turns.length}/{total} câu. Nếu kết thúc bây giờ, buổi này sẽ không được lưu, không có báo cáo và
-              không tính lượt. Lần sau bạn sẽ bắt đầu lại từ đầu.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="soft" onClick={() => setConfirmEnd(false)}>
-              Tiếp tục trả lời
-            </Button>
-            <Button variant="destructive" onClick={() => void endEarly()}>
-              Kết thúc, không lưu
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ConfirmDialog
+        open={confirmEnd}
+        onOpenChange={setConfirmEnd}
+        destructive
+        icon={LogOut}
+        title="Kết thúc buổi phỏng vấn?"
+        description="Buổi này sẽ không được lưu và không tính lượt."
+        facts={[
+          { label: "Đã trả lời", value: `${turns.length} / ${total} câu` },
+          { label: "Báo cáo", value: "Không có" },
+        ]}
+        cancelLabel="Ở lại phòng"
+        confirmLabel="Kết thúc, không lưu"
+        onConfirm={endEarly}
+      />
     </div>
   )
 }
 
-// ---------- Phần dùng chung với phòng chờ trước khi bắt đầu (interview-lobby.tsx) ----------
+// ---------- Thanh trạng thái, tiến độ và lộ trình câu hỏi ----------
 
 type RoomTone = "idle" | "live" | "paused" | "done"
 
 const TONE: Record<RoomTone, { text: string; dot: string }> = {
-  idle: { text: "text-ink-2", dot: "bg-ink-3" },
+  idle: { text: "text-ink-3", dot: "bg-ink-3" },
   live: { text: "text-bad", dot: "animate-pulse bg-bad" },
   paused: { text: "text-warn", dot: "bg-warn" },
   done: { text: "text-good", dot: "bg-good" },
 }
 
-/** Thanh dính dưới header: vị trí, trạng thái buổi; children là tiến độ câu và các nút điều khiển. */
+/** Thanh dính dưới header: vị trí, trạng thái buổi; children là tiến độ câu, đồng hồ và các nút điều khiển. */
 export function RoomHeader({
   title,
   status,
@@ -351,60 +355,53 @@ export function RoomHeader({
   children?: ReactNode
 }) {
   return (
-    <div className="sticky top-16 z-20 -mt-2 bg-surface pt-2 pb-2">
-      <Panel className="flex flex-wrap items-center justify-between gap-4 p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-violet-soft text-violet">
-            <UserRound className="size-5" aria-hidden />
-          </span>
-          <div className="grid min-w-0">
-            <p className="truncate font-heading text-lg font-bold">{title}</p>
-            <p className={cn("flex items-center gap-1.5 text-xs font-medium", TONE[tone].text)}>
-              <span className={cn("size-2 rounded-full", TONE[tone].dot)} aria-hidden />
-              {status}
-            </p>
-          </div>
+    <div className="sticky top-16 z-20 -mx-4 -mt-6 border-b border-line bg-card/90 px-4 py-2.5 backdrop-blur-md sm:-mx-6 sm:-mt-8 sm:px-6 sm:py-3">
+      {/* Điện thoại: tên vị trí + đồng hồ/nút trên một dòng, tiến độ xuống dòng dưới để thanh dính thấp gọn */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <div className="grid min-w-0 flex-1 sm:flex-none">
+          <p className="truncate text-base font-semibold text-ink">{title}</p>
+          <p className={cn("flex items-center gap-1.5 text-[13px] font-medium", TONE[tone].text)}>
+            <span className={cn("size-1.5 rounded-full", TONE[tone].dot)} aria-hidden />
+            {status}
+          </p>
         </div>
         {children}
-      </Panel>
+      </div>
     </div>
   )
 }
 
-/** "Câu x/y" kèm chấm tiến độ; children là đồng hồ (khi đang trả lời). */
+/** "Câu x / y" kèm các đoạn tiến độ (đã trả lời: đậm, đang trả lời: màu nhấn). */
 export function RoomProgress({
   total,
   answered,
   currentIndex,
   label,
-  children,
 }: {
   total: number
   answered: Set<number>
   currentIndex: number | null
   label: string
-  children?: ReactNode
 }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl bg-blue-soft/60 px-4 py-2.5">
-      <span className="font-heading text-sm font-bold text-blue">{label}</span>
+    <div className="order-last flex basis-full items-center gap-3 sm:order-none sm:basis-auto">
+      <span className="text-[13px] font-semibold text-ink tabular-nums">{label}</span>
       <span className="flex gap-1.5" aria-hidden>
         {Array.from({ length: total }, (_, i) => i + 1).map((index) => (
           <span
             key={index}
             className={cn(
-              "size-2.5 rounded-full",
-              answered.has(index) ? "bg-good" : index === currentIndex ? "bg-violet ring-4 ring-violet/20" : "bg-line",
+              "h-1 w-7 rounded-full transition-colors duration-300 sm:w-9",
+              answered.has(index) ? "bg-ink" : index === currentIndex ? "bg-blue" : "bg-line-strong",
             )}
           />
         ))}
       </span>
-      {children}
     </div>
   )
 }
 
-/** Lộ trình 4 câu; chỉ cho biết đã trả lời hay chưa, không hiện điểm (điểm có trong báo cáo sau buổi). */
+/** Lộ trình các câu; chỉ cho biết đã trả lời hay chưa, không hiện điểm (điểm có trong báo cáo sau buổi). */
 export function QuestionRoadmap({
   total,
   turns,
@@ -415,17 +412,16 @@ export function QuestionRoadmap({
   currentIndex: number | null
 }) {
   return (
-    <Panel className="grid gap-3 p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-heading text-base font-bold">
-          <ListChecks className="size-4 text-violet" aria-hidden />
+    <section aria-labelledby="roadmap-title" className="grid gap-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 id="roadmap-title" className="text-base font-semibold text-ink">
           Lộ trình câu hỏi
         </h2>
-        <span className="rounded-full bg-violet-soft px-2.5 py-0.5 text-xs font-semibold text-violet">
-          {turns.length}/{total}
+        <span className="text-sm text-ink-3 tabular-nums">
+          {turns.length} / {total}
         </span>
       </div>
-      <ol className="grid gap-2">
+      <ol className="grid gap-1">
         {QUESTION_THEMES.slice(0, total).map((theme, i) => {
           const index = i + 1
           const turn = turns.find((t) => t.index === index)
@@ -434,10 +430,8 @@ export function QuestionRoadmap({
           return (
             <li
               key={theme}
-              className={cn(
-                "flex gap-2.5 rounded-xl p-3 text-sm",
-                isCurrent ? "bg-violet-soft/60 ring-1 ring-violet/20" : turn ? "bg-surface" : "",
-              )}
+              className={cn("-mx-3 flex gap-2.5 rounded-xl px-3 py-2.5 text-sm", isCurrent && "bg-panel")}
+              aria-current={isCurrent ? "step" : undefined}
             >
               {turn ? (
                 timedOutBlank ? (
@@ -446,17 +440,17 @@ export function QuestionRoadmap({
                   <CircleCheck className="mt-0.5 size-4 shrink-0 text-good" aria-hidden />
                 )
               ) : isCurrent ? (
-                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2 border-violet" aria-hidden>
-                  <span className="size-1.5 rounded-full bg-violet" />
+                <span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full border-2 border-blue" aria-hidden>
+                  <span className="size-1.5 rounded-full bg-blue" />
                 </span>
               ) : (
-                <Circle className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
+                <Circle className="mt-0.5 size-4 shrink-0 text-line-strong" aria-hidden />
               )}
               <span className="grid min-w-0 flex-1">
-                <span className={cn("truncate", isCurrent ? "font-semibold text-violet" : "text-ink")}>
+                <span className={cn("truncate text-ink", isCurrent && "font-semibold")}>
                   Câu {index}: {theme}
                 </span>
-                <span className={cn("text-xs", turn ? (timedOutBlank ? "text-warn" : "text-good") : isCurrent ? "text-violet" : "text-ink-3")}>
+                <span className={cn("text-[13px]", timedOutBlank ? "text-warn" : "text-ink-3")}>
                   {turn ? (timedOutBlank ? "Hết giờ, chưa trả lời" : "Đã trả lời") : isCurrent ? "Đang trả lời" : "Sắp tới"}
                 </span>
               </span>
@@ -464,7 +458,30 @@ export function QuestionRoadmap({
           )
         })}
       </ol>
-    </Panel>
+    </section>
   )
 }
 
+/** 4 ô gợi ý trả lời theo STAR, tĩnh (không phản ứng theo câu trả lời, DESIGN.md mục 7). */
+function StarGuide() {
+  return (
+    <section aria-labelledby="star-guide-title" className="grid gap-3">
+      <h2 id="star-guide-title" className="text-base font-semibold text-ink">
+        Gợi ý trả lời theo STAR
+      </h2>
+      <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-1">
+        {STAR_ORDER.map((key) => (
+          <div key={key} className="min-w-0 rounded-xl bg-panel px-3.5 py-3">
+            <p className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <span className="grid size-[22px] place-items-center rounded-[7px] bg-card text-xs font-semibold shadow-xs">
+                {STAR_META[key].letter}
+              </span>
+              {STAR_META[key].label}
+            </p>
+            <p className="mt-1 text-xs leading-[18px] text-ink-3">{STAR_META[key].hint}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}

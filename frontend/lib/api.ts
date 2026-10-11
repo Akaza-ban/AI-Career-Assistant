@@ -22,10 +22,13 @@ import type {
   ChangePasswordRequest,
   ChatMessage,
   ChangePasswordResponse,
+  CompareJdsRequest,
+  CompareJdsResponse,
   Conversation,
   ConversationSummary,
   CreateGapAnalysisRequest,
   CreateInterviewRequest,
+  CreatePastedJdRequest,
   CvVersion,
   ExportCvRequest,
   ExportCvResponse,
@@ -40,8 +43,11 @@ import type {
   JobDescription,
   OptimizerSession,
   ProgressRange,
+  RecommendJdsRequest,
+  RecommendJdsResponse,
   ReviewInterviewRequest,
   Role,
+  SavedJd,
   SharedItem,
   SharingOverview,
   StudentOverview,
@@ -137,6 +143,13 @@ export const api = {
       () => mockApi.listNotifications(role),
       () => request("/notifications", { headers: { "X-Demo-Role": role } }),
     ),
+  markNotificationRead: (role: Role, id: string): Promise<void> =>
+    via(
+      "notifications",
+      () => mockApi.markNotificationRead(role, id),
+      () =>
+        request(`/notifications/${encodeURIComponent(id)}/read`, { method: "POST", headers: { "X-Demo-Role": role } }),
+    ),
   markAllNotificationsRead: (role: Role): Promise<void> =>
     via(
       "notifications",
@@ -206,6 +219,21 @@ export const api = {
 
   // ---- JD & phân tích khoảng cách ----
   listJdLibrary: (): Promise<JobDescription[]> => via("gap", () => mockApi.listJdLibrary(), () => request("/jd/library")),
+  /** Gợi ý vị trí theo CV (tối đa top_n), chấm theo quy tắc; advice do LLM viết cho vị trí #1 khi generate_advice. */
+  recommendJds: (body: RecommendJdsRequest): Promise<RecommendJdsResponse> =>
+    via("gap", () => mockApi.recommendJds(body), () => request("/jd/recommend", json(body))),
+  // JD đã lưu: backend chưa có endpoint (DESIGN.md mục 12) nên luôn dùng mock, kể cả khi bật NEXT_PUBLIC_LIVE_APIS.
+  // Khi backend có, chuyển sang via("gap", ...) như các hàm trên.
+  listSavedJds: (): Promise<SavedJd[]> => mockApi.listSavedJds(),
+  saveJd: (jdId: string): Promise<SavedJd> => mockApi.saveJd(jdId),
+  unsaveJd: (jdId: string): Promise<void> => mockApi.unsaveJd(jdId),
+  /** Vị trí SV chọn được: thư viện JD và các JD SV đã tự dán (GET /jd). */
+  listMyJds: (): Promise<JobDescription[]> => via("gap", () => mockApi.listMyJds(), () => request("/jd")),
+  // Backend chỉ tạo JD tự dán bên trong POST /gap-analysis; endpoint riêng là đề xuất của frontend nên luôn dùng mock.
+  createPastedJd: (body: CreatePastedJdRequest): Promise<JobDescription> => mockApi.createPastedJd(body),
+  /** So sánh CV với 2–3 JD qua LLM; kết quả sắp theo match_score giảm dần. */
+  compareJds: (body: CompareJdsRequest): Promise<CompareJdsResponse> =>
+    via("gap", () => mockApi.compareJds(body), () => request("/jd/compare", json(body))),
   createGapAnalysis: (body: CreateGapAnalysisRequest): Promise<GapAnalysis> =>
     via("gap", () => mockApi.createGapAnalysis(body), () => request("/gap-analysis", json(body))),
   getGapAnalysis: (id: string): Promise<GapAnalysis> =>

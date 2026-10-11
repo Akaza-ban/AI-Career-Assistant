@@ -1,20 +1,14 @@
 import type { Metadata } from "next"
-import { Be_Vietnam_Pro, Plus_Jakarta_Sans } from "next/font/google"
+import { Hanken_Grotesk } from "next/font/google"
 
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import "./globals.css"
 
-const heading = Plus_Jakarta_Sans({
+// Một font grotesk cho cả tiêu đề và nội dung (DESIGN.md 3.4), có dấu tiếng Việt.
+const sans = Hanken_Grotesk({
   subsets: ["latin", "vietnamese"],
-  weight: ["500", "600", "700", "800"],
-  variable: "--font-head",
-})
-
-const body = Be_Vietnam_Pro({
-  subsets: ["latin", "vietnamese"],
-  weight: ["400", "500", "600"],
   variable: "--font-body",
 })
 
@@ -30,7 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="vi"
-      className={`${heading.variable} ${body.variable} h-full`}
+      className={`${sans.variable} h-full`}
       suppressHydrationWarning
     >
       <body className="min-h-full">

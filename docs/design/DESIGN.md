@@ -1,188 +1,357 @@
-# DESIGN.md — CareerX Design System
+# DESIGN.md — CareerX Design System (v2)
 
-Tài liệu này là nguồn tham chiếu thiết kế cho Claude Code khi build frontend Next.js của CareerX. Đặt file này ở gốc repo (cạnh `CLAUDE.md` nếu có). Mọi màn hình mới nên tái sử dụng token và component mô tả ở đây thay vì tự đặt màu/khoảng cách mới.
+Nguồn tham chiếu thiết kế cho mọi màn hình của ứng dụng CareerX (sinh viên và cố vấn). Khi dựng hoặc sửa giao diện, dùng token và component trong tài liệu này thay vì tự đặt màu, khoảng cách hay hiệu ứng mới.
 
-**Nguồn gốc:** các token và component bên dưới được trích từ landing page demo (`CareerX.html` (cùng thư mục `docs/design/`), hướng thiết kế "B", lấy cảm hứng từ ventriloc.ca). Landing page đó là **bản trình diễn tĩnh (HTML/CSS/JS thuần)**, không phải code sản phẩm — nhiệm vụ ở đây là dựng lại đúng ngôn ngữ thiết kế đó bằng component Next.js thật, có thể tái sử dụng cho các màn hình trong Figma (dashboard sinh viên, phân tích CV, phỏng vấn STAR, màn cố vấn...).
+- Bố cục và luồng của từng màn: [`WIREFRAMES.md`](WIREFRAMES.md).
+- Bản mẫu tương tác (6 artboard: Tổng quan, Thư viện JD, Kết quả phân tích, Thư viện JD trên điện thoại, Phòng phỏng vấn, Trình tối ưu CV): https://claude.ai/artifact/Qk4gymtBzk5Eg9BXB6phbc. Link ở chế độ riêng tư; chủ sở hữu cần chia sẻ thì người khác mới mở được. Khi tài liệu và bản mẫu lệch nhau, **bản mẫu là chuẩn về hình ảnh**, tài liệu này là chuẩn về token và quy tắc.
 
----
-
-## 1. Tech stack đề xuất
-
-- **Next.js** (App Router) + TypeScript.
-- **Tailwind CSS**, cấu hình token bên dưới thành theme thay vì hardcode màu trong className.
-- Font qua `next/font/google` (không dùng `<link>` tới Google Fonts thủ công).
-- Nếu cần thư viện component nền (dialog, dropdown, tooltip...), ưu tiên **shadcn/ui** hoặc **Radix UI** rồi restyle theo token ở đây — không kéo nguyên bộ theme có sẵn của thư viện khác.
-- Icon: outline, stroke ~1.75–2px, bo góc nhẹ (xem cách vẽ SVG trong bento cards) — có thể dùng `lucide-react` làm bộ icon nền rồi chỉnh stroke-width cho khớp.
-
-Nếu dự án đã chọn stack khác (CSS Modules, styled-components, không dùng Tailwind...), báo lại để chỉnh phần ánh xạ token, phần còn lại vẫn áp dụng nguyên.
+**Phạm vi:** v2 thay thế hướng "B" (ventriloc.ca) của bản trước cho phần ứng dụng. Landing page demo `CareerX.html` thuộc hướng cũ; khi làm lại landing thì dùng cùng token ở đây.
 
 ---
 
-## 2. Design tokens
+## 1. Hướng thiết kế
 
-### 2.1 Màu sắc — Light mode (mặc định)
+**Màu sắc nhẹ nhàng kiểu Family, component kiểu dashboard Stripe, tổng thể nghiêm túc.**
+
+| Lấy từ | Lấy gì | Không lấy |
+|---|---|---|
+| **Family** (family.co) | Nền trắng và xám rất nhạt, nút dạng pill, góc bo mềm, bóng đổ nhẹ, chuyển động lò xo, sheet trượt từ dưới lên | Minh hoạ hoạt hình, màu kẹo ngọt, giọng văn đùa vui |
+| **Stripe** (dashboard và trang giới thiệu) | Thanh tìm kiếm xám, panel xám chứa thẻ, hàng chỉ số ngăn bằng đường kẻ mảnh, biểu đồ đường mảnh, badge có chấm tròn, link "Xem thêm", dải màu pastel cắt chéo ở đầu trang | Khối gradient lớn, đậm; hình minh hoạ kiểu landing page trong dashboard |
+
+**Nguyên tắc**
+1. **Nền trung tính là mặc định.** Nội dung đặt trên nền trắng hoặc xám rất nhạt. Màu chỉ dùng cho tín hiệu (link, trạng thái, biểu đồ).
+2. **Màu đen cho hành động và vị trí hiện tại.** Nút chính, mục đang chọn trên sidebar, segmented control đang chọn đều dùng `--ink`.
+3. **Dải pastel chỉ nằm ở đầu trang**, phía sau nội dung (mục 4). Không đặt khối gradient lơ lửng giữa trang.
+4. **Dashboard không phải landing page.** Không có thẻ minh hoạ nổi, không có ảnh chụp màn hình khác nằm trong thẻ. Mỗi thẻ hiện dữ liệu thật và một hành động.
+5. **Ít chữ.** Phần chào hỏi gồm một câu, một dòng phụ và nút bấm. Mỗi thẻ có một tiêu đề, một dòng thông tin phụ và một hành động.
+6. **Trung thực với dữ liệu.** Không hiện con số khi con số chưa đủ tin cậy (mục 8).
+
+---
+
+## 2. Tech stack
+
+- **Next.js 16** (App Router) + TypeScript + **Tailwind CSS v4**. Token khai báo trong `frontend/app/globals.css`.
+- **shadcn/ui** trên nền Radix UI, restyle theo token.
+- Font qua `next/font/google`.
+- Icon: **`lucide-react`**, nét outline, `strokeWidth` 1.75. **Không dùng emoji.**
+- Biểu đồ: `recharts`, đường mảnh 2px màu `--accent`.
+- Toast: `sonner`.
+
+**Đề xuất thêm (cần nhóm duyệt trước khi cài):** `motion` (chuyển động lò xo, pill trượt, sheet kéo được) và `cmdk` (bảng lệnh Ctrl K).
+
+---
+
+## 3. Design tokens
+
+### 3.1 Màu trung tính
 
 | Token | Hex | Vai trò |
 |---|---|---|
 | `--bg` | `#FFFFFF` | nền trang |
-| `--surface` | `#F3F6FC` | nền section xen kẽ, nền pill/badge |
-| `--card` | `#FFFFFF` | nền thẻ, dropdown |
-| `--ink` | `#0B1B3A` | chữ chính |
-| `--ink-2` | `#41506F` | chữ phụ |
-| `--ink-3` | `#64708B` | chữ mờ, label, placeholder |
-| `--line` | `#E1E8F5` | viền, đường phân cách |
-| `--blue` | `#2563EB` | **màu thương hiệu chính**, nút primary, link, focus ring |
-| `--blue-soft` | `#E4EDFF` | nền badge/kicker màu xanh |
-| `--on-blue` | `#FFFFFF` | chữ trên nền `--blue` |
-| `--violet` | `#6741E0` | màu nhấn phụ (gradient tiêu đề, badge thứ hai) |
-| `--violet-soft` | `#EEE9FD` | nền badge màu tím |
-| `--gold` | `#E0B852` | màu nhấn cao cấp — dùng cho underline nhấn, icon nổi bật, cột tiêu đề trên footer tối |
-| `--navy` | `#0B1533` | nền tối (footer, khối CTA tối) |
-| `--good` / `--good-soft` | `#12784B` / `#DDF3E7` | trạng thái tích cực (đạt, đã chấp nhận) |
-| `--warn` / `--warn-soft` | `#8F4E00` / `#FBEBCF` | trạng thái cảnh báo (thiếu, cần bổ sung) |
-| `--bad` / `--bad-soft` | `#B3261E` / `#FBE0DD` | trạng thái lỗi/từ chối |
+| `--surface` | `#F4F4F5` | nút phụ, segmented control, hover, nền ô tìm kiếm |
+| `--panel` | `#F7F7F9` | panel chứa thẻ ("Việc nên làm tiếp", "Phù hợp nhất với CV"), khối thông tin phụ |
+| `--card` | `#FFFFFF` | thẻ, popover, sheet, dialog |
+| `--ink` | `#18181B` | chữ chính, nút chính, mục đang chọn, logo |
+| `--ink-2` | `#52525B` | chữ phụ |
+| `--ink-3` | `#6B6B74` | nhãn, chú thích, placeholder (đạt ≥ 4.5:1 trên `--bg` và `--surface`) |
+| `--line` | `#ECECEF` | đường kẻ, viền thẻ |
+| `--line-strong` | `#DEDEE3` | viền ô nhập, viền badge |
 
-### 2.2 Màu sắc — Dark mode
+### 3.2 Màu nhấn và trạng thái
 
-| Token | Hex |
+| Token | Hex | Vai trò |
+|---|---|---|
+| `--accent` | `#5B5BD6` | link, biểu đồ, thanh tiến độ, focus ring, chấm báo tin mới |
+| `--accent-strong` | `#4A4AB0` | chữ trên nền `--accent-soft`, link khi hover |
+| `--accent-soft` | `#EFEFFC` | nền badge "Khá", từ khoá JD được đánh dấu, ô icon trong thẻ công việc |
+| `--good` / `--good-soft` / `--good-line` | `#15803D` / `#EBF7EF` / `#CDEBD7` | đã đáp ứng, đã áp dụng, mức "Cao" |
+| `--warn` / `--warn-soft` / `--warn-line` | `#9A5B00` / `#FFF6E6` / `#F5E1B8` | còn thiếu, chỗ cần tự điền số liệu, đồng hồ sắp hết giờ |
+| `--bad` / `--bad-soft` | `#B42318` / `#FEF0EE` | lỗi, xoá, kết thúc sớm, đồng hồ dưới 10 giây |
+| `--gold` / `--gold-soft` | `#E0B852` / `#FFF7DD` | dòng CV có gợi ý trong Trình tối ưu |
+
+Màu nhấn có thể đổi về sau (bản mẫu có Tweaks thử teal, cam, đen). Chỉ cần đổi `--accent`; `--accent-strong` = trộn 18% đen, `--accent-soft` = trộn 91% trắng.
+
+### 3.3 Dải pastel (aurora)
+
+| Token | Giá trị |
 |---|---|
-| `--bg` | `#070D1B` |
-| `--surface` | `#0C1428` |
-| `--card` | `#101A32` |
-| `--ink` | `#EDF1FA` |
-| `--ink-2` | `#B4BFD6` |
-| `--ink-3` | `#8894AE` |
-| `--line` | `#202C48` |
-| `--blue` | `#7C9DFF` |
-| `--blue-soft` | `#16234A` |
-| `--on-blue` | `#07101F` |
-| `--violet` | `#A996FF` |
-| `--violet-soft` | `#221D4A` |
-| `--good` / `--good-soft` | `#5CD19A` / `#123B2C` |
-| `--warn` / `--warn-soft` | `#F0B24D` / `#3A2C12` |
-| `--bad` / `--bad-soft` | `#FF8F86` / `#3F1C1A` |
+| `--au-1` | `#FFB59E` (đào) |
+| `--au-2` | `#FF9FCB` (hồng) |
+| `--au-3` | `#B8A4FF` (tím nhạt) |
+| `--au-4` | `#9ED4FF` (xanh trời) |
+| Chiều cao | **460px** trên desktop, **260px** trên điện thoại |
+| Mép dưới | **không có mép**: tan dần xuống nền trắng bằng `mask-image` hơi nghiêng (176°), không dùng `clip-path` cắt chéo |
+| Chuyển động | trôi chậm 16 giây, qua lại |
 
-`--gold` và `--navy` giữ nguyên ở cả hai theme (không đảo màu).
+### 3.4 Typography
 
-### 2.3 Typography
+- **Một font duy nhất cho cả tiêu đề và nội dung: `Hanken Grotesk`** (grotesk thẳng, gần Söhne của Stripe, có dấu tiếng Việt). Nạp qua `next/font/google` trong `app/layout.tsx`.
+- **Tránh "cái nhìn AI":** không ghép 2 font, không dùng weight 800, không giãn chữ quá sát. Tiêu đề tối đa weight 600–700, `letter-spacing` không chặt hơn `-0.02em`. Không dùng Inter, Geist, Plus Jakarta Sans (font mặc định của rất nhiều sản phẩm do AI dựng).
+- Mọi con số dùng `font-variant-numeric: tabular-nums`.
 
-- **Heading font:** `Plus Jakarta Sans` (weight 500/600/700/800), fallback `Be Vietnam Pro, system-ui, sans-serif`.
-- **Body font:** `Be Vietnam Pro` (weight 400/500/600), fallback `system-ui, -apple-system, 'Segoe UI', sans-serif`.
-- Cả hai đều hỗ trợ tiếng Việt có dấu — bắt buộc giữ, không đổi sang font không hỗ trợ dấu.
-- Type scale:
-  - `h1`: weight 800, `clamp(2.3rem, 4.5vw, 3.75rem)`, line-height 1.06, `letter-spacing: -0.025em`
-  - `h2`: weight 700, `clamp(1.85rem, 3.5vw, 2.75rem)`, line-height 1.12
-  - `h3`: weight 700, `1.125rem`, line-height 1.3
-  - body: weight 400, `1rem`, line-height 1.6
-  - lede/intro text: `clamp(1.02rem, 1.4vw, 1.15rem)`, màu `--ink-2`
-  - fine print: `0.8125rem`, màu `--ink-3`
-- Heading dùng `text-wrap: balance` để tránh xuống dòng lẻ chữ.
-- Gradient chữ (dùng cho từ khoá nhấn trong `h1`): `linear-gradient(95deg, var(--blue), var(--violet))` + `background-clip: text` + `color: transparent`.
+| Cấp | Weight | Cỡ / line-height | Dùng cho |
+|---|---|---|---|
+| `display` | 600, `-0.025em` | 40 / 46 (điện thoại 30 / 36) | câu chào trên Tổng quan: "Chào buổi sáng/trưa/chiều/tối, {tên}!" + một câu bên dưới; 2 nút đặt đối diện bên phải, căn đáy |
+| `h1` | 600, `-0.025em` | 40 / 46 (điện thoại 30 / 36) | tiêu đề trang (`PageHeader`): **cùng cỡ và bố cục với lời chào Tổng quan** — một dòng mô tả 17px bên dưới, nút/bộ chọn đặt đối diện bên phải, căn đáy |
+| `h2` | 600–700 | 22–26 / 28–32 | tiêu đề khu vực ("Tiến độ của bạn", "Tất cả vị trí") |
+| `h3` | 600 | 16–17 / 22–24 | tiêu đề thẻ |
+| `metric` | 400 | 26 / 32 | số liệu trong hàng chỉ số (không in đậm, theo Stripe) |
+| `body` | 400 | 15 / 24 | nội dung |
+| `small` | 500 | 13 / 20 | thông tin phụ, nhãn |
+| `micro` | 500 | 12 / 16 | badge, tiêu đề nhóm trên sidebar |
 
-Next.js setup gợi ý:
-```ts
-import { Plus_Jakarta_Sans, Be_Vietnam_Pro } from 'next/font/google'
+Trên điện thoại: `display` 32/38, `h1` 26/32. Tiêu đề dùng `text-wrap: balance`.
 
-const heading = Plus_Jakarta_Sans({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['500', '600', '700', '800'],
-  variable: '--font-head',
-})
-const body = Be_Vietnam_Pro({
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600'],
-  variable: '--font-body',
-})
+### 3.5 Bo góc
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| — | 6px | badge |
+| — | 10px | mục sidebar, ô tìm kiếm, ô nhập nhỏ |
+| `--r-md` | 12px | ô nhập, thẻ nhỏ |
+| `--r-card` | 16px | thẻ |
+| `--r-xl` | 22px | panel, dialog, mép trên của sheet |
+| pill | 999px | nút, segmented control, avatar |
+
+### 3.6 Khoảng cách và bố cục
+
+- Thang 4px: `4 · 8 · 12 · 16 · 20 · 24 · 28 · 32 · 40 · 56`.
+- Sidebar rộng 252px. **Nội dung trải hết chiều rộng còn lại, không giới hạn max-width**; chỉ có lề 16px (điện thoại), 24px (máy tính bảng), 40px (desktop), 48px (≥ 1280px). Trên màn rộng, tăng số cột thay vì để trống hai bên.
+- **Bố cục vùng và khối kiểu dashboard Stripe (không dùng thẻ chứa):**
+  - **Vùng** (`Zone`): tiêu đề 26px weight 600 + link bên phải, đường kẻ `--line` ngay dưới, nội dung cách 28px. Các vùng cách nhau 56–64px.
+  - **Khối** trong vùng: tiêu đề 16px weight 600, **không phụ đề**; các dòng kẻ mảnh (tên dòng weight 500, dòng phụ 13px `--ink-3`); **dòng chân** (`WidgetFooter`): link bên trái + ghi chú nhỏ bên phải, luôn nằm ở đáy khối để các khối cạnh nhau thẳng hàng.
+  - Chỉ số (`MetricColumn`): tiêu đề + badge thay đổi (+22,3 xanh / âm màu cảnh báo), số 26px, đường biểu đồ mảnh, dòng chân.
+  - Thẻ chỉ dùng cho việc cần hành động ("Việc nên làm tiếp"), không bọc danh sách hay chỉ số.
+- Breakpoint: `< 760` điện thoại · `760–1024` máy tính bảng · `≥ 1024` desktop.
+- Vùng chạm tối thiểu 44 × 44px.
+
+### 3.7 Bóng đổ
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--shadow-xs` | `0 1px 2px rgba(24,24,27,.05)` | ô tìm kiếm, pill đang chọn |
+| `--shadow-sm` | `0 1px 3px rgba(24,24,27,.06), 0 1px 2px rgba(24,24,27,.03)` | thẻ |
+| `--shadow-md` | `0 12px 28px -12px rgba(24,24,27,.16)` | thẻ khi hover |
+| `--shadow-lg` | `0 24px 60px -20px rgba(24,24,27,.3)` | dialog, lớp phủ |
+
+### 3.8 Chuyển động
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--ease-out` | `cubic-bezier(.22,1,.36,1)` | xuất hiện, mở rộng |
+| `--ease-spring` | `cubic-bezier(.34,1.4,.64,1)` | pill trượt, sheet, dialog |
+| — | 120ms | nhấn nút (`scale(.97)`) |
+| — | 220–380ms | hover thẻ, pill, sheet |
+| — | 1100ms | đếm số và vẽ vòng điểm khi xuất hiện lần đầu |
+
+Tôn trọng `prefers-reduced-motion`: tắt chuyển động, dải pastel đứng yên, số hiện ngay giá trị cuối.
+
+---
+
+## 4. Dải pastel: dùng ở đâu
+
+- **Có dải:** đầu mọi trang có sidebar (Tổng quan, Thư viện JD, Kết quả phân tích, Trình tối ưu CV…) và trang tương ứng trên điện thoại. Dải nằm **phía sau** header, tiêu đề và phần đầu nội dung.
+- **Không có dải:** chế độ tập trung (Phòng chờ, Phòng phỏng vấn), dialog, sheet.
+- **Không bao giờ:** khối gradient giữa trang, nền gradient cho thẻ, banner gradient. Lời khuyên AI, nhận xét AI và các khối thông tin khác dùng nền trung tính (`--card` có viền, hoặc `--panel`).
+- Trên nền dải, ô tìm kiếm và nút phụ dùng nền trắng mờ `rgba(255,255,255,.7)` kèm `backdrop-filter: blur(8px)`.
+
+```css
+/* frontend/app/globals.css: .aurora-band */
+.aurora-band{position:absolute;inset:0 0 auto 0;height:460px;z-index:0;pointer-events:none;
+  background:radial-gradient(42% 90% at 6% 8%,var(--au-4) 0%,transparent 62%),
+             radial-gradient(38% 95% at 34% -6%,var(--au-3) 0%,transparent 62%),
+             radial-gradient(40% 95% at 66% 4%,var(--au-2) 0%,transparent 62%),
+             radial-gradient(40% 100% at 98% 22%,var(--au-1) 0%,transparent 62%);
+  background-size:150% 150%;
+  mask-image:linear-gradient(176deg,#000 0%,#000 30%,transparent 92%); /* tan dần, không lộ mép dưới */
+  animation:aurora-drift 16s ease-in-out infinite alternate}
+@keyframes aurora-drift{from{background-position:0% 0%}to{background-position:100% 60%}}
 ```
 
-### 2.4 Bo góc, khoảng cách, đổ bóng
-
-- Bo góc: nút `12px`, thẻ/card `20px`, badge/pill/nút tròn `999px` (full), khung ảnh nhỏ trong CTA `16px`.
-- Khoảng cách section: `padding-block: clamp(56px, 8vw, 104px)`.
-- Container: `max-width: 1180px`, `padding-inline: clamp(16px, 4vw, 40px)`.
-- Shadow:
-  - `--shadow`: `0 1px 2px rgba(11,27,58,.05), 0 16px 36px -16px rgba(37,99,235,.3)` — dùng cho card nổi bật, dropdown mở.
-  - `--shadow-sm`: `0 1px 2px rgba(11,27,58,.06), 0 6px 16px -8px rgba(11,27,58,.16)` — dùng cho card thường, nút soft.
-  - Ở dark mode, cả hai đổi sang bóng đen: `0 1px 2px rgba(0,0,0,.4), 0 16px 36px -16px rgba(0,0,0,.7)` (shadow-sm tương tự với `-8px`).
-- Breakpoint chính: mobile mặc định → `760px` (bento chuyển sang lưới) → `960px` (layout 2 cột cho vai trò/CTA) → `1000px` (pill nav + dropdown hiện, burger ẩn).
+Ngoại lệ có chủ đích: vòng điểm ở Kết quả phân tích tô gradient pastel (`#7FC4FF → #9F86FF → #FF8FB8`), thanh "Đang phân tích…" chạy gradient pastel.
 
 ---
 
-## 3. Component inventory
+## 5. Khung ứng dụng
 
-Dựng mỗi mục dưới đây thành **một component Next.js dùng lại được**, không viết lại style mỗi lần dùng.
+### 5.1 Logo
 
-| Component | Biến thể | Ghi chú hành vi |
+- Chỉ dùng **hình chữ X** của logo cũ (khiên, chữ X, mũi tên, ngôi sao), màu `--ink`, nền trong suốt, **không có khung**.
+- Bên cạnh là chữ "CareerX" (Jakarta 800, 20px, `-0.04em`). Không có dòng phụ.
+- File: `frontend/public/brand/careerx-glyph.png` (tạo từ `careerx-mark.png`).
+
+### 5.2 Sidebar (desktop)
+
+- Rộng 252px, nền trắng, viền phải `--line`. Không có thẻ cố vấn hay thẻ quảng bá ở cuối.
+- Chia nhóm, tiêu đề nhóm cỡ `micro`, màu `--ink-3`:
+
+| Nhóm | Mục |
+|---|---|
+| (không tiêu đề) | Tổng quan |
+| Hồ sơ | CV của tôi · Thư viện JD |
+| Luyện tập | Phân tích CV & JD · Luyện phỏng vấn · Tiến bộ |
+| Tài khoản | Chia sẻ với cố vấn · Cài đặt |
+
+- Mục thường: chữ `--ink-2`, hover nền `--surface`. **Mục đang chọn: nền `--ink`, chữ trắng, weight 600.**
+- Cố vấn: Tổng quan · Sinh viên phụ trách (cùng kiểu).
+
+### 5.3 Header (mọi trang desktop)
+
+Giống nhau trên mọi trang, không thay đổi theo trang. **Header dính trên cùng khi cuộn** (`sticky top-0`): ở đầu trang trong suốt để thấy dải pastel; cuộn xuống thì nền trắng mờ `bg-background/85` + `backdrop-blur` và đường kẻ dưới `--line`.
+- Trái: ô tìm kiếm rộng tối đa 520px, nền trắng mờ, placeholder "Tìm vị trí, thao tác…", phím tắt `Ctrl K`.
+- Phải: tin nhắn (chấm `--accent` khi có tin mới), thông báo, avatar tròn nền `--ink`. Menu avatar chỉ có tên và "Đổi vai trò"; **Cài đặt chỉ nằm trên sidebar**, không lặp lại ở menu avatar.
+- Breadcrumb và thao tác riêng của trang nằm ở một dòng riêng ngay dưới header.
+
+### 5.4 Điện thoại (< 760px)
+
+- **Thanh tab dưới đáy, 5 mục:** Tổng quan · Thư viện · Phân tích · Phỏng vấn · Tôi. Mục đang chọn màu `--ink` kèm vạch nhỏ trên đầu. "Tôi" mở sheet: CV của tôi, Tiến bộ, Chia sẻ, Cài đặt, Đăng xuất.
+- Header gồm tiêu đề trang, nút tìm kiếm và avatar.
+- **Không hiện thanh cuộn, không cuộn ngang.** Khung trang vừa đúng màn hình; danh sách xếp dọc.
+- Bố cục 2 cột đổi thành 1 cột. Thông tin phụ mở bằng sheet.
+
+### 5.5 Chế độ tập trung (Phòng chờ, Phòng phỏng vấn)
+
+- Không sidebar, không dải pastel. Thanh trên cao 64px: "Rời phòng" · logo + tên buổi · đồng hồ · Tạm dừng.
+- Nội dung một cột, rộng tối đa 820px.
+- *Thiết kế Phòng phỏng vấn đang tạm chốt; có thể làm lại khi có ý tưởng tốt hơn.*
+
+---
+
+## 6. Component
+
+| Component | Quy cách |
+|---|---|
+| `Button` | `primary`: nền `--ink`, chữ trắng, pill, cao 44–46px · `secondary`: nền `--surface` · `ghost`: không nền · `danger`: nền `--bad` · `link`: chữ `--accent`, weight 600 |
+| `Badge` | bo 6px, viền 1px, cỡ 12px, chấm tròn 6px màu chữ. Biến thể theo token trạng thái |
+| `MatchLabel` | badge mức phù hợp, xem mục 8.2 |
+| `SegmentedControl` | nền `--surface`, pill trượt nền trắng + `--shadow-xs`; chữ đang chọn `--ink`, còn lại `--ink-3` |
+| `Panel` | nền `--panel`, bo `--r-xl`, padding 24–28px, chứa các thẻ trắng |
+| `TaskCard` | thẻ "Việc nên làm tiếp": ô icon nền `--accent-soft` + loại việc · tiêu đề · dòng thông tin · thanh tiến độ · dòng cuối có thông tin phụ và nút `primary` nhỏ |
+| `QuickLink` | dòng trắng có icon, nhãn và mũi tên, dùng cho lối tắt |
+| `MetricColumn` | nhãn · số (`metric`) + số so sánh nhỏ · đường biểu đồ mảnh · "Xem thêm" và thời gian cập nhật. Các cột cách nhau, phía trên có tiêu đề khu vực kèm đường kẻ |
+| `ListRow` / `Table` | dòng ngăn bằng `--line`, hover nền `--panel`, tiêu đề cột chữ hoa 12px `--ink-3` |
+| `RecCard` | thẻ vị trí gợi ý: badge mức phù hợp, hạng, nút lưu, tiêu đề, công ty, "Còn thiếu", link "Xem chi tiết" |
+| `AdviceRow` | lời khuyên AI: thẻ trắng viền `--line`, icon bóng đèn trên nền `--surface`, một câu tóm tắt, nút mở kế hoạch, chú thích "Do AI tạo" |
+| `ScoreCard` | thẻ trắng: vòng điểm gradient pastel · badge mức + một câu nhận xét · 3 thanh điểm theo mức yêu cầu |
+| `SkillRow` | tên kỹ năng · bằng chứng trích từ CV · badge trạng thái (Đã đáp ứng / Chỉ liệt kê / Còn thiếu) |
+| `CvPaper` | bản CV trên thẻ trắng; dòng có gợi ý: nền `--gold-soft` + vạch trái `--gold`; đang xét: thêm viền `--ink`; đã áp dụng: nền `--good-soft` + tag |
+| `SuggestionCard` | loại gợi ý (badge) · câu gốc (nền `--panel`) · đề xuất (chỗ cần điền số: nền `--warn-soft` viền gạch; từ khoá JD: nền `--accent-soft`) · Áp dụng / Sửa / Bỏ qua · Hoàn tác |
+| `CapabilityCheck` | câu hỏi kinh nghiệm + 3 lựa chọn pill (Có, đã dùng / Đang học / Chưa có) |
+| `AuroraBand` | mục 4 |
+| `StickyActionBar` | dính đáy, nền trắng mờ, viền trên `--line`; trái là tóm tắt, phải là nút chính |
+| `Sheet` / `Dialog` | bo `--r-xl`, `--shadow-lg`, nền mờ phía sau `rgba(24,24,27,.3)` |
+| `AiProgress` | các bước có tên + thanh gradient pastel chạy |
+| `Skeleton` · `EmptyState` · `ErrorBlock` · `FallbackBanner` · `Toast` | mục 9 |
+
+---
+
+## 7. Mẫu bố cục đã chốt
+
+- **Tổng quan:** dải pastel · câu chào + một dòng + 2 nút · panel "Việc nên làm tiếp" (2 `TaskCard` + 3 `QuickLink`) · "Tiến độ của bạn" (3 `MetricColumn`) · "Vị trí hợp với bạn" và "Kỹ năng nên học thêm" dạng danh sách.
+- **Thư viện JD:** tiêu đề + chọn CV · panel "Phù hợp nhất với CV" (lưới 3 `RecCard`, mở rộng tới 6, `AdviceRow` ở cuối panel) · "Tất cả vị trí" dạng bảng với tìm kiếm, chọn ngành, segmented Tất cả / Đã lưu.
+- **Kết quả phân tích:** tên vị trí + CV · `ScoreCard` · "Kỹ năng và bằng chứng" (`SkillRow` theo nhóm mức yêu cầu, segmented lọc) · cột phải "Gợi ý cải thiện" + nhận xét AI · `StickyActionBar`.
+- **Trình tối ưu CV:** tiêu đề + tiến độ · `CvPaper` bên trái · `SuggestionCard` và `CapabilityCheck` bên phải · `StickyActionBar` với nút "Hoàn tất & tạo phiên bản".
+- **Phòng phỏng vấn:** chế độ tập trung · thanh tiến độ 4 câu · câu hỏi · 4 ô hướng dẫn STAR (tĩnh, không sáng lên theo câu trả lời) · ô trả lời có đếm ký tự.
+
+---
+
+## 8. Nội dung và quy tắc hiển thị
+
+### 8.1 Khi nào hiện điểm số
+
+| Nguồn | Cách chấm | Hiển thị |
 |---|---|---|
-| `Button` | `primary` (nền `--blue`), `soft` (viền + nền `--card`), `dark` (nền `--ink`/`--navy`, đổi theo tông header) | min-height 46px, bo góc 12px, hover nhấc nhẹ `translateY(-2px)` |
-| `Badge` / `Kicker` | mặc định (xanh), `violet`, trạng thái `good/warn/bad` | pill nhỏ, chữ 13px weight 600, nền `-soft` tương ứng màu chữ |
-| `PillNav` + `Dropdown` | menu ngang dạng pill, có submenu dropdown khi hover/click | header dùng, xem mục 4 |
-| `Card` (`BentoCard`) | 2 cột hoặc 3 cột tuỳ nội dung (`span 2` / `span 3` trên lưới 6 cột) | icon nhỏ trong badge tròn, tiêu đề, mô tả, minh hoạ phía dưới |
-| `WindowMock` | khung "giao diện minh hoạ" | titlebar giả macOS: 3 chấm tròn 11px màu đỏ `#EC6A5E`, vàng `#F4BE4F`, xanh `#61C554`, cộng nhãn text bên phải; nội dung minh hoạ UI thật bên trong |
-| `Stepper` (pinned steps) | 4 bước, có rail tiến trình dọc | xem mục 5 — hành vi cuộn ghim |
-| `RoleTabs` | chuyển giữa 2 vai trò (Sinh viên / Cố vấn) | dùng `role="tablist"`/`role="tab"`, điều hướng bằng phím mũi tên |
-| `TrustStat` (KPI) | số liệu lớn + nhãn | dùng cho mục tiêu/độ tin cậy, không trình bày như kết quả đã đạt nếu là mục tiêu (`≥ 60%` ghi rõ "mục tiêu") |
-| `FaqAccordion` | `<details>` nhóm loại trừ lẫn nhau | mở câu này tự đóng câu trước — xem mục 5 |
-| `CtaCard` | khối CTA có minh hoạ, checklist, underline nhấn màu vàng | dùng ở cuối trang / cuối flow |
-| `Header` | logo, pill nav, nút ngôn ngữ, nút CTA — **các phần tử tách rời, không nằm trong một khối nền** | xem mục 4 |
-| `Footer` | nền `--navy`, cột liên kết tiêu đề màu `--gold`, block ngôn ngữ | luôn dùng tông chữ sáng |
+| Gợi ý vị trí (`/jd/recommend`) | Quy tắc, không LLM | **Chỉ nhãn** Cao/Khá/Trung bình, kèm "Ước tính nhanh theo kỹ năng" |
+| Phân tích 1 vị trí, So sánh (`/gap-analysis`, `/jd/compare`) | Quy tắc + LLM | **Điểm 0–100 kèm nhãn** |
+| Phỏng vấn | LLM chấm STAR | `x.x / 5`, không gắn nhãn. **Không hiện điểm trong lúc phỏng vấn** |
+
+### 8.2 Nhãn mức phù hợp (toàn hệ thống)
+
+| Điểm | `match_label` | Nhãn | Badge |
+|---|---|---|---|
+| ≥ 75 | `high` | **Cao** | nền `--good-soft`, viền `--good-line`, chữ `--good` |
+| 50–74 | `medium` | **Khá** | nền `--accent-soft`, viền `--line-strong`, chữ `--accent-strong` |
+| < 50 | `low` | **Trung bình** | nền `--surface`, viền `--line-strong`, chữ `--ink-2` |
+
+Không dùng màu đỏ cho mức thấp. Bộ nhãn này thay cho "Cao / Trung bình / Thấp" ở các màn hiện tại.
+
+### 8.3 Quy tắc khác
+
+- **Không tự bịa thông tin.** Gợi ý sửa CV phải cho Áp dụng, Sửa, Bỏ qua và Hoàn tác. Chỗ cần số liệu để trống `[số]` và có lời nhắc "AI không tự đặt số liệu". AI không tự thêm kỹ năng còn thiếu; phải qua `CapabilityCheck`.
+- **Nội dung do AI tạo** có chú thích "Do AI tạo từ CV và JD; hãy tự kiểm chứng".
+- **Không đặt đoạn cảnh báo AI dài** ("Các đánh giá, điểm số và gợi ý được tạo bởi AI chỉ mang tính tham khảo…") ở trang kết quả, báo cáo hay bất kỳ trang nào. Cam kết này nằm trong phần đồng ý xử lý dữ liệu ở Cài đặt và ô cam kết trước khi tải CV.
+- **Quyền riêng tư:** chia sẻ với cố vấn mặc định tắt, công tắc riêng cho từng mục.
+- **Không dùng emoji.** Dùng icon outline của `lucide-react`.
+- Giọng văn: ngắn, trực tiếp, xưng "bạn". Nút bắt đầu bằng động từ.
 
 ---
 
-## 4. Hành vi Header (quan trọng, dễ làm sai)
+## 9. Trạng thái rỗng, đang tải, lỗi
 
-- Header `position: fixed`, **nền mặc định trong suốt** — logo/nav/nút là các phần tử riêng lẻ nổi trên nội dung, không bọc trong một thanh nền.
-- Chỉ `PillNav` và nút tròn (burger, ngôn ngữ) có nền riêng (nền mờ dạng kính: `background-color` bán trong suốt + `backdrop-filter: blur(12px)`) để chữ luôn đọc được dù nội dung phía sau là gì.
-- Mỗi section khai báo nó "tối hay sáng" (ví dụ `data-hbg="bg" | "surface" | "navy"`); khi phần giữa header đi qua ranh giới của section nào, `Header` đổi màu chữ/nút theo tông của section đó (đặc biệt: chuyển sang tông sáng khi đè lên footer nền `--navy`).
-- Header ẩn khi cuộn xuống, hiện lại khi cuộn lên (giống ventriloc.ca) — vô hiệu hoá ẩn khi đang mở dropdown/menu mobile hoặc đang ở gần đầu trang.
-- Trên mobile (`<1000px`): pill nav + dropdown ẩn, thay bằng nút burger mở menu full-width.
+| Loại | Khi nào | Hình thức |
+|---|---|---|
+| **Tải nhanh** | dưới khoảng 1 giây | `Skeleton` đúng hình nội dung. Không dùng spinner toàn trang |
+| **Tác vụ AI** | 3–30 giây | `AiProgress`. Sau 15 giây đổi câu chữ "Lâu hơn bình thường một chút…"; sau 45 giây cho chạy ở nền và báo qua thông báo |
+| **Rỗng lần đầu** | chưa có dữ liệu | `EmptyState`: icon trong vòng tròn `--surface`, tiêu đề, một câu, một nút |
+| **Rỗng do lọc** | bộ lọc không khớp | một dòng chữ kèm "Xoá bộ lọc" |
+| **Lỗi một khối** | một khối không tải được | `ErrorBlock` đúng chỗ khối đó; khối khác vẫn hiện |
+| **Lỗi toàn trang** | dữ liệu chính không tải được | thẻ giữa trang, nguyên nhân bằng lời thường, "Thử lại" và "Về Tổng quan" |
+| **Lỗi thao tác** | lưu, gửi, xoá thất bại | toast có nút Thử lại; **giữ nguyên dữ liệu đã nhập** |
+| **Chế độ dự phòng** | LLM lỗi, backend dùng quy tắc | `FallbackBanner` nền `--warn-soft`: "Kết quả được tạo bằng quy tắc, chưa có đánh giá AI chi tiết." |
 
----
-
-## 5. Chuyển động & tương tác
-
-- **Reveal khi cuộn:** các khối nội dung (section, card, FAQ item, footer) ẩn (mờ + dịch xuống nhẹ) khi ngoài khung nhìn, hiện lại khi cuộn tới, và **ẩn lại khi cuộn qua khỏi** (hai chiều, không chỉ hiện một lần). Dùng `IntersectionObserver`, threshold thấp, `rootMargin` âm nhẹ để không giật khi ở sát mép màn hình. Tôn trọng `prefers-reduced-motion: reduce` — tắt hết hiệu ứng, hiển thị ngay.
-- **Section cuộn ghim (pinned steps):** riêng phần theo dạng "4 bước" — tiêu đề đứng yên (`position: sticky`) trong lúc người dùng cuộn qua một track cao, nội dung từng bước và khung minh hoạ bên phải đổi theo tiến trình cuộn (không phải bấm tab để chuyển). Bản thân khối này cũng tuân theo quy tắc "ẩn khi chưa cuộn tới, hiện khi cuộn vào, ẩn khi cuộn qua" như các section khác — chỉ khác là trong lúc hiện, nó bị ghim thay vì cuộn tự do.
-- **FAQ:** accordion loại trừ lẫn nhau — mở câu nào thì câu đang mở trước đó tự đóng lại.
-- **Card hover:** nhấc nhẹ (`translateY(-4px)`) kèm đổi shadow từ `-sm` sang `--shadow`.
+Chi tiết từng màn ở `WIREFRAMES.md`, phần C.
 
 ---
 
-## 6. Nguyên tắc nội dung (áp dụng khi dựng UI có dữ liệu)
+## 10. Khả năng truy cập
 
-- Đây là sản phẩm tối ưu CV **không tự bịa thông tin**: mọi chỗ hiển thị gợi ý sửa CV phải có UI thể hiện rõ "gợi ý ← có thể chấp nhận/sửa/bỏ qua", không tự động áp dụng.
-- Số liệu chưa đạt được (mục tiêu KPI, benchmark) phải ghi rõ là mục tiêu/ước tính, không trình bày như kết quả đã có.
-- Trạng thái quyền riêng tư (chia sẻ với cố vấn hay không) cần có toggle rõ ràng trên từng tài liệu, không mặc định bật.
-- **Không dùng emoji** (👋, 🎉, 🔥...) trong giao diện, kể cả khi Figma có. Cần biểu tượng thì dùng icon outline (`lucide-react`) theo mục 1 để giữ tính thẩm mĩ và nhất quán.
-
----
-
-## 7. File tham chiếu cho Claude Code
-
-Khi giao việc dựng từng màn hình, đính kèm cho agent:
-1. File landing page demo này (`CareerX.html` (cùng thư mục `docs/design/`)) — để đọc token/CSS gốc.
-2. `DESIGN.md` này.
-3. Ảnh export của đúng frame Figma đang làm (đặt tên theo route, ví dụ `sinh-vien_phan-tich-cv.png`), kèm mô tả ngắn: mục đích màn hình, phần nào tĩnh/động, trạng thái loading/rỗng/lỗi nếu có.
-
-Quy tắc làm việc với agent:
-- Giao từng màn hình/component một, không yêu cầu dựng toàn bộ frontend trong một prompt.
-- Yêu cầu agent dùng token và component đã có ở `DESIGN.md`, không tự chế màu/khoảng cách mới.
-- Sau khi agent code xong một màn hình, chụp lại và so với ảnh Figma gốc để agent tự sửa chỗ lệch trước khi sang màn tiếp theo.
+- Chữ thường đạt tương phản ≥ 4.5:1, chữ lớn ≥ 3:1.
+- Mọi thứ điều khiển được bằng bàn phím; focus ring `--accent` 2px, cách 2px.
+- Thông tin không chỉ truyền bằng màu: badge luôn có chữ, dòng CV có gợi ý có thêm vạch trái.
+- Segmented control dùng `role="tablist"` / `role="tab"`; lựa chọn kiểu radio dùng `role="radiogroup"`.
+- Đồng hồ phỏng vấn có `role="timer"`; kết quả tác vụ AI thông báo qua `aria-live="polite"`.
+- Tôn trọng `prefers-reduced-motion`.
 
 ---
 
-## 8. Việc cần xác nhận thêm (chưa có trong landing demo)
+## 11. Triển khai trong `frontend/`
 
-- Bộ input/form (text field, upload file, select, checkbox, toggle) — landing demo chưa có, cần thiết kế thêm dựa theo tông màu/bo góc ở trên khi build các màn hình dashboard.
-- Empty state, loading state, error state cho từng màn hình dữ liệu thật.
-- Dark mode: landing demo đã có đủ token dark, nhưng cần xác nhận sản phẩm có bật toggle theme cho người dùng hay theo hệ điều hành.
+**Hiện trạng:** token v1 nằm trong `frontend/app/globals.css` (`:root`), ánh xạ sang biến shadcn (`--primary`, `--border`, `--muted`…).
+
+**Thứ tự chuyển sang v2:**
+1. Thay token v1 bằng token mục 3 trong `globals.css`. Ánh xạ shadcn: `--primary` = `--ink`, `--ring` = màu nhấn, `--muted` = `--surface`, `--accent` (shadcn) = `--surface`. Thêm utility `aurora-band` và `glass`. *(Đã làm.)*
+   **Quy ước tên trong code:** tên `accent` thuộc shadcn, nên màu nhấn iris dùng qua class `blue`: `text-blue`, `bg-blue`, `bg-blue-soft`, chữ đậm hơn là `text-accent-strong`. `navy` giờ là `--ink`. Tên cũ được giữ để các màn chưa làm lại không vỡ.
+2. Thêm `frontend/public/brand/careerx-glyph.png`, cập nhật `components/brand/logo.tsx`. *(Đã làm.)*
+3. Làm lại khung: `components/shell/` (sidebar chia nhóm theo `nav-config.ts`, header chuẩn, thanh tab điện thoại `mobile-tab-bar.tsx`, dải pastel trong `app-shell.tsx`). *(Đã làm.)*
+4. Dựng component mục 6. *(Đã có `Badge` kiểu mới và `MatchBadge`; `SegmentedControl`, `TaskCard`, `MetricColumn`… dựng khi làm màn dùng đến.)*
+5. Đổi nhãn mức phù hợp sang Cao/Khá/Trung bình ở mọi nơi hiển thị `match_label`. *(Đã làm, qua `MATCH_LABEL_META` và `MatchBadge`.)*
+6. Làm lại từng màn theo bản mẫu và `WIREFRAMES.md`: Tổng quan → Thư viện JD (route mới `/student/library`) → Kết quả phân tích → Trình tối ưu CV → Phòng phỏng vấn → các màn còn lại.
+
+**Dark mode:** vẫn tạm tắt (`forcedTheme="light"` trong `components/theme-provider.tsx`). Khi bật cần định nghĩa lại bảng màu tối cho v2.
+
+**Tính năng ngoài phạm vi Gate 1** bật/tắt qua `frontend/lib/features.ts`.
 
 ---
 
-## 9. Token đã được triển khai ở đâu trong `frontend/`
+## 12. Việc cần backend để hoàn thiện thiết kế
 
-- Toàn bộ token ở mục 2 nằm trong `frontend/app/globals.css`: biến gốc (`--bg`, `--ink`, `--blue`...) cho light mode trong `:root` và dark mode trong `.dark`.
-- Token được ánh xạ sang biến của shadcn/ui (`--primary` = `--blue`, `--border` = `--line`, `--muted` = `--surface`...), nên component shadcn tự nhận màu thương hiệu.
-- Class Tailwind dùng trực tiếp tên token: `bg-surface`, `text-ink-2`, `text-ink-3`, `border-line`, `bg-blue-soft text-blue`, `bg-good-soft text-good`, `bg-warn-soft text-warn`, `bg-bad-soft text-bad`, `bg-navy`, `text-gold`. Bóng đổ: `shadow-card` (= `--shadow-sm`) và `shadow-float` (= `--shadow`). Font tiêu đề: `font-heading`. Chữ gradient: `text-grad`.
-- Dark mode (trả lời câu hỏi cuối mục 8): **tạm tắt**. Giai đoạn đầu luôn dùng bảng màu sáng dù hệ điều hành ở chế độ nào, để dễ theo dõi và bắt lỗi. Token tối vẫn giữ nhưng đang comment trong `globals.css`. Khi làm tính năng đổi sáng/tối: bỏ comment khối `.dark` và bỏ `forcedTheme="light"` trong `frontend/components/theme-provider.tsx` (dùng `next-themes`, class `.dark` trên `<html>`), rồi thêm nút đổi theme.
-- Chức năng ngoài phạm vi Gate 1 bật/tắt qua `frontend/lib/features.ts`.
+| Tính năng | Cần thêm |
+|---|---|
+| Lưu vị trí yêu thích | endpoint lưu / bỏ lưu / liệt kê JD đã lưu |
+| Dán JD theo mục | endpoint tạo JD tự dán nhận các mục (tổng quan, mô tả, yêu cầu, khác), trả `jd_id` để dùng cho `/jd/compare` |
+| Mức phù hợp của vị trí ngoài Top gợi ý | endpoint chấm nhanh theo quy tắc cho một hoặc nhiều JD |
+| Chi tiết vị trí chia theo mục | JD trong thư viện cần trường riêng cho mô tả, yêu cầu, quyền lợi |
+| Thông báo khi tác vụ AI chạy nền xong | endpoint thông báo (frontend đang dùng mock) |
+| Cài đặt, đổi mật khẩu, xuất / xoá dữ liệu | các endpoint `/students/me/settings`, `/auth/change-password`… (frontend đang dùng mock) |
+
+Ràng buộc hiện tại: gợi ý trả tối đa 6 vị trí; so sánh nhận 2–3 JD; thư viện có 8 JD và chỉ gồm JD đã index vào Chroma.
+
+---
+
+## 13. Quy trình làm việc với agent
+
+Khi giao dựng một màn, đính kèm `DESIGN.md`, phần tương ứng trong `WIREFRAMES.md`, và artboard tương ứng trong bản mẫu (nếu có).
+
+- Giao từng màn hoặc từng component một.
+- Chỉ dùng token và component đã có ở đây. Cần cái mới thì bổ sung vào tài liệu này trước.
+- Dựng xong một màn thì chạy thử trên trình duyệt ở 375px và 1280px, so với bản mẫu hoặc wireframe rồi mới sang màn tiếp theo.

@@ -30,13 +30,27 @@ export const STATUS_PRIORITY: Record<StudentStatus, number> = {
   improving: 4,
 }
 
+/** Màu badge theo trạng thái (DESIGN.md mục 6: bo 6px, viền mảnh, chấm tròn màu chữ). */
+const STATUS_BADGE: Record<StudentStatus, string> = {
+  flagged: "border-bad/20 bg-bad-soft text-bad",
+  declining: "border-warn-line bg-warn-soft text-warn",
+  insufficient: "border-line-strong bg-surface text-ink-2",
+  stable: "border-line-strong bg-blue-soft text-accent-strong",
+  improving: "border-good-line bg-good-soft text-good",
+}
+
 export function StudentStatusBadge({ student, className }: { student: AssignedStudent; className?: string }) {
-  const meta = STATUS_META[studentStatus(student)]
-  const Icon = meta.icon
+  const status = studentStatus(student)
   return (
-    <span className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold whitespace-nowrap", meta.className, className)}>
-      <Icon className="size-3" aria-hidden />
-      {meta.label}
+    <span
+      className={cn(
+        "inline-flex h-[22px] w-fit shrink-0 items-center gap-1.5 rounded-badge border px-2 text-xs font-medium whitespace-nowrap",
+        STATUS_BADGE[status],
+        className,
+      )}
+    >
+      <span className="size-1.5 rounded-full bg-current" aria-hidden />
+      {STATUS_META[status].label}
     </span>
   )
 }
@@ -45,7 +59,7 @@ export function StudentStatusBadge({ student, className }: { student: AssignedSt
 export function FlagDetail({ student }: { student: AssignedStudent }) {
   if (!student.flag) return null
   return (
-    <span className="text-xs text-bad">
+    <span className="text-[13px] text-bad">
       Buổi {student.flag.rounds.join(", ")} không tăng điểm · {formatRelativeTime(student.flag.flagged_at).toLowerCase()}
     </span>
   )
@@ -65,14 +79,18 @@ export function ScoreDelta({ student, size = "sm" }: { student: AssignedStudent;
   }
   const d = student.score_delta
   return (
-    <span className={cn("flex items-center gap-1.5 whitespace-nowrap", size === "md" ? "text-sm" : "text-xs")}>
+    <span className={cn("flex items-center gap-1.5 whitespace-nowrap tabular-nums", size === "md" ? "text-sm" : "text-xs")}>
       <span className="text-ink-2">{formatScore(student.first_score!)}</span>
       <ArrowRight className="size-3 text-ink-3" aria-hidden />
-      <strong className="font-heading text-ink">{formatScore(student.latest_score!)}</strong>
+      <strong className="font-semibold text-ink">{formatScore(student.latest_score!)}</strong>
       <span
         className={cn(
-          "rounded-md px-1.5 py-0.5 font-semibold",
-          student.trend === "improving" ? "bg-good-soft text-good" : student.trend === "declining" ? "bg-bad-soft text-bad" : "bg-surface text-ink-2",
+          "rounded-badge border px-1.5 text-xs leading-5 font-semibold",
+          student.trend === "improving"
+            ? "border-good-line bg-good-soft text-good"
+            : student.trend === "declining"
+              ? "border-warn-line bg-warn-soft text-warn"
+              : "border-line-strong bg-surface text-ink-2",
         )}
       >
         {d > 0 ? "+" : ""}
@@ -104,7 +122,7 @@ export function StudentIdentity({ student, showEmail = true }: { student: Assign
     <span className="flex min-w-0 items-center gap-3">
       <UserAvatar name={student.full_name} src={student.avatar_url} className="size-10" />
       <span className="grid min-w-0">
-        <span className="truncate font-heading font-bold text-ink">{student.full_name}</span>
+        <span className="truncate font-semibold text-ink">{student.full_name}</span>
         <span className="truncate text-xs text-ink-2">
           {student.student_code ? `MSSV ${student.student_code}` : student.subtitle}
           {showEmail && ` · ${student.email}`}

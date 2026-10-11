@@ -2,27 +2,11 @@
 
 import Link from "next/link"
 import { useId, useState, type FormEvent, type ReactNode } from "react"
-import {
-  BadgeCheck,
-  Bell,
-  Check,
-  CircleAlert,
-  CircleX,
-  Database,
-  Download,
-  Eye,
-  EyeOff,
-  Loader2,
-  ShieldCheck,
-  Trash2,
-  TriangleAlert,
-  UserRound,
-  type LucideIcon,
-} from "lucide-react"
+import { Check, Download, Eye, EyeOff, Loader2, TriangleAlert } from "lucide-react"
 import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
-import { Panel, SectionHeader } from "@/components/common/panel"
+import { Zone } from "@/components/common/zone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { api, ApiError } from "@/lib/api"
 import { features } from "@/lib/features"
-import { formatBytes, formatDate, formatRelativeTime, formatTime } from "@/lib/format"
+import { formatBytes, formatDate, formatTime } from "@/lib/format"
 import { isStrongPassword, PASSWORD_RULES } from "@/lib/password"
 import type { StudentSettings } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -45,81 +29,338 @@ import { cn } from "@/lib/utils"
 // ---------- Khung chung ----------
 
 export const SETTINGS_SECTIONS = [
-  { id: "account", label: "Tài khoản & Bảo mật", icon: UserRound },
-  { id: "privacy", label: "Quyền riêng tư & Liêm chính", icon: ShieldCheck },
-  { id: "notifications", label: "Thông báo & Lời nhắc", icon: Bell },
-  { id: "data", label: "Dữ liệu cá nhân", icon: Database },
-] as const satisfies readonly { id: string; label: string; icon: LucideIcon }[]
+  { id: "account", label: "Tài khoản" },
+  { id: "privacy", label: "Quyền riêng tư" },
+  { id: "notifications", label: "Thông báo" },
+  { id: "data", label: "Dữ liệu" },
+] as const satisfies readonly { id: string; label: string }[]
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]["id"]
 
-/** Một khối cài đặt: tiêu đề và mô tả nằm ngoài ô, ô chỉ chứa nội dung (cùng kiểu các trang khác). */
-function SettingsBlock({
-  title,
-  description,
+/** "20/09" */
+const shortDate = (iso: string) => formatDate(iso).slice(0, 5)
+
+/** Nút viền dạng pill nhỏ của bản vẽ ("Đổi mật khẩu", "Tải xuống"). */
+const pillLine = "h-9 rounded-full border-line-strong bg-card px-4 font-semibold text-ink shadow-xs"
+
+/** Nhãn "Sắp có" khi cờ dataActions tắt: nút chỉ hiển thị, chưa gọi API thật. */
+function SoonBadge() {
+  return <Badge variant="neutral">Sắp có</Badge>
+}
+
+/**
+ * Một dòng cài đặt (bản vẽ CaiDat): nhãn + giải thích ngắn bên trái, điều khiển bên phải.
+ * Điện thoại: xếp dọc; riêng dòng có công tắc (`inline`) giữ công tắc bên phải vì nó nhỏ.
+ */
+function SettingRow({
+  label,
+  hint,
+  htmlFor,
+  inline = false,
   children,
 }: {
-  title: string
-  description: ReactNode
+  label: ReactNode
+  hint?: ReactNode
+  htmlFor?: string
+  inline?: boolean
   children: ReactNode
 }) {
+  const Label = htmlFor ? "label" : "p"
   return (
-    <div className="grid gap-3">
-      <div className="grid gap-1">
-        <SectionHeader title={title} />
-        <p className="text-xs text-ink-2">{description}</p>
+    <div
+      className={cn(
+        "grid items-center gap-x-10 gap-y-3 border-b border-line py-5",
+        inline
+          ? "grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(200px,1fr)_minmax(0,1.4fr)]"
+          : "sm:grid-cols-[minmax(200px,1fr)_minmax(0,1.4fr)]",
+      )}
+    >
+      <div className="min-w-0">
+        <Label htmlFor={htmlFor} className={cn("block font-medium text-ink", htmlFor && "cursor-pointer")}>
+          {label}
+        </Label>
+        {hint && <div className="text-sm text-ink-3">{hint}</div>}
       </div>
-      {children}
+      <div className="flex min-w-0 flex-wrap items-center gap-3 sm:justify-end">{children}</div>
     </div>
   )
 }
 
-/** Nút thao tác dữ liệu: khi cờ dataActions tắt thì chỉ hiển thị, kèm nhãn "Sắp có". */
-function SoonBadge() {
+function SettingsZone({ id, title, children }: { id: SettingsSectionId; title: string; children: ReactNode }) {
   return (
-    <Badge variant="neutral" className="h-auto px-2 py-0.5">
-      Sắp có
-    </Badge>
+    <div id={id} className="scroll-mt-24">
+      {/* Dòng đầu nằm sát đường kẻ tiêu đề như bản vẽ. */}
+      <Zone id={`${id}-title`} title={title} className="[&>div:last-child]:pt-0">
+        {children}
+      </Zone>
+    </div>
   )
 }
 
-// ---------- Mục lục ----------
+// ---------- Mục lục neo ----------
 
 export function SettingsNav({ active, onSelect }: { active: SettingsSectionId; onSelect: (id: SettingsSectionId) => void }) {
   return (
-    <nav aria-label="Mục cài đặt" className="rounded-[20px] border border-line bg-card p-2 shadow-card">
-      <ul className="grid gap-1">
-        {SETTINGS_SECTIONS.map((s) => {
-          const Icon = s.icon
-          const isActive = s.id === active
-          return (
-            <li key={s.id}>
-              <a
-                href={`#${s.id}`}
-                aria-current={isActive ? "true" : undefined}
-                onClick={(e) => {
-                  e.preventDefault()
-                  onSelect(s.id)
-                }}
-                className={cn(
-                  "relative flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
-                  isActive ? "bg-blue-soft text-blue" : "text-ink-2 hover:bg-surface hover:text-ink",
-                )}
-              >
-                {isActive && <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-blue" aria-hidden />}
-                <Icon className="size-[18px] shrink-0" aria-hidden />
-                {s.label}
-              </a>
-            </li>
-          )
-        })}
-      </ul>
+    <nav aria-label="Mục cài đặt" className="flex flex-col gap-0.5">
+      {SETTINGS_SECTIONS.map((s) => {
+        const isActive = s.id === active
+        return (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            aria-current={isActive ? "true" : undefined}
+            onClick={(e) => {
+              e.preventDefault()
+              onSelect(s.id)
+            }}
+            className={cn(
+              "block px-3.5 py-2 text-sm transition-colors",
+              isActive
+                ? "rounded-r-lg font-semibold text-ink shadow-[inset_2px_0_0_var(--ink)]"
+                : "rounded-lg font-medium text-ink-2 hover:bg-surface hover:text-ink",
+            )}
+          >
+            {s.label}
+          </a>
+        )
+      })}
     </nav>
   )
 }
 
-// ---------- Đồng ý xử lý dữ liệu & liêm chính ----------
+// ---------- Tài khoản ----------
 
+export function AccountSection({
+  fullName,
+  settings,
+  onPasswordChanged,
+}: {
+  fullName: string
+  settings: StudentSettings
+  onPasswordChanged: (updatedAt: string) => void
+}) {
+  const [changing, setChanging] = useState(false)
+  const updatedAt = settings.password_updated_at
+  return (
+    <SettingsZone id="account" title="Tài khoản">
+      <SettingRow label="Họ tên" hint="Cần sửa? Liên hệ phòng quản lý đào tạo">
+        <span className="wrap-anywhere text-ink-2">{fullName}</span>
+      </SettingRow>
+      <SettingRow label="Mã sinh viên">
+        <span className="text-ink-2 tabular-nums">{settings.student_code}</span>
+      </SettingRow>
+      <SettingRow label="Khoa">
+        <span className="wrap-anywhere text-ink-2">{settings.faculty}</span>
+      </SettingRow>
+      <SettingRow label="Email" hint="Dùng để đăng nhập, không đổi được">
+        <span className="wrap-anywhere text-ink-2">{settings.email}</span>
+      </SettingRow>
+      <SettingRow
+        label="Mật khẩu"
+        hint={updatedAt ? `Đổi lần cuối ${formatDate(updatedAt)}` : "Chưa đổi kể từ khi tạo tài khoản"}
+      >
+        <Button variant="outline" className={pillLine} onClick={() => setChanging(true)}>
+          Đổi mật khẩu
+        </Button>
+      </SettingRow>
+      <PasswordDialog
+        open={changing}
+        onOpenChange={setChanging}
+        onChanged={(at) => {
+          onPasswordChanged(at)
+          setChanging(false)
+        }}
+      />
+    </SettingsZone>
+  )
+}
+
+// ---------- Đổi mật khẩu (dialog) ----------
+
+interface PasswordFieldProps {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  autoComplete: "current-password" | "new-password"
+  error?: string | null
+  describedBy?: string
+}
+
+function PasswordField({ label, value, onChange, autoComplete, error, describedBy }: PasswordFieldProps) {
+  const id = useId()
+  const errorId = `${id}-error`
+  const [visible, setVisible] = useState(false)
+  return (
+    <div className="grid gap-1.5">
+      <label htmlFor={id} className="text-sm font-medium text-ink">
+        {label}
+      </label>
+      <div className="relative">
+        <Input
+          id={id}
+          type={visible ? "text" : "password"}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={[error ? errorId : null, describedBy].filter(Boolean).join(" ") || undefined}
+          className="h-[42px] rounded-[10px] border-line-strong bg-card pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => setVisible((v) => !v)}
+          aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+          aria-pressed={visible}
+          className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-ink-3 hover:bg-surface hover:text-ink"
+        >
+          {visible ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
+        </button>
+      </div>
+      {error && (
+        <p id={errorId} className="text-xs text-bad">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
+type PasswordFieldName = "current" | "next" | "confirm"
+
+function PasswordDialog({
+  open,
+  onOpenChange,
+  onChanged,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onChanged: (updatedAt: string) => void
+}) {
+  const rulesId = useId()
+  const [current, setCurrent] = useState("")
+  const [next, setNext] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [submitted, setSubmitted] = useState(false)
+  const [serverError, setServerError] = useState<{ field: PasswordFieldName; message: string } | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const errors: Record<PasswordFieldName, string | null> = {
+    current: !current ? "Hãy nhập mật khẩu hiện tại." : null,
+    next: !isStrongPassword(next)
+      ? "Mật khẩu mới chưa đạt các điều kiện bên dưới."
+      : next === current
+        ? "Mật khẩu mới phải khác mật khẩu hiện tại."
+        : null,
+    confirm: confirm !== next ? "Mật khẩu nhập lại không khớp." : null,
+  }
+  const valid = !errors.current && !errors.next && !errors.confirm
+
+  // Lỗi hiển thị sau lần bấm cập nhật đầu tiên; riêng ô nhập lại báo ngay khi đã gõ.
+  const fieldError = (field: PasswordFieldName) =>
+    (serverError?.field === field ? serverError.message : null) ??
+    (submitted || (field === "confirm" && confirm.length > 0) ? errors[field] : null)
+
+  function reset() {
+    setCurrent("")
+    setNext("")
+    setConfirm("")
+    setSubmitted(false)
+    setServerError(null)
+  }
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setSubmitted(true)
+    setServerError(null)
+    if (!valid) return
+    setSaving(true)
+    try {
+      const res = await api.changePassword({ current_password: current, new_password: next })
+      onChanged(res.password_updated_at)
+      reset()
+      toast.success("Đã đổi mật khẩu.")
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "wrong_password") setServerError({ field: "current", message: err.message })
+      else if (err instanceof ApiError && err.code === "same_password") setServerError({ field: "next", message: err.message })
+      else toast.error(err instanceof Error ? err.message : "Không đổi được mật khẩu.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (saving) return
+        if (!value) reset()
+        onOpenChange(value)
+      }}
+    >
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Đổi mật khẩu</DialogTitle>
+          <DialogDescription>Sau khi đổi, các thiết bị khác cần đăng nhập lại bằng mật khẩu mới.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} noValidate className="grid gap-4">
+          <PasswordField
+            label="Mật khẩu hiện tại"
+            value={current}
+            onChange={(v) => {
+              setCurrent(v)
+              if (serverError?.field === "current") setServerError(null)
+            }}
+            autoComplete="current-password"
+            error={fieldError("current")}
+          />
+          <PasswordField
+            label="Mật khẩu mới"
+            value={next}
+            onChange={(v) => {
+              setNext(v)
+              if (serverError?.field === "next") setServerError(null)
+            }}
+            autoComplete="new-password"
+            error={fieldError("next")}
+            describedBy={rulesId}
+          />
+          <ul id={rulesId} className="grid gap-1.5 text-sm" aria-label="Mật khẩu mới cần có">
+            {PASSWORD_RULES.map((rule) => {
+              const ok = rule.test(next)
+              return (
+                <li key={rule.label} className={cn("flex items-center gap-2", ok ? "text-good" : "text-ink-3")}>
+                  <Check className={cn("size-3.5 shrink-0", !ok && "opacity-40")} aria-hidden />
+                  {rule.label}
+                  <span className="sr-only">{ok ? "(đã đạt)" : "(chưa đạt)"}</span>
+                </li>
+              )
+            })}
+          </ul>
+          <PasswordField
+            label="Nhập lại mật khẩu mới"
+            value={confirm}
+            onChange={setConfirm}
+            autoComplete="new-password"
+            error={fieldError("confirm")}
+          />
+          <DialogFooter>
+            <Button type="button" variant="soft" onClick={() => onOpenChange(false)} disabled={saving}>
+              Huỷ
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving && <Loader2 className="animate-spin" aria-hidden />}
+              {saving ? "Đang cập nhật…" : "Cập nhật mật khẩu"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------- Quyền riêng tư ----------
+
+// Nội dung pháp lý của phần đồng ý: giữ nguyên văn.
 const CONSENT_TERMS = [
   "Hệ thống dùng CV, JD và câu trả lời phỏng vấn của bạn để phân tích khoảng trống kỹ năng và gợi ý cách diễn đạt.",
   "AI chỉ gợi ý dựa trên kinh nghiệm có thật do bạn cung cấp, không tự thêm kỹ năng hay thành tích bạn chưa có.",
@@ -128,70 +369,86 @@ const CONSENT_TERMS = [
   "Cố vấn phụ trách thấy số liệu tổng hợp (điểm, mức tiến bộ); nội dung chỉ thấy khi bạn bật chia sẻ và thu hồi được bất cứ lúc nào.",
 ]
 
-export function ConsentCard({
-  consentAt,
+type SettingsPatch = { privacy?: Partial<StudentSettings["privacy"]>; notifications?: Partial<StudentSettings["notifications"]> }
+
+const linkButton = "text-sm font-semibold text-blue hover:text-accent-strong disabled:pointer-events-none disabled:opacity-50"
+
+export function PrivacySection({
+  settings,
+  advisorName,
+  onChange,
   onWithdraw,
 }: {
-  consentAt: string | null
+  settings: StudentSettings
+  advisorName: string | null
+  onChange: (patch: SettingsPatch) => void
   onWithdraw: () => Promise<void>
 }) {
   const [viewing, setViewing] = useState(false)
   const [withdrawing, setWithdrawing] = useState(false)
+  const consentAt = settings.consent_accepted_at
 
   return (
-    <SettingsBlock
-      title="Đồng ý xử lý dữ liệu & Cam kết liêm chính học thuật"
-      description="Nguyên tắc bảo vệ hồ sơ sinh viên và cam kết trung thực của ứng viên."
-    >
-      <Panel className="grid gap-5">
+    <SettingsZone id="privacy" title="Quyền riêng tư">
+      <SettingRow
+        label="Chia sẻ tài liệu với cố vấn"
+        hint={advisorName ? `Cố vấn: ${advisorName}. Mặc định mọi tài liệu là riêng tư.` : "Mặc định mọi tài liệu là riêng tư."}
+      >
+        <Link href="/student/share" className={linkButton}>
+          Chọn mục chia sẻ
+        </Link>
+      </SettingRow>
+      <SettingRow
+        inline
+        htmlFor="anonymous-contribution"
+        label="Đóng góp dữ liệu ẩn danh"
+        hint="Giúp cải thiện gợi ý vị trí. Không gồm tên và liên hệ."
+      >
+        <Switch
+          id="anonymous-contribution"
+          size="lg"
+          checked={settings.privacy.anonymous_contribution}
+          onCheckedChange={(v) => onChange({ privacy: { anonymous_contribution: v } })}
+        />
+      </SettingRow>
+      <SettingRow
+        label="Đồng ý xử lý dữ liệu và cam kết liêm chính"
+        hint={
+          consentAt ? (
+            `Xác nhận lúc ${formatTime(consentAt)} ngày ${formatDate(consentAt)}`
+          ) : (
+            <span className="text-warn">Phân tích CV và phỏng vấn thử tạm khoá cho tới khi bạn đồng ý lại.</span>
+          )
+        }
+      >
         {consentAt ? (
-          <div className="grid gap-2 text-sm">
-            <p className="flex items-center gap-2 font-heading font-bold text-good">
-              <BadgeCheck className="size-5 shrink-0" aria-hidden />
-              Bạn đã đồng ý điều khoản xử lý dữ liệu & cam kết liêm chính học thuật
-            </p>
-            <p className="text-xs text-ink-2">
-              Xác nhận lúc {formatTime(consentAt)} ngày {formatDate(consentAt)}, khi khởi tạo hồ sơ lần đầu.
-            </p>
-            <p className="leading-6 text-ink">
-              Nguyên tắc cốt lõi: AI chỉ phân tích khoảng trống kỹ năng và gợi ý cách diễn đạt dựa trên{" "}
-              <span className="underline underline-offset-2">kinh nghiệm có thật</span> do bạn cung cấp. Bạn chịu trách
-              nhiệm về tính trung thực của hồ sơ trước nhà tuyển dụng và nhà trường.
-            </p>
-          </div>
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-good">
+            <Check className="size-4" aria-hidden />
+            Đã đồng ý {shortDate(consentAt)}
+          </span>
         ) : (
-          <p role="status" className="flex items-start gap-2 rounded-2xl bg-warn-soft/70 p-5 text-sm text-ink">
-            <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
-            Bạn đã rút lại sự đồng ý. Các chức năng phân tích CV và phỏng vấn thử tạm khoá cho tới khi bạn đồng ý lại.
-          </p>
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-warn">
+            <TriangleAlert className="size-4" aria-hidden />
+            Đã rút lại
+          </span>
         )}
-        <div className="grid gap-3 border-t border-line pt-4">
-          {consentAt && (
-            <p className="flex items-center gap-1.5 text-xs text-ink-2">
-              <CircleAlert className="size-3.5 text-bad" aria-hidden />
-              Rút lại sự đồng ý sẽ khoá ngay các chức năng phân tích bằng AI.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="soft" className="h-10" onClick={() => setViewing(true)}>
-              <Eye aria-hidden />
-              Xem lại văn bản cam kết
-            </Button>
-            {consentAt && (
-              <Button
-                variant="ghost"
-                className="h-10 bg-bad-soft text-bad hover:bg-bad-soft/80 hover:text-bad"
-                disabled={!features.dataActions}
-                onClick={() => setWithdrawing(true)}
-              >
-                <CircleX aria-hidden />
-                Rút lại sự đồng ý
-              </Button>
-            )}
-            {consentAt && !features.dataActions && <SoonBadge />}
-          </div>
-        </div>
-      </Panel>
+        <button type="button" className={linkButton} onClick={() => setViewing(true)}>
+          Xem điều khoản
+        </button>
+        {consentAt && (
+          <>
+            <button
+              type="button"
+              className={linkButton}
+              disabled={!features.dataActions}
+              onClick={() => setWithdrawing(true)}
+            >
+              Rút lại
+            </button>
+            {!features.dataActions && <SoonBadge />}
+          </>
+        )}
+      </SettingRow>
 
       <Dialog open={viewing} onOpenChange={setViewing}>
         <DialogContent className="sm:max-w-lg">
@@ -221,82 +478,13 @@ export function ConsentCard({
         destructive
         onConfirm={onWithdraw}
       />
-    </SettingsBlock>
+    </SettingsZone>
   )
 }
 
-// ---------- Nhóm công tắc ----------
+// ---------- Thông báo ----------
 
-interface ToggleRowProps {
-  id: string
-  title: string
-  tag?: string
-  description: ReactNode
-  checked: boolean
-  disabled?: boolean
-  onChange: (value: boolean) => void
-}
-
-function ToggleRow({ id, title, tag, description, checked, disabled, onChange }: ToggleRowProps) {
-  return (
-    <li className="flex items-start justify-between gap-6 px-6 py-5">
-      <div className="grid min-w-0 gap-1">
-        <label htmlFor={id} className="flex flex-wrap items-center gap-2 font-heading font-bold text-ink">
-          {title}
-          {tag && <Badge variant="neutral">{tag}</Badge>}
-        </label>
-        <p className="text-sm leading-6 wrap-anywhere text-ink-2">{description}</p>
-      </div>
-      <Switch id={id} size="lg" checked={checked} disabled={disabled} onCheckedChange={onChange} className="mt-1 shrink-0" />
-    </li>
-  )
-}
-
-type SettingsPatch = { privacy?: Partial<StudentSettings["privacy"]>; notifications?: Partial<StudentSettings["notifications"]> }
-
-export function PrivacyCard({
-  settings,
-  advisorName,
-  onChange,
-}: {
-  settings: StudentSettings
-  advisorName: string | null
-  onChange: (patch: SettingsPatch) => void
-}) {
-  return (
-    <SettingsBlock
-      title="Tuỳ chọn quyền riêng tư & chia sẻ"
-      description="Chủ động quyết định ai được xem dữ liệu hướng nghiệp của bạn."
-    >
-      <Panel className="grid overflow-hidden p-0">
-        <ul className="divide-y divide-line">
-          <li className="flex items-center justify-between gap-6 px-6 py-5">
-            <div className="grid min-w-0 gap-1">
-              <p className="font-heading font-bold text-ink">Chia sẻ tài liệu với cố vấn</p>
-              <p className="text-sm leading-6 text-ink-2">
-                {advisorName ? `Người phụ trách: ${advisorName}. ` : ""}Bạn bật / tắt chia sẻ từng CV và báo cáo phỏng vấn ở
-                trang Chia sẻ với cố vấn. Mặc định mọi tài liệu là riêng tư.
-              </p>
-            </div>
-            <Link href="/student/share" className="shrink-0 text-sm font-medium text-blue hover:underline">
-              Mở trang Chia sẻ
-            </Link>
-          </li>
-          <ToggleRow
-            id="anonymous-contribution"
-            title="Đóng góp dữ liệu ẩn danh để cải thiện gợi ý"
-            tag="Cộng đồng"
-            description="Họ tên, email, số điện thoại và địa chỉ được loại bỏ trước khi dữ liệu được dùng để thống kê chất lượng gợi ý."
-            checked={settings.privacy.anonymous_contribution}
-            onChange={(v) => onChange({ privacy: { anonymous_contribution: v } })}
-          />
-        </ul>
-      </Panel>
-    </SettingsBlock>
-  )
-}
-
-export function NotificationsCard({
+export function NotificationsSection({
   settings,
   onChange,
 }: {
@@ -304,258 +492,31 @@ export function NotificationsCard({
   onChange: (patch: SettingsPatch) => void
 }) {
   const n = settings.notifications
-  return (
-    <SettingsBlock title="Thông báo & Lời nhắc" description="Chọn những gì bạn muốn được báo qua chuông thông báo.">
-      <Panel className="grid overflow-hidden p-0">
-        <ul className="divide-y divide-line">
-          <ToggleRow
-            id="notify-advisor"
-            title="Khi cố vấn để lại nhận xét mới"
-            description="Báo ngay khi cố vấn nhận xét CV hoặc báo cáo phỏng vấn bạn đã chia sẻ."
-            checked={n.advisor_comment}
-            onChange={(v) => onChange({ notifications: { advisor_comment: v } })}
-          />
-          <ToggleRow
-            id="notify-report"
-            title="Khi báo cáo phân tích hoặc phỏng vấn sẵn sàng"
-            description="Hữu ích khi bạn rời trang trong lúc hệ thống đang chấm điểm."
-            checked={n.report_ready}
-            onChange={(v) => onChange({ notifications: { report_ready: v } })}
-          />
-          <ToggleRow
-            id="notify-weekly"
-            title="Nhắc luyện tập hằng tuần"
-            description="Nhắc bạn khi chưa luyện phỏng vấn trong 7 ngày và còn lượt trong tuần."
-            checked={n.weekly_reminder}
-            onChange={(v) => onChange({ notifications: { weekly_reminder: v } })}
-          />
-          <ToggleRow
-            id="notify-email"
-            title="Gửi thêm qua email"
-            description={`Gửi bản sao các thông báo đang bật tới ${settings.email}.`}
-            checked={n.email}
-            onChange={(v) => onChange({ notifications: { email: v } })}
-          />
-        </ul>
-      </Panel>
-    </SettingsBlock>
-  )
-}
-
-// ---------- Đổi mật khẩu ----------
-
-interface PasswordFieldProps {
-  label: string
-  value: string
-  onChange: (value: string) => void
-  autoComplete: "current-password" | "new-password"
-  error?: string | null
-  describedBy?: string
-}
-
-function PasswordField({ label, value, onChange, autoComplete, error, describedBy }: PasswordFieldProps) {
-  const id = useId()
-  const errorId = `${id}-error`
-  const [visible, setVisible] = useState(false)
-  return (
-    <div className="grid gap-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-ink">
-        {label}
-      </label>
-      <div className="relative">
-        <Input
-          id={id}
-          type={visible ? "text" : "password"}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          autoComplete={autoComplete}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={[error ? errorId : null, describedBy].filter(Boolean).join(" ") || undefined}
-          className="h-10 bg-surface pr-10"
-        />
-        <button
-          type="button"
-          onClick={() => setVisible((v) => !v)}
-          aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-          aria-pressed={visible}
-          className="absolute top-1/2 right-2 grid size-7 -translate-y-1/2 place-items-center rounded-md text-ink-3 hover:bg-card hover:text-ink"
-        >
-          {visible ? <EyeOff className="size-4" aria-hidden /> : <Eye className="size-4" aria-hidden />}
-        </button>
-      </div>
-      {error && (
-        <p id={errorId} className="text-xs text-bad">
-          {error}
-        </p>
-      )}
-    </div>
-  )
-}
-
-type PasswordFieldName = "current" | "next" | "confirm"
-
-export function PasswordCard({
-  updatedAt,
-  onChanged,
-}: {
-  updatedAt: string | null
-  onChanged: (updatedAt: string) => void
-}) {
-  const rulesId = useId()
-  const [current, setCurrent] = useState("")
-  const [next, setNext] = useState("")
-  const [confirm, setConfirm] = useState("")
-  const [submitted, setSubmitted] = useState(false)
-  const [serverError, setServerError] = useState<{ field: PasswordFieldName; message: string } | null>(null)
-  const [saving, setSaving] = useState(false)
-
-  const errors: Record<PasswordFieldName, string | null> = {
-    current: !current ? "Hãy nhập mật khẩu hiện tại." : null,
-    next: !isStrongPassword(next)
-      ? "Mật khẩu mới chưa đạt các điều kiện bên cạnh."
-      : next === current
-        ? "Mật khẩu mới phải khác mật khẩu hiện tại."
-        : null,
-    confirm: confirm !== next ? "Mật khẩu nhập lại không khớp." : null,
-  }
-  const valid = !errors.current && !errors.next && !errors.confirm
-
-  // Lỗi hiển thị sau lần bấm cập nhật đầu tiên; riêng ô nhập lại báo ngay khi đã gõ.
-  const fieldError = (field: PasswordFieldName) =>
-    (serverError?.field === field ? serverError.message : null) ??
-    (submitted || (field === "confirm" && confirm.length > 0) ? errors[field] : null)
-
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    setSubmitted(true)
-    setServerError(null)
-    if (!valid) return
-    setSaving(true)
-    try {
-      const res = await api.changePassword({ current_password: current, new_password: next })
-      onChanged(res.password_updated_at)
-      setCurrent("")
-      setNext("")
-      setConfirm("")
-      setSubmitted(false)
-      toast.success("Đã đổi mật khẩu.")
-    } catch (err) {
-      if (err instanceof ApiError && err.code === "wrong_password") setServerError({ field: "current", message: err.message })
-      else if (err instanceof ApiError && err.code === "same_password") setServerError({ field: "next", message: err.message })
-      else toast.error(err instanceof Error ? err.message : "Không đổi được mật khẩu.")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <SettingsBlock
-      title="Đổi mật khẩu"
-      description={
-        updatedAt
-          ? `Lần đổi gần nhất: ${formatRelativeTime(updatedAt).toLowerCase()} (${formatDate(updatedAt)}).`
-          : "Bạn chưa đổi mật khẩu kể từ khi tạo tài khoản."
-      }
-    >
-      <Panel>
-        <form onSubmit={submit} noValidate className="grid gap-4 md:grid-cols-2 md:gap-x-6">
-          <div className="grid content-start gap-4">
-            <PasswordField
-              label="Mật khẩu hiện tại"
-              value={current}
-              onChange={(v) => {
-                setCurrent(v)
-                if (serverError?.field === "current") setServerError(null)
-              }}
-              autoComplete="current-password"
-              error={fieldError("current")}
-            />
-            <PasswordField
-              label="Mật khẩu mới"
-              value={next}
-              onChange={(v) => {
-                setNext(v)
-                if (serverError?.field === "next") setServerError(null)
-              }}
-              autoComplete="new-password"
-              error={fieldError("next")}
-              describedBy={rulesId}
-            />
-            <PasswordField
-              label="Nhập lại mật khẩu mới"
-              value={confirm}
-              onChange={setConfirm}
-              autoComplete="new-password"
-              error={fieldError("confirm")}
-            />
-          </div>
-          <div className="grid content-between gap-4">
-            <div id={rulesId} className="grid gap-2 rounded-2xl bg-surface p-4">
-              <p className="text-sm font-medium text-ink">Mật khẩu mới cần có</p>
-              <ul className="grid gap-1.5 text-sm">
-                {PASSWORD_RULES.map((rule) => {
-                  const ok = rule.test(next)
-                  return (
-                    <li key={rule.label} className={cn("flex items-center gap-2", ok ? "text-good" : "text-ink-2")}>
-                      <span
-                        className={cn(
-                          "grid size-4 shrink-0 place-items-center rounded-full",
-                          ok ? "bg-good text-white" : "border border-line bg-card",
-                        )}
-                        aria-hidden
-                      >
-                        {ok && <Check className="size-3" />}
-                      </span>
-                      {rule.label}
-                      <span className="sr-only">{ok ? "(đã đạt)" : "(chưa đạt)"}</span>
-                    </li>
-                  )
-                })}
-              </ul>
-              <p className="pt-1 text-xs text-ink-3">Sau khi đổi, các thiết bị khác cần đăng nhập lại bằng mật khẩu mới.</p>
-            </div>
-            <Button type="submit" className="h-10 justify-self-start px-5" disabled={saving}>
-              {saving && <Loader2 className="animate-spin" aria-hidden />}
-              {saving ? "Đang cập nhật…" : "Cập nhật mật khẩu"}
-            </Button>
-          </div>
-        </form>
-      </Panel>
-    </SettingsBlock>
-  )
-}
-
-// ---------- Tài khoản ----------
-
-export function AccountCard({ fullName, settings }: { fullName: string; settings: StudentSettings }) {
-  const rows: { label: string; value: string }[] = [
-    { label: "Họ và tên", value: fullName },
-    { label: "Mã sinh viên", value: settings.student_code },
-    { label: "Khoa", value: settings.faculty },
-    { label: "Email", value: settings.email },
+  const rows: { key: keyof StudentSettings["notifications"]; label: string; hint?: string }[] = [
+    { key: "advisor_comment", label: "Cố vấn để lại nhận xét mới" },
+    { key: "report_ready", label: "Báo cáo phân tích hoặc phỏng vấn đã sẵn sàng" },
+    { key: "weekly_reminder", label: "Nhắc luyện tập hằng tuần", hint: "Khi 7 ngày chưa luyện và còn lượt trong tuần" },
+    { key: "email", label: "Gửi thêm qua email", hint: `Bản sao các thông báo đang bật, gửi tới ${settings.email}` },
   ]
   return (
-    <SettingsBlock title="Tài khoản" description="Thông tin dùng để cố vấn và nhà trường nhận diện bạn.">
-      <Panel className="grid gap-5">
-        <dl className="grid gap-x-8 gap-y-4 sm:grid-cols-2">
-          {rows.map((r) => (
-            <div key={r.label} className="grid gap-0.5">
-              <dt className="text-xs text-ink-2">{r.label}</dt>
-              <dd className="font-medium wrap-anywhere text-ink">{r.value}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="border-t border-line pt-4 text-xs text-ink-2">
-          Cần sửa thông tin tài khoản? Hãy liên hệ cố vấn hoặc phòng quản lý đào tạo của trường.
-        </p>
-      </Panel>
-    </SettingsBlock>
+    <SettingsZone id="notifications" title="Thông báo">
+      {rows.map((r) => (
+        <SettingRow key={r.key} inline htmlFor={`notify-${r.key}`} label={r.label} hint={r.hint}>
+          <Switch
+            id={`notify-${r.key}`}
+            size="lg"
+            checked={n[r.key]}
+            onCheckedChange={(v) => onChange({ notifications: { [r.key]: v } })}
+          />
+        </SettingRow>
+      ))}
+    </SettingsZone>
   )
 }
 
-// ---------- Dữ liệu cá nhân: dung lượng, tải về, xoá ----------
+// ---------- Dữ liệu: dung lượng, tải về, xoá ----------
 
-export function PersonalDataCard({
+export function DataSection({
   storage,
   onDeleteAll,
 }: {
@@ -580,65 +541,47 @@ export function PersonalDataCard({
   }
 
   return (
-    <SettingsBlock title="Dữ liệu cá nhân" description="Dung lượng đã dùng, tải bản sao và xoá dữ liệu bạn lưu trên CareerX.">
-      <Panel className="grid overflow-hidden p-0">
-        <ul className="divide-y divide-line">
-          <li className="grid gap-3 px-6 py-5">
-            <p className="flex items-center justify-between gap-2">
-              <span className="font-heading font-bold text-ink">Dung lượng lưu trữ</span>
-              <span className="text-sm font-semibold text-blue">{percent}%</span>
-            </p>
-            <div
-              className="h-2 overflow-hidden rounded-full bg-surface"
-              role="progressbar"
-              aria-valuenow={percent}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="Dung lượng đã dùng"
-            >
-              <div className="h-full rounded-full bg-blue" style={{ width: `${Math.max(percent, 2)}%` }} />
-            </div>
-            <p className="text-xs text-ink-2">
-              Đã dùng {formatBytes(storage.used_bytes)} / {formatBytes(storage.limit_bytes)} · Dung lượng do{" "}
-              {storage.allocated_by} cấp.
-            </p>
-          </li>
+    <SettingsZone id="data" title="Dữ liệu">
+      <SettingRow label="Dung lượng lưu trữ" hint={`Do ${storage.allocated_by} cấp`}>
+        <span className="text-sm text-ink-2 tabular-nums">
+          {formatBytes(storage.used_bytes)} / {formatBytes(storage.limit_bytes)}
+        </span>
+        <span
+          className="block h-1.5 w-[120px] overflow-hidden rounded-full bg-surface"
+          role="progressbar"
+          aria-valuenow={percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Dung lượng đã dùng"
+        >
+          <span className="block h-full rounded-full bg-blue" style={{ width: `${Math.max(percent, 2)}%` }} />
+        </span>
+      </SettingRow>
+      <SettingRow label="Tải toàn bộ dữ liệu" hint="CV, kết quả phân tích và báo cáo phỏng vấn, dạng .zip">
+        {!features.dataActions && <SoonBadge />}
+        <Button variant="outline" className={pillLine} disabled={!features.dataActions || exporting} onClick={exportAll}>
+          {exporting ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
+          Tải xuống
+        </Button>
+      </SettingRow>
 
-          <li className="flex flex-wrap items-center justify-between gap-4 px-6 py-5">
-            <div className="grid max-w-xl gap-1">
-              <p className="flex items-center gap-2 font-heading font-bold text-ink">
-                Tải xuống dữ liệu của bạn
-                {!features.dataActions && <SoonBadge />}
-              </p>
-              <p className="text-sm leading-6 text-ink-2">
-                Toàn bộ lịch sử phân tích, báo cáo phỏng vấn và các phiên bản CV trong một gói.
-              </p>
-            </div>
-            <Button variant="outline" className="h-10 bg-card" disabled={!features.dataActions || exporting} onClick={exportAll}>
-              <Download aria-hidden />
-              Tải xuống toàn bộ dữ liệu
-            </Button>
-          </li>
-
-          <li className="flex flex-wrap items-center justify-between gap-4 bg-bad-soft/25 px-6 py-5">
-            <div className="grid max-w-xl gap-1">
-              <p className="flex items-center gap-2 font-heading font-bold text-bad">
-                <TriangleAlert className="size-4" aria-hidden />
-                Xoá toàn bộ dữ liệu
-                {!features.dataActions && <SoonBadge />}
-              </p>
-              <p className="text-sm leading-6 text-ink-2">
-                Xoá vĩnh viễn toàn bộ phiên bản CV, lịch sử phỏng vấn STAR, điểm số và nhận xét của cố vấn.{" "}
-                <span className="font-medium text-bad">Không thể hoàn tác sau khi xác nhận.</span>
-              </p>
-            </div>
-            <Button variant="destructive" className="h-10" disabled={!features.dataActions} onClick={() => setConfirm(true)}>
-              <Trash2 aria-hidden />
-              Xoá toàn bộ dữ liệu của tôi
-            </Button>
-          </li>
-        </ul>
-      </Panel>
+      <div className="mt-6 flex flex-wrap items-center gap-4 rounded-[14px] border border-bad/20 bg-bad-soft px-5 py-[18px]">
+        <div className="min-w-[220px] flex-1">
+          <p className="flex items-center gap-2 font-semibold text-bad">
+            Xoá toàn bộ dữ liệu
+            {!features.dataActions && <SoonBadge />}
+          </p>
+          <p className="text-sm text-ink-2">Xoá vĩnh viễn mọi CV, báo cáo, điểm số và nhận xét. Không thể hoàn tác.</p>
+        </div>
+        <Button
+          variant="outline"
+          className="h-9 rounded-full border-bad/30 bg-card px-4 font-semibold text-bad hover:bg-card hover:text-bad"
+          disabled={!features.dataActions}
+          onClick={() => setConfirm(true)}
+        >
+          Xoá dữ liệu
+        </Button>
+      </div>
 
       <ConfirmDialog
         open={confirm}
@@ -649,6 +592,6 @@ export function PersonalDataCard({
         destructive
         onConfirm={onDeleteAll}
       />
-    </SettingsBlock>
+    </SettingsZone>
   )
 }

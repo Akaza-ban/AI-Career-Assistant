@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Check, CircleCheck, KeyRound, Loader2, MessageSquareQuote, Pencil, Sparkles, Undo2, Wand2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Info, Loader2 } from "lucide-react"
 
+import { diffAdded } from "@/components/student/optimizer/text-diff"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import type { Suggestion, SuggestionDecisionRequest, SuggestionKind } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -12,24 +12,45 @@ import { cn } from "@/lib/utils"
 /** Khớp MAX_EDIT_CHARS ở backend (src/services/cv_optimizer.py). */
 const MAX_EDIT_CHARS = 600
 
-const KIND: Record<SuggestionKind, { label: string; icon: typeof Sparkles; accent: string }> = {
-  star_quantify: { label: "Gợi ý định lượng hoá STAR", icon: Sparkles, accent: "border-t-violet" },
-  ats_keyword: { label: "Dùng đúng từ khoá JD", icon: KeyRound, accent: "border-t-blue" },
-  rephrase: { label: "Gợi ý diễn đạt lại", icon: Wand2, accent: "border-t-blue" },
+const KIND_LABEL: Record<SuggestionKind, string> = {
+  star_quantify: "Định lượng hoá theo STAR",
+  ats_keyword: "Dùng đúng từ khoá JD",
+  rephrase: "Diễn đạt lại",
+}
+
+const DONE: Record<Exclude<Suggestion["status"], "pending">, { text: string; tone: string }> = {
+  accepted: { text: "Đã áp dụng đề xuất này.", tone: "bg-good-soft text-good" },
+  edited: { text: "Đã lưu bản bạn sửa.", tone: "bg-good-soft text-good" },
+  rejected: { text: "Đã bỏ qua gợi ý này. Câu gốc được giữ nguyên.", tone: "bg-surface text-ink-2" },
 }
 
 interface SuggestionCardProps {
   suggestion: Suggestion
+  /** Vị trí 1-based và tổng số gợi ý, cho tiêu đề "Gợi ý x / n". */
+  index: number
+  total: number
+  /** Tên mục CV chứa dòng được gợi ý, ví dụ "Kinh nghiệm". */
+  section?: string
   /** false khi đã "Hoàn tất": chỉ xem, không đổi được quyết định. */
   editable: boolean
+  onPrev: () => void
+  onNext: () => void
   onDecide: (decision: SuggestionDecisionRequest["decision"], editedText?: string) => Promise<void>
   onProvideContext: (answer: string) => Promise<void>
 }
 
-// Figma: các thẻ bên phải "Trình tối ưu CV". PRD US-SV-03 (AC1 áp dụng, AC2 cần ngữ cảnh, AC3 bỏ qua), mục 6.4.
-export function SuggestionCard({ suggestion: s, editable, onDecide, onProvideContext }: SuggestionCardProps) {
-  const kind = KIND[s.kind]
-  const KindIcon = kind.icon
+// Bản vẽ ToiUu: thẻ gợi ý bên phải. PRD US-SV-03 (AC1 áp dụng, AC2 cần ngữ cảnh, AC3 bỏ qua), mục 6.4.
+export function SuggestionCard({
+  suggestion: s,
+  index,
+  total,
+  section,
+  editable,
+  onPrev,
+  onNext,
+  onDecide,
+  onProvideContext,
+}: SuggestionCardProps) {
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(s.proposed_text)
@@ -44,172 +65,226 @@ export function SuggestionCard({ suggestion: s, editable, onDecide, onProvideCon
     }
   }
 
-  const applied = s.status === "accepted" || s.status === "edited"
-  const rejected = s.status === "rejected"
   const pending = s.status === "pending"
+  const askContext = pending && s.needs_context
 
   return (
-    <article
+    <section
       id={`sg-${s.id}`}
-      className={cn(
-        "grid scroll-mt-24 gap-3 rounded-[20px] border border-t-4 border-line bg-card p-4 shadow-card",
-        kind.accent,
-        rejected && "opacity-75",
-      )}
+      aria-labelledby="suggestion-title"
+      className="scroll-mt-24 rounded-card border border-line bg-card px-5 py-5 shadow-card sm:px-[22px]"
     >
-      <header className="flex items-start justify-between gap-2">
-        <Badge variant={s.kind === "star_quantify" ? "violet" : "blue"} className="h-auto px-2 py-0.5">
-          <KindIcon aria-hidden />
-          {kind.label}
-        </Badge>
-        {s.status === "accepted" && (
-          <span className="flex items-center gap-1 text-xs font-medium text-good">
-            <CircleCheck className="size-3.5" aria-hidden />
-            Đã áp dụng
-          </span>
+      <div className="mb-3.5 flex items-center gap-2">
+        <h2 id="suggestion-title" className="flex-1 text-base font-semibold text-ink">
+          Gợi ý <span className="tabular-nums">{index}</span> / {total}
+        </h2>
+        {total > 1 && (
+          <>
+            <RoundButton label="Gợi ý trước" onClick={onPrev}>
+              <ChevronLeft className="size-4" aria-hidden />
+            </RoundButton>
+            <RoundButton label="Gợi ý sau" onClick={onNext}>
+              <ChevronRight className="size-4" aria-hidden />
+            </RoundButton>
+          </>
         )}
-        {s.status === "edited" && (
-          <span className="flex items-center gap-1 text-xs font-medium text-good">
-            <Pencil className="size-3.5" aria-hidden />
-            Đã sửa tay
-          </span>
-        )}
-        {rejected && <span className="text-xs font-medium text-ink-3">Đã bỏ qua</span>}
-      </header>
-
-      <div className="grid gap-1">
-        <h3 className="font-heading text-sm font-bold text-ink">{s.skill}</h3>
-        {pending && s.rationale && <p className="text-[13px] leading-5 text-ink-2">{s.rationale}</p>}
-        <p className="text-xs text-ink-3">Căn cứ: dòng {s.evidence_span.line_start} trong CV gốc</p>
       </div>
 
-      {/* AC2: cần SV bổ sung ngữ cảnh trước khi AI gợi ý */}
-      {pending && s.needs_context && (
-        <div className="grid gap-2 rounded-xl bg-violet-soft/60 p-3">
-          <p className="flex items-start gap-2 text-[13px] font-medium text-ink">
-            <MessageSquareQuote className="mt-0.5 size-4 shrink-0 text-violet" aria-hidden />
-            {s.context_question}
-          </p>
-          <Textarea
-            value={context}
-            onChange={(e) => setContext(e.target.value)}
-            placeholder="Ví dụ: phỏng vấn 8 người gồm giảng viên và sinh viên, mô hình hoá 5 quy trình…"
-            aria-label="Ngữ cảnh bổ sung"
-            className="min-h-20 bg-card text-sm"
-            disabled={!editable}
-          />
-          <p className="text-xs text-ink-2">AI không tự đặt số liệu. Gợi ý sẽ dựa hoàn toàn vào thông tin bạn cung cấp.</p>
-          <Button
-            size="sm"
-            variant="violet"
-            className="justify-self-start"
-            disabled={!editable || busy || !context.trim()}
-            onClick={() => run(() => onProvideContext(context))}
-          >
-            {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-            Gửi ngữ cảnh để nhận gợi ý
-          </Button>
+      <div className="flex animate-in flex-col gap-3 duration-300 fade-in slide-in-from-bottom-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Badge variant="blue">
+            <span className="size-1.5 rounded-full bg-current" aria-hidden />
+            {KIND_LABEL[s.kind]}
+          </Badge>
+          <span className="text-xs text-ink-3">
+            <span className="font-medium text-ink-2">{s.skill}</span>
+            {section && ` · ${section}`}
+          </span>
         </div>
-      )}
+        {pending && s.rationale && <p className="text-[13px] leading-5 text-ink-2">{s.rationale}</p>}
 
-      {pending && !s.needs_context && (
-        <>
-          <div className="grid gap-1.5 rounded-xl bg-surface p-3 text-[13px] leading-5">
-            <p>
-              <span className="font-semibold text-bad">Cũ: </span>
-              <span className="text-ink-2">{s.original_text}</span>
+        <Labeled label="Câu gốc">
+          <p className="rounded-[10px] bg-panel px-3 py-2.5 text-sm text-ink-2">{s.original_text}</p>
+        </Labeled>
+
+        {/* AC2: cần SV bổ sung ngữ cảnh thật trước khi AI gợi ý */}
+        {askContext && (
+          <>
+            <Labeled label={s.context_question ?? "Bạn bổ sung thêm thông tin thật cho câu này nhé"} htmlFor={`ctx-${s.id}`}>
+              <Textarea
+                id={`ctx-${s.id}`}
+                value={context}
+                onChange={(e) => setContext(e.target.value)}
+                placeholder="Ví dụ: phỏng vấn 8 người gồm giảng viên và sinh viên, mô hình hoá 5 quy trình…"
+                className="min-h-24 rounded-[10px] px-3 py-2.5 text-[15px] leading-6"
+                disabled={!editable}
+              />
+            </Labeled>
+            <p className="flex gap-2 rounded-[10px] bg-warn-soft px-2.5 py-2 text-[13px] leading-5 text-warn">
+              <Info className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+              AI không tự đặt số liệu. Gợi ý sẽ dựa hoàn toàn vào thông tin bạn cung cấp.
             </p>
-            {editing ? (
-              <div className="grid gap-1">
-                <span className="font-semibold text-good">Mới (bạn sửa):</span>
-                <Textarea
-                  value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  maxLength={MAX_EDIT_CHARS}
-                  aria-label="Nội dung chỉnh sửa"
-                  className="min-h-24 bg-card text-sm"
-                />
-                <span className="justify-self-end text-[11px] text-ink-3">
-                  {draft.length}/{MAX_EDIT_CHARS}
-                </span>
+            {editable && (
+              <div className="flex flex-wrap gap-2 pt-0.5">
+                <PillButton tone="dark" disabled={busy || !context.trim()} onClick={() => run(() => onProvideContext(context))}>
+                  {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                  Gửi để nhận gợi ý
+                </PillButton>
+                <PillButton tone="ghost" disabled={busy} onClick={() => run(() => onDecide("reject"))}>
+                  Bỏ qua
+                </PillButton>
               </div>
+            )}
+          </>
+        )}
+
+        {!askContext && editing && (
+          <Labeled label="Bản bạn sửa" htmlFor={`edit-${s.id}`}>
+            <Textarea
+              id={`edit-${s.id}`}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              maxLength={MAX_EDIT_CHARS}
+              className="min-h-24 rounded-[10px] border-ink px-3 py-2.5 text-[15px] leading-6"
+            />
+            <span className="mt-1 block text-right text-xs text-ink-3 tabular-nums">
+              {draft.length}/{MAX_EDIT_CHARS}
+            </span>
+          </Labeled>
+        )}
+
+        {!askContext && !editing && (
+          <Labeled label={s.status === "edited" ? "Bản bạn sửa" : pending ? "Đề xuất" : "Đề xuất đã xét"}>
+            <p
+              className={cn(
+                "rounded-[10px] border border-line-strong px-3 py-2.5 text-[15px] leading-6 text-ink",
+                s.status === "rejected" && "text-ink-3",
+              )}
+            >
+              {s.status === "edited" ? s.final_text : <Highlighted prev={s.original_text} next={s.proposed_text} />}
+            </p>
+          </Labeled>
+        )}
+
+        {pending && !askContext && editable && (
+          <div className="flex flex-wrap gap-2 pt-0.5">
+            {editing ? (
+              <>
+                <PillButton tone="dark" disabled={busy || !draft.trim()} onClick={() => run(() => onDecide("edit", draft))}>
+                  {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                  Lưu bản sửa
+                </PillButton>
+                <PillButton
+                  tone="soft"
+                  disabled={busy}
+                  onClick={() => {
+                    setEditing(false)
+                    setDraft(s.proposed_text)
+                  }}
+                >
+                  Huỷ
+                </PillButton>
+              </>
             ) : (
-              <p>
-                <span className="font-semibold text-good">Mới: </span>
-                <span className="text-ink">{s.proposed_text}</span>
-              </p>
+              <>
+                <PillButton tone="dark" disabled={busy} onClick={() => run(() => onDecide("accept"))}>
+                  {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
+                  Áp dụng
+                </PillButton>
+                <PillButton tone="soft" disabled={busy} onClick={() => setEditing(true)}>
+                  Sửa
+                </PillButton>
+                <PillButton tone="ghost" disabled={busy} onClick={() => run(() => onDecide("reject"))}>
+                  Bỏ qua
+                </PillButton>
+              </>
             )}
           </div>
-          {editable && (
-            <div className="flex flex-wrap gap-2">
-              {editing ? (
-                <>
-                  <Button size="sm" disabled={busy || !draft.trim()} onClick={() => run(() => onDecide("edit", draft))}>
-                    {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}
-                    Lưu bản chỉnh sửa
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={() => {
-                      setEditing(false)
-                      setDraft(s.proposed_text)
-                    }}
-                  >
-                    <Undo2 aria-hidden />
-                    Huỷ
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button size="sm" disabled={busy} onClick={() => run(() => onDecide("accept"))}>
-                    {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}
-                    Chấp nhận gợi ý
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    className="bg-blue-soft"
-                    disabled={busy}
-                    onClick={() => setEditing(true)}
-                  >
-                    <Pencil aria-hidden />
-                    Chỉnh sửa
-                  </Button>
-                  <Button size="sm" variant="ghost" className="text-ink-2" disabled={busy} onClick={() => run(() => onDecide("reject"))}>
-                    Bỏ qua
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-        </>
-      )}
+        )}
 
-      {applied && (
-        <p className="rounded-xl bg-good-soft/60 p-3 text-[13px] leading-5 text-ink">
-          <span className="font-semibold text-good">{s.status === "edited" ? "Bản bạn sửa: " : "Đã áp dụng: "}</span>
-          {s.final_text}
-        </p>
+        {s.status !== "pending" && (
+          <div className={cn("flex items-center gap-2.5 rounded-[10px] px-3 py-2.5 text-sm font-medium", DONE[s.status].tone)}>
+            <span className="flex-1">{DONE[s.status].text}</span>
+            {editable && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => run(() => onDecide("undo"))}
+                className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 underline underline-offset-2 hover:text-ink disabled:opacity-50"
+              >
+                {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
+                Hoàn tác
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+/** Câu đề xuất với phần thêm mới so với câu gốc được tô nhẹ màu nhấn. */
+function Highlighted({ prev, next }: { prev: string; next: string }) {
+  return (
+    <>
+      {diffAdded(prev, next).map((part, i) =>
+        part.added ? (
+          <mark key={i} className="rounded bg-accent-soft px-0.5 text-ink">
+            {part.text}
+          </mark>
+        ) : (
+          <span key={i}>{part.text}</span>
+        ),
       )}
-      {rejected && (
-        <p className="rounded-xl bg-surface p-3 text-[13px] leading-5 text-ink-2">
-          Giữ nguyên câu gốc: <span className="text-ink">{s.original_text}</span>
-        </p>
+    </>
+  )
+}
+
+function Labeled({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
+  const Tag = htmlFor ? "label" : "div"
+  return (
+    <div>
+      <Tag htmlFor={htmlFor} className="mb-1 block text-xs font-semibold text-ink-3">
+        {label}
+      </Tag>
+      {children}
+    </div>
+  )
+}
+
+function RoundButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="grid size-9 place-items-center rounded-full bg-surface text-ink-2 transition-colors hover:bg-line hover:text-ink active:scale-95"
+    >
+      {children}
+    </button>
+  )
+}
+
+const PILL_TONE = {
+  dark: "bg-ink px-5 text-white hover:bg-ink/85",
+  soft: "bg-surface px-[18px] text-ink hover:bg-line",
+  ghost: "px-3.5 text-ink-2 hover:bg-surface hover:text-ink",
+}
+
+function PillButton({
+  tone,
+  className,
+  ...props
+}: React.ComponentProps<"button"> & { tone: keyof typeof PILL_TONE }) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        "inline-flex h-11 items-center gap-2 rounded-full text-sm font-semibold transition-[transform,background-color] active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50",
+        PILL_TONE[tone],
+        className,
       )}
-      {(applied || rejected) && editable && (
-        <Button
-          size="sm"
-          variant="ghost"
-          className="justify-self-start text-ink-2"
-          disabled={busy}
-          onClick={() => run(() => onDecide("undo"))}
-        >
-          {busy ? <Loader2 className="animate-spin" aria-hidden /> : <Undo2 aria-hidden />}
-          Hoàn tác
-        </Button>
-      )}
-    </article>
+      {...props}
+    />
   )
 }
