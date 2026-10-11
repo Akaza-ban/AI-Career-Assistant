@@ -19,6 +19,7 @@ export type ApiGroup =
   | "settings"
   | "advisor"
   | "messages"
+  | "auth"
 
 // NEXT_PUBLIC_LIVE_APIS: danh sách nhóm gọi backend thật, cách nhau bởi dấu phẩy (ví dụ "me,cv"),
 // hoặc "all" cho tất cả. Để trống = toàn bộ dùng mock.

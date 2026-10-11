@@ -3,9 +3,9 @@
 Nguồn tham chiếu thiết kế cho mọi màn hình của ứng dụng CareerX (sinh viên và cố vấn). Khi dựng hoặc sửa giao diện, dùng token và component trong tài liệu này thay vì tự đặt màu, khoảng cách hay hiệu ứng mới.
 
 - Bố cục và luồng của từng màn: [`WIREFRAMES.md`](WIREFRAMES.md).
-- Bản mẫu tương tác (6 artboard: Tổng quan, Thư viện JD, Kết quả phân tích, Thư viện JD trên điện thoại, Phòng phỏng vấn, Trình tối ưu CV): https://claude.ai/artifact/Qk4gymtBzk5Eg9BXB6phbc. Link ở chế độ riêng tư; chủ sở hữu cần chia sẻ thì người khác mới mở được. Khi tài liệu và bản mẫu lệch nhau, **bản mẫu là chuẩn về hình ảnh**, tài liệu này là chuẩn về token và quy tắc.
+- Bản mẫu tương tác (canvas gồm mọi màn của sinh viên và 4 màn cố vấn: Tổng quan, Sinh viên phụ trách, Hồ sơ sinh viên, Nhận xét buổi phỏng vấn): https://claude.ai/artifact/Qk4gymtBzk5Eg9BXB6phbc. Link ở chế độ riêng tư; chủ sở hữu cần chia sẻ thì người khác mới mở được. Khi tài liệu và bản mẫu lệch nhau, **bản mẫu là chuẩn về hình ảnh**, tài liệu này là chuẩn về token và quy tắc.
 
-**Phạm vi:** v2 thay thế hướng "B" (ventriloc.ca) của bản trước cho phần ứng dụng. Landing page demo `CareerX.html` thuộc hướng cũ; khi làm lại landing thì dùng cùng token ở đây.
+**Phạm vi:** v2 thay thế hướng "B" (ventriloc.ca) của bản trước cho cả ứng dụng và landing page. `CareerX.html` là landing cũ, chỉ còn để tham khảo nội dung; landing mới theo mục 4.1 và 7.
 
 ---
 
@@ -68,6 +68,7 @@ Nguồn tham chiếu thiết kế cho mọi màn hình của ứng dụng Career
 | `--warn` / `--warn-soft` / `--warn-line` | `#9A5B00` / `#FFF6E6` / `#F5E1B8` | còn thiếu, chỗ cần tự điền số liệu, đồng hồ sắp hết giờ |
 | `--bad` / `--bad-soft` | `#B42318` / `#FEF0EE` | lỗi, xoá, kết thúc sớm, đồng hồ dưới 10 giây |
 | `--gold` / `--gold-soft` | `#E0B852` / `#FFF7DD` | dòng CV có gợi ý trong Trình tối ưu |
+| `--night` | `#0E1020` | **chỉ dùng ở landing page:** nền dải tối "Cam kết" (mục 4.1). Chữ trắng, chữ phụ `#A3A6BE`, đường kẻ `rgba(255,255,255,.09)` |
 
 Màu nhấn có thể đổi về sau (bản mẫu có Tweaks thử teal, cam, đen). Chỉ cần đổi `--accent`; `--accent-strong` = trộn 18% đen, `--accent-soft` = trộn 91% trắng.
 
@@ -170,6 +171,13 @@ Tôn trọng `prefers-reduced-motion`: tắt chuyển động, dải pastel đ�
 
 Ngoại lệ có chủ đích: vòng điểm ở Kết quả phân tích tô gradient pastel (`#7FC4FF → #9F86FF → #FF8FB8`), thanh "Đang phân tích…" chạy gradient pastel.
 
+### 4.1 Landing page: một dải tối làm điểm dừng
+
+Trang giới thiệu dài và chủ yếu nền trắng, nên có **đúng một** dải nền `--night` kéo hết chiều ngang (phần "Cam kết") để chia nhịp trang, theo cách Stripe dùng các mảng tối. Quy tắc:
+- Nền đặc `--night`, không gradient lớn; chỉ có 1–2 quầng sáng mờ (blur 60px, độ mờ ≤ 0,35) ở góc.
+- Thẻ trên nền tối: `rgba(255,255,255,.05)` + viền `rgba(255,255,255,.09)`. Đường nối trong sơ đồ dùng gradient pastel của dải aurora.
+- Không dùng nền tối trong ứng dụng (sinh viên, cố vấn) và các trang đăng nhập / đăng ký.
+
 ---
 
 ## 5. Khung ứng dụng
@@ -202,6 +210,11 @@ Giống nhau trên mọi trang, không thay đổi theo trang. **Header dính tr
 - Phải: tin nhắn (chấm `--accent` khi có tin mới), thông báo, avatar tròn nền `--ink`. Menu avatar chỉ có tên và "Đổi vai trò"; **Cài đặt chỉ nằm trên sidebar**, không lặp lại ở menu avatar.
 - Breadcrumb và thao tác riêng của trang nằm ở một dòng riêng ngay dưới header.
 
+**Bảng nổi của header** (menu avatar, thông báo, tin nhắn) dùng chung một kiểu (`floatingSurface` trong `components/shell/notification-menu.tsx`): nền `--card`, bo 18px, `--shadow-md` (class `shadow-float`), viền `ring-1 --line`. Không dùng icon màu, không viết hoa tiêu đề nhóm.
+- **Menu avatar** (rộng 288px): đầu menu có avatar 40px, tên và một dòng phụ; bên dưới chỉ có "Đổi vai trò". Mục bo 8px, hover nền `--panel`.
+- **Thông báo** (rộng 400px): tiêu đề + "N chưa đọc", segmented `sm` Tất cả / Chưa đọc; nhóm "Hôm nay" / "Trước đó". Icon trung tính trong vòng tròn `--surface`, chỉ cảnh báo liêm chính dùng `--bad`. Chưa đọc: chấm `--accent` trên icon, tiêu đề weight 500. **Cả dòng là một link**; bấm vào thì mở trang liên quan và **đánh dấu đã đọc ngay** (không chờ tải lại). Cuối bảng có "Đánh dấu tất cả đã đọc" khi còn tin chưa đọc.
+- **Tin nhắn** (bảng trượt rộng 400px, `--shadow-lg`): tiêu đề không icon màu, dòng giờ trực nền `--panel`, tin của mình nền `--ink` chữ trắng, ô soạn bo 14px viền `--line-strong`, focus viền `--ink`.
+
 ### 5.4 Điện thoại (< 760px)
 
 - **Thanh tab dưới đáy, 5 mục:** Tổng quan · Thư viện · Phân tích · Phỏng vấn · Tôi. Mục đang chọn màu `--ink` kèm vạch nhỏ trên đầu. "Tôi" mở sheet: CV của tôi, Tiến bộ, Chia sẻ, Cài đặt, Đăng xuất.
@@ -212,6 +225,7 @@ Giống nhau trên mọi trang, không thay đổi theo trang. **Header dính tr
 ### 5.5 Chế độ tập trung (Phòng chờ, Phòng phỏng vấn)
 
 - Không sidebar, không dải pastel. Thanh trên cao 64px: "Rời phòng" · logo + tên buổi · đồng hồ · Tạm dừng.
+- "Rời phòng" mở `ConfirmDialog` (kiểu nguy hiểm) rồi **quay về trang Luyện phỏng vấn** (`/student/interview/new`), không về Tổng quan.
 - Nội dung một cột, rộng tối đa 820px.
 - *Thiết kế Phòng phỏng vấn đang tạm chốt; có thể làm lại khi có ý tưởng tốt hơn.*
 
@@ -224,7 +238,9 @@ Giống nhau trên mọi trang, không thay đổi theo trang. **Header dính tr
 | `Button` | `primary`: nền `--ink`, chữ trắng, pill, cao 44–46px · `secondary`: nền `--surface` · `ghost`: không nền · `danger`: nền `--bad` · `link`: chữ `--accent`, weight 600 |
 | `Badge` | bo 6px, viền 1px, cỡ 12px, chấm tròn 6px màu chữ. Biến thể theo token trạng thái |
 | `MatchLabel` | badge mức phù hợp, xem mục 8.2 |
-| `SegmentedControl` | nền `--surface`, pill trượt nền trắng + `--shadow-xs`; chữ đang chọn `--ink`, còn lại `--ink-3` |
+| `SegmentedControl` | nền `--surface`, pill trượt nền trắng + `--shadow-xs`; chữ đang chọn `--ink`, còn lại `--ink-3`. Ba cỡ: `sm` cao 32px (lọc trong khối, bảng nổi) · `md` cao 36px (mặc định) · `lg` cao 40px, chữ 15px (chuyển chế độ chính của trang: tab hồ sơ sinh viên, "So với 1 / nhiều vị trí"). Không ghi đè cỡ bằng class riêng |
+| `ConfirmDialog` | xác nhận trước thao tác quan trọng. Rộng 460px, bo 22px, không nút đóng góc. Icon tròn · tiêu đề 20px · **một câu mô tả** · (tuỳ chọn) **một hàng thông tin** nền `--panel` chia cột bằng đường kẻ (ví dụ "Đã trả lời 2 / 5 câu" · "Báo cáo: Không có") · 2 nút pill. Kiểu nguy hiểm: icon và nút chính màu `--bad`. Không viết đoạn giải thích dài |
+| `Accordion` (danh sách câu) | chỉ **một mục mở cùng lúc**; mở mục khác thì mục đang mở đóng lại. Mục đầu mở sẵn |
 | `Panel` | nền `--panel`, bo `--r-xl`, padding 24–28px, chứa các thẻ trắng |
 | `TaskCard` | thẻ "Việc nên làm tiếp": ô icon nền `--accent-soft` + loại việc · tiêu đề · dòng thông tin · thanh tiến độ · dòng cuối có thông tin phụ và nút `primary` nhỏ |
 | `QuickLink` | dòng trắng có icon, nhãn và mũi tên, dùng cho lối tắt |
@@ -251,7 +267,13 @@ Giống nhau trên mọi trang, không thay đổi theo trang. **Header dính tr
 - **Thư viện JD:** tiêu đề + chọn CV · panel "Phù hợp nhất với CV" (lưới 3 `RecCard`, mở rộng tới 6, `AdviceRow` ở cuối panel) · "Tất cả vị trí" dạng bảng với tìm kiếm, chọn ngành, segmented Tất cả / Đã lưu.
 - **Kết quả phân tích:** tên vị trí + CV · `ScoreCard` · "Kỹ năng và bằng chứng" (`SkillRow` theo nhóm mức yêu cầu, segmented lọc) · cột phải "Gợi ý cải thiện" + nhận xét AI · `StickyActionBar`.
 - **Trình tối ưu CV:** tiêu đề + tiến độ · `CvPaper` bên trái · `SuggestionCard` và `CapabilityCheck` bên phải · `StickyActionBar` với nút "Hoàn tất & tạo phiên bản".
+- **Thiết lập phỏng vấn:** `PageHeader` · vùng "Chọn CV" **trước** vùng "Chọn vị trí" · cột phải tóm tắt buổi + "Vào phòng chờ" · "Buổi gần đây".
+- **Phòng chờ:** chế độ tập trung · vị trí và CV trên 2 dòng riêng · luật của buổi · "Sẵn sàng" + "Đổi CV và vị trí" (về Thiết lập, giữ lựa chọn). Không có hướng dẫn 5 bước hay link màu tím.
 - **Phòng phỏng vấn:** chế độ tập trung · thanh tiến độ 4 câu · câu hỏi · 4 ô hướng dẫn STAR (tĩnh, không sáng lên theo câu trả lời) · ô trả lời có đếm ký tự.
+- **Landing page `/`:** thanh trên dính (Cách hoạt động · Cam kết · Cho cố vấn · Hỏi đáp · Đăng nhập · Tạo tài khoản) · hero căn giữa kiểu Family: tiêu đề hiện lần lượt từng chữ, hai bên là **ô biểu tượng pastel** (icon lucide nét trắng trên nền đổ chéo từ bảng màu aurora, hoặc ô trắng icon `--ink`) bật ra kiểu lò xo rồi trôi nhẹ; không dùng mảnh giao diện hay minh hoạ hoạt hình · hero cao vừa một màn hình · "Bớt đoán, luyện đúng chỗ.": bảng kẻ mảnh so sánh "Tự chuẩn bị" với "Với CareerX" (cột CareerX nền `--panel`), không thẻ, không icon · "Từ CV đến buổi phỏng vấn": cột trái dính, cột phải 4 khung xám hiện dần khi cuộn tới (kiểu "Details that matter" của Family) · dải tối "Cam kết" (mục 4.1) · Cho cố vấn · Hỏi đáp (đóng hết, mở một câu thì câu khác đóng) · lời mời cuối trang · footer 3 cột + dòng "© 2026 CareerX · Thực hiện bởi nhóm T131 · Model Citizens". **Không có nút demo** (nút này chỉ ở trang Đăng nhập).
+- **Đăng nhập / Đăng ký / Quên mật khẩu:** thẻ trắng 440–480px giữa trang trên dải pastel. Đăng ký chỉ cho sinh viên: Họ và tên, Ngày sinh, Số điện thoại, Email, Mật khẩu + 2 ô đồng ý (xử lý dữ liệu, cam kết liêm chính); nút tắt tới khi tick đủ. Tài khoản cố vấn do CareerX cấp. Trang Đăng nhập có "Dùng thử bản demo" mở hộp chọn Sinh viên / Cố vấn.
+- **Cố vấn, Tổng quan:** dải pastel · câu chào + một dòng + 2 nút · panel "Việc cần làm" (thẻ "Chờ nhận xét" và "Cần chú ý") · "Tình hình nhóm" (4 chỉ số) · "Phân tích nhóm" (điểm theo tuần + tiêu chí STAR) · hàng 3 vùng nhỏ: Mức tiến bộ, Tiến bộ nhiều nhất, Nhận xét gần đây.
+- **Cố vấn, Hồ sơ sinh viên:** tên + trạng thái + "Thêm ghi chú" / "Nhắn tin" · 4 chỉ số · segmented `lg` Phỏng vấn / CV / Ghi chú. Nhận xét một buổi mở dialog 2 cột: trái là báo cáo, phải là ô nhận xét trên nền `--panel`.
 
 ---
 
@@ -262,8 +284,10 @@ Giống nhau trên mọi trang, không thay đổi theo trang. **Header dính tr
 | Nguồn | Cách chấm | Hiển thị |
 |---|---|---|
 | Gợi ý vị trí (`/jd/recommend`) | Quy tắc, không LLM | **Chỉ nhãn** Cao/Khá/Trung bình, kèm "Ước tính nhanh theo kỹ năng" |
-| Phân tích 1 vị trí, So sánh (`/gap-analysis`, `/jd/compare`) | Quy tắc + LLM | **Điểm 0–100 kèm nhãn** |
-| Phỏng vấn | LLM chấm STAR | `x.x / 5`, không gắn nhãn. **Không hiện điểm trong lúc phỏng vấn** |
+| Phân tích 1 vị trí, So sánh (`/gap-analysis`, `/jd/compare`) | Quy tắc + LLM | **Điểm % kèm nhãn** (ví dụ `72% · Khá`) |
+| Phỏng vấn | LLM chấm STAR | `x,x / 5`, không gắn nhãn. **Không hiện điểm trong lúc phỏng vấn** |
+
+Số thập phân dùng dấu phẩy theo tiếng Việt (`3,6 / 5`, `80,6%`).
 
 ### 8.2 Nhãn mức phù hợp (toàn hệ thống)
 
@@ -281,6 +305,10 @@ Không dùng màu đỏ cho mức thấp. Bộ nhãn này thay cho "Cao / Trung 
 - **Nội dung do AI tạo** có chú thích "Do AI tạo từ CV và JD; hãy tự kiểm chứng".
 - **Không đặt đoạn cảnh báo AI dài** ("Các đánh giá, điểm số và gợi ý được tạo bởi AI chỉ mang tính tham khảo…") ở trang kết quả, báo cáo hay bất kỳ trang nào. Cam kết này nằm trong phần đồng ý xử lý dữ liệu ở Cài đặt và ô cam kết trước khi tải CV.
 - **Quyền riêng tư:** chia sẻ với cố vấn mặc định tắt, công tắc riêng cho từng mục.
+- **Hỏi ít.** Khảo sát sau buổi phỏng vấn (CSAT) chỉ có số sao và ô nhận xét tuỳ chọn; không hỏi "Bạn có dùng lại không?".
+- **Người dùng không gắn với một trường.** Sinh viên đến từ nhiều trường: hồ sơ gồm họ tên, ngày sinh, số điện thoại, email cá nhân. Không hiện email trường, mã sinh viên, khoa, ngành, khoá; không viết "nhà trường phân công" hay "Trường X".
+- **Trang giới thiệu không nêu tên người cụ thể**, kể cả tên giả trong dữ liệu mẫu. Dùng "CV của bạn", "Sinh viên A/B/C", "Nguyễn Văn A".
+- **Không thêm nút trùng chức năng.** Trang đã có vùng kéo thả thì không đặt thêm nút "Tải lên" ở tiêu đề.
 - **Không dùng emoji.** Dùng icon outline của `lucide-react`.
 - Giọng văn: ngắn, trực tiếp, xưng "bạn". Nút bắt đầu bằng động từ.
 
@@ -325,7 +353,7 @@ Chi tiết từng màn ở `WIREFRAMES.md`, phần C.
 3. Làm lại khung: `components/shell/` (sidebar chia nhóm theo `nav-config.ts`, header chuẩn, thanh tab điện thoại `mobile-tab-bar.tsx`, dải pastel trong `app-shell.tsx`). *(Đã làm.)*
 4. Dựng component mục 6. *(Đã có `Badge` kiểu mới và `MatchBadge`; `SegmentedControl`, `TaskCard`, `MetricColumn`… dựng khi làm màn dùng đến.)*
 5. Đổi nhãn mức phù hợp sang Cao/Khá/Trung bình ở mọi nơi hiển thị `match_label`. *(Đã làm, qua `MATCH_LABEL_META` và `MatchBadge`.)*
-6. Làm lại từng màn theo bản mẫu và `WIREFRAMES.md`: Tổng quan → Thư viện JD (route mới `/student/library`) → Kết quả phân tích → Trình tối ưu CV → Phòng phỏng vấn → các màn còn lại.
+6. Làm lại từng màn theo bản mẫu và `WIREFRAMES.md`. *(Đã làm mọi màn của sinh viên và 3 màn cố vấn. Còn lại: trang chọn vai trò `/`, bảng lệnh Ctrl K.)*
 
 **Dark mode:** vẫn tạm tắt (`forcedTheme="light"` trong `components/theme-provider.tsx`). Khi bật cần định nghĩa lại bảng màu tối cho v2.
 
@@ -341,7 +369,10 @@ Chi tiết từng màn ở `WIREFRAMES.md`, phần C.
 | Dán JD theo mục | endpoint tạo JD tự dán nhận các mục (tổng quan, mô tả, yêu cầu, khác), trả `jd_id` để dùng cho `/jd/compare` |
 | Mức phù hợp của vị trí ngoài Top gợi ý | endpoint chấm nhanh theo quy tắc cho một hoặc nhiều JD |
 | Chi tiết vị trí chia theo mục | JD trong thư viện cần trường riêng cho mô tả, yêu cầu, quyền lợi |
-| Thông báo khi tác vụ AI chạy nền xong | endpoint thông báo (frontend đang dùng mock) |
+| Thông báo khi tác vụ AI chạy nền xong | endpoint thông báo, gồm đánh dấu một thông báo đã đọc `POST /notifications/{id}/read` (frontend đang dùng mock) |
+| "Nhận xét" mở đúng buổi từ Tổng quan cố vấn | API tổng quan trả danh sách buổi chờ nhận xét (`session_id`, sinh viên, vị trí). Hồ sơ đã hỗ trợ `?review=<session_id>`; hiện nút chỉ mở tab Phỏng vấn |
+| Đăng ký, đăng nhập, quên mật khẩu | endpoint tài khoản thật (hiện đăng nhập tạm bằng header `X-Demo-Role`); bảng `users` đã có `phone`, `date_of_birth` |
+| Lịch sử chia sẻ, đổi họ tên | endpoint cho khối "Gần đây" ở trang Chia sẻ và ô họ tên ở Cài đặt (frontend đang dùng mock) |
 | Cài đặt, đổi mật khẩu, xuất / xoá dữ liệu | các endpoint `/students/me/settings`, `/auth/change-password`… (frontend đang dùng mock) |
 
 Ràng buộc hiện tại: gợi ý trả tối đa 6 vị trí; so sánh nhận 2–3 JD; thư viện có 8 JD và chỉ gồm JD đã index vào Chroma.

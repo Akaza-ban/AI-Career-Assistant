@@ -12,9 +12,9 @@ const at = (days: number, hour: number, minute = 0) => {
 export const mockAdvisorContact: AdvisorContact = {
   id: "cv-007",
   full_name: "ThS. Trần Hoàng Nam",
-  title: "Cố vấn nghề nghiệp Khoa Hệ thống thông tin",
-  email: "nam.th@university.edu.vn",
-  office: "Phòng A2.305",
+  title: "Cố vấn hướng nghiệp",
+  email: "nam.tran@careerx.vn",
+  office: "Trực tuyến qua Google Meet",
   office_hours: "Thứ 3 & Thứ 5 (14:00 – 16:30)",
   avatar_url: null,
 }
@@ -45,12 +45,12 @@ export const mockInitialReviews: Record<string, { comment: string; days: number;
 }
 
 export const mockSettings: StudentSettings = {
-  email: "minhanh.k21@student.university.edu.vn",
-  student_code: "21125430",
-  faculty: "Khoa Kinh doanh Quốc tế",
+  email: "minhanh.nguyen@gmail.com",
+  phone: "0912 345 678",
+  date_of_birth: "2003-05-14",
   password_updated_at: at(60, 20, 0),
   consent_accepted_at: at(21, 14, 20),
-  storage: { used_bytes: 0, limit_bytes: 50 * 1024 * 1024, allocated_by: "Trung tâm Hướng nghiệp của trường" },
+  storage: { used_bytes: 0, limit_bytes: 50 * 1024 * 1024, allocated_by: "CareerX" },
   privacy: { anonymous_contribution: false },
   notifications: { advisor_comment: true, report_ready: true, weekly_reminder: false, email: true },
 }

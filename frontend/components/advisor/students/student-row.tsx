@@ -84,7 +84,7 @@ export function StudentRow({
             <StudentAvatar name={s.full_name} src={s.avatar_url} />
             <span className="grid min-w-0">
               <span className="truncate font-medium text-ink">{s.full_name}</span>
-              <span className="truncate text-[13px] text-ink-3">{s.subtitle}</span>
+              <span className="truncate text-[13px] text-ink-3">{s.email}</span>
             </span>
           </span>
           <span className={cn("min-w-0 text-sm", s.target ? "text-ink-2" : "text-ink-3")}>
@@ -108,7 +108,7 @@ export function StudentRow({
               <span className="grid min-w-0">
                 <span className="truncate font-medium text-ink">{s.full_name}</span>
                 <span className="truncate text-[13px] text-ink-3">
-                  {s.subtitle} · {s.target?.title ?? "Chưa chọn vị trí"}
+                  {s.target?.title ?? "Chưa chọn vị trí"}
                 </span>
               </span>
               <ChevronDown className={cn("mt-1 size-4 shrink-0 text-ink-3 transition-transform", open && "rotate-180")} aria-hidden />

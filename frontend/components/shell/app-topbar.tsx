@@ -94,7 +94,7 @@ export function AppTopbar({ role }: { role: Role }) {
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="mx-1 my-1 bg-line" />
             <DropdownMenuItem
-              render={<Link href="/" />}
+              render={<Link href="/login?demo=1" />}
               className="h-10 gap-2.5 rounded-xl px-3 text-sm font-medium text-ink-2 focus:bg-panel focus:text-ink [&_svg]:text-ink-3"
             >
               <Repeat2 className="size-4" strokeWidth={1.75} aria-hidden />

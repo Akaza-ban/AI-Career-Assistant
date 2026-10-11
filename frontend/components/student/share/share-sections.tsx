@@ -39,7 +39,7 @@ export function AdvisorCard({ advisor }: { advisor: AdvisorContact | null }) {
         <div className="min-w-0">
           <p className="font-semibold text-ink">Bạn chưa được phân công cố vấn</p>
           <p className="text-sm text-ink-3">
-            Khi nhà trường phân công, cố vấn sẽ hiện ở đây. Tài liệu vẫn riêng tư cho tới khi bạn bật chia sẻ.
+            Khi bạn được phân công cố vấn, thông tin cố vấn sẽ hiện ở đây. Tài liệu vẫn riêng tư cho tới khi bạn bật chia sẻ.
           </p>
         </div>
       </div>

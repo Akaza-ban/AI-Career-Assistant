@@ -12,7 +12,7 @@ export interface UserProfile {
   id: string
   role: Role
   full_name: string
-  /** Ví dụ "KDQT - K2021" */
+  /** SV: email; cố vấn: chức danh. */
   subtitle: string
   avatar_url: string | null
 }
@@ -810,7 +810,7 @@ export interface StudentProgress {
 export interface AdvisorContact {
   id: string
   full_name: string
-  /** Ví dụ "Cố vấn nghề nghiệp Khoa Hệ thống thông tin" */
+  /** Ví dụ "Cố vấn hướng nghiệp" */
   title: string
   email: string
   office: string | null
@@ -866,9 +866,11 @@ export interface UpdateSharingRequest {
 // ---------- Cài đặt & Quyền riêng tư ----------
 
 export interface StudentSettings {
+  /** Email đăng nhập (email cá nhân, không cần email trường). */
   email: string
-  student_code: string
-  faculty: string
+  phone: string | null
+  /** YYYY-MM-DD */
+  date_of_birth: string | null
   /** Lần đổi mật khẩu gần nhất; null nếu chưa đổi kể từ khi tạo tài khoản. */
   password_updated_at: ISODateString | null
   /** Thời điểm SV đồng ý điều khoản xử lý dữ liệu & cam kết liêm chính; null nếu đã rút lại. */
@@ -889,6 +891,40 @@ export interface StudentSettings {
 
 export interface ChangePasswordRequest {
   current_password: string
+  new_password: string
+}
+
+// ---------- Tài khoản: đăng ký, đăng nhập, quên mật khẩu ----------
+// Chỉ sinh viên tự đăng ký; tài khoản cố vấn do CareerX cấp. Email là email cá nhân (không cần email trường).
+
+export interface LoginRequest {
+  email: string
+  password: string
+}
+
+export interface LoginResponse {
+  role: Role
+  profile: UserProfile
+}
+
+export interface RegisterRequest {
+  full_name: string
+  /** YYYY-MM-DD */
+  date_of_birth: string
+  phone: string
+  email: string
+  password: string
+  /** Đồng ý xử lý dữ liệu và cam kết liêm chính (cả hai bắt buộc). */
+  consent: true
+  integrity_pledge: true
+}
+
+export interface PasswordResetRequest {
+  email: string
+}
+
+export interface PasswordResetConfirmRequest {
+  token: string
   new_password: string
 }
 
@@ -921,12 +957,10 @@ export interface StudentFlag {
 export interface AssignedStudent {
   id: string
   full_name: string
-  /** Ví dụ "KDQT - K2021" */
+  /** Dòng phụ dưới tên (hiện là email). */
   subtitle: string
-  student_code: string | null
   email: string
-  major: string | null
-  cohort: string | null
+  phone?: string | null
   avatar_url: string | null
   /** Vị trí của buổi phỏng vấn gần nhất (hoặc lượt phân tích gần nhất). */
   target: InterviewJdRef | null
@@ -1110,7 +1144,7 @@ export interface ChatParticipant {
   id: string
   full_name: string
   role: Role
-  /** SV: ngành - khoá; cố vấn: chức danh. */
+  /** SV: email; cố vấn: chức danh. */
   subtitle: string
   avatar_url: string | null
   /** Giờ tư vấn (chỉ với cố vấn). */

@@ -39,6 +39,8 @@ export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]["id"]
 
 /** "20/09" */
 const shortDate = (iso: string) => formatDate(iso).slice(0, 5)
+/** "2003-05-14" → "14/05/2003", không qua Date để tránh lệch múi giờ. */
+const dayMonthYear = (ymd: string) => ymd.split("-").reverse().join("/")
 
 /** Nút viền dạng pill nhỏ của bản vẽ ("Đổi mật khẩu", "Tải xuống"). */
 const pillLine = "h-9 rounded-full border-line-strong bg-card px-4 font-semibold text-ink shadow-xs"
@@ -143,14 +145,14 @@ export function AccountSection({
   const updatedAt = settings.password_updated_at
   return (
     <SettingsZone id="account" title="Tài khoản">
-      <SettingRow label="Họ tên" hint="Cần sửa? Liên hệ phòng quản lý đào tạo">
+      <SettingRow label="Họ tên">
         <span className="wrap-anywhere text-ink-2">{fullName}</span>
       </SettingRow>
-      <SettingRow label="Mã sinh viên">
-        <span className="text-ink-2 tabular-nums">{settings.student_code}</span>
+      <SettingRow label="Ngày sinh">
+        <span className="text-ink-2 tabular-nums">{settings.date_of_birth ? dayMonthYear(settings.date_of_birth) : "Chưa cập nhật"}</span>
       </SettingRow>
-      <SettingRow label="Khoa">
-        <span className="wrap-anywhere text-ink-2">{settings.faculty}</span>
+      <SettingRow label="Số điện thoại">
+        <span className="text-ink-2 tabular-nums">{settings.phone ?? "Chưa cập nhật"}</span>
       </SettingRow>
       <SettingRow label="Email" hint="Dùng để đăng nhập, không đổi được">
         <span className="wrap-anywhere text-ink-2">{settings.email}</span>

@@ -124,8 +124,7 @@ export function StudentIdentity({ student, showEmail = true }: { student: Assign
       <span className="grid min-w-0">
         <span className="truncate font-semibold text-ink">{student.full_name}</span>
         <span className="truncate text-xs text-ink-2">
-          {student.student_code ? `MSSV ${student.student_code}` : student.subtitle}
-          {showEmail && ` · ${student.email}`}
+          {showEmail ? student.email : student.phone ?? student.email}
         </span>
       </span>
     </span>

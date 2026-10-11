@@ -18,7 +18,7 @@ export const mockStudent: UserProfile = {
   id: "sv-0142",
   role: "student",
   full_name: "Nguyễn Minh Anh",
-  subtitle: "KDQT - K2021",
+  subtitle: "minhanh.nguyen@gmail.com",
   avatar_url: null,
 }
 
@@ -26,7 +26,7 @@ export const mockAdvisor: UserProfile = {
   id: "cv-007",
   role: "advisor",
   full_name: "ThS. Trần Hoàng Nam",
-  subtitle: "Khoa HTTT",
+  subtitle: "Cố vấn hướng nghiệp",
   avatar_url: null,
 }
 

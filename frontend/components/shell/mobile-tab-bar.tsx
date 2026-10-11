@@ -80,7 +80,7 @@ export function MobileTabBar({ role }: { role: Role }) {
               )
             })}
             <Link
-              href="/"
+              href="/login?demo=1"
               onClick={() => setOpen(false)}
               className="flex items-center gap-3 rounded-[10px] px-3 py-3 text-[15px] font-medium text-ink-2 hover:bg-surface"
             >

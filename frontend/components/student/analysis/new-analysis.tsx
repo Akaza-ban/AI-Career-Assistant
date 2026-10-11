@@ -92,7 +92,8 @@ export function NewAnalysis({ initialCvId, initialJdIds }: { initialCvId: string
         actions={
           <SegmentedControl
             aria-label="Chế độ phân tích"
-            className="w-full p-1 sm:w-auto [&_button]:h-10 [&_button]:px-5 [&_button]:text-[15px]"
+            size="lg"
+        className="w-full p-1 sm:w-auto"
             value={mode}
             onChange={(m) => syncUrl({ mode: m })}
             options={MODE_OPTIONS}

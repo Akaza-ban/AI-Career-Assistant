@@ -16,7 +16,7 @@ interface SegmentedControlProps<T extends string> {
   value: T
   onChange: (value: T) => void
   "aria-label": string
-  size?: "sm" | "md"
+  size?: "sm" | "md" | "lg"
   className?: string
 }
 
@@ -75,7 +75,7 @@ export function SegmentedControl<T extends string>({
             onClick={() => onChange(option.value)}
             className={cn(
               "relative z-[1] rounded-full px-3 font-semibold whitespace-nowrap transition-colors",
-              size === "sm" ? "h-8 text-[13px]" : "h-9 text-sm",
+              size === "sm" ? "h-8 text-[13px]" : size === "lg" ? "h-10 px-5 text-[15px]" : "h-9 text-sm",
               selected ? "text-ink" : "text-ink-3 hover:text-ink-2",
             )}
           >

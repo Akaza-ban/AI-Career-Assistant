@@ -47,6 +47,11 @@ import type {
   CapabilityAnswerRequest,
   CapabilityCheck,
   ChangePasswordRequest,
+  LoginRequest,
+  LoginResponse,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  RegisterRequest,
   ChangePasswordResponse,
   ChatMessage,
   ChatParticipant,
@@ -463,6 +468,16 @@ const advisorReviews: Record<string, AdvisorReviewInfo> = isNewStudent
 /** Mật khẩu hiện tại ở chế độ mock (để thử luồng đổi mật khẩu). */
 let mockPassword = "careerx123"
 
+// ---------- Tài khoản ----------
+// Hai tài khoản demo (mật khẩu chung với mockPassword) và các tài khoản tạo mới trong phiên.
+const LOGIN_MAX_ATTEMPTS = 5
+const accounts = new Map<string, { role: Role; password: () => string }>([
+  ["minhanh.nguyen@gmail.com", { role: "student", password: () => mockPassword }],
+  ["nam.tran@careerx.vn", { role: "advisor", password: () => mockPassword }],
+])
+let failedLogins = 0
+const normalizeEmail = (email: string) => email.trim().toLowerCase()
+
 const reviewRead = (r: AdvisorReviewInfo) => r.seen_at !== null && r.seen_at >= r.updated_at
 
 /** Danh sách tài liệu có thể chia sẻ: mọi phiên bản CV và mọi buổi phỏng vấn đã hoàn thành. */
@@ -641,10 +656,8 @@ function minhAnhSource(): StudentSource {
       id: MINH_ANH,
       full_name: mockStudent.full_name,
       subtitle: mockStudent.subtitle,
-      student_code: "21125430",
-      email: "minhanh.k21@student.university.edu.vn",
-      major: "Kinh doanh quốc tế",
-      cohort: "K2021",
+      email: mockStudent.subtitle,
+      phone: "0912 345 678",
       avatar_url: null,
     },
     cvs: [...cvVersions].sort((a, b) => b.version - a.version),
@@ -721,6 +734,49 @@ const chatStudentIds = (role: Role) =>
         .map((p) => p.id)
 
 export const mockApi = {
+  async login(body: LoginRequest): Promise<LoginResponse> {
+    await delay(700)
+    if (failedLogins >= LOGIN_MAX_ATTEMPTS) {
+      throw new ApiError(429, "Bạn đã nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.", "too_many_attempts")
+    }
+    const account = accounts.get(normalizeEmail(body.email))
+    if (!account || account.password() !== body.password) {
+      failedLogins += 1
+      const left = LOGIN_MAX_ATTEMPTS - failedLogins
+      throw new ApiError(
+        401,
+        left > 0
+          ? `Email hoặc mật khẩu chưa đúng. Còn ${left} lần thử trước khi tạm khoá 15 phút.`
+          : "Bạn đã nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.",
+        "invalid_credentials",
+      )
+    }
+    failedLogins = 0
+    return { role: account.role, profile: clone(account.role === "advisor" ? mockAdvisor : mockStudent) }
+  },
+
+  async register(body: RegisterRequest): Promise<LoginResponse> {
+    await delay(900)
+    const email = normalizeEmail(body.email)
+    if (accounts.has(email)) throw new ApiError(409, "Email này đã có tài khoản.", "email_taken")
+    const password = body.password
+    accounts.set(email, { role: "student", password: () => password })
+    return { role: "student", profile: { ...clone(mockStudent), full_name: body.full_name.trim(), subtitle: email } }
+  },
+
+  async requestPasswordReset(body: PasswordResetRequest): Promise<void> {
+    await delay(600)
+    void body
+  },
+
+  async confirmPasswordReset(body: PasswordResetConfirmRequest): Promise<LoginResponse> {
+    await delay(700)
+    if (!body.token) throw new ApiError(400, "Link đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.", "invalid_token")
+    mockPassword = body.new_password
+    failedLogins = 0
+    return { role: "student", profile: clone(mockStudent) }
+  },
+
   async listNotifications(role: Role) {
     await delay(500)
     return clone(notifications[role])

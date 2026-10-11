@@ -2,7 +2,7 @@
 
 Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồng thao tác và trạng thái**. Màu, font, bo góc và chuyển động lấy từ [`DESIGN.md`](DESIGN.md).
 
-**Trạng thái:** A0, A1, A2 và B2 đã cập nhật theo bản mẫu đã duyệt. Sáu màn có artboard trong bản mẫu (Tổng quan, Thư viện JD, Kết quả phân tích, Thư viện JD trên điện thoại, Phòng phỏng vấn, Trình tối ưu CV) lấy **bản mẫu làm chuẩn về hình ảnh**; wireframe ở đây giữ vai trò mô tả luồng và trạng thái. Các màn còn lại dựng theo wireframe kết hợp quy tắc của DESIGN.md v2.
+**Trạng thái:** mọi màn của sinh viên và 3 màn cố vấn (A19–A21) đã có artboard trên canvas và đã dựng xong; **canvas là chuẩn về hình ảnh**, wireframe ở đây giữ vai trò mô tả luồng và trạng thái. Các màn A0–A2, A8, A11, A12, A14 và A19–A21 đã cập nhật theo bản dựng; những màn khác có thể còn ký hiệu cũ (`▓`, `(●●● Cao)`), khi lệch thì theo canvas. Chưa dựng: A18 (bảng lệnh Ctrl K).
 
 ## Ký hiệu
 
@@ -21,7 +21,7 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
 | `✎` | JD tự dán |
 | `▒` | skeleton đang tải |
 
-**Quy tắc điểm số:** màn gợi ý chỉ hiện nhãn; màn phân tích và so sánh hiện "điểm · nhãn" (ví dụ `72 · Khá`); phỏng vấn hiện `x.x / 5`.
+**Quy tắc điểm số:** màn gợi ý chỉ hiện nhãn; màn phân tích và so sánh hiện "điểm % · nhãn" (ví dụ `72% · Khá`); phỏng vấn hiện `x,x / 5`, không nhãn. Số thập phân dùng dấu phẩy.
 
 ---
 
@@ -199,7 +199,9 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
    tối thiểu 2, tối đa 3 vị trí (giới hạn của backend); đủ 3 thì ẩn ô "+ Thêm vị trí"
 ```
 
-## A6. Kết quả so sánh
+## A6. Kết quả so sánh — `/student/analysis/compare?jd=…`
+
+Trang riêng, breadcrumb "Phân tích CV & JD / So sánh". Thứ tự vùng: Mức phù hợp · Kỹ năng (bảng, có chú giải) · "Nên ưu tiên học trước" (kỹ năng thiếu ở mọi vị trí) · Nhận xét của AI.
 
 ```
  So sánh 3 vị trí  ·  CV_DataAnalyst.pdf v2.1                 ( Đổi CV )
@@ -329,10 +331,9 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
 
 ```
  Trình tối ưu CV / Xuất CV
- ┌▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┐
- │▓  Phiên bản v2.2 đã sẵn sàng                                           ▓│
- │▓  4 câu đã sửa · 1 kỹ năng đang phát triển · 0 thông tin tự thêm       ▓│
- └▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┘
+ Xuất CV                                              ( Quay lại trình tối ưu )
+ CV_DataAnalyst_v2.2.pdf          ← dòng mô tả chỉ là tên file CV, không ghi JD hay công ty
+ 4 câu đã sửa · 1 kỹ năng đang phát triển · 0 thông tin AI tự thêm   (hàng chỉ số)
  ┌ Các câu đã sửa ───────────────────────────────┐ ┌ Cam kết liêm chính ────────┐
  │ Tìm câu cũ trong file CV và thay bằng câu mới.│ │ [ ] Mọi thông tin trong CV │
  │ ┌───────────────────────────────────────────┐ │ │     là sự thật và do tôi   │
@@ -350,27 +351,34 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
 ## A12. Thiết lập phỏng vấn và Phòng chờ — `/student/interview/new`, `/start`
 
 ```
- Luyện phỏng vấn                                        Còn 2 / 3 buổi tuần này
- ┌ Chọn vị trí & CV ────────────────────────────────┐ ┌ Tóm tắt buổi phỏng vấn ────┐
- │ Vị trí   ( ▌Gợi ý & Đã lưu ) ( Đã phân tích )    │ │ Data Analyst · FPT         │
- │   (●) ★ Data Analyst · FPT          (●●● Cao)    │ │ CV_DataAnalyst v2.1        │
- │   ( ) ★ BI Developer · VNG          (●●○ Khá)    │ │ 5 câu · khoảng 20 phút     │
- │   ( ) ♥ Backend Intern · Tiki                    │ │ Chấm theo STAR             │
- │ CV       [CV_DataAnalyst v2.1 ▾]                 │ │────────────────────────────│
- └──────────────────────────────────────────────────┘ │ [ Vào phòng chờ → ]        │
- ┌ Buổi gần đây ────────────────────────────────────┐ └────────────────────────────┘
- │ Data Analyst · 3.6 / 5 · 05/10      ( Báo cáo → )│
- │ ◐ BA · đang dở câu 3/5              ( Tiếp tục → )│
- └──────────────────────────────────────────────────┘
+ Luyện phỏng vấn
+ Chọn CV và vị trí. AI sẽ hỏi 5 câu và chấm theo khung STAR.
+ Chọn CV ─────────────────────────────────────────── ┌ Tóm tắt buổi phỏng vấn ────┐
+   (●) CV_DataAnalyst.pdf · v2.1 · Đang dùng          │ Vị trí   Data Analyst · FPT│
+   ( ) CV_BA.pdf · v1.0                               │ CV       CV_DataAnalyst v2.1│
+ Chọn vị trí            ( ▌Gợi ý & đã lưu ) ( Đã phân tích ) │ Số câu   5 câu · ~20 phút │
+   (●) ★ Data Analyst · FPT          (● Cao)          │ Chấm     Theo STAR, thang 5│
+   ( ) ★ BI Developer · VNG          (● Khá)          │ ●●○ Còn 1 / 3 buổi tuần này│
+                                                      │ [ Vào phòng chờ → ]        │
+   ( ) ♥ Backend Intern · Tiki                        └────────────────────────────┘
+   Tìm trong Thư viện JD →
+ Buổi gần đây                                                      Xem lịch sử
+ ─────────────────────────────────────────────────────────────────────────────
+   Data Analyst · 3,6 / 5 · 05/10                                 ( Báo cáo → )
+   CV đứng trước vị trí · lượt tuần tính theo vị trí đang chọn
+   Hướng dẫn lần đầu (tour) bước 1 khoanh cả 2 vùng "Chọn CV" và "Chọn vị trí"
 
  ── Phòng chờ (chế độ tập trung, không sidebar) ─────────────────────────
               ╭──────╮
-              │  AI  │  AI Career Coach · Người phỏng vấn
-              ╰──────╯
-     Trước khi bắt đầu
-     ○ 5 câu, mỗi câu có đồng hồ riêng     ○ Được tạm dừng 1 lần
-     ○ Điểm không hiện trong lúc phỏng vấn ○ Giọng nói không được lưu
-     ( Xem hướng dẫn 5 bước )          [ Sẵn sàng ]   ← đồng hồ câu 1 chỉ chạy sau khi bấm
+              │  AI  │  AI Career Coach
+              ╰──────╯   Người phỏng vấn · 5 câu · khoảng 20 phút
+     Vị trí   Business Analyst Intern · Công ty Công nghệ A     ← 2 dòng riêng
+     CV       CV_DataAnalyst.pdf · v2.1
+     ─ luật của buổi (đồng hồ từng câu, tạm dừng, rời phòng thì không lưu…) ─
+     Còn 2 / 3 buổi cho vị trí này trong tuần.
+     [ Sẵn sàng ]   ( Đổi CV và vị trí )   ← đồng hồ câu 1 chỉ chạy sau khi bấm Sẵn sàng
+   "Đổi CV và vị trí" về Thiết lập, giữ lựa chọn · "Rời phòng" (thanh trên) hỏi lại
+   rồi về trang Luyện phỏng vấn · không có "Xem hướng dẫn 5 bước"
 ```
 
 ## A13. Phòng phỏng vấn — `/student/interview/[id]`
@@ -391,6 +399,12 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
         │                                                      │
         └──────────────────────────────────────────────────────┘
         124 từ                                     [ Gửi câu trả lời → ]
+
+ Kết thúc sớm → ConfirmDialog (kiểu nguy hiểm):
+   Kết thúc buổi phỏng vấn?
+   Buổi này sẽ không được lưu và không tính lượt.
+   ┌ Đã trả lời  2 / 5 câu │ Báo cáo  Không có ┐   ← một hàng thông tin
+   ( Ở lại phòng )   [ Kết thúc, không lưu ]
 ```
 
 ## A14. Báo cáo phỏng vấn — `/student/interview/[id]/report`
@@ -409,14 +423,20 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
  │ R Kết quả      ███████░░░░░░░  3.1 Yếu nhất│ │ bày, không viết sẵn câu trả lời│
  └────────────────────────────────────────────┘ └───────────────────────────────┘
  Chi tiết từng câu
- ┌ 1  Hãy kể về một lần bạn dùng dữ liệu để thuyết phục…        4.0   ⌄ ┐ ◆ accordion
- │    Câu trả lời của bạn · Nhận xét AI · điểm S T A R từng chữ          │
- ┌ 2  …                                                         3.2   ⌄ ┐
+ ┌ 1  Hãy kể về một lần bạn dùng dữ liệu để thuyết phục…        4,0   ⌃ ┐ ◆ accordion,
+ │    Câu trả lời của bạn · Nhận xét AI · điểm S T A R từng chữ          │   chỉ 1 câu mở:
+ ┌ 2  …                                                         3,2   ⌄ ┐   mở câu 2 thì
+                                                                            câu 1 đóng lại
  ┌ Nhận xét của cố vấn ─────────────────────────────────────────────────┐
  │ (CL) Cô Lan · 10/10 · "Câu 3 cần nêu rõ kết quả đo được…"            │
  │ Điểm AI giữ nguyên; nhận xét giúp bạn biết nên luyện gì tiếp.        │
  └──────────────────────────────────────────────────────────────────────┘
  [ Luyện lại vị trí này → ]  ( Chia sẻ với cố vấn )
+   không có đoạn cảnh báo AI dài ở cuối trang (DESIGN.md 8.3)
+
+ Cuối trang: "Bạn thấy buổi luyện phỏng vấn này thế nào?"  ( Đánh giá buổi này )
+ CSAT (dialog): "Bạn thấy buổi này thế nào?" · số sao 1–5 · Nhận xét (tuỳ chọn) · ( Để sau ) [ Gửi đánh giá ]
+   không hỏi "Bạn có dùng lại không?"
 ```
 
 ## A15. Lịch sử & Tiến bộ — `/student/history`
@@ -516,67 +536,98 @@ Wireframe ASCII cho từng màn của ứng dụng. Mô tả **bố cục, luồ
 ## A19. Tổng quan cố vấn — `/advisor`
 
 ```
- ┌▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┐
- │▓  Chào cô Lan,                                                         ▓│
- │▓  3 sinh viên cần chú ý  ·  4 buổi phỏng vấn chờ nhận xét              ▓│
- │▓  [ Xem buổi chờ nhận xét → ]                                          ▓│
- └▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓┘
- ┌ Sinh viên ─────┐ ┌ Điểm PV TB ────┐ ┌ Đang tiến bộ ──┐ ┌ Chờ nhận xét ──┐
- │ 24             │ │ 3.5 ▲ +0.3     │ │ 15 / 24        │ │ 4              │
- └────────────────┘ └────────────────┘ └────────────────┘ └────────────────┘
- ┌ Sinh viên cần chú ý ──────────────────────┐ ┌ Điểm PV trung bình theo tuần ─┐
- │ (BH) Bùi Hà     ▼ giảm 2 buổi liên tiếp →│ │      ●───●                    │
- │ (TM) Trần Minh  14 ngày không hoạt động  →│ │ ●───╱     ╲●──●               │
- │ (LK) Lê Khoa    Chưa tải CV              →│ └───────────────────────────────┘
- └───────────────────────────────────────────┘
- ┌ Tiêu chí STAR cả nhóm ──┐ ┌ Phân bố mức tiến bộ ──┐ ┌ Tiến bộ nhiều nhất ─────┐
- │ S ████████ T ███████    │ │ ███████ Tăng   15     │ │ Phạm An   2.8 → 4.1     │
- │ A ██████   R ████ Yếu   │ │ ███     Giữ     6     │ │ Võ Nhi    3.0 → 3.9     │
- └─────────────────────────┘ │ █       Giảm    3     │ └─────────────────────────┘
-                             └───────────────────────┘
- ┌ Nhận xét đã gửi gần đây ─────────────────────────────────────────────────┐
+ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+ ░ Chào buổi sáng, cô Lan!                      ( Sinh viên phụ trách ) [ Nhận xét  ░
+ ░ 4 buổi chờ nhận xét · 3 sinh viên cần chú ý.                           buổi chờ › ]
+ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░
+ ┌ Việc cần làm ─────────────────────────────────────────────────────── panel xám ┐
+ │ ┌ Chờ nhận xét 4                  Xem tất cả ┐ ┌ Cần chú ý 3            Xem danh sách ┐ │
+ │ │ (PA) Phạm An                                │ │ (BH) Bùi Hà                         │ │
+ │ │      Data Analyst · 2 buổi chờ · 2 giờ trước│ │      Buổi 3, 4 không tăng điểm · BA │ │
+ │ │                               [ Nhận xét ]  │ │                         ( ✉ Nhắn tin )│ │
+ │ │ (VN) Võ Nhi …                 [ Nhận xét ]  │ │ (TM) Trần Minh …        ( ✉ Nhắn tin )│ │
+ │ └─────────────────────────────────────────────┘ └─────────────────────────────────────┘ │
+ └────────────────────────────────────────────────────────────────────────────────────┘
+ Tình hình nhóm
+ ─────────────────────────────────────────────────────────────────────────────────────
+ Sinh viên          Điểm phỏng vấn TB     Đang tiến bộ          Độ khớp CV TB
+ 24                 3,5 / 5   +0,3        15 / 24               68%
+ Phân tích nhóm
+ ─────────────────────────────────────────────────────────────────────────────────────
+ Điểm phỏng vấn TB theo tuần                     Tiêu chí STAR cả nhóm
+      ●───●                                      Bối cảnh  S  ━━━━━━━━━━░  3,8
+ ●───╱     ╲●──●                                 Kết quả   R  ━━━━━░░░░░░  2,9 (màu warn)
+ Mức tiến bộ            Tiến bộ nhiều nhất          Nhận xét gần đây
+ ───────────────        ─────────────────────       ──────────────────────────
+ ━━━━━━━ Tăng   15      Phạm An   2,8 → 4,1         Phạm An · Data Analyst · 10/10
+ ━━━     Giữ     6      Võ Nhi    3,0 → 3,9         "Câu 3 cần nêu rõ kết quả…"
+ ━       Giảm    3
+   "Nhận xét" hiện mở tab Phỏng vấn trong hồ sơ; khi API trả danh sách buổi chờ thì
+   mở thẳng dialog nhận xét bằng `?review=<session_id>` (DESIGN.md mục 12)
+   "Cần chú ý" = SV bị gắn cờ 2 vòng liên tiếp không tăng điểm
 ```
 
 ## A20. Sinh viên phụ trách — `/advisor/students`
 
 ```
- Sinh viên phụ trách                      [Tìm sinh viên…        ]
- ( ▌Tất cả 24 ) ( Cần chú ý 3 ) ( Chờ nhận xét 4 ) ( Đang tiến bộ 15 )   ◆ pill trượt
- ┌──────────────────────────────────────────────────────────────────────────────┐
- │ Sinh viên        Vị trí đang luyện   Điểm đầu → gần nhất  Trạng thái  Hoạt động│
- ├──────────────────────────────────────────────────────────────────────────────┤
- │ (PA) Phạm An     Data Analyst        2.8 → 4.1  ▁▃▅▇      Tiến bộ     2 giờ   ⌄│
- │ (BH) Bùi Hà      BA                  3.4 → 2.9  ▇▅▃       Cần chú ý   1 ngày  ⌄│
- │  ┌ STAR: R yếu nhất · CV: 51 → 64 · Gợi ý buổi tới: luyện câu tình huống ┐   │ ◆ mở rộng
- │  │ ( Mở hồ sơ → )  ( Nhắn tin )                                          │   │   tại chỗ
- │  └───────────────────────────────────────────────────────────────────────┘   │
- │ (LK) Lê Khoa     Chưa chọn vị trí    —                    Chưa đủ dữ liệu  —  ⌄│
- └──────────────────────────────────────────────────────────────────────────────┘
+ Sinh viên phụ trách                                      [⌕ Tìm sinh viên        ]
+ ( ▌Tất cả 24 ) ( Cần chú ý 3 ) ( Chờ nhận xét 4 ) ( Đang tiến bộ 15 )
+                                                         Sắp xếp: [Ưu tiên cần hỗ trợ ▾]
+ SINH VIÊN       VỊ TRÍ ĐANG LUYỆN   ĐIỂM PV ĐẦU → GẦN NHẤT  ĐỘ KHỚP CV  TRẠNG THÁI   HOẠT ĐỘNG
+ ─────────────────────────────────────────────────────────────────────────────────────────
+ (PA) Phạm An    Data Analyst        2,8 → 4,1  ▁▃▅▇         81%         (● Tiến bộ)  2 giờ  ⌄
+ (BH) Bùi Hà     BA                  3,4 → 2,9  ▇▅▃          64%         (● Cần chú ý) 1 ngày ⌃
+    STAR yếu nhất      Độ khớp CV         Gợi ý buổi tới                        ◆ mở rộng
+    Kết quả · 2,5      51% → 64%          Luyện câu tình huống có số liệu          tại chỗ
+                                         ( ✉ Nhắn tin )  [ Mở hồ sơ → ]
+ (LK) Lê Khoa    Chưa chọn vị trí    Chưa có buổi nào        Chưa phân tích  Chưa đủ dữ liệu — ⌄
+   4 bộ lọc chính là segmented; các trạng thái còn lại (Đang giảm, Ổn định, Chưa đủ dữ liệu,
+   Chưa chia sẻ tài liệu) mở qua URL `?status=` · điện thoại: segmented đổi thành ô chọn
+   sắp xếp: Ưu tiên cần hỗ trợ · Hoạt động gần nhất · Tiến bộ nhiều nhất · Tên A → Z
 ```
 
 ## A21. Hồ sơ sinh viên — `/advisor/students/[id]`
 
 ```
- Sinh viên phụ trách / Phạm An
- ┌─────────────────────────────────────────────────────────────────────────┐
- │ (PA) Phạm An · K66 CNTT          Tiến bộ      [ Nhắn tin ] ( Ghi chú )  │
- │ Đang nhắm: Data Analyst · BI Developer                                  │
- └─────────────────────────────────────────────────────────────────────────┘
- ( ▌Phỏng vấn ) ( CV ) ( Ghi chú 3 )                                  ◆ pill trượt
- ── Tab Phỏng vấn ─────────────────────────────────────────────────────────
- ┌ Tiến bộ theo vị trí ──────────────────┐ ┌ Tiêu chí STAR ───────────────┐
- │ Data Analyst  2.8 ─ 3.4 ─ 3.8 ─ 4.1   │ │ S 4.2  T 4.0  A 3.8  R 3.1   │
- │ điểm chỉ so sánh trong cùng vị trí    │ │                     Yếu nhất │
- └───────────────────────────────────────┘ └──────────────────────────────┘
- Các buổi phỏng vấn thử   ( ▌Tất cả ) ( Chờ nhận xét 1 )
- │ 09/10 Data Analyst  4.1  Chờ nhận xét                   [ Nhận xét → ] │ → dialog: trái là
- │ 05/10 Data Analyst  3.8  ✓ Đã nhận xét                  ( Xem )        │   báo cáo, phải là
- ── Tab CV ────────────────────────────────────────────────────────────────   ô nhận xét
- │ CV đang dùng · Độ khớp qua các phiên bản · Vị trí đang nhắm ·            │
- │ Kết quả phân tích gần nhất (72 · Khá)                                    │
- ── Tab Ghi chú ───────────────────────────────────────────────────────────
- │ [Thêm ghi chú…                         ] Gắn thẻ: (Kỹ năng)(Thái độ)    │
- │ Gợi ý cho buổi tư vấn tiếp theo (do hệ thống tổng hợp)                   │
+ Sinh viên phụ trách › Hồ sơ sinh viên
+ (NA) Nguyễn Minh Anh  (● Đang tiến bộ)                  ( ✎ Thêm ghi chú ) [ ✉ Nhắn tin ]
+      MSSV 21125430 · KDQT · K2021 · Đang nhắm: Business Analyst Intern
+ Điểm STAR gần nhất +0,7   Độ khớp CV gần nhất +22,3   Số buổi đã luyện   Hoạt động cuối
+ 3,6 / 5                   80,6%                       6                  Vừa xong
+ Buổi đầu 2,9 ở cùng vị trí CV v2.0 · Business Analyst 100 phút · 4 buổi  Chia sẻ 3/8 tài liệu
+ ─────────────────────────────────────────────────────────────────────────────────────
+ ( ▌Phỏng vấn ) ( CV ) ( Ghi chú 1 )                     segmented cỡ lg, ◆ pill trượt
+ ── Tab Phỏng vấn ─────────────────────────────────────────────────────────────────────
+ Tiến bộ theo vị trí   [Business Analyst Intern ▾]    Tiêu chí STAR
+ 5 ┤        ●────●──●                                 Bối cảnh S  ━━━━━━━━░  3,7
+ 3 ┤ ●────●╱                                          Kết quả  R  ━━━━━░░░░  2,5 (warn)
+   điểm chỉ so sánh trong cùng vị trí                 ✦ gợi ý hướng dẫn cho tiêu chí yếu nhất
+ Các buổi phỏng vấn thử                               ( ▌Tất cả ) ( Chờ nhận xét 0 )
+ ─────────────────────────────────────────────────────────────────────────────────────
+ 11/10  Business Analyst Intern  Buổi 4 · 16 phút    3,6 / 5  (● Đã nhận xét)       Xem
+ 09/10  Data Analyst             Buổi 2 · 18 phút    3,9 / 5  (● Chờ nhận xét) [ Nhận xét ]
+ 04/10  Business Analyst Intern  Buổi 2 · 19 phút    3,1 / 5  (khoá) Chưa chia sẻ
+   buổi chưa chia sẻ không mở được; mở bằng URL `?review=<session_id>`
+ ── Dialog Nhận xét buổi phỏng vấn ───────────────────────────────────────────────────
+ ┌ (NA) Nhận xét buổi phỏng vấn  Nguyễn Minh Anh · BA Intern · 09/10 · 5 câu      ✕ ┐
+ │ Báo cáo (điểm STAR, từng câu,           │ Nhận xét của bạn          (nền panel) │
+ │ câu trả lời, nhận xét AI)               │ [Viết nhận xét cho sinh viên…       ] │
+ │                                         │ Sinh viên sẽ thấy nhận xét này trong  │
+ │                                         │ báo cáo. Điểm AI giữ nguyên.          │
+ │                                         │ (Nêu rõ kết quả)(Tách vai trò cá nhân)│
+ │                                         │ (Rút gọn bối cảnh)(Khen điểm mạnh)    │
+ │                                         │                   [ Gửi nhận xét ]    │
+ └──────────────────────────────────────────────────────────────────────────────────┘
+   chip mẫu câu chèn câu vào ô · đã nhận xét: tiêu đề "Nhận xét đã gửi", nút "Lưu nhận xét"
+   điện thoại: dialog toàn màn hình, 2 cột xếp dọc
+ ── Tab CV ────────────────────────────────────────────────────────────────────────────
+ CV đang dùng (Chỉ đọc) · Phiên bản khác · Độ khớp qua các phiên bản
+ Phân tích gần nhất: Vị trí đang nhắm · điểm % · nhãn · Kỹ năng còn thiếu
+ ── Tab Ghi chú ───────────────────────────────────────────────────────────────────────
+ Ghi chú của bạn  (Chỉ cố vấn xem được)
+ [Nội dung ghi chú…                    ]  Gắn thẻ: (Hành vi)(Kỹ năng mềm)(Kỹ thuật)(Theo dõi đặc biệt)
+ danh sách ghi chú: sửa tại chỗ, xoá qua ConfirmDialog
+ Gợi ý cho buổi tư vấn tới (do hệ thống tổng hợp)
 ```
 
 ---

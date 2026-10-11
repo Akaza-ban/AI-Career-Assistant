@@ -14,6 +14,8 @@
   /* Màu thương hiệu dùng trực tiếp: bg-surface, text-ink-2, bg-blue-soft... */
   --color-surface: var(--surface);
   --color-panel: var(--panel);
+  --color-night: var(--night);
+  --color-night-mute: var(--night-mute);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-ink-3: var(--ink-3);
@@ -104,6 +106,9 @@
   --panel: #f7f7f9;
   --card: #ffffff;
   --ink: #18181b;
+  /* Dải tối duy nhất của landing page (DESIGN.md 4.1); không dùng trong app */
+  --night: #0e1020;
+  --night-mute: #a3a6be;
   --ink-2: #52525b;
   --ink-3: #6b6b74;
   --line: #ececef;

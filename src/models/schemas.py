@@ -40,7 +40,7 @@ class UserProfile(BaseModel):
     id: str = Field(..., description="Mã người dùng")
     role: Literal["student", "advisor"] = Field(..., description="Vai trò")
     full_name: str = Field(..., description="Họ và tên")
-    subtitle: str = Field(default="", description="Dòng phụ, ví dụ 'KDQT - K2021'")
+    subtitle: str = Field(default="", description="Dòng phụ: email (SV) hoặc chức danh (cố vấn)")
     avatar_url: str | None = Field(default=None, description="Ảnh đại diện")
 
 
@@ -943,10 +943,8 @@ class AssignedStudentResponse(BaseModel):
     id: str
     full_name: str
     subtitle: str
-    student_code: str | None = None
     email: str
-    major: str | None = None
-    cohort: str | None = None
+    phone: str | None = None
     avatar_url: str | None = None
     target: InterviewJd | None = Field(default=None, description="Vị trí của buổi gần nhất (hoặc lần phân tích)")
     interview_count: int
@@ -1124,7 +1122,7 @@ class ChatParticipant(BaseModel):
     id: str
     full_name: str
     role: Literal["student", "advisor"]
-    subtitle: str = Field(..., description="SV: ngành - khoá; cố vấn: chức danh")
+    subtitle: str = Field(..., description="SV: email; cố vấn: chức danh")
     avatar_url: str | None = None
     office_hours: str | None = Field(default=None, description="Giờ tư vấn (chỉ với cố vấn)")
 

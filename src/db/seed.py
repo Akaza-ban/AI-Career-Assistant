@@ -1,4 +1,5 @@
 import json
+from datetime import date
 from pathlib import Path
 
 from sqlalchemy import select, update
@@ -17,20 +18,19 @@ DEMO_USERS = [
         "id": DEMO_STUDENT_ID,
         "role": "student",
         "full_name": "Nguyễn Minh Anh",
-        "subtitle": "KDQT - K2021",
-        "email": "minhanh.k21@student.university.edu.vn",
-        "student_code": "21125430",
-        "major": "Kinh doanh quốc tế",
-        "cohort": "K2021",
+        "subtitle": "minhanh.nguyen@gmail.com",
+        "email": "minhanh.nguyen@gmail.com",
+        "phone": "0912 345 678",
+        "date_of_birth": date(2003, 5, 14),
     },
     {
         "id": DEMO_ADVISOR_ID,
         "role": "advisor",
         "full_name": "ThS. Trần Hoàng Nam",
-        "subtitle": "Khoa HTTT",
-        "email": "nam.th@university.edu.vn",
-        "title": "Cố vấn nghề nghiệp Khoa Hệ thống thông tin",
-        "office": "Phòng A2.305",
+        "subtitle": "Cố vấn hướng nghiệp",
+        "email": "nam.tran@careerx.vn",
+        "title": "Cố vấn hướng nghiệp",
+        "office": "Trực tuyến qua Google Meet",
         "office_hours": "Thứ 3 & Thứ 5 (14:00 – 16:30)",
     },
 ]
@@ -46,12 +46,28 @@ def seed_demo_users(db: Session) -> None:
         if user is None:
             db.add(User(**data))
             continue
+        migrate_school_profile(user, data)
         for key, value in data.items():
             if getattr(user, key) is None:
                 setattr(user, key, value)
     db.flush()
     assign(db, DEMO_ADVISOR_ID, DEMO_STUDENT_ID)
     db.commit()
+
+
+LEGACY_FIELDS = ("subtitle", "email", "title", "office")
+
+
+def migrate_school_profile(user: User, data: dict) -> None:
+    """
+    Hồ sơ demo tạo trước khi bỏ email trường / mã SV: đổi sang thông tin cá nhân trong `data`.
+    Chỉ áp dụng cho bản ghi còn email đuôi "university.edu.vn" nên chạy lại không ghi đè thay đổi của người dùng.
+    """
+    if not user.email.endswith("university.edu.vn"):
+        return
+    for key in LEGACY_FIELDS:
+        if key in data:
+            setattr(user, key, data[key])
 
 
 def assign(db: Session, advisor_id: str, student_id: str) -> None:

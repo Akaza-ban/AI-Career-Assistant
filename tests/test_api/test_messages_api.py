@@ -61,7 +61,7 @@ def add_student(student_id: str, assigned: bool = True) -> str:
                 role="student",
                 full_name=f"Sinh viên {student_id}",
                 subtitle="HTTT - K2022",
-                email=f"{student_id}@example.edu.vn",
+                email=f"{student_id}@example.com",
             )
         )
         if assigned:

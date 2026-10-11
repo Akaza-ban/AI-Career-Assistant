@@ -60,7 +60,7 @@ export interface AnalysisSource {
 
 /** Dữ liệu một SV: phía SV (Minh Anh) lấy từ trạng thái mock của SV, SV giả định lấy từ COHORT. */
 export interface StudentSource {
-  profile: Pick<AssignedStudent, "id" | "full_name" | "subtitle" | "student_code" | "email" | "major" | "cohort" | "avatar_url">
+  profile: Pick<AssignedStudent, "id" | "full_name" | "subtitle" | "email" | "phone" | "avatar_url">
   /** Mới nhất trước. */
   cvs: CvVersion[]
   /** Lượt phân tích đã hoàn tất, mới nhất trước. */
@@ -318,10 +318,7 @@ interface CohortSpec {
   id: string
   full_name: string
   email: string
-  student_code: string
-  major: string
-  short: string
-  cohort: string
+  phone: string
   jd: string
   weak: StarCriterion
   /** (số ngày trước, kỹ năng thiếu, kỹ năng chỉ liệt kê) */
@@ -340,11 +337,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0151",
     full_name: "Lê Quang Huy",
-    email: "huy.lq21@student.university.edu.vn",
-    student_code: "21125501",
-    major: "Công nghệ thông tin",
-    short: "CNTT",
-    cohort: "K2021",
+    email: "huy.lq@gmail.com",
+    phone: "0903 214 587",
     jd: "jd-be-intern",
     weak: "result",
     versions: [
@@ -365,11 +359,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0152",
     full_name: "Phạm Thu Trang",
-    email: "trang.pt22@student.university.edu.vn",
-    student_code: "22124018",
-    major: "Hệ thống thông tin quản lý",
-    short: "HTTTQL",
-    cohort: "K2022",
+    email: "trang.pt@gmail.com",
+    phone: "0987 552 130",
     jd: "jd-ba-intern",
     weak: "action",
     versions: [[33, ["BPMN", "Jira", "Figma"], ["Agile/Scrum"]]],
@@ -387,11 +378,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0153",
     full_name: "Lê Thu Hà",
-    email: "ha.lt21@student.university.edu.vn",
-    student_code: "21123377",
-    major: "Kinh doanh quốc tế",
-    short: "KDQT",
-    cohort: "K2021",
+    email: "ha.lt@gmail.com",
+    phone: "0916 408 772",
     jd: "jd-xnk-fresher",
     weak: "task",
     versions: [[48, ["Incoterms", "Thủ tục hải quan"], ["Thanh toán quốc tế"]]],
@@ -407,11 +395,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0154",
     full_name: "Phạm Quang Huy",
-    email: "huy.pq22@student.university.edu.vn",
-    student_code: "22125210",
-    major: "Công nghệ thông tin",
-    short: "CNTT",
-    cohort: "K2022",
+    email: "huy.pq@gmail.com",
+    phone: "0935 117 264",
     jd: "jd-fe-junior",
     weak: "result",
     versions: [[22, ["TypeScript", "Next.js", "Unit test"], ["Tailwind CSS"]]],
@@ -428,11 +413,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0155",
     full_name: "Võ Ngọc Lan",
-    email: "lan.vn22@student.university.edu.vn",
-    student_code: "22126044",
-    major: "Marketing",
-    short: "MKT",
-    cohort: "K2022",
+    email: "lan.vn@gmail.com",
+    phone: "0978 630 415",
     jd: "jd-mkt-analyst",
     weak: "action",
     versions: [[10, ["A/B Testing", "Quảng cáo trả phí", "SQL", "SEO"], ["Báo cáo hiệu quả chiến dịch"]]],
@@ -445,11 +427,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0156",
     full_name: "Đặng Minh Khoa",
-    email: "khoa.dm21@student.university.edu.vn",
-    student_code: "21127102",
-    major: "Tài chính – Ngân hàng",
-    short: "TCNH",
-    cohort: "K2021",
+    email: "khoa.dm@gmail.com",
+    phone: "0908 742 091",
     jd: "jd-fa-fresher",
     weak: "result",
     versions: [[8, ["Định giá doanh nghiệp", "Mô hình tài chính", "CFA"], []]],
@@ -462,11 +441,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0157",
     full_name: "Trần Bảo Châu",
-    email: "chau.tb21@student.university.edu.vn",
-    student_code: "21124590",
-    major: "Hệ thống thông tin quản lý",
-    short: "HTTTQL",
-    cohort: "K2021",
+    email: "chau.tb@gmail.com",
+    phone: "0941 285 336",
     jd: "jd-da-intern",
     weak: "situation",
     versions: [[18, ["Tableau", "Google Analytics"], ["Thống kê"]]],
@@ -482,11 +458,8 @@ const COHORT: CohortSpec[] = [
   {
     id: "sv-0158",
     full_name: "Trần Văn Hưng",
-    email: "hung.tv22@student.university.edu.vn",
-    student_code: "22123881",
-    major: "Kinh doanh quốc tế",
-    short: "KDQT",
-    cohort: "K2022",
+    email: "hung.tv@gmail.com",
+    phone: "0962 019 548",
     jd: "jd-po-assistant",
     weak: "task",
     versions: [[30, ["Kiến thức ngân hàng số"], ["Phân tích dữ liệu"]]],
@@ -539,7 +512,7 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
           jd,
           cv_version_id: cvId,
           cv_label: `v1.${i}`,
-          cv_file_name: `CV_${spec.full_name.split(" ").at(-1)}_${spec.short}_v${i + 1}.docx`,
+          cv_file_name: `CV_${spec.full_name.split(" ").at(-1)}_v${i + 1}.docx`,
           status: "completed",
           current_step: null,
           match_score: score,
@@ -556,7 +529,7 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
         label: `v1.${i}`,
         family_id: `cv_${key}_1`,
         version_count: spec.versions.length,
-        file_name: `CV_${spec.full_name.split(" ").at(-1)}_${spec.short}_v${i + 1}.docx`,
+        file_name: `CV_${spec.full_name.split(" ").at(-1)}_v${i + 1}.docx`,
         file_type: "docx",
         size_bytes: 24_000,
         page_count: null,
@@ -618,11 +591,9 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
       profile: {
         id: spec.id,
         full_name: spec.full_name,
-        subtitle: `${spec.short} - ${spec.cohort}`,
-        student_code: spec.student_code,
+        subtitle: spec.email,
         email: spec.email,
-        major: spec.major,
-        cohort: spec.cohort,
+        phone: spec.phone,
         avatar_url: null,
       },
       cvs,

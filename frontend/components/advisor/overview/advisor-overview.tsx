@@ -60,7 +60,7 @@ export function AdvisorOverview() {
             <EmptyState
               icon={Users}
               title="Chưa có sinh viên phụ trách"
-              description="Khi nhà trường phân công sinh viên cho bạn, tiến bộ của cả nhóm sẽ hiển thị ở đây."
+              description="Khi bạn được phân công sinh viên, tiến bộ của cả nhóm sẽ hiển thị ở đây."
             />
           </SoftPanel>
         ) : (

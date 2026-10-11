@@ -103,7 +103,8 @@ export function StudentProfile({
           { value: "cv", label: "CV" },
           { value: "notes", label: "Ghi chú", count: noteList.length },
         ]}
-        className="mt-10 w-full sm:w-fit [&_button]:h-10 [&_button]:px-[18px] [&_button]:text-[15px]"
+        size="lg"
+        className="mt-10 w-full sm:w-fit"
       />
 
       <div role="tabpanel" aria-label={tab === "cv" ? "CV" : tab === "interviews" ? "Phỏng vấn" : "Ghi chú"} className="mt-9">
@@ -134,7 +135,7 @@ export function StudentProfile({
 function ProfileHeader({ detail, onAddNote }: { detail: AdvisorStudentDetail; onAddNote: () => void }) {
   const s = detail.student
   const { openChat } = useChat()
-  const meta = [s.student_code && `MSSV ${s.student_code}`, s.subtitle].filter(Boolean).join(" · ")
+  const meta = [s.email, s.phone].filter(Boolean).join(" · ")
   return (
     <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-5 pt-8 pb-8 md:pt-12 md:pb-10">
       <div className="flex min-w-0 flex-[1_1_480px] items-start gap-4 md:items-center md:gap-[18px]">

@@ -81,7 +81,7 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
       (s) =>
         matchesStatus(s, status) &&
         (!q ||
-          [s.full_name, s.student_code ?? "", s.email, s.subtitle, s.major ?? "", s.cohort ?? "", s.target?.title ?? "", s.target?.company ?? ""].some(
+          [s.full_name, s.email, s.phone ?? "", s.target?.title ?? "", s.target?.company ?? ""].some(
             (v) => v.toLowerCase().includes(q),
           )),
     )
@@ -211,7 +211,7 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
             <EmptyState
               icon={Users}
               title="Chưa có sinh viên phụ trách"
-              description="Khi nhà trường phân công sinh viên cho bạn, danh sách sẽ hiện ở đây."
+              description="Khi bạn được phân công sinh viên, danh sách sẽ hiện ở đây."
             />
           ) : rows.length === 0 ? (
             <EmptyState

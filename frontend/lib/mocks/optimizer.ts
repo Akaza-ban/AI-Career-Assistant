@@ -9,7 +9,7 @@ export const mockCvDocument: CvDocument = {
   header: [
     line(1, "Nguyễn Minh Anh"),
     line(2, "Fresher Business Analyst"),
-    line(3, "minhanh.k21@truongx.edu.vn | (+84) 900 000 000 | Hà Nội, Việt Nam"),
+    line(3, "minhanh.nguyen@gmail.com | 0912 345 678 | Hà Nội, Việt Nam"),
   ],
   sections: [
     {

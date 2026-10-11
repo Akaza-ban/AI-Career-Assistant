@@ -80,7 +80,7 @@ function StudentChat() {
       <>
         <PanelTop title="Trò chuyện với cố vấn" />
         <CenteredNote icon={UserRoundX} title="Bạn chưa được phân công cố vấn">
-          Khi nhà trường phân công, bạn có thể nhắn tin với cố vấn ở đây.
+          Khi được phân công cố vấn, bạn có thể nhắn tin với cố vấn ở đây.
         </CenteredNote>
       </>
     )

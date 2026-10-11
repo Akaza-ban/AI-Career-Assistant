@@ -20,6 +20,11 @@ import type {
   AssignedStudent,
   CapabilityAnswerRequest,
   ChangePasswordRequest,
+  LoginRequest,
+  LoginResponse,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  RegisterRequest,
   ChatMessage,
   ChangePasswordResponse,
   CompareJdsRequest,
@@ -122,6 +127,17 @@ function via<T>(group: ApiGroup, mock: () => Promise<T>, live: () => Promise<T>)
 }
 
 export const api = {
+  // ---- Tài khoản ----
+  login: (body: LoginRequest): Promise<LoginResponse> =>
+    via("auth", () => mockApi.login(body), () => request("/auth/login", json(body))),
+  register: (body: RegisterRequest): Promise<LoginResponse> =>
+    via("auth", () => mockApi.register(body), () => request("/auth/register", json(body))),
+  /** Luôn trả thành công dù email có tồn tại hay không, để không lộ ai có tài khoản. */
+  requestPasswordReset: (body: PasswordResetRequest): Promise<void> =>
+    via("auth", () => mockApi.requestPasswordReset(body), () => request("/auth/password-reset", json(body))),
+  confirmPasswordReset: (body: PasswordResetConfirmRequest): Promise<LoginResponse> =>
+    via("auth", () => mockApi.confirmPasswordReset(body), () => request("/auth/password-reset/confirm", json(body))),
+
   // ---- Người dùng ----
   getMe: (role: Role): Promise<UserProfile> =>
     via("me", () => mockApi.getMe(role), () => request("/me", { headers: { "X-Demo-Role": role } })),

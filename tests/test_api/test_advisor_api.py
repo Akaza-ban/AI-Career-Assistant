@@ -61,11 +61,9 @@ def add_student(student_id: str, name: str, assigned: bool = True) -> str:
                 id=student_id,
                 role="student",
                 full_name=name,
-                subtitle="HTTT - K2022",
-                email=f"{student_id}@example.edu.vn",
-                student_code="22120000",
-                major="Hệ thống thông tin",
-                cohort="K2022",
+                subtitle=f"{student_id}@example.com",
+                email=f"{student_id}@example.com",
+                phone="0900 000 000",
             )
         )
         if assigned:

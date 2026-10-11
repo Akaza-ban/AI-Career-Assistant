@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.db.database import Base
@@ -21,15 +21,15 @@ class User(Base):
     # "student" | "advisor"
     role: Mapped[str] = mapped_column(String(16), index=True)
     full_name: Mapped[str] = mapped_column(String(255))
-    # Ví dụ "KDQT - K2021" (sinh viên) hoặc "Khoa HTTT" (cố vấn)
+    # Dòng phụ dưới tên: email (sinh viên) hoặc chức danh (cố vấn)
     subtitle: Mapped[str] = mapped_column(String(255), default="")
     email: Mapped[str] = mapped_column(String(255), unique=True)
     avatar_url: Mapped[str | None] = mapped_column(String(1024), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    # Sinh viên: mã SV, ngành, khoá (lọc danh sách ở trang Cố vấn)
-    student_code: Mapped[str | None] = mapped_column(String(32), default=None)
-    major: Mapped[str | None] = mapped_column(String(255), default=None)
-    cohort: Mapped[str | None] = mapped_column(String(32), default=None)
+    # Sinh viên: hồ sơ cá nhân, không gắn với trường (người dùng đến từ nhiều trường khác nhau).
+    # DB cũ còn cột student_code / major / cohort: không dùng nữa, để nguyên (cho phép NULL).
+    phone: Mapped[str | None] = mapped_column(String(32), default=None)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, default=None)
     # Cố vấn: chức danh, văn phòng, giờ tư vấn (hiện ở trang Chia sẻ với cố vấn của SV)
     title: Mapped[str | None] = mapped_column(String(255), default=None)
     office: Mapped[str | None] = mapped_column(String(255), default=None)
