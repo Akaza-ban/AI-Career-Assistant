@@ -13,6 +13,7 @@ import {
   JD_TABS,
   JdLibraryPicker,
   JdPasteForm,
+  JdRecommendationPicker,
   SelectedCvCard,
   type JdTab,
   type PastedJd,
@@ -37,7 +38,7 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
   const [cvId, setCvId] = useState<string | null>(initialCvId)
   // Vào từ nút "Phân tích" trên thẻ CV (?cv=) thì CV đã chọn sẵn → vào thẳng bước 2.
   const [step, setStep] = useState<0 | 1>(initialCvId ? 1 : 0)
-  const [tab, setTab] = useState<JdTab>("library")
+  const [tab, setTab] = useState<JdTab>("recommended")
   const [paste, setPaste] = useState<PastedJd>(EMPTY_PASTE)
   const [libraryJd, setLibraryJd] = useState<JobDescription | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -71,7 +72,7 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
       if (!clear_filters || submitting) return
       setCvId(initialCvId)
       setStep(initialCvId ? 1 : 0)
-      setTab("library")
+      setTab("recommended")
       setPaste(EMPTY_PASTE)
       setLibraryJd(null)
     },
@@ -79,12 +80,19 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
 
   const pasteTouched = paste.title.trim() !== "" || paste.text.trim() !== ""
   const pasteReady = paste.title.trim() !== "" && countWords(paste.text) >= JD_MIN_WORDS
-  // SV chỉ chọn một nguồn JD: tab đang mở quyết định gửi JD thư viện hay JD tự dán.
-  const ready = tab === "library" ? libraryJd !== null : pasteReady
+  // SV chọn một nguồn JD: tab đang mở quyết định gửi JD thư viện / gợi ý hay JD tự dán.
+  const isJdSelected = libraryJd !== null
+  const ready = tab === "recommended" || tab === "library" ? isJdSelected : pasteReady
   const missingHint =
-    tab === "library" ? "Hãy chọn một vị trí trong thư viện JD." : `Nhập tiêu đề và tối thiểu ${JD_MIN_WORDS} từ nội dung JD.`
+    tab === "recommended"
+      ? "Hãy chọn một vị trí được AI gợi ý ở trên."
+      : tab === "library"
+      ? "Hãy chọn một vị trí trong thư viện JD."
+      : `Nhập tiêu đề và tối thiểu ${JD_MIN_WORDS} từ nội dung JD.`
   const selectionLabel =
-    tab === "library"
+    tab === "recommended"
+      ? libraryJd && { text: libraryJd.title, source: "AI Gợi ý", icon: Sparkles }
+      : tab === "library"
       ? libraryJd && { text: libraryJd.title, source: "Thư viện", icon: Library }
       : paste.title.trim() && { text: paste.title.trim(), source: "Dán tay", icon: ClipboardPaste }
 
@@ -98,7 +106,7 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
     setSubmitting(true)
     try {
       const analysis = await api.createGapAnalysis(
-        tab === "library"
+        tab === "recommended" || tab === "library"
           ? { cv_version_id: selectedCv.id, jd_id: libraryJd!.id }
           : {
               cv_version_id: selectedCv.id,
@@ -185,7 +193,14 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
             ))}
           </div>
 
-          {tab === "library" ? (
+          {tab === "recommended" ? (
+            <JdRecommendationPicker
+              selectedCv={selectedCv}
+              selected={libraryJd}
+              onSelect={setLibraryJd}
+              libraryJds={library}
+            />
+          ) : tab === "library" ? (
             <JdLibraryPicker items={library} selected={libraryJd} onSelect={setLibraryJd} />
           ) : (
             <JdPasteForm value={paste} onChange={setPaste} showErrors={pasteTouched} />

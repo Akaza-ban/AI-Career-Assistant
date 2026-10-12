@@ -72,6 +72,8 @@ import type {
   ProgressRange,
   ReviewInterviewRequest,
   Role,
+  RecommendJDsRequest,
+  RecommendJDsResponse,
   SharedItem,
   SharingOverview,
   StarCriterion,
@@ -852,6 +854,36 @@ export const mockApi = {
   async listJdLibrary() {
     await delay()
     return clone(mockJdLibrary)
+  },
+
+  async recommendJds(body: RecommendJDsRequest): Promise<RecommendJDsResponse> {
+    await delay(600)
+    const top3 = mockJdLibrary.slice(0, body.top_n || 3).map((jd, idx) => ({
+      jd_id: jd.id,
+      title: jd.title,
+      company: jd.company,
+      industry: jd.industry,
+      level: jd.level,
+      semantic_score: 0.88 - idx * 0.05,
+      match_score: idx === 0 ? 82 : idx === 1 ? 68 : 55,
+      match_label: idx === 0 ? ("high" as const) : ("medium" as const),
+      matched_skills: jd.skills.slice(0, 3).map((s) => s.name),
+      partial_skills: jd.skills.slice(3, 4).map((s) => s.name),
+      missing_skills: jd.skills.slice(4).map((s) => s.name),
+    }))
+    return {
+      cv_version_id: body.cv_version_id,
+      recommendations: top3,
+      advice: {
+        summary: `Hồ sơ của bạn phù hợp nhất với vị trí ${top3[0]?.title ?? "Thực tập sinh"} với độ tương thích ${top3[0]?.match_score ?? 80}%.`,
+        top_position_advice: "Bạn có thế mạnh ở các kỹ năng nền tảng. Tiếp tục củng cố thêm các công cụ thực chiến theo yêu cầu của doanh nghiệp.",
+        action_plan: [
+          "Bổ sung dự án thực tế thể hiện các kỹ năng còn thiếu.",
+          "Áp dụng phương pháp STAR để định lượng hóa thành tích trong CV.",
+          "Luyện tập phỏng vấn thử trên hệ thống cho vị trí này.",
+        ],
+      },
+    }
   },
 
   // US-SV-02 AC2: JD dán vào phải có ít nhất JD_MIN_WORDS từ. SV chỉ chọn một nguồn JD.

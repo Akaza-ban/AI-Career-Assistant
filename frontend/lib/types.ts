@@ -102,6 +102,42 @@ export interface CreateGapAnalysisRequest {
   jd_company?: string
 }
 
+// ---------- Gợi ý JD phù hợp từ CV (Task A3, RAG Recommendation) ----------
+
+export interface JDRecommendationItem {
+  jd_id: string
+  title: string
+  company?: string | null
+  industry?: string | null
+  level?: string | null
+  semantic_score: number
+  match_score?: number | null
+  match_label?: MatchLabel | null
+  matched_skills: string[]
+  partial_skills: string[]
+  missing_skills: string[]
+  breakdown?: ScoreBreakdown[]
+}
+
+export interface CareerAdvice {
+  summary: string
+  top_position_advice: string
+  action_plan: string[]
+}
+
+export interface RecommendJDsRequest {
+  cv_version_id?: string | null
+  cv_text?: string | null
+  top_n?: number
+  generate_advice?: boolean
+}
+
+export interface RecommendJDsResponse {
+  cv_version_id?: string | null
+  recommendations: JDRecommendationItem[]
+  advice?: CareerAdvice | null
+}
+
 // ---------- Phân tích khoảng cách (US-SV-02, US-SV-05, PRD mục 5.2) ----------
 
 export type AnalysisStatus = "processing" | "completed" | "failed"

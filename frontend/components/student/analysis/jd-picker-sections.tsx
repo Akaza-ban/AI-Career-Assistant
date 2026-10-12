@@ -11,6 +11,7 @@ import {
   Info,
   Library,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react"
 
 import { Panel } from "@/components/common/panel"
@@ -324,8 +325,11 @@ export function JdPasteForm({ value, onChange, showErrors }: JdPasteFormProps) {
 }
 
 export const JD_TABS = [
+  { value: "recommended", label: "AI gợi ý theo CV", icon: Sparkles },
   { value: "library", label: "Chọn từ thư viện JD", icon: Library },
   { value: "paste", label: "Dán JD của bạn", icon: ClipboardPaste },
 ] as const
 
 export type JdTab = (typeof JD_TABS)[number]["value"]
+
+export { JdRecommendationPicker } from "./jd-recommendation-picker"

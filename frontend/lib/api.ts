@@ -40,6 +40,8 @@ import type {
   JobDescription,
   OptimizerSession,
   ProgressRange,
+  RecommendJDsRequest,
+  RecommendJDsResponse,
   ReviewInterviewRequest,
   Role,
   SharedItem,
@@ -206,6 +208,8 @@ export const api = {
 
   // ---- JD & phân tích khoảng cách ----
   listJdLibrary: (): Promise<JobDescription[]> => via("gap", () => mockApi.listJdLibrary(), () => request("/jd/library")),
+  recommendJds: (body: RecommendJDsRequest): Promise<RecommendJDsResponse> =>
+    via("gap", () => mockApi.recommendJds(body), () => request("/jd/recommend", json(body))),
   createGapAnalysis: (body: CreateGapAnalysisRequest): Promise<GapAnalysis> =>
     via("gap", () => mockApi.createGapAnalysis(body), () => request("/gap-analysis", json(body))),
   getGapAnalysis: (id: string): Promise<GapAnalysis> =>
