@@ -1,53 +1,9 @@
-// Mock cho So sánh nhiều vị trí (POST /jd/compare) và JD tự dán dùng lại được.
+// Mock cho So sánh nhiều vị trí (POST /jd/compare). JD tự dán ở lib/mocks/jds.ts.
 // Mô phỏng src/services/jd_recommendation.compare_selected_jds_with_llm: chấm từng JD theo PRD 5.2, sắp giảm dần,
 // kèm nhận xét ngắn và danh sách kỹ năng thiếu ở mọi JD.
 
 import { recommendFromProfile, skillProfileOf } from "@/lib/mocks/library"
-import type {
-  CompareJdsResponse,
-  CreatePastedJdRequest,
-  JdComparisonItem,
-  JdSkill,
-  JobDescription,
-  MatchLabel,
-} from "@/lib/types"
-
-const FALLBACK_SKILLS: JdSkill[] = [
-  { name: "Giao tiếp", importance: "required" },
-  { name: "Excel", importance: "required" },
-  { name: "Tiếng Anh", importance: "preferred" },
-  { name: "Làm việc nhóm", importance: "additional" },
-]
-
-const fold = (s: string) => s.normalize("NFC").toLowerCase()
-
-/** Bóc kỹ năng của JD tự dán: lấy các kỹ năng trong thư viện có xuất hiện trong văn bản (giả lập bước LLM). */
-export function buildPastedJd(id: string, body: CreatePastedJdRequest, library: JobDescription[]): JobDescription {
-  const text = fold(body.text)
-  const seen = new Set<string>()
-  const skills: JdSkill[] = []
-  for (const jd of library) {
-    for (const skill of jd.skills) {
-      if (seen.has(skill.name) || !text.includes(fold(skill.name))) continue
-      seen.add(skill.name)
-      skills.push(skill)
-    }
-  }
-  for (const skill of FALLBACK_SKILLS) {
-    if (skills.length >= 4) break
-    if (!seen.has(skill.name)) skills.push(skill)
-  }
-  return {
-    id,
-    title: body.title.trim(),
-    company: body.company?.trim() || null,
-    industry: body.industry?.trim() || null,
-    level: body.level ?? null,
-    skills,
-    content: body.text,
-    source: "pasted",
-  }
-}
+import type { CompareJdsResponse, JdComparisonItem, JobDescription, MatchLabel } from "@/lib/types"
 
 const joinVi = (items: string[]) =>
   items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} và ${items[items.length - 1]}`

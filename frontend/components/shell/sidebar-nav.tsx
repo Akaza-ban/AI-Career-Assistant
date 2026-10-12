@@ -4,14 +4,14 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { Logo } from "@/components/brand/logo"
-import { advisorShell, isNavActive, studentShell } from "@/components/shell/nav-config"
+import { isNavActive, shellOf } from "@/components/shell/nav-config"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 /** Sidebar desktop 252px (DESIGN.md 5.2): logo, các mục chia nhóm, mục đang chọn nền đen. */
 export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname()
-  const config = role === "advisor" ? advisorShell : studentShell
+  const config = shellOf(role)
 
   return (
     <div className="flex h-full flex-col px-3.5 pt-5 pb-4">

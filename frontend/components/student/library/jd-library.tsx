@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
+import { Plus } from "lucide-react"
 
 import { PageHeader } from "@/components/common/page-header"
+import { AddJdDialog, type JdDialogMode } from "@/components/student/library/add-jd-dialog"
 import { AllPositions } from "@/components/student/library/all-positions"
 import { JdQuickSheet } from "@/components/student/library/jd-quick-sheet"
 import {
@@ -12,18 +14,25 @@ import {
   useRecommendations,
   useSavedJds,
 } from "@/components/student/library/library-data"
+import { MyJds } from "@/components/student/library/my-jds"
 import { RecommendationPanel } from "@/components/student/library/recommendation-panel"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import type { CvVersion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-/** Thư viện JD (WIREFRAMES A2/B2): gợi ý theo CV đang chọn, rồi toàn bộ thư viện kèm tìm kiếm và lọc. */
+/**
+ * Thư viện JD (WIREFRAMES A2/B2, bản vẽ ThuVienJdCuaBan): gợi ý theo CV đang chọn, JD sinh viên tự dán (chỉ người dán
+ * thấy), rồi toàn bộ thư viện kèm tìm kiếm và lọc.
+ */
 export function JdLibrary({ initialCvId }: { initialCvId: string | null }) {
   const library = useApi(api.listJdLibrary)
   const cvs = useApi(api.listCvVersions)
   const saved = useSavedJds()
+  const mine = useApi(api.listPastedJds)
+  const [dialog, setDialog] = useState<JdDialogMode | null>(null)
   const [pickedCvId, setPickedCvId] = useState<string | null>(initialCvId)
   const [openJdId, setOpenJdId] = useState<string | null>(null)
 
@@ -51,7 +60,15 @@ export function JdLibrary({ initialCvId }: { initialCvId: string | null }) {
           className="pt-2 max-lg:[&_h1]:sr-only max-md:[&_p]:hidden md:pt-4 lg:pt-12"
           title="Thư viện JD"
           description={`${count ? `${count} vị trí` : "Các vị trí"} đã chuẩn hoá yêu cầu theo mức Bắt buộc, Ưu tiên và Cộng thêm.`}
-          actions={<CvPicker cvs={cvs.data ? readyCvs : undefined} value={cv} onChange={setPickedCvId} />}
+          actions={
+            <>
+              <CvPicker cvs={cvs.data ? readyCvs : undefined} value={cv} onChange={setPickedCvId} />
+              <Button size="brand" className="h-[38px] px-4" onClick={() => setDialog({ kind: "create" })}>
+                <Plus data-icon="inline-start" aria-hidden />
+                Thêm JD
+              </Button>
+            </>
+          }
         />
 
         <RecommendationPanel
@@ -66,6 +83,15 @@ export function JdLibrary({ initialCvId }: { initialCvId: string | null }) {
         />
       </div>
 
+      <MyJds
+        jds={mine.data}
+        error={mine.error}
+        onRetry={mine.reload}
+        onAdd={() => setDialog({ kind: "create" })}
+        onEdit={(jd) => setDialog({ kind: "edit", jd })}
+        onDeleted={mine.reload}
+      />
+
       <AllPositions
         library={library.data}
         error={library.error}
@@ -75,6 +101,8 @@ export function JdLibrary({ initialCvId }: { initialCvId: string | null }) {
         detailHref={detailHref}
         onOpen={setOpenJdId}
       />
+
+      <AddJdDialog mode={dialog} onOpenChange={(open) => !open && setDialog(null)} onSaved={mine.reload} />
 
       <JdQuickSheet
         jd={openJd}

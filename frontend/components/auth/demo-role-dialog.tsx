@@ -1,12 +1,12 @@
 "use client"
 
-import { ChevronRight, UserRound, UsersRound, X } from "lucide-react"
+import { ChevronRight, ShieldCheck, UserRound, UsersRound, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "@/lib/session"
 
-const ICONS = { student: UserRound, advisor: UsersRound }
+const ICONS = { student: UserRound, advisor: UsersRound, admin: ShieldCheck }
 
 /**
  * Chọn tài khoản demo trên trang Đăng nhập: chỉ điền sẵn email và mật khẩu vào form,

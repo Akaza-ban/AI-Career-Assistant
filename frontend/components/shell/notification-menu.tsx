@@ -10,6 +10,8 @@ import {
   MessageSquareText,
   ShieldAlert,
   Sparkles,
+  UserPlus,
+  UserRoundCheck,
   UserRoundX,
   type LucideIcon,
 } from "lucide-react"
@@ -32,6 +34,8 @@ const kindIcon: Record<NotificationKind, LucideIcon> = {
   integrity_alert: ShieldAlert,
   student_activity: MessageSquareText,
   student_inactive: UserRoundX,
+  advisor_assigned: UserRoundCheck,
+  student_registered: UserPlus,
 }
 
 type Filter = "all" | "unread"

@@ -7,7 +7,6 @@ import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { Zone } from "@/components/common/zone"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -20,7 +19,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { api, ApiError } from "@/lib/api"
-import { features } from "@/lib/features"
 import { formatBytes, formatDate, formatTime } from "@/lib/format"
 import { isStrongPassword } from "@/lib/password"
 import { PasswordRuleList } from "@/components/common/password-rules"
@@ -48,11 +46,6 @@ const dayMonthYear = (ymd: string) => ymd.split("-").reverse().join("/")
 
 /** Nút viền dạng pill nhỏ của bản vẽ ("Đổi mật khẩu", "Tải xuống"). */
 const pillLine = "h-9 rounded-full border-line-strong bg-card px-4 font-semibold text-ink shadow-xs"
-
-/** Nhãn "Sắp có" khi cờ dataActions tắt: nút chỉ hiển thị, chưa gọi API thật. */
-function SoonBadge() {
-  return <Badge variant="neutral">Sắp có</Badge>
-}
 
 /**
  * Một dòng cài đặt (bản vẽ CaiDat): nhãn + giải thích ngắn bên trái, điều khiển bên phải.
@@ -538,15 +531,9 @@ export function PrivacySection({
         </button>
         {consentAt && (
           <>
-            <button
-              type="button"
-              className={linkButton}
-              disabled={!features.dataActions}
-              onClick={() => setWithdrawing(true)}
-            >
+            <button type="button" className={linkButton} onClick={() => setWithdrawing(true)}>
               Rút lại
             </button>
-            {!features.dataActions && <SoonBadge />}
           </>
         )}
       </SettingRow>
@@ -648,9 +635,8 @@ export function DataSection({
           <span className="block h-full rounded-full bg-blue" style={{ width: `${Math.max(percent, 2)}%` }} />
         </span>
       </SettingRow>
-      <SettingRow label="Tải toàn bộ dữ liệu" hint="CV, kết quả phân tích và báo cáo phỏng vấn, dạng .zip">
-        {!features.dataActions && <SoonBadge />}
-        <Button variant="outline" className={pillLine} disabled={!features.dataActions || exporting} onClick={exportAll}>
+      <SettingRow label="Tải toàn bộ dữ liệu" hint="CV, kết quả phân tích và báo cáo phỏng vấn, dạng file JSON">
+        <Button variant="outline" className={pillLine} disabled={exporting} onClick={exportAll}>
           {exporting ? <Loader2 className="animate-spin" aria-hidden /> : <Download aria-hidden />}
           Tải xuống
         </Button>
@@ -660,14 +646,12 @@ export function DataSection({
         <div className="min-w-[220px] flex-1">
           <p className="flex items-center gap-2 font-semibold text-bad">
             Xoá toàn bộ dữ liệu
-            {!features.dataActions && <SoonBadge />}
           </p>
           <p className="text-sm text-ink-2">Xoá vĩnh viễn mọi CV, báo cáo, điểm số và nhận xét. Không thể hoàn tác.</p>
         </div>
         <Button
           variant="outline"
           className="h-9 rounded-full border-bad/30 bg-card px-4 font-semibold text-bad hover:bg-card hover:text-bad"
-          disabled={!features.dataActions}
           onClick={() => setConfirm(true)}
         >
           Xoá dữ liệu

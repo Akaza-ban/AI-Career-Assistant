@@ -329,8 +329,6 @@ interface CohortSpec {
   /** (buổi thứ mấy, SV đã xem?, nội dung) */
   review: [number, boolean, string] | null
   note: [string, AdvisorNote["tags"], boolean] | null
-  /** Số sao CSAT SV chấm sau từng lượt dùng. */
-  csat: number[]
 }
 
 const COHORT: CohortSpec[] = [
@@ -352,7 +350,6 @@ const COHORT: CohortSpec[] = [
       [4, 3.9, 0],
     ],
     share: "all",
-    csat: [5, 4, 5, 5, 4],
     review: [4, true, "Em trình bày bối cảnh và nhiệm vụ rất rõ. Buổi tới thử nêu thêm kết quả đo được, ví dụ thời gian phản hồi API."],
     note: ["Tiến bộ đều qua 4 buổi. Có thể giới thiệu thực tập backend.", ["technical"], false],
   },
@@ -371,7 +368,6 @@ const COHORT: CohortSpec[] = [
       [2, 2.9, 1],
     ],
     share: "latest",
-    csat: [4, 3, 3],
     review: null,
     note: ["Điểm không tăng mấy buổi gần đây, có câu hết giờ. Hẹn gặp trực tiếp.", ["watch"], true],
   },
@@ -388,7 +384,6 @@ const COHORT: CohortSpec[] = [
       [30, 3.1, 0],
     ],
     share: "cv",
-    csat: [4, 5],
     review: null,
     note: null,
   },
@@ -406,7 +401,6 @@ const COHORT: CohortSpec[] = [
       [5, 3.3, 0],
     ],
     share: "none",
-    csat: [4],
     review: null,
     note: null,
   },
@@ -420,7 +414,6 @@ const COHORT: CohortSpec[] = [
     versions: [[10, ["A/B Testing", "Quảng cáo trả phí", "SQL", "SEO"], ["Báo cáo hiệu quả chiến dịch"]]],
     sessions: [[6, 2.7, 1]],
     share: "all",
-    csat: [5],
     review: null,
     note: null,
   },
@@ -434,7 +427,6 @@ const COHORT: CohortSpec[] = [
     versions: [[8, ["Định giá doanh nghiệp", "Mô hình tài chính", "CFA"], []]],
     sessions: [],
     share: "cv",
-    csat: [4],
     review: null,
     note: null,
   },
@@ -451,7 +443,6 @@ const COHORT: CohortSpec[] = [
       [3, 3.1, 0],
     ],
     share: "all",
-    csat: [5, 4],
     review: [1, true, "Câu trả lời về dashboard Power BI rất cụ thể. Giữ cách kể có số liệu như vậy."],
     note: null,
   },
@@ -469,7 +460,6 @@ const COHORT: CohortSpec[] = [
       [7, 4.2, 0],
     ],
     share: "latest",
-    csat: [5, 5, 4],
     review: [3, false, "Rất tốt. Thử luyện thêm câu hỏi về xử lý xung đột ưu tiên giữa các bên liên quan."],
     note: ["Hồ sơ tốt, có thể giới thiệu vị trí PO Assistant.", ["soft_skill"], false],
   },
@@ -485,7 +475,6 @@ function starOffsets(weak: StarCriterion): Record<StarCriterion, number> {
 
 export interface CohortStudent extends StudentSource {
   notes: AdvisorNote[]
-  csat: number[]
 }
 
 /** Dựng dữ liệu các SV giả định, thời gian tính lùi từ lúc gọi. */
@@ -602,17 +591,16 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
       shared,
       reviews,
       notes,
-      csat: spec.csat,
     }
   })
 }
 
 // ---------- Tổng quan cả nhóm (giống advisor.overview ở backend) ----------
 
-// "Hoạt động" = có lượt phân tích hoặc buổi phỏng vấn hoàn thành trong 30 ngày; mục tiêu ≥ 60% và CSAT ≥ 4 (PRD mục 9)
+// "Hoạt động" = có lượt phân tích hoặc buổi phỏng vấn hoàn thành trong 30 ngày; mục tiêu ≥ 60% (PRD mục 9).
+// CSAT toàn hệ thống nằm ở trang Quản trị (lib/mocks/admin.ts).
 const ACTIVE_DAYS = 30
 const ACTIVE_TARGET = 60
-const CSAT_TARGET = 4
 const WEEKS = 8
 const TOP_IMPROVERS = 5
 const RECENT_REVIEWS = 5
@@ -656,7 +644,7 @@ function cohortStar(sources: StudentSource[]): CohortStar | null {
   }
 }
 
-export function overviewOf(sources: StudentSource[], advisorName: string, csat: number[], now = Date.now()): AdvisorOverview {
+export function overviewOf(sources: StudentSource[], advisorName: string, now = Date.now()): AdvisorOverview {
   const rows = sources.map(summarize)
   const latest = rows.flatMap((r) => (r.latest_score !== null ? [r.latest_score] : []))
   const deltas = rows.flatMap((r) => (r.score_delta !== null ? [r.score_delta] : []))
@@ -687,9 +675,6 @@ export function overviewOf(sources: StudentSource[], advisorName: string, csat: 
     scored_count: latest.length,
     average_delta: mean(deltas),
     delta_count: deltas.length,
-    csat: mean(csat),
-    csat_count: csat.length,
-    csat_target: CSAT_TARGET,
     weekly_scores: weeklyScores(sources, now),
     status_counts: statusCounts,
     star,

@@ -6,6 +6,7 @@ from docx import Document
 
 STUDENT = {"X-Demo-Role": "student"}
 ADVISOR = {"X-Demo-Role": "advisor"}
+ADMIN = {"X-Demo-Role": "admin"}
 
 
 def make_pdf(text: str | None) -> bytes:

@@ -1,6 +1,7 @@
 """
 Tài khoản: băm mật khẩu, phiên đăng nhập, đăng ký sinh viên, quên / đổi mật khẩu.
-Chỉ sinh viên tự đăng ký; tài khoản cố vấn do CareerX tạo. Email là email cá nhân, không gắn với trường.
+Chỉ sinh viên tự đăng ký (chờ quản trị viên phân công cố vấn); tài khoản cố vấn do quản trị viên tạo bằng mật khẩu tạm.
+Email là email cá nhân, không gắn với trường.
 """
 
 import hashlib
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 from src.api.errors import AppError
 from src.config import get_settings
 from src.db.models import AuthSession, PasswordResetToken, User, utcnow
+from src.services import notifications
 from src.services.mailer import send_email
 
 PBKDF2_ITERATIONS = 390_000
@@ -177,6 +179,8 @@ def login(db: Session, email: str, password: str) -> User:
     user.failed_logins = 0
     user.locked_until = None
     db.commit()
+    if user.disabled_at is not None:
+        raise AppError(403, "Tài khoản đã bị tạm khoá. Hãy liên hệ quản trị viên.", "account_disabled")
     return user
 
 
@@ -214,6 +218,16 @@ def register(
         integrity_pledge_at=now,
     )
     db.add(user)
+    for admin in db.scalars(select(User).where(User.role == "admin", User.disabled_at.is_(None))):
+        notifications.notify(
+            db,
+            admin,
+            "student_registered",
+            f"{name} vừa tạo tài khoản",
+            "Sinh viên mới đang chờ phân công cố vấn.",
+            action_label="Phân công",
+            action_href="/admin/students?filter=unassigned",
+        )
     db.commit()
     return user
 
@@ -283,7 +297,8 @@ def change_password(db: Session, user: User, current: str, new: str) -> datetime
 
 
 def _set_password(db: Session, user: User, password: str) -> None:
-    """Đặt mật khẩu mới và đăng xuất mọi phiên cũ (route tạo phiên mới cho thiết bị hiện tại)."""
+    """Đặt mật khẩu mới (thay cả mật khẩu tạm) và đăng xuất mọi phiên cũ (route tạo phiên mới cho thiết bị hiện tại)."""
     user.password_hash = hash_password(password)
     user.password_updated_at = utcnow()
+    user.must_change_password = None
     end_all_sessions(db, user)

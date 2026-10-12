@@ -1,8 +1,8 @@
 "use client"
 
-import { useId, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, ChevronRight, ChevronUp, Heart, MessagesSquare, CloudOff, SearchX } from "lucide-react"
+import { ArrowRight, ChevronRight, ChevronUp, Heart, LockKeyhole, MessagesSquare, CloudOff, PencilLine, SearchX } from "lucide-react"
 
 import { BottomActionBar } from "@/components/common/bottom-action-bar"
 import { MatchBadge } from "@/components/common/match-badge"
@@ -10,7 +10,8 @@ import { PageHeader } from "@/components/common/page-header"
 import { EmptyState } from "@/components/common/empty-state"
 import { Panel } from "@/components/common/panel"
 import { WidgetFooter, Zone } from "@/components/common/zone"
-import { MatchSummary, SkillChip, Widget, type MatchSummaryProps } from "@/components/student/library/library-bits"
+import { AddJdDialog } from "@/components/student/library/add-jd-dialog"
+import { MatchSummary, SkillChip, type MatchSummaryProps } from "@/components/student/library/library-bits"
 import {
   cvOptionLabel,
   defaultCv,
@@ -20,11 +21,11 @@ import {
   useRecommendations,
   useSavedJds,
 } from "@/components/student/library/library-data"
-import { parseJdContent, type JdSection, type JdSectionKind } from "@/components/student/library/parse-jd"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
+import { jdFacts, sectionLines } from "@/lib/jd"
 import type { CvVersion, JobDescription, RequirementImportance } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
@@ -35,9 +36,14 @@ const REQUIREMENT_ROWS: { importance: RequirementImportance; label: string }[] =
   { importance: "additional", label: "Cộng thêm" },
 ]
 
-/** Chi tiết vị trí (WIREFRAMES A3/B3): nội dung JD bên trái, thẻ mức phù hợp dính bên phải (điện thoại: thanh đáy + sheet). */
+/**
+ * Chi tiết vị trí (WIREFRAMES A3/B3, bản vẽ ChiTietJd / ChiTietJdCuaBan): cấu trúc chung cho JD thư viện và JD tự dán.
+ * Nội dung bên trái, thẻ mức phù hợp dính bên phải (điện thoại: thanh đáy + sheet).
+ */
 export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string | null }) {
-  const library = useApi(api.listJdLibrary)
+  // Thư viện đang hiển thị và JD sinh viên tự dán (GET /jd)
+  const library = useApi(api.listMyJds)
+  const [editing, setEditing] = useState(false)
   const cvs = useApi(api.listCvVersions)
   const saved = useSavedJds()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -70,13 +76,14 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
   if (!library.data) return <DetailSkeleton />
 
   const jd = library.data.find((j) => j.id === id)
+  const pasted = jd?.source === "pasted"
   if (!jd) {
     return (
       <Panel className="mx-auto mt-10 max-w-xl">
         <EmptyState
           icon={SearchX}
           title="Không tìm thấy vị trí"
-          description="Vị trí này không còn trong thư viện hoặc đường dẫn chưa đúng."
+          description="Vị trí này không còn trong thư viện, đã bị xoá hoặc đường dẫn chưa đúng."
           action={
             <Button variant="dark" size="brand" nativeButton={false} render={<Link href="/student/library" />}>
               Về Thư viện JD
@@ -120,9 +127,30 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
     <div className="grid grid-cols-[minmax(0,1fr)] gap-10 md:gap-12">
       <PageHeader
         title={jd.title}
-        description={metaLine(jd.company, levelText(jd.level), jd.industry)}
+        description={
+          <>
+            {metaLine(jd.company, levelText(jd.level), jd.industry)}
+            {pasted && (
+              <span className="mt-1 flex items-center gap-1.5 text-sm text-ink-3">
+                <LockKeyhole className="size-3.5" strokeWidth={1.75} aria-hidden />
+                JD bạn tự dán, chỉ bạn thấy
+              </span>
+            )}
+          </>
+        }
         actions={
           <>
+            {pasted && (
+              <Button
+                variant="outline"
+                size="brand"
+                className="border-line-strong bg-card shadow-xs"
+                onClick={() => setEditing(true)}
+              >
+                <PencilLine data-icon="inline-start" aria-hidden />
+                Sửa
+              </Button>
+            )}
             {save}
             <span className="hidden flex-wrap gap-2.5 lg:flex">
               <Button
@@ -130,7 +158,7 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
                 size="brand"
                 className="glass text-ink shadow-xs hover:bg-white"
                 nativeButton={false}
-                render={<Link href="/student/interview/new" />}
+                render={<Link href={`/student/interview/new?jd=${jd.id}`} />}
               >
                 Luyện phỏng vấn
               </Button>
@@ -143,10 +171,10 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
         }
       />
 
+      <Facts jd={jd} />
+
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-x-14 gap-y-14 lg:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_340px]">
-        <Zone id="jd-body-title" title="Mô tả & yêu cầu">
-          <JdBody jd={jd} />
-        </Zone>
+        <JdBody jd={jd} />
         <aside className="sticky top-6 hidden lg:block" aria-labelledby="jd-match-title">
           {/* Cao bằng hàng tiêu đề vùng để hai đường kẻ thẳng hàng. */}
           <div className="border-b border-line pb-3.5">
@@ -197,7 +225,30 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
           </SheetContent>
         </Sheet>
       </div>
+
+      {pasted && (
+        <AddJdDialog mode={editing ? { kind: "edit", jd } : null} onOpenChange={setEditing} onSaved={library.reload} />
+      )}
     </div>
+  )
+}
+
+/** Dải thông tin nhanh: địa điểm, hình thức, nơi làm việc, lương, kinh nghiệm, hạn nộp (chỉ các trường có giá trị). */
+export function Facts({ jd }: { jd: JobDescription }) {
+  const facts = jdFacts(jd)
+  if (facts.length === 0) return null
+  return (
+    <dl
+      className="-mt-4 grid gap-x-5 gap-y-4 rounded-card bg-panel px-5 py-4 [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] md:-mt-6 md:px-[22px]"
+      aria-label="Thông tin nhanh"
+    >
+      {facts.map((f) => (
+        <div key={f.label} className="min-w-0">
+          <dt className="text-xs text-ink-3">{f.label}</dt>
+          <dd className="mt-0.5 text-[15px] font-medium text-ink">{f.value}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -235,7 +286,7 @@ function ActionButtons({ jdId }: { jdId: string }) {
         variant="soft"
         className="h-11 w-full rounded-full text-[15px] font-semibold"
         nativeButton={false}
-        render={<Link href="/student/interview/new" />}
+        render={<Link href={`/student/interview/new?jd=${jdId}`} />}
       >
         <MessagesSquare className="size-4" aria-hidden />
         Luyện phỏng vấn
@@ -244,92 +295,100 @@ function ActionButtons({ jdId }: { jdId: string }) {
   )
 }
 
-/** Nội dung JD thành các khối không viền: đoạn mở đầu, "Mô tả công việc", "Yêu cầu ứng viên" (mỗi mức một dòng), phần còn lại. */
-function JdBody({ jd }: { jd: JobDescription }) {
-  const sections = parseJdContent(jd.content)
-  const byKind = (kind: JdSectionKind) => sections.filter((s) => s.kind === kind)
-  const requirementText: Record<RequirementImportance, JdSection[]> = {
-    required: byKind("required"),
-    preferred: byKind("preferred"),
-    additional: byKind("additional"),
-  }
-  const others = sections.filter((s) => s.kind === "benefits" || s.kind === "other")
-
+/** Các mục theo cấu trúc chung: Mô tả công việc, Yêu cầu ứng viên (kèm kỹ năng theo mức), Quyền lợi, Cách ứng tuyển. */
+export function JdBody({ jd }: { jd: JobDescription }) {
+  // Kỹ năng chỉ dò từ điển (chưa phân tích): chưa biết mức nên hiện một hàng
+  const graded = jd.skills_source !== "dictionary"
   return (
-    <div className="grid max-w-[880px] min-w-0 grid-cols-[minmax(0,1fr)] gap-10">
-      {byKind("overview").map((s, i) => (
-        <SectionText key={i} section={s} lead />
-      ))}
+    <div className="grid max-w-[880px] min-w-0 grid-cols-[minmax(0,1fr)] gap-12">
+      <Zone id="jd-desc-title" title="Mô tả công việc">
+        <Lines text={jd.description} />
+      </Zone>
 
-      {byKind("description").length > 0 && (
-        <BodySection title="Mô tả công việc">
-          {byKind("description").map((s, i) => (
-            <SectionText key={i} section={s} />
-          ))}
-        </BodySection>
-      )}
-
-      <BodySection title="Yêu cầu ứng viên">
-        <div className="-mt-1.5">
-          {REQUIREMENT_ROWS.map(({ importance, label }) => {
-            const skills = jd.skills.filter((s) => s.importance === importance)
-            const text = requirementText[importance]
-            if (skills.length === 0 && text.length === 0) return null
-            return (
-              <div
-                key={importance}
-                className="grid grid-cols-[minmax(0,1fr)] gap-2 border-b border-line py-3.5 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-4"
-              >
-                <p className="pt-0.5 text-[15px] font-medium text-ink">{label}</p>
-                <div className="grid min-w-0 gap-2.5">
-                  {skills.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                      {skills.map((s) => (
-                        <SkillChip key={s.name} name={s.name} />
-                      ))}
+      <Zone id="jd-req-title" title="Yêu cầu ứng viên">
+        <div className="grid gap-5">
+          {jd.majors && jd.majors.length > 0 && (
+            <p className="text-sm text-ink-2">Chuyên ngành phù hợp: {jd.majors.join(", ")}</p>
+          )}
+          <Lines text={jd.requirements} />
+          {jd.skills.length > 0 && (
+            <div className="border-t border-line">
+              {graded ? (
+                REQUIREMENT_ROWS.map(({ importance, label }) => {
+                  const skills = jd.skills.filter((s) => s.importance === importance)
+                  if (skills.length === 0) return null
+                  return (
+                    <div
+                      key={importance}
+                      className="grid grid-cols-[minmax(0,1fr)] gap-2 border-b border-line py-3.5 sm:grid-cols-[96px_minmax(0,1fr)] sm:gap-4"
+                    >
+                      <p className="pt-0.5 text-[15px] font-medium text-ink">{label}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {skills.map((s) => (
+                          <SkillChip key={s.name} name={s.name} />
+                        ))}
+                      </div>
                     </div>
-                  )}
-                  {text.map((s, i) => (
-                    <SectionText key={i} section={s} small />
-                  ))}
+                  )
+                })
+              ) : (
+                <div className="grid gap-2.5 py-3.5">
+                  <div className="flex flex-wrap gap-1.5">
+                    {jd.skills.map((s) => (
+                      <SkillChip key={s.name} name={s.name} />
+                    ))}
+                  </div>
+                  <p className="text-[13px] text-ink-3">Mức Bắt buộc / Ưu tiên / Cộng thêm sẽ có sau lần phân tích đầu tiên.</p>
                 </div>
-              </div>
-            )
-          })}
+              )}
+            </div>
+          )}
         </div>
-      </BodySection>
+      </Zone>
 
-      {others.map((s, i) => (
-        <BodySection key={i} title={s.title ?? "Thông tin khác"}>
-          <SectionText section={s} />
-        </BodySection>
-      ))}
+      {jd.benefits && (
+        <Zone id="jd-benefits-title" title="Quyền lợi">
+          <Lines text={jd.benefits} />
+        </Zone>
+      )}
+      {jd.how_to_apply && (
+        <Zone id="jd-apply-title" title="Cách ứng tuyển">
+          <Lines text={jd.how_to_apply} />
+        </Zone>
+      )}
     </div>
   )
 }
 
-function BodySection({ title, children }: { title: string; children: React.ReactNode }) {
-  const id = useId()
+/** Đoạn văn, gạch đầu dòng và tiêu đề nhỏ ("Ưu tiên:") của một mục. */
+function Lines({ text }: { text: string | null | undefined }) {
+  const lines = sectionLines(text)
+  if (lines.length === 0) return <p className="text-[15px] text-ink-3">Chưa có nội dung.</p>
+  const blocks: { kind: "p" | "h" | "ul"; items: string[] }[] = []
+  for (const line of lines) {
+    const kind = line.heading ? "h" : line.bullet ? "ul" : "p"
+    const last = blocks.at(-1)
+    if (kind === "ul" && last?.kind === "ul") last.items.push(line.text)
+    else blocks.push({ kind, items: [line.text] })
+  }
   return (
-    <Widget id={id} title={title}>
-      <div className="pt-1.5">{children}</div>
-    </Widget>
-  )
-}
-
-function SectionText({ section, lead = false, small = false }: { section: JdSection; lead?: boolean; small?: boolean }) {
-  const text = small ? "text-sm text-ink-2" : lead ? "text-[15px] text-ink sm:text-base" : "text-[15px] text-ink-2"
-  return (
-    <div className={`grid gap-2 ${text}`}>
-      {section.paragraphs.map((p, i) => (
-        <p key={i}>{p}</p>
-      ))}
-      {section.bullets.length > 0 && (
-        <ul className="grid list-disc gap-1.5 pl-5 marker:text-ink-3">
-          {section.bullets.map((b, i) => (
-            <li key={i}>{b}</li>
-          ))}
-        </ul>
+    <div className="grid gap-2.5 text-[15px] text-ink-2">
+      {blocks.map((b, i) =>
+        b.kind === "ul" ? (
+          <ul key={i} className="grid list-disc gap-1.5 pl-5 marker:text-ink-3">
+            {b.items.map((item, j) => (
+              <li key={j}>{item}</li>
+            ))}
+          </ul>
+        ) : b.kind === "h" ? (
+          <p key={i} className="pt-1.5 text-sm font-semibold text-ink">
+            {b.items[0].replace(/:$/, "")}
+          </p>
+        ) : (
+          <p key={i} className={i === 0 ? "text-ink" : undefined}>
+            {b.items[0]}
+          </p>
+        ),
       )}
     </div>
   )

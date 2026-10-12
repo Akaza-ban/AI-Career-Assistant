@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 STEPS = ["parse", "retrieve", "compare", "generate", "verify_grounding"]
 ANALYSIS_TIMEOUT_SECONDS = 150
 # Khớp JD_MIN_WORDS ở frontend/lib/types.ts (US-SV-02 AC2)
+# Nguồn mức quan trọng của kỹ năng JD tự dán đủ tin để không cần AI trích lại khi phân tích
+TRUSTED_SKILLS = ("ai", "analysis", "admin")
 JD_MIN_WORDS = 50
 
 
@@ -48,14 +50,37 @@ def create_analysis(db: Session, user: User, request: CreateGapAnalysisRequest) 
             )
         if not (request.jd_title and request.jd_title.strip()):
             raise AppError(422, "Hãy nhập tiêu đề vị trí tuyển dụng.", "jd_title_required")
+        # Tách các mục theo cấu trúc chung bằng quy tắc (không gọi AI); kỹ năng được trích lại bằng AI khi phân tích
+        from src.services import jd_parser
+
+        content = request.jd_text.strip()
+        draft = jd_parser.parse_rules(content, jd_parser.library_vocabulary(db))
         jd = JobDescription(
             id=f"jd_{uuid.uuid4().hex[:12]}",
             source="pasted",
             owner_id=user.id,
             title=request.jd_title.strip(),
-            company=(request.jd_company or "").strip() or None,
-            content=request.jd_text.strip(),
-            skills=[],
+            company=(request.jd_company or "").strip() or draft["company"],
+            level=draft["level"],
+            content=content,
+            skills=draft["skills"],
+            skills_source=draft["skills_source"],
+            **{
+                k: draft[k]
+                for k in (
+                    "employment_type",
+                    "work_mode",
+                    "location",
+                    "salary",
+                    "deadline",
+                    "experience",
+                    "majors",
+                    "description",
+                    "requirements",
+                    "benefits",
+                    "how_to_apply",
+                )
+            },
         )
         db.add(jd)
     else:
@@ -129,8 +154,9 @@ async def run_analysis(analysis_id: str) -> None:
         state: dict[str, Any] = {
             "cv_raw": cv.content_text,
             "jd_raw": jd.content,
-            # JD thư viện có sẵn yêu cầu đã chuẩn hoá; JD tự dán sẽ được trích ở bước retrieve
-            "requirements": jd.skills if jd.source == "library" else [],
+            # JD thư viện (và JD tự dán đã có mức quan trọng từ AI / lượt phân tích trước) dùng thẳng yêu cầu đã có;
+            # còn lại trích bằng AI ở bước retrieve
+            "requirements": jd.skills if jd.source == "library" or jd.skills_source in TRUSTED_SKILLS else [],
             "llm_calls": 0,
         }
         jd_source, jd_id = jd.source, jd.id
@@ -168,6 +194,7 @@ async def run_analysis(analysis_id: str) -> None:
                     {"name": r["name"], "importance": r["importance"], "aliases": r.get("aliases", [])}
                     for r in final["requirements"]
                 ]
+                jd.skills_source = "analysis"
         analysis = db.get(GapAnalysis, analysis_id)
         if analysis is not None:
             analysis.status = "completed"

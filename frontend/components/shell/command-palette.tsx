@@ -6,19 +6,23 @@ import {
   ArrowRight,
   BriefcaseBusiness,
   CornerDownLeft,
+  FilePlus2,
   FileUp,
   GitCompareArrows,
   MessagesSquare,
   ScanText,
   Search,
+  UserPlus,
   UserRound,
+  UserRoundCheck,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react"
 
-import { advisorShell, studentShell } from "@/components/shell/nav-config"
+import { shellOf } from "@/components/shell/nav-config"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { api } from "@/lib/api"
-import type { AssignedStudent, JobDescription, Role } from "@/lib/types"
+import type { AdminAdvisor, AdminStudent, AssignedStudent, JobDescription, Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 interface PaletteItem {
@@ -58,11 +62,39 @@ const STUDENT_ACTIONS = [
   item("Thao tác", "Tải CV lên", "/student/cv", FileUp),
 ]
 
+const ADMIN_ACTIONS = [
+  item("Thao tác", "Thêm cố vấn", "/admin/advisors?new=1", UserPlus),
+  item("Thao tác", "Phân công sinh viên chưa có cố vấn", "/admin/students?filter=unassigned", UsersRound),
+  item("Thao tác", "Thêm JD vào thư viện", "/admin/jds/new", FilePlus2),
+]
+
+const ACTIONS: Record<Role, PaletteItem[]> = { student: STUDENT_ACTIONS, advisor: [], admin: ADMIN_ACTIONS }
+
+/** Quản trị viên tìm cả sinh viên lẫn cố vấn; chọn một người thì mở danh sách đã lọc sẵn theo email. */
+function adminRecords(people: { students: AdminStudent[]; advisors: AdminAdvisor[] }): PaletteItem[] {
+  return [
+    ...people.advisors.map((a) =>
+      item("Cố vấn", a.full_name, `/admin/advisors?q=${encodeURIComponent(a.email)}`, UserRoundCheck, a.title, a.email),
+    ),
+    ...people.students.map((s) =>
+      item(
+        "Sinh viên",
+        s.full_name,
+        `/admin/students?q=${encodeURIComponent(s.email)}`,
+        UserRound,
+        s.advisor?.full_name ?? "Chưa phân công",
+        `${s.email} ${s.phone ?? ""}`,
+      ),
+    ),
+  ]
+}
+
 const GROUP_LIMIT = 6
 
 /**
  * Bảng lệnh Ctrl K (WIREFRAMES A18). Sinh viên: tìm vị trí trong thư viện JD (theo tên, công ty, kỹ năng), thao tác
- * nhanh, đi tới các trang. Cố vấn: tìm sinh viên phụ trách và đi tới các trang. Gõ không dấu vẫn tìm được.
+ * nhanh, đi tới các trang. Cố vấn: tìm sinh viên phụ trách và đi tới các trang. Quản trị viên: tìm sinh viên, cố vấn,
+ * thao tác quản lý. Gõ không dấu vẫn tìm được.
  */
 export function CommandPalette({ role, open, onOpenChange }: { role: Role; open: boolean; onOpenChange: (open: boolean) => void }) {
   const router = useRouter()
@@ -72,21 +104,27 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
   const [active, setActive] = useState(0)
   const [jds, setJds] = useState<JobDescription[] | null>(null)
   const [students, setStudents] = useState<AssignedStudent[] | null>(null)
+  const [people, setPeople] = useState<{ students: AdminStudent[]; advisors: AdminAdvisor[] } | null>(null)
 
   // Chỉ tải dữ liệu khi mở lần đầu
   useEffect(() => {
     if (!open) return
     if (role === "student" && jds === null) api.listJdLibrary().then(setJds, () => setJds([]))
     if (role === "advisor" && students === null) api.listAssignedStudents().then(setStudents, () => setStudents([]))
-  }, [open, role, jds, students])
+    if (role === "admin" && people === null) {
+      Promise.all([api.listAdminStudents(), api.listAdminAdvisors()]).then(
+        ([s, a]) => setPeople({ students: s, advisors: a }),
+        () => setPeople({ students: [], advisors: [] }),
+      )
+    }
+  }, [open, role, jds, students, people])
 
-  const pages = useMemo(
-    () => (role === "advisor" ? advisorShell : studentShell).nav.map((n) => item("Đi tới", n.label, n.href, n.icon)),
-    [role],
-  )
+  const pages = useMemo(() => shellOf(role).nav.map((n) => item("Đi tới", n.label, n.href, n.icon)), [role])
   const records = useMemo(
     () =>
-      role === "student"
+      role === "admin"
+        ? adminRecords(people ?? { students: [], advisors: [] })
+        : role === "student"
         ? (jds ?? []).map((jd) =>
             item(
               "Vị trí",
@@ -100,7 +138,7 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
         : (students ?? []).map((s) =>
             item("Sinh viên", s.full_name, `/advisor/students/${s.id}`, UserRound, s.target?.title ?? s.email, `${s.email} ${s.phone ?? ""}`),
           ),
-    [role, jds, students],
+    [role, jds, students, people],
   )
 
   const results = useMemo(() => {
@@ -109,7 +147,7 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
     const matches = (it: PaletteItem) => words.every((w) => it.haystack.includes(w))
     const groups: PaletteItem[][] = [
       records.filter((r) => (q ? matches(r) : false)).slice(0, GROUP_LIMIT),
-      (role === "student" ? STUDENT_ACTIONS : []).filter((a) => !q || matches(a)),
+      ACTIONS[role].filter((a) => !q || matches(a)),
       pages.filter((p) => !q || matches(p)),
     ]
     return groups.flat()
@@ -140,7 +178,7 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
     }
   }
 
-  const loading = role === "student" ? jds === null : students === null
+  const loading = role === "student" ? jds === null : role === "admin" ? people === null : students === null
   const activeIndex = Math.min(active, Math.max(results.length - 1, 0))
 
   return (
@@ -161,7 +199,9 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
               setActive(0)
             }}
             onKeyDown={onKeyDown}
-            placeholder={role === "student" ? "Tìm vị trí, kỹ năng, thao tác…" : "Tìm sinh viên, trang…"}
+            placeholder={
+              role === "student" ? "Tìm vị trí, kỹ năng, thao tác…" : role === "admin" ? "Tìm sinh viên, cố vấn, thao tác…" : "Tìm sinh viên, trang…"
+            }
             role="combobox"
             aria-expanded
             aria-controls={listId}

@@ -2,7 +2,7 @@
 // Tên field dùng snake_case để khớp trực tiếp với Pydantic schema ở src/models/schemas.py.
 // Khi backend chốt schema, sửa file này cho khớp; các trang chỉ phụ thuộc vào đây và lib/api.ts.
 
-export type Role = "student" | "advisor"
+export type Role = "student" | "advisor" | "admin"
 
 export type ISODateString = string
 
@@ -15,6 +15,8 @@ export interface UserProfile {
   /** SV: email; cố vấn: chức danh. */
   subtitle: string
   avatar_url: string | null
+  /** Cố vấn đang dùng mật khẩu tạm do quản trị viên đặt: phải đổi trước khi dùng tiếp. */
+  must_change_password?: boolean
 }
 
 // ---------- CV (US-SV-01) ----------
@@ -74,9 +76,51 @@ export type RequirementImportance = "required" | "preferred" | "additional"
 export interface JdSkill {
   name: string
   importance: RequirementImportance
+  /** Tên gọi khác (để nhận ra kỹ năng khi CV / JD viết khác chữ). */
+  aliases?: string[]
 }
 
-export interface JobDescription {
+export type EmploymentType = "full_time" | "part_time" | "internship"
+export type WorkMode = "onsite" | "remote" | "hybrid"
+export type ExperienceLevel = "none" | "under_1" | "1_2" | "2_plus"
+
+/**
+ * Cấu trúc chung của mọi JD (thư viện và JD sinh viên tự dán). Bắt buộc với JD tự dán: tên vị trí, cấp bậc, mô tả,
+ * yêu cầu; JD thư viện bắt buộc thêm công ty, ngành, hình thức, nơi làm việc, địa điểm, kinh nghiệm.
+ */
+export interface JdFields {
+  title?: string | null
+  company?: string | null
+  level?: JobLevel | null
+  /** Một trong JD_INDUSTRIES (lib/jd.ts). */
+  industry?: string | null
+  employment_type?: EmploymentType | null
+  work_mode?: WorkMode | null
+  location?: string | null
+  /** Chữ tự do: "12 – 15 triệu", "Thoả thuận". */
+  salary?: string | null
+  /** YYYY-MM-DD */
+  deadline?: string | null
+  experience?: ExperienceLevel | null
+  majors?: string[] | null
+  /** Mô tả công việc (gạch đầu dòng, có thể có đoạn giới thiệu ở đầu). */
+  description?: string | null
+  /** Yêu cầu ứng viên; có thể có dòng "Ưu tiên:" / "Điểm cộng:". */
+  requirements?: string | null
+  benefits?: string | null
+  how_to_apply?: string | null
+}
+
+/** Kết quả tách toàn văn JD (POST /jd/parse), chưa lưu. */
+export interface JdDraft extends JdFields {
+  skills: JdSkill[]
+  skills_source: "dictionary" | "sections" | "ai"
+  /** Có dùng AI (khi quy tắc còn thiếu tên vị trí, mô tả hoặc yêu cầu). */
+  used_ai: boolean
+  word_count: number
+}
+
+export interface JobDescription extends JdFields {
   id: string
   title: string
   company: string | null
@@ -87,6 +131,9 @@ export interface JobDescription {
   /** Toàn văn JD. */
   content: string
   source: "library" | "pasted"
+  /** Nguồn mức quan trọng của kỹ năng; "dictionary" / "sections": mức chính xác có sau lần phân tích đầu tiên. */
+  skills_source?: "dictionary" | "sections" | "ai" | "analysis" | "admin" | null
+  created_at?: ISODateString | null
 }
 
 /** Ngưỡng JD tối thiểu khi dán text (US-SV-02 AC2). */
@@ -158,13 +205,14 @@ export interface SavedJd {
  * Tạo một JD tự dán để dùng lại (ví dụ khi so sánh nhiều vị trí, POST /jd/compare chỉ nhận jd_ids).
  * Backend hiện chỉ tạo JD tự dán bên trong POST /gap-analysis; đây là endpoint đề xuất, mới có ở mock.
  */
-export interface CreatePastedJdRequest {
-  title: string
-  company?: string
-  level?: JobLevel
-  industry?: string
+export interface CreatePastedJdRequest extends JdFields {
   /** Toàn văn JD (≥ JD_MIN_WORDS từ). */
   text: string
+  /** Kỹ năng từ bước tách (JdDraft). */
+  skills?: JdSkill[]
+  skills_source?: JdDraft["skills_source"]
+  /** true: sinh viên đã xem lại các trường (hộp Thêm JD); bắt buộc tên vị trí, cấp bậc, mô tả, yêu cầu. */
+  reviewed?: boolean
 }
 
 // ---------- So sánh nhiều vị trí (POST /jd/compare) ----------
@@ -591,12 +639,18 @@ export interface InterviewQuota {
 
 // ---------- Phản hồi (B3, US-SV-06) ----------
 
+/** Lượt dùng được chấm sao (CSAT). */
+export type CsatActivity = "gap_analysis" | "optimizer" | "interview"
+/** Phần nhỏ được like / dislike. */
+export type ThumbActivity = "gap_suggestion" | "interview_turn" | "job_recommendation" | "jd_compare"
+
 export type FeedbackRequest =
   | {
       response_id: string
       kind: "thumb"
       /** 1 = hữu ích, -1 = chưa hữu ích */
       value: 1 | -1
+      activity?: ThumbActivity
       comment?: string
     }
   | {
@@ -604,8 +658,10 @@ export type FeedbackRequest =
       kind: "csat"
       /** 1–5 sao */
       value: 1 | 2 | 3 | 4 | 5
-      activity: "gap_analysis" | "interview"
+      activity: CsatActivity
       comment?: string
+      /** Chỉ khi 1–3 sao: mã lý do chọn nhanh (lib/feedback.ts). */
+      tags?: string[]
       /** "Bạn có dùng lại không?" (tuỳ chọn). */
       would_reuse?: boolean
     }
@@ -906,6 +962,8 @@ export interface LoginRequest {
 export interface LoginResponse {
   role: Role
   profile: UserProfile
+  /** true: đăng nhập bằng mật khẩu tạm, chuyển sang trang Đặt mật khẩu mới. */
+  must_change_password?: boolean
 }
 
 export interface RegisterRequest {
@@ -1140,9 +1198,6 @@ export interface AdvisorOverview {
   /** TB chênh lệch (gần nhất − buổi đầu) ở vị trí đang luyện của từng SV có ≥ 2 buổi. */
   average_delta: number | null
   delta_count: number
-  csat: number | null
-  csat_count: number
-  csat_target: number
   weekly_scores: WeeklyScore[]
   status_counts: Record<StudentStatus, number>
   star: CohortStar | null
@@ -1207,6 +1262,10 @@ export type NotificationKind =
   | "integrity_alert"
   | "student_activity"
   | "student_inactive"
+  /** SV: có cố vấn mới; cố vấn: được phân công thêm SV. */
+  | "advisor_assigned"
+  /** Quản trị viên: SV mới tạo tài khoản, đang chờ phân công. */
+  | "student_registered"
 
 export interface AppNotification {
   id: string
@@ -1225,4 +1284,168 @@ export interface AppNotification {
 export interface ApiErrorBody {
   detail: string
   code?: string
+}
+
+// ---------- Quản trị (thống kê, tài khoản cố vấn, phân công SV) ----------
+
+export type AdminPeriod = 7 | 30 | 90
+
+export interface AdminStats {
+  days: AdminPeriod
+  users: {
+    student_count: number
+    /** SV tạo tài khoản trong 7 ngày qua. */
+    new_students_week: number
+    /** Tổng số SV ở cuối mỗi tuần (7 tuần, cũ → mới). */
+    student_series: number[]
+    /** SV có lượt phân tích / buổi phỏng vấn hoàn thành trong kỳ. */
+    active_count: number
+    active_series: number[]
+    /** Cố vấn đang hoạt động (không tính tài khoản tạm khoá). */
+    advisor_count: number
+    assigned_count: number
+    unassigned_count: number
+  }
+  usage: {
+    weekly: { week_start: string; analyses: number; interviews: number }[]
+    analyses: number
+    /** % thay đổi so với kỳ trước; null khi kỳ trước chưa có lượt nào. */
+    analyses_change: number | null
+    interviews: number
+    interviews_change: number | null
+    /** Phiên bản CV tạo từ Trình tối ưu trong kỳ. */
+    optimized_cvs: number
+  }
+  satisfaction: {
+    csat: number | null
+    count: number
+    target: number
+    /** Số lượt theo số sao, khoá "1"…"5". */
+    distribution: Record<"1" | "2" | "3" | "4" | "5", number>
+    /** Số lượt chấm 1–3 sao trong kỳ. */
+    low_count: number
+    /** Lý do chưa hài lòng, nhiều nhất trước (tối đa 5). */
+    reasons: { reason: string; label: string; activities: CsatActivity[]; count: number }[]
+    /** Like / dislike theo từng phần. */
+    helpful: { activity: ThumbActivity; label: string; likes: number; total: number }[]
+  }
+  /** Nhận xét kèm đánh giá CSAT, không có tên SV. */
+  recent_comments: AdminComment[]
+}
+
+export interface AdminComment {
+  id: string
+  /** Số sao 1–5. */
+  value: number
+  activity: CsatActivity | null
+  /** null khi sinh viên chỉ chọn lý do, không viết chữ. */
+  comment: string | null
+  tags: { reason: string; label: string }[]
+  created_at: ISODateString
+}
+
+export interface AdminCommentsQuery {
+  /** Bỏ trống = mọi lúc. */
+  days?: AdminPeriod
+  stars?: 1 | 2 | 3 | 4 | 5
+  activity?: CsatActivity
+  /** Mã lý do, ví dụ "off_target". */
+  reason?: string
+  offset?: number
+  limit?: number
+}
+
+export interface AdminCommentsPage {
+  total: number
+  items: AdminComment[]
+}
+
+export type AdvisorAccountStatus = "active" | "password_pending" | "disabled"
+
+export interface AdminAdvisor {
+  id: string
+  full_name: string
+  email: string
+  title: string
+  avatar_url: string | null
+  student_count: number
+  /** Buổi SV đã chia sẻ mà cố vấn chưa nhận xét. */
+  pending_reviews: number
+  status: AdvisorAccountStatus
+  last_active_at: ISODateString | null
+  created_at: ISODateString
+}
+
+export interface CreateAdvisorRequest {
+  full_name: string
+  email: string
+  title: string
+  temporary_password: string
+}
+
+export interface UpdateAdvisorRequest {
+  full_name?: string
+  email?: string
+  title?: string
+  /** true = tạm khoá, false = mở khoá. */
+  disabled?: boolean
+}
+
+export interface AdminStudent {
+  id: string
+  full_name: string
+  email: string
+  phone: string | null
+  avatar_url: string | null
+  /** null = chưa phân công. */
+  advisor: { id: string; full_name: string; disabled: boolean } | null
+  created_at: ISODateString
+  last_active_at: ISODateString | null
+}
+
+export interface AssignAdvisorResponse {
+  assigned: number
+  unchanged: number
+}
+
+// ---------- Quản trị: thư viện JD ----------
+
+export interface AdminJdRow {
+  id: string
+  title: string
+  company: string | null
+  industry: string | null
+  level: JobLevel | null
+  skills: JdSkill[]
+  status: "published" | "hidden"
+  /** Lượt phân tích CV + buổi phỏng vấn hoàn thành trong 30 ngày. */
+  usage_30d: number
+  updated_at: ISODateString
+}
+
+/** JD sinh viên tự dán, gộp theo vị trí – công ty (không kèm tên sinh viên). */
+export interface AdminUploadedJd {
+  sample_jd_id: string
+  title: string
+  company: string | null
+  level: JobLevel | null
+  skills: JdSkill[]
+  student_count: number
+  last_added_at: ISODateString
+  /** JD thư viện tương ứng nếu đã có. */
+  library_jd_id: string | null
+}
+
+export interface AdminJdDetail extends JobDescription {
+  status?: string | null
+  source_jd_id?: string | null
+  updated_at?: ISODateString | null
+}
+
+export interface AdminJdUpsert extends JdFields {
+  skills?: JdSkill[]
+  /** Toàn văn đã dán (không có thì backend dựng từ các mục). */
+  text?: string | null
+  source_jd_id?: string | null
+  status?: "published" | "hidden"
 }

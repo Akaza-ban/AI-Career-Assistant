@@ -12,6 +12,7 @@ import type { Role } from "@/lib/types"
  * Chỉ hiện khung ứng dụng khi đã đăng nhập đúng vai trò (kể cả tài khoản demo), để không gọi API khi chưa có phiên:
  * - Chưa đăng nhập → trang Đăng nhập.
  * - Mở khu vực của vai trò khác → về trang chủ của vai trò mình.
+ * - Còn mật khẩu tạm (cố vấn do quản trị viên tạo tài khoản) → trang Đặt mật khẩu của bạn.
  * - Đã nối API tài khoản thật mà phiên hết hạn → Đăng nhập kèm thông báo.
  */
 export function AuthGuard({ role, children }: { role: Role; children: ReactNode }) {
@@ -21,6 +22,10 @@ export function AuthGuard({ role, children }: { role: Role; children: ReactNode 
     const mode = getAuthMode()
     if (!mode) {
       router.replace("/login")
+      return
+    }
+    if (mode.mustChangePassword) {
+      router.replace("/change-password")
       return
     }
     if (mode.role !== role) {

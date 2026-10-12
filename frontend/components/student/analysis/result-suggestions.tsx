@@ -51,7 +51,7 @@ export function ResultSuggestions({ analysis }: { analysis: GapAnalysis }) {
               <Copy aria-hidden />
               Sao chép
             </Button>
-            <FeedbackWidget variant="thumbs" responseId={s.id} />
+            <FeedbackWidget variant="thumbs" responseId={s.id} activity="gap_suggestion" />
           </span>
         </div>
       </>

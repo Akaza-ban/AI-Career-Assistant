@@ -21,7 +21,6 @@ from src.db.models import (
     AdvisorNote,
     AdvisorReview,
     CvVersion,
-    Feedback,
     GapAnalysis,
     InterviewSession,
     JobDescription,
@@ -38,10 +37,9 @@ MAX_SUGGESTIONS = 4
 MAX_COMMENT_CHARS = 2000
 MAX_NOTE_CHARS = 2000
 # Tổng quan cả nhóm: "hoạt động" = có lượt phân tích hoặc buổi phỏng vấn hoàn thành trong 30 ngày;
-# mục tiêu ≥ 60% SV hoạt động và CSAT ≥ 4/5 (PRD mục 9)
+# mục tiêu ≥ 60% SV hoạt động (PRD mục 9). CSAT toàn hệ thống nằm ở trang Quản trị (src/services/admin.py).
 ACTIVE_DAYS = 30
 ACTIVE_TARGET = 60
-CSAT_TARGET = 4.0
 WEEKS = 8
 TOP_IMPROVERS = 5
 RECENT_REVIEWS = 5
@@ -500,8 +498,6 @@ def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
     since = now - timedelta(days=ACTIVE_DAYS)
     latest = [r["latest_score"] for r in rows if r["latest_score"] is not None]
     deltas = [r["score_delta"] for r in rows if r["score_delta"] is not None]
-    ids = [d.student.id for d in data]
-    csat = list(db.scalars(select(Feedback.value).where(Feedback.user_id.in_(ids), Feedback.kind == "csat")))
     star = _cohort_star(data)
     flagged = sorted((r for r in rows if r["flag"]), key=lambda r: r["flag"]["flagged_at"], reverse=True)
     improvers = sorted((r for r in rows if (r["score_delta"] or 0) > 0), key=lambda r: r["score_delta"], reverse=True)
@@ -517,9 +513,6 @@ def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
         "scored_count": len(latest),
         "average_delta": _mean(deltas),
         "delta_count": len(deltas),
-        "csat": _mean(csat),
-        "csat_count": len(csat),
-        "csat_target": CSAT_TARGET,
         "weekly_scores": _weekly_scores(data, now),
         "status_counts": {
             status: sum(1 for r in rows if _status(r) == status)

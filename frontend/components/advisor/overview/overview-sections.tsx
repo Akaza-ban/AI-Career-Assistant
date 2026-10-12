@@ -254,17 +254,7 @@ export function GroupMetrics({ data, students }: { data: AdvisorOverview; studen
   const delta = data.average_delta
 
   return (
-    <Zone
-      id="group-metrics"
-      title="Tình hình nhóm"
-      aside={
-        data.csat !== null && (
-          <span className="text-sm text-ink-3 tabular-nums">
-            Hài lòng (CSAT) {formatScore(data.csat)} / 5 · {data.csat_count} lượt đánh giá
-          </span>
-        )
-      }
-    >
+    <Zone id="group-metrics" title="Tình hình nhóm">
       <div className="grid gap-x-11 gap-y-10 [grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr))]">
         <MetricColumn
           label="Sinh viên"

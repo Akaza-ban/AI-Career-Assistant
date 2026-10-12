@@ -8,6 +8,21 @@ import { API_BASE_URL, isLive, type ApiGroup } from "@/lib/config"
 import { mockApi } from "@/lib/mocks/handlers"
 import { clearAuthMode, getAuthMode } from "@/lib/session"
 import type {
+  AdminJdDetail,
+  AdminJdRow,
+  AdminJdUpsert,
+  AdminUploadedJd,
+  JdDraft,
+  JdFields,
+  AdminAdvisor,
+  AdminCommentsPage,
+  AdminCommentsQuery,
+  AdminPeriod,
+  AdminStats,
+  AdminStudent,
+  AssignAdvisorResponse,
+  CreateAdvisorRequest,
+  UpdateAdvisorRequest,
   AdvisorInterviewReport,
   AdvisorNote,
   AdvisorNoteRequest,
@@ -100,6 +115,10 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
       clearAuthMode()
       window.location.assign("/login?expired=1")
     }
+    // Còn mật khẩu tạm (cố vấn mới được tạo tài khoản): phải đặt mật khẩu mới trước
+    if (res.status === 403 && body?.code === "password_change_required" && typeof window !== "undefined") {
+      window.location.assign("/change-password")
+    }
     throw new ApiError(res.status, detail, body?.code)
   }
   return res
@@ -136,6 +155,9 @@ export const api = {
     via("auth", () => mockApi.confirmPasswordReset(body), () => request("/auth/password-reset/confirm", json(body))),
   /** Kết thúc phiên đăng nhập (cookie); không lỗi nếu phiên đã hết. */
   logout: (): Promise<void> => via("auth", async () => {}, () => request("/auth/logout", { method: "POST" })),
+  /** Đặt mật khẩu mới thay mật khẩu tạm ở lần đăng nhập đầu. Lỗi 400 "wrong_password" khi mật khẩu tạm không đúng. */
+  changeTemporaryPassword: (body: ChangePasswordRequest): Promise<ChangePasswordResponse> =>
+    via("auth", () => mockApi.changeTemporaryPassword(body), () => request("/auth/change-password", json(body))),
 
   // ---- Người dùng ----
   getMe: (role: Role): Promise<UserProfile> =>
@@ -244,9 +266,23 @@ export const api = {
     via("gap", () => mockApi.unsaveJd(jdId), () => request(`/jd/${encodeURIComponent(jdId)}/saved`, { method: "DELETE" })),
   /** Vị trí SV chọn được: thư viện JD và các JD SV đã tự dán (GET /jd). */
   listMyJds: (): Promise<JobDescription[]> => via("gap", () => mockApi.listMyJds(), () => request("/jd")),
-  /** Lưu JD tự dán để dùng lại (so sánh nhiều vị trí chỉ nhận jd_ids). */
+  /** Lưu JD tự dán theo cấu trúc chung. reviewed (hộp Thêm JD): bắt buộc tên vị trí, cấp bậc, mô tả, yêu cầu. */
   createPastedJd: (body: CreatePastedJdRequest): Promise<JobDescription> =>
     via("gap", () => mockApi.createPastedJd(body), () => request("/jd", json(body))),
+  /** Tách toàn văn JD thành các trường (chưa lưu). Lỗi 422 "jd_too_short" khi dưới 50 từ. */
+  parseJd: (text: string): Promise<JdDraft> =>
+    via("gap", () => mockApi.parseJd(text), () => request("/jd/parse", json({ text }))),
+  /** JD của bạn: JD sinh viên tự dán, mới nhất trước. */
+  listPastedJds: (): Promise<JobDescription[]> => via("gap", () => mockApi.listPastedJds(), () => request("/jd/mine")),
+  updatePastedJd: (id: string, fields: JdFields): Promise<JobDescription> =>
+    via(
+      "gap",
+      () => mockApi.updatePastedJd(id, fields),
+      () => request(`/jd/${encodeURIComponent(id)}`, { ...json(fields), method: "PATCH" }),
+    ),
+  /** Bỏ khỏi danh sách; các lượt phân tích, phỏng vấn đã làm với JD này vẫn mở được. */
+  deletePastedJd: (id: string): Promise<void> =>
+    via("gap", () => mockApi.deletePastedJd(id), () => request(`/jd/${encodeURIComponent(id)}`, { method: "DELETE" })),
   /** So sánh CV với 2–3 JD qua LLM; kết quả sắp theo match_score giảm dần. */
   compareJds: (body: CompareJdsRequest): Promise<CompareJdsResponse> =>
     via("gap", () => mockApi.compareJds(body), () => request("/jd/compare", json(body))),
@@ -341,6 +377,13 @@ export const api = {
   // ---- Phản hồi (B3) ----
   sendFeedback: (body: FeedbackRequest): Promise<FeedbackResponse> =>
     via("feedback", () => mockApi.sendFeedback(body), () => request("/feedback", json(body))),
+  /** Huỷ like / dislike (bấm lại nút đang chọn). CSAT không huỷ được. */
+  deleteThumb: (responseId: string): Promise<void> =>
+    via(
+      "feedback",
+      () => mockApi.deleteThumb(responseId),
+      () => request(`/feedback?response_id=${encodeURIComponent(responseId)}&kind=thumb`, { method: "DELETE" }),
+    ),
   getFeedback: (responseId: string, kind: "thumb" | "csat"): Promise<FeedbackStatus> =>
     via(
       "feedback",
@@ -454,5 +497,64 @@ export const api = {
       "advisor",
       () => mockApi.deleteAdvisorNote(studentId, noteId),
       () => request(`${advisorStudentPath(studentId)}/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" }),
+    ),
+
+  // ---- Quản trị (chỉ tài khoản admin; vai trò khác nhận 403 "forbidden") ----
+  getAdminStats: (days: AdminPeriod): Promise<AdminStats> =>
+    via("admin", () => mockApi.getAdminStats(days), () => request(`/admin/stats?days=${days}`)),
+  /** Nhận xét kèm đánh giá sao của SV (không kèm tên), mới nhất trước. */
+  listAdminComments: (query: AdminCommentsQuery): Promise<AdminCommentsPage> =>
+    via(
+      "admin",
+      () => mockApi.listAdminComments(query),
+      () => {
+        const params = Object.entries(query).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        return request(`/admin/comments?${new URLSearchParams(params)}`)
+      },
+    ),
+  listAdminJds: (): Promise<AdminJdRow[]> => via("admin", () => mockApi.listAdminJds(), () => request("/admin/jds")),
+  /** JD sinh viên tự dán, gộp theo vị trí – công ty (không kèm tên sinh viên). */
+  listUploadedJds: (): Promise<AdminUploadedJd[]> =>
+    via("admin", () => mockApi.listUploadedJds(), () => request("/admin/jds/uploaded")),
+  /** JD thư viện để sửa, hoặc JD sinh viên tải lên để điền sẵn form "Đưa vào thư viện". */
+  getAdminJd: (id: string): Promise<AdminJdDetail> =>
+    via("admin", () => mockApi.getAdminJd(id), () => request(`/admin/jds/${encodeURIComponent(id)}`)),
+  /** Lỗi 409 "jd_duplicate"; 422 "jd_fields_required" / "jd_skills_required". */
+  createAdminJd: (body: AdminJdUpsert): Promise<AdminJdDetail> =>
+    via("admin", () => mockApi.createAdminJd(body), () => request("/admin/jds", json(body))),
+  /** Sửa JD thư viện hoặc ẩn / hiện (status). */
+  updateAdminJd: (id: string, body: AdminJdUpsert): Promise<AdminJdDetail> =>
+    via(
+      "admin",
+      () => mockApi.updateAdminJd(id, body),
+      () => request(`/admin/jds/${encodeURIComponent(id)}`, { ...json(body), method: "PATCH" }),
+    ),
+  listAdminAdvisors: (): Promise<AdminAdvisor[]> =>
+    via("admin", () => mockApi.listAdminAdvisors(), () => request("/admin/advisors")),
+  /** Lỗi 409 "email_taken" khi email đã có tài khoản; 422 "weak_password" khi mật khẩu tạm chưa đủ mạnh. */
+  createAdvisor: (body: CreateAdvisorRequest): Promise<AdminAdvisor> =>
+    via("admin", () => mockApi.createAdvisor(body), () => request("/admin/advisors", json(body))),
+  /** Sửa thông tin hoặc tạm khoá / mở khoá (tạm khoá đăng xuất mọi phiên của cố vấn). */
+  updateAdvisor: (id: string, body: UpdateAdvisorRequest): Promise<AdminAdvisor> =>
+    via(
+      "admin",
+      () => mockApi.updateAdvisor(id, body),
+      () => request(`/admin/advisors/${encodeURIComponent(id)}`, { ...json(body), method: "PATCH" }),
+    ),
+  resetAdvisorPassword: (id: string, temporaryPassword: string): Promise<AdminAdvisor> =>
+    via(
+      "admin",
+      () => mockApi.resetAdvisorPassword(id, temporaryPassword),
+      () =>
+        request(`/admin/advisors/${encodeURIComponent(id)}/reset-password`, json({ temporary_password: temporaryPassword })),
+    ),
+  listAdminStudents: (): Promise<AdminStudent[]> =>
+    via("admin", () => mockApi.listAdminStudents(), () => request("/admin/students")),
+  /** Gán / đổi cố vấn; đổi cố vấn thì tài liệu SV đã chia sẻ chuyển về riêng tư. 409 "advisor_disabled". */
+  assignAdvisor: (studentIds: string[], advisorId: string): Promise<AssignAdvisorResponse> =>
+    via(
+      "admin",
+      () => mockApi.assignAdvisor(studentIds, advisorId),
+      () => request("/admin/assignments", json({ student_ids: studentIds, advisor_id: advisorId })),
     ),
 }

@@ -2,14 +2,14 @@
 
 import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, ChevronDown, ChevronRight, MessageSquareHeart, TimerOff, UserPlus } from "lucide-react"
+import { AlertCircle, ChevronDown, ChevronRight, TimerOff, UserPlus } from "lucide-react"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
+import { RateRow } from "@/components/common/rate-dialog"
 import { Zone, ZoneLink } from "@/components/common/zone"
-import { CsatDialog } from "@/components/student/interview/csat-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -334,7 +334,7 @@ function TurnItem({ turn, open, onToggle }: { turn: InterviewTurn; open: boolean
                 ))}
               </div>
             )}
-            <FeedbackWidget variant="thumbs" responseId={turn.id} className="mt-4" />
+            <FeedbackWidget variant="thumbs" responseId={turn.id} activity="interview_turn" className="mt-4" />
           </div>
         </div>
       )}
@@ -345,28 +345,17 @@ function TurnItem({ turn, open, onToggle }: { turn: InterviewTurn; open: boolean
 // ---------- Khảo sát CSAT (US-SV-06) ----------
 
 function Csat({ report }: { report: Report }) {
-  const [open, setOpen] = useState(false)
-  const [submitted, setSubmitted] = useState<number | null>(null)
-  const fetchCsat = useCallback(() => api.getFeedback(report.response_id, "csat"), [report.response_id])
-  const { data: saved } = useApi(fetchCsat)
-  const rated = submitted ?? saved?.value ?? null
-
   return (
-    <div className="-mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-8 md:-mt-6">
-      <p className="text-ink-2">
-        {rated ? `Bạn đã đánh giá buổi này ${rated} sao. Cảm ơn bạn!` : "Bạn thấy buổi luyện phỏng vấn này thế nào?"}
-      </p>
-      <Button variant="soft" size="brand" onClick={() => setOpen(true)} disabled={rated !== null}>
-        <MessageSquareHeart strokeWidth={1.75} aria-hidden />
-        {rated ? "Đã đánh giá" : "Đánh giá buổi này"}
-      </Button>
-      <CsatDialog
-        responseId={report.response_id}
-        activity="interview"
-        open={open}
-        onOpenChange={setOpen}
-        onSubmitted={setSubmitted}
-      />
-    </div>
+    <RateRow
+      responseId={report.response_id}
+      activity="interview"
+      title="Đánh giá buổi phỏng vấn"
+      subtitle={report.jd.company ? `${report.jd.title} · ${report.jd.company}` : report.jd.title}
+      askReuse
+      question="Bạn thấy buổi luyện phỏng vấn này thế nào?"
+      buttonLabel="Đánh giá buổi này"
+      doneLabel="buổi này"
+      className="-mt-4 border-t border-line pt-8 md:-mt-6"
+    />
   )
 }

@@ -6,7 +6,7 @@ import { useState } from "react"
 import { LogOut, Menu } from "lucide-react"
 
 import { useSignOut } from "@/components/shell/account-actions"
-import { advisorShell, isNavActive, studentShell } from "@/components/shell/nav-config"
+import { isNavActive, shellOf } from "@/components/shell/nav-config"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
@@ -22,7 +22,7 @@ export function MobileTabBar({ role }: { role: Role }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const signOut = useSignOut()
-  const config = role === "advisor" ? advisorShell : studentShell
+  const config = shellOf(role)
   const tabs = config.nav.filter((item) => item.tab)
   const rest = config.nav.filter((item) => !item.tab)
   const meActive = rest.some((item) => isNavActive(item, pathname))

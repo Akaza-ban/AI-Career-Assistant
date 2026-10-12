@@ -10,7 +10,7 @@ import { FormAlert, PasswordField, TextField, isEmail, type FieldHint } from "@/
 import { DemoRoleDialog } from "@/components/auth/demo-role-dialog"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
-import { homeOf, setAuthMode } from "@/lib/session"
+import { landingOf, setAuthMode, type AuthMode } from "@/lib/session"
 
 export function LoginForm({ expired = false }: { expired?: boolean }) {
   const router = useRouter()
@@ -42,9 +42,10 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
     setBusy(true)
     setError(null)
     try {
-      const { role } = await api.login({ email: email.trim(), password })
-      setAuthMode({ role })
-      router.push(homeOf(role))
+      const { role, must_change_password } = await api.login({ email: email.trim(), password })
+      const mode: AuthMode = must_change_password ? { role, mustChangePassword: true } : { role }
+      setAuthMode(mode)
+      router.push(landingOf(mode))
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : null
       setError({

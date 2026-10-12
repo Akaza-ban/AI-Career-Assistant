@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { AlertCircle, ChevronRight, Columns3, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
+import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { AiProgress } from "@/components/common/ai-progress"
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
@@ -174,6 +175,8 @@ function CompareView({ data, cvId, changeHref }: { data: CompareJdsResponse; cvI
     )
   }
 
+  // Một lần like / dislike cho cả bảng, theo cặp CV – nhóm vị trí
+  const feedbackId = `cmp_${data.cv_version_id ?? cvId}_${data.comparisons.map((c) => c.jd_id).sort().join("_")}`
   const interviewHref = `/student/interview/new?jd=${encodeURIComponent(top.jd_id)}&cv=${encodeURIComponent(data.cv_version_id ?? cvId)}`
 
   return (
@@ -215,6 +218,13 @@ function CompareView({ data, cvId, changeHref }: { data: CompareJdsResponse; cvI
             Luyện phỏng vấn
           </Button>
         </div>
+        <FeedbackWidget
+          variant="question"
+          responseId={feedbackId}
+          activity="jd_compare"
+          question="Bảng so sánh này có giúp bạn chọn vị trí?"
+          className="border-t border-line pt-6"
+        />
       </div>
     </div>
   )

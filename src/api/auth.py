@@ -36,12 +36,16 @@ def _set_session_cookie(response: Response, token: str, expires: datetime) -> No
 def _signed_in(db: DbSession, response: Response, user: User) -> LoginResponse:
     token, expires = auth.create_session(db, user)
     _set_session_cookie(response, token, expires)
-    return LoginResponse(role=user.role, profile=UserProfile.model_validate(user))
+    profile = UserProfile.model_validate(user)
+    return LoginResponse(role=user.role, profile=profile, must_change_password=profile.must_change_password)
 
 
 @router.post("/login", response_model=LoginResponse)
 def login(body: LoginRequest, db: DbSession, response: Response) -> LoginResponse:
-    """Đăng nhập bằng email + mật khẩu. Sai 5 lần liên tiếp thì tạm khoá 15 phút (429 "too_many_attempts")."""
+    """
+    Đăng nhập bằng email + mật khẩu. Sai 5 lần liên tiếp thì tạm khoá 15 phút (429 "too_many_attempts");
+    tài khoản bị quản trị viên tạm khoá: 403 "account_disabled". must_change_password = true: đang dùng mật khẩu tạm.
+    """
     user = auth.login(db, body.email, body.password)
     return _signed_in(db, response, user)
 

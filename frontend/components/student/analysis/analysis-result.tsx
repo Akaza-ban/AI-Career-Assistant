@@ -6,9 +6,9 @@ import { useCallback, useEffect, useState } from "react"
 import { AlertCircle, Loader2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
-import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { AiProgress } from "@/components/common/ai-progress"
 import { PageHeader } from "@/components/common/page-header"
+import { RateRow } from "@/components/common/rate-dialog"
 import { FallbackBanner } from "@/components/student/analysis/analysis-result-sections"
 import { ResultActionBar } from "@/components/student/analysis/result-action-bar"
 import { ResultScoreCard } from "@/components/student/analysis/result-score-card"
@@ -92,16 +92,16 @@ export function AnalysisResult({ id }: { id: string }) {
           <ResultScoreCard analysis={analysis} />
           <ResultSkills analysis={analysis} />
           <ResultSuggestions analysis={analysis} />
-          <div className="grid gap-7 border-t border-line pt-8">
-            {/* US-SV-06: khảo sát CSAT sau mỗi lượt phân tích; bỏ thẻ bao để khớp bố cục vùng */}
-            <FeedbackWidget
-              variant="stars"
-              responseId={analysis.response_id}
-              activity="gap_analysis"
-              title="Bạn chấm lượt phân tích này mấy sao?"
-              className="rounded-none border-0 bg-transparent p-0 shadow-none [&>div:first-child]:basis-60"
-            />
-          </div>
+          {/* US-SV-06: chỉ một dòng câu hỏi; bấm "Đánh giá" mới mở hộp chấm sao */}
+          <RateRow
+            responseId={analysis.response_id}
+            activity="gap_analysis"
+            title="Đánh giá lượt phân tích"
+            subtitle={`${analysis.jd.title} · CV ${analysis.cv_label}`}
+            question="Bạn thấy lượt phân tích này thế nào?"
+            buttonLabel="Đánh giá lượt này"
+            className="border-t border-line pt-8"
+          />
           <ResultActionBar analysis={analysis} />
         </>
       )}

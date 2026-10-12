@@ -24,20 +24,22 @@ const ChatContext = createContext<ChatState | null>(null)
 
 /**
  * Trạng thái khung chat dùng chung cho cả khung giao diện, nên khung vẫn mở khi chuyển trang.
- * Phòng phỏng vấn dùng khung giao diện riêng nên không có chat.
+ * Phòng phỏng vấn dùng khung giao diện riêng nên không có chat; quản trị viên không có tin nhắn (enabled = false).
  */
-export function ChatProvider({ role, children }: { role: Role; children: ReactNode }) {
+export function ChatProvider({ role, enabled = true, children }: { role: Role; enabled?: boolean; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [studentId, setStudentId] = useState<string | null>(null)
   const [unread, setUnread] = useState(0)
 
   const refreshUnread = useCallback(() => {
+    if (!enabled) return
     api.getUnreadMessageCount(role).then(setUnread, () => {
       // Lỗi mạng tạm thời: giữ số cũ, lần hỏi sau thử lại.
     })
-  }, [role])
+  }, [role, enabled])
 
   useEffect(() => {
+    if (!enabled) return
     refreshUnread()
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") refreshUnread()
@@ -48,7 +50,7 @@ export function ChatProvider({ role, children }: { role: Role; children: ReactNo
       window.clearInterval(timer)
       document.removeEventListener("visibilitychange", onVisible)
     }
-  }, [refreshUnread])
+  }, [refreshUnread, enabled])
 
   const openChat = useCallback((id?: string) => {
     setStudentId(id ?? null)

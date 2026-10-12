@@ -4,6 +4,7 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
 
 from src.agents.graph import agent
+from src.api import admin as admin_routes
 from src.api import advisor as advisor_routes
 from src.api import analysis as analysis_routes
 from src.api import auth as auth_routes
@@ -34,6 +35,7 @@ router.include_router(message_routes.router)
 router.include_router(auth_routes.router)
 router.include_router(notification_routes.router)
 router.include_router(settings_routes.router)
+router.include_router(admin_routes.router)
 
 
 # ============================================================================

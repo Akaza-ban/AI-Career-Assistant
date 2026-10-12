@@ -4,7 +4,7 @@ import pytest
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("role", "expected_id"),
-    [("student", "sv-0142"), ("advisor", "cv-007")],
+    [("student", "sv-0142"), ("advisor", "cv-007"), ("admin", "qt-001")],
 )
 async def test_me_returns_demo_user_for_role(client, role, expected_id):
     response = await client.get("/api/v1/me", headers={"X-Demo-Role": role})
@@ -16,7 +16,7 @@ async def test_me_returns_demo_user_for_role(client, role, expected_id):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("headers", [{}, {"X-Demo-Role": "admin"}])
+@pytest.mark.parametrize("headers", [{}, {"X-Demo-Role": "superuser"}])
 async def test_me_without_valid_role_is_unauthenticated(client, headers):
     response = await client.get("/api/v1/me", headers=headers)
     assert response.status_code == 401

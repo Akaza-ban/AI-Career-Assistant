@@ -3,15 +3,16 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState, type FormEvent } from "react"
-import { Loader2, Mail, TriangleAlert } from "lucide-react"
+import { KeyRound, Loader2, Mail, TriangleAlert } from "lucide-react"
 
 import { AuthCard, AuthHeading } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField, TextField, isEmail, type FieldHint } from "@/components/auth/auth-fields"
 import { PasswordRuleList } from "@/components/common/password-rules"
+import { useSignOut } from "@/components/shell/account-actions"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
 import { isStrongPassword } from "@/lib/password"
-import { homeOf, setAuthMode } from "@/lib/session"
+import { getAuthMode, homeOf, setAuthMode } from "@/lib/session"
 
 const RESEND_SECONDS = 60
 const BACK_LINK = (
@@ -170,6 +171,111 @@ export function ResetPassword({ token }: { token: string | null }) {
           {busy ? "Đang lưu…" : "Lưu và đăng nhập"}
         </Button>
       </form>
+    </AuthCard>
+  )
+}
+
+/**
+ * Lần đăng nhập đầu của cố vấn (tài khoản do quản trị viên tạo) hoặc sau khi được đặt lại mật khẩu tạm:
+ * phải đặt mật khẩu mới trước khi vào trang. Backend chặn các API khác (403 "password_change_required").
+ */
+export function ChangeTemporaryPassword() {
+  const router = useRouter()
+  const signOut = useSignOut()
+  const [ready, setReady] = useState(false)
+  const [current, setCurrent] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [submitted, setSubmitted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<{ message: string; wrongCurrent: boolean } | null>(null)
+
+  useEffect(() => {
+    const mode = getAuthMode()
+    if (!mode) router.replace("/login")
+    else if (!mode.mustChangePassword) router.replace(homeOf(mode.role))
+    // localStorage chỉ đọc được ở trình duyệt nên phải xét sau khi gắn vào trang
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    else setReady(true)
+  }, [router])
+
+  if (!ready) return null
+
+  const strong = isStrongPassword(password)
+  const currentHint: FieldHint = error?.wrongCurrent
+    ? { tone: "error", text: "Mật khẩu tạm không đúng." }
+    : submitted && !current
+      ? { tone: "error", text: "Hãy nhập mật khẩu tạm." }
+      : null
+  const confirmHint: FieldHint =
+    confirm && confirm === password
+      ? { tone: "ok", text: "Đã khớp" }
+      : (confirm && confirm.length >= password.length) || (submitted && confirm !== password)
+        ? { tone: "error", text: confirm ? "Hai mật khẩu chưa khớp." : "Hãy nhập lại mật khẩu." }
+        : null
+
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setSubmitted(true)
+    if (!current || !strong || confirm !== password) return
+    if (current === password) {
+      setError({ message: "Mật khẩu mới phải khác mật khẩu tạm.", wrongCurrent: false })
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await api.changeTemporaryPassword({ current_password: current, new_password: password })
+      const mode = getAuthMode()
+      const role = mode?.role ?? "advisor"
+      setAuthMode({ role })
+      router.push(homeOf(role))
+    } catch (err) {
+      const apiErr = err instanceof ApiError ? err : null
+      setError({
+        message: apiErr?.message ?? "Chưa lưu được mật khẩu. Hãy thử lại.",
+        wrongCurrent: apiErr?.code === "wrong_password",
+      })
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AuthCard className="max-w-[420px]">
+      <IconBadge>
+        <KeyRound className="size-[22px]" strokeWidth={1.75} aria-hidden />
+      </IconBadge>
+      <AuthHeading
+        title="Đặt mật khẩu của bạn"
+        description="Bạn đang dùng mật khẩu tạm do quản trị viên cấp. Hãy đặt mật khẩu mới để bắt đầu dùng CareerX."
+      />
+      <form onSubmit={submit} noValidate className="grid gap-5">
+        {error && !error.wrongCurrent && <FormAlert>{error.message}</FormAlert>}
+        <PasswordField
+          label="Mật khẩu tạm"
+          autoComplete="current-password"
+          value={current}
+          onChange={(v) => {
+            setCurrent(v)
+            if (error?.wrongCurrent) setError(null)
+          }}
+          hint={currentHint}
+          disabled={busy}
+          autoFocus
+        />
+        <div className="grid gap-2.5">
+          <PasswordField label="Mật khẩu mới" autoComplete="new-password" value={password} onChange={setPassword} disabled={busy} />
+          <PasswordRuleList password={password} showErrors={submitted} />
+        </div>
+        <PasswordField label="Nhập lại mật khẩu mới" autoComplete="new-password" value={confirm} onChange={setConfirm} hint={confirmHint} disabled={busy} />
+        <Button type="submit" variant="dark" size="brand" className="h-12 w-full" disabled={busy}>
+          {busy && <Loader2 className="animate-spin" aria-hidden />}
+          {busy ? "Đang lưu…" : "Lưu và tiếp tục"}
+        </Button>
+      </form>
+      <button type="button" onClick={() => void signOut()} className="justify-self-center text-sm font-semibold text-ink-2 hover:text-ink">
+        Đăng xuất
+      </button>
     </AuthCard>
   )
 }

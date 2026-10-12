@@ -6,6 +6,7 @@ import {
   ScanText,
   SlidersHorizontal,
   TrendingUp,
+  UserRoundCheck,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -118,6 +119,26 @@ export const advisorShell: ShellConfig = {
       parents: () => [{ label: "Sinh viên phụ trách", href: "/advisor/students" }],
     },
   ],
+}
+
+// Quản trị (bản vẽ QuanTriTongQuan, QuanTriCoVan, QuanTriSinhVien): ba trang riêng, không gộp
+export const adminShell: ShellConfig = {
+  role: "admin",
+  nav: [
+    { href: "/admin", label: "Tổng quan", icon: LayoutGrid, tab: "Tổng quan" },
+    { href: "/admin/advisors", label: "Cố vấn", icon: UserRoundCheck, match: "/admin/advisors", group: "Quản lý", tab: "Cố vấn" },
+    { href: "/admin/students", label: "Sinh viên", icon: Users, match: "/admin/students", group: "Quản lý", tab: "Sinh viên" },
+    { href: "/admin/jds", label: "Thư viện JD", icon: Library, match: "/admin/jds", group: "Quản lý", tab: "JD" },
+  ],
+  extraPages: [
+    { pattern: /^\/admin\/feedback$/, title: "Nhận xét", parents: () => [{ label: "Tổng quan", href: "/admin" }] },
+    { pattern: /^\/admin\/jds\/new$/, title: "Thêm JD", parents: () => [{ label: "Thư viện JD", href: "/admin/jds" }] },
+    { pattern: /^\/admin\/jds\/[^/]+$/, title: "Sửa JD", parents: () => [{ label: "Thư viện JD", href: "/admin/jds" }] },
+  ],
+}
+
+export function shellOf(role: Role): ShellConfig {
+  return role === "admin" ? adminShell : role === "advisor" ? advisorShell : studentShell
 }
 
 export function isNavActive(item: NavItem, pathname: string): boolean {

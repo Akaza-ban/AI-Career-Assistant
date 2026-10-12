@@ -13,12 +13,15 @@ from src.models.schemas import (
     CreateGapAnalysisRequest,
     CreatePastedJdRequest,
     GapAnalysisResponse,
+    JdDraftResponse,
+    JdFields,
     JobDescriptionResponse,
+    ParseJdRequest,
     RecommendJDsRequest,
     RecommendJDsResponse,
     SavedJdResponse,
 )
-from src.services import gap_analysis, jds
+from src.services import gap_analysis, jd_parser, jds
 from src.services.jd_recommendation import (
     compare_selected_jds_with_llm,
     generate_career_advice_with_llm,
@@ -154,32 +157,56 @@ async def recommend_jds(
 
 @router.get("/jd/library", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
 def list_jd_library(user: CurrentUser, db: DbSession) -> list[JobDescription]:
-    """Thư viện JD chuẩn hoá: nội dung đầy đủ và yêu cầu kỹ năng theo mức Required / Preferred / Additional."""
-    return list(
-        db.scalars(select(JobDescription).where(JobDescription.source == "library").order_by(JobDescription.title))
-    )
+    """Thư viện JD đang hiển thị, theo cấu trúc chung; kỹ năng theo mức Required / Preferred / Additional."""
+    return jds.published_library(db)
 
 
 @router.get("/jd", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
 def list_my_jds(user: CurrentStudent, db: DbSession) -> list[JobDescription]:
-    """Các vị trí SV có thể chọn khi luyện phỏng vấn: thư viện JD và các JD SV đã tự dán khi phân tích."""
-    library = db.scalars(
-        select(JobDescription).where(JobDescription.source == "library").order_by(JobDescription.title)
-    )
-    pasted = db.scalars(
-        select(JobDescription)
-        .where(JobDescription.source == "pasted", JobDescription.owner_id == user.id)
-        .order_by(JobDescription.created_at.desc())
-    )
-    return [*library, *pasted]
+    """Các vị trí SV chọn được: thư viện JD đang hiển thị và các JD SV đã tự dán (mới nhất trước)."""
+    return [*jds.published_library(db), *jds.list_pasted(db, user)]
 
 
 @router.post("/jd", response_model=JobDescriptionResponse, status_code=status.HTTP_201_CREATED, tags=["Gap Analysis"])
 def create_pasted_jd(body: CreatePastedJdRequest, user: CurrentStudent, db: DbSession) -> JobDescription:
-    """Lưu một JD tự dán để dùng lại (ví dụ khi so sánh nhiều vị trí, POST /jd/compare chỉ nhận jd_ids)."""
-    return jds.create_pasted(
-        db, user, title=body.title, text=body.text, company=body.company, level=body.level, industry=body.industry
-    )
+    """
+    Lưu JD tự dán theo cấu trúc chung. reviewed=true (hộp Thêm JD, bước xem lại): bắt buộc tên vị trí, cấp bậc, mô tả,
+    yêu cầu. Không gửi các trường (màn So sánh): chỉ cần tên vị trí, phần còn lại tự tách bằng quy tắc.
+    """
+    fields = body.model_dump(exclude_unset=True, exclude={"text", "reviewed"})
+    return jds.create_pasted(db, user, body.text, fields, reviewed=body.reviewed)
+
+
+@router.post("/jd/parse", response_model=JdDraftResponse, tags=["Gap Analysis"])
+async def parse_jd(body: ParseJdRequest, user: CurrentUser, db: DbSession) -> dict:
+    """
+    Tách toàn văn JD thành cấu trúc chung (chưa lưu): quy tắc trước, chỉ gọi AI khi còn thiếu tên vị trí, mô tả hoặc
+    yêu cầu. Dùng cho hộp Thêm JD của sinh viên và form Thêm JD vào thư viện của quản trị viên.
+    """
+    if user.role not in ("student", "admin"):
+        raise AppError(403, "Chức năng này dành cho sinh viên và quản trị viên.", "forbidden")
+    if len(body.text.split()) < jds.JD_MIN_WORDS:
+        raise AppError(422, f"Nội dung JD quá ngắn. Hãy dán tối thiểu {jds.JD_MIN_WORDS} từ.", "jd_too_short")
+    draft = await jd_parser.parse(db, body.text)
+    return {**draft, "word_count": jds.word_count(body.text)}
+
+
+@router.get("/jd/mine", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
+def list_pasted_jds(user: CurrentStudent, db: DbSession) -> list[JobDescription]:
+    """JD của bạn: các JD sinh viên tự dán (chỉ người dán thấy), mới nhất trước."""
+    return jds.list_pasted(db, user)
+
+
+@router.patch("/jd/{jd_id}", response_model=JobDescriptionResponse, tags=["Gap Analysis"])
+def update_pasted_jd(jd_id: str, body: JdFields, user: CurrentStudent, db: DbSession) -> JobDescription:
+    """Sửa JD tự dán (không tách lại toàn văn, kỹ năng giữ nguyên)."""
+    return jds.update_pasted(db, user, jd_id, body.model_dump(exclude_unset=True))
+
+
+@router.delete("/jd/{jd_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Gap Analysis"])
+def delete_pasted_jd(jd_id: str, user: CurrentStudent, db: DbSession) -> None:
+    """Xoá JD tự dán khỏi danh sách; các lượt phân tích, phỏng vấn đã làm với JD này vẫn mở được."""
+    jds.delete_pasted(db, user, jd_id)
 
 
 @router.get("/jd/saved", response_model=list[SavedJdResponse], tags=["Gap Analysis"])

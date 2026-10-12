@@ -8,7 +8,7 @@ import { ChevronRight, LogOut, Search } from "lucide-react"
 import { ChatLauncher } from "@/components/chat/chat-launcher"
 import { useSignOut } from "@/components/shell/account-actions"
 import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette"
-import { advisorShell, getBreadcrumb, studentShell } from "@/components/shell/nav-config"
+import { getBreadcrumb, shellOf } from "@/components/shell/nav-config"
 import { floatingSurface, NotificationMenu } from "@/components/shell/notification-menu"
 import { useProfile } from "@/components/shell/profile-context"
 import { UserAvatar } from "@/components/shell/user-avatar"
@@ -42,7 +42,7 @@ function useScrolled(threshold = 4) {
 /** Header chuẩn, giống nhau trên mọi trang (DESIGN.md 5.3). Điện thoại: tiêu đề trang thay cho ô tìm kiếm. */
 export function AppTopbar({ role }: { role: Role }) {
   const pathname = usePathname()
-  const config = role === "advisor" ? advisorShell : studentShell
+  const config = shellOf(role)
   const profile = useProfile()
   const signOut = useSignOut()
   const crumbs = getBreadcrumb(config, pathname)
@@ -82,7 +82,7 @@ export function AppTopbar({ role }: { role: Role }) {
         >
           <Search className="size-[19px]" strokeWidth={1.75} aria-hidden />
         </button>
-        <ChatLauncher />
+        {role !== "admin" && <ChatLauncher />}
         <NotificationMenu role={role} />
         <DropdownMenu>
           <DropdownMenuTrigger render={<button type="button" className="ml-1 rounded-full" aria-label="Tài khoản" />}>
@@ -114,7 +114,7 @@ export function AppTopbar({ role }: { role: Role }) {
 /** Breadcrumb ở dòng riêng dưới header, chỉ hiện ở trang con (có ít nhất một bước cha). */
 export function PageCrumbs({ role }: { role: Role }) {
   const pathname = usePathname()
-  const config = role === "advisor" ? advisorShell : studentShell
+  const config = shellOf(role)
   const crumbs = getBreadcrumb(config, pathname)
   if (crumbs.length < 2) return null
 

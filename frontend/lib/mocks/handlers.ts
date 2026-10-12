@@ -22,6 +22,7 @@ import {
   syntheticReport,
   type StudentSource,
 } from "@/lib/mocks/advisor"
+import * as adminMock from "@/lib/mocks/admin"
 import { MAX_MESSAGE_CHARS, seedThreads, toChatMessage, unreadFor, type StoredMessage } from "@/lib/mocks/chat"
 import { mockCvDocument, mockSuggestions } from "@/lib/mocks/optimizer"
 import { draftDocument } from "@/lib/cv-document"
@@ -29,8 +30,25 @@ import { mockAnalysisSeeds, mockInterviewRows } from "@/lib/mocks/progress"
 import { buildOverview, buildProgress } from "@/lib/mocks/student-progress"
 import { mockAdvisorContact, mockInitialReviews, mockInitialShared, mockSettings } from "@/lib/mocks/sharing"
 import { adviceFor, recommendFromProfile, skillProfileOf } from "@/lib/mocks/library"
-import { buildPastedJd, compareFromProfile } from "@/lib/mocks/compare"
+import { compareFromProfile } from "@/lib/mocks/compare"
+import * as jdMock from "@/lib/mocks/jds"
 import type {
+  AdminJdDetail,
+  AdminJdRow,
+  AdminJdUpsert,
+  AdminUploadedJd,
+  JdDraft,
+  JdFields,
+  AdminCommentsPage,
+  AdminCommentsQuery,
+  AdminPeriod,
+  AdminStats,
+  AdminAdvisor,
+  AdminStudent,
+  AssignAdvisorResponse,
+  CreateAdvisorRequest,
+  UpdateAdvisorRequest,
+  UserProfile,
   AdvisorFeedback,
   AdvisorInterviewReport,
   AdvisorNote,
@@ -119,8 +137,7 @@ let savedJds: SavedJd[] = isNewStudent
       { jd_id: "jd-fe-junior", saved_at: new Date(Date.now() - 5 * 86_400_000).toISOString() },
     ]
 // JD SV tự dán (backend lưu lại theo chủ sở hữu, GET /jd trả về cùng thư viện). Mất khi tải lại trang.
-let pastedJds: JobDescription[] = []
-const findJd = (id: string) => mockJdLibrary.find((j) => j.id === id) ?? pastedJds.find((j) => j.id === id)
+const findJd = (id: string) => mockJdLibrary.find((j) => j.id === id) ?? jdMock.findPasted(id)
 const countJdWords = (text: string) => text.split(/\s+/).filter(Boolean).length
 
 // ---- Phiên bản CV theo từng CV (mô phỏng src/services/cv_versions.py) ----
@@ -190,6 +207,18 @@ const notifications: Record<Role, AppNotification[]> = {
   student: isNewStudent ? [] : clone(mockStudentNotifications),
   // Thông báo đầu tiên nói về buổi của Minh Anh: chỉ có khi Minh Anh có dữ liệu mẫu
   advisor: clone(isNewStudent ? mockAdvisorNotifications.slice(1) : mockAdvisorNotifications),
+  admin: [
+    {
+      id: "n-q1",
+      kind: "student_registered",
+      title: "Hoàng Minh Thu vừa tạo tài khoản",
+      body: "Sinh viên mới đang chờ phân công cố vấn.",
+      created_at: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+      read: false,
+      action_label: "Phân công",
+      action_href: "/admin/students?filter=unassigned",
+    },
+  ],
 }
 
 // ---- Trình tối ưu CV (lưu trong bộ nhớ, mô phỏng src/services/cv_optimizer.py) ----
@@ -471,13 +500,43 @@ const advisorReviews: Record<string, AdvisorReviewInfo> = isNewStudent
 let mockPassword = "careerx123"
 
 // ---------- Tài khoản ----------
-// Hai tài khoản demo (mật khẩu chung với mockPassword) và các tài khoản tạo mới trong phiên.
+// Tài khoản demo SV và quản trị viên (mật khẩu chung với mockPassword) và các tài khoản SV tạo mới trong phiên.
+// Tài khoản cố vấn (kể cả cố vấn demo) nằm ở lib/mocks/admin.ts để quản trị viên tạo, khoá và đặt lại mật khẩu tạm.
 const LOGIN_MAX_ATTEMPTS = 5
 const accounts = new Map<string, { role: Role; password: () => string }>([
   ["minhanh.nguyen@gmail.com", { role: "student", password: () => mockPassword }],
-  ["nam.tran@careerx.vn", { role: "advisor", password: () => mockPassword }],
+  ["admin@careerx.vn", { role: "admin", password: () => mockPassword }],
 ])
 let failedLogins = 0
+/** Cố vấn đang đăng nhập ở chế độ mock (để đổi mật khẩu tạm và hiện đúng tên). */
+let signedInAdvisorEmail: string | null = null
+
+function wrongCredentials(): never {
+  failedLogins += 1
+  const left = LOGIN_MAX_ATTEMPTS - failedLogins
+  throw new ApiError(
+    401,
+    left > 0
+      ? `Email hoặc mật khẩu chưa đúng. Còn ${left} lần thử trước khi tạm khoá 15 phút.`
+      : "Bạn đã nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.",
+    "invalid_credentials",
+  )
+}
+
+/** Nhóm SV của cố vấn demo, dạng dùng cho trang Quản trị. */
+function adminCohort(): adminMock.CohortProfile[] {
+  return advisorSources().map(({ profile, sessions, analyses }) => {
+    const dates = [sessions[0]?.completed_at, analyses[0]?.row.completed_at].filter((d): d is string => Boolean(d))
+    return {
+      id: profile.id,
+      full_name: profile.full_name,
+      email: profile.email,
+      phone: profile.phone ?? null,
+      avatar_url: profile.avatar_url,
+      last_active_at: dates.sort().at(-1) ?? null,
+    }
+  })
+}
 const normalizeEmail = (email: string) => email.trim().toLowerCase()
 
 const reviewRead = (r: AdvisorReviewInfo) => r.seen_at !== null && r.seen_at >= r.updated_at
@@ -741,20 +800,21 @@ export const mockApi = {
     if (failedLogins >= LOGIN_MAX_ATTEMPTS) {
       throw new ApiError(429, "Bạn đã nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.", "too_many_attempts")
     }
-    const account = accounts.get(normalizeEmail(body.email))
-    if (!account || account.password() !== body.password) {
-      failedLogins += 1
-      const left = LOGIN_MAX_ATTEMPTS - failedLogins
-      throw new ApiError(
-        401,
-        left > 0
-          ? `Email hoặc mật khẩu chưa đúng. Còn ${left} lần thử trước khi tạm khoá 15 phút.`
-          : "Bạn đã nhập sai quá nhiều lần. Hãy thử lại sau 15 phút.",
-        "invalid_credentials",
-      )
+    const email = normalizeEmail(body.email)
+    const advisor = adminMock.mockAdvisorAccount(email)
+    if (advisor) {
+      if ((advisor.password ?? mockPassword) !== body.password) wrongCredentials()
+      failedLogins = 0
+      if (advisor.disabled) {
+        throw new ApiError(403, "Tài khoản đã bị tạm khoá. Hãy liên hệ quản trị viên.", "account_disabled")
+      }
+      signedInAdvisorEmail = email
+      return { role: "advisor", profile: adminMock.advisorProfile(advisor), must_change_password: advisor.mustChange }
     }
+    const account = accounts.get(email)
+    if (!account || account.password() !== body.password) wrongCredentials()
     failedLogins = 0
-    return { role: account.role, profile: clone(account.role === "advisor" ? mockAdvisor : mockStudent) }
+    return { role: account.role, profile: clone(account.role === "admin" ? adminMock.mockAdmin : mockStudent) }
   },
 
   async register(body: RegisterRequest): Promise<LoginResponse> {
@@ -794,14 +854,70 @@ export const mockApi = {
     notifications[role] = notifications[role].map((n) => ({ ...n, read: true }))
   },
 
-  async getMe(role: Role) {
+  async getMe(role: Role): Promise<UserProfile> {
     await delay(150)
-    return clone(role === "advisor" ? mockAdvisor : mockStudent)
+    if (role === "admin") return clone(adminMock.mockAdmin)
+    if (role === "student") return clone(mockStudent)
+    const advisor = signedInAdvisorEmail ? adminMock.mockAdvisorAccount(signedInAdvisorEmail) : undefined
+    return advisor ? { ...adminMock.advisorProfile(advisor), must_change_password: advisor.mustChange } : clone(mockAdvisor)
+  },
+
+  async changeTemporaryPassword(body: ChangePasswordRequest): Promise<ChangePasswordResponse> {
+    await delay(700)
+    if (body.current_password === body.new_password) {
+      throw new ApiError(422, "Mật khẩu mới phải khác mật khẩu hiện tại.", "same_password")
+    }
+    if (!signedInAdvisorEmail || !adminMock.setAdvisorPassword(signedInAdvisorEmail, body.current_password, body.new_password, mockPassword)) {
+      throw new ApiError(400, "Mật khẩu hiện tại không đúng.", "wrong_password")
+    }
+    return { password_updated_at: new Date().toISOString() }
+  },
+
+  // ---- Quản trị (lib/mocks/admin.ts) ----
+  async getAdminStats(days: AdminPeriod): Promise<AdminStats> {
+    await delay()
+    return clone(adminMock.stats(days, adminCohort()))
+  },
+
+  async listAdminComments(query: AdminCommentsQuery): Promise<AdminCommentsPage> {
+    await delay()
+    return clone(adminMock.listComments(query))
+  },
+
+  async listAdminAdvisors(): Promise<AdminAdvisor[]> {
+    await delay()
+    const pending = advisorSources().map(summarize).reduce((sum, s) => sum + s.pending_reviews, 0)
+    return clone(adminMock.listAdvisors(adminCohort(), pending))
+  },
+
+  async createAdvisor(body: CreateAdvisorRequest): Promise<AdminAdvisor> {
+    await delay(700)
+    return clone(adminMock.createAdvisor(body))
+  },
+
+  async updateAdvisor(id: string, body: UpdateAdvisorRequest): Promise<AdminAdvisor> {
+    await delay(400)
+    return clone(adminMock.updateAdvisor(id, body))
+  },
+
+  async resetAdvisorPassword(id: string, temporaryPassword: string): Promise<AdminAdvisor> {
+    await delay(500)
+    return clone(adminMock.resetAdvisorPassword(id, temporaryPassword))
+  },
+
+  async listAdminStudents(): Promise<AdminStudent[]> {
+    await delay()
+    return clone(adminMock.listStudents(adminCohort()))
+  },
+
+  async assignAdvisor(studentIds: string[], advisorId: string): Promise<AssignAdvisorResponse> {
+    await delay(600)
+    return clone(adminMock.assign(studentIds, advisorId))
   },
 
   async listInterviewJds(): Promise<JobDescription[]> {
     await delay()
-    return clone(mockJdLibrary)
+    return clone([...jdMock.publishedLibrary(), ...jdMock.pastedJds()])
   },
 
   async getQuota(jdId: string): Promise<InterviewQuota> {
@@ -933,7 +1049,7 @@ export const mockApi = {
 
   async listJdLibrary() {
     await delay()
-    return clone(mockJdLibrary)
+    return clone(jdMock.publishedLibrary())
   },
 
   /** Mô phỏng POST /jd/recommend: chấm theo quy tắc, tối đa top_n vị trí, lời khuyên cho vị trí #1. */
@@ -954,19 +1070,61 @@ export const mockApi = {
   /** GET /jd: thư viện JD và các JD SV đã tự dán. */
   async listMyJds(): Promise<JobDescription[]> {
     await delay(300)
-    return clone([...mockJdLibrary, ...pastedJds])
+    return clone([...jdMock.publishedLibrary(), ...jdMock.pastedJds()])
   },
 
+  /** POST /jd: reviewed (hộp Thêm JD) bắt buộc đủ trường chính; dán nhanh (So sánh) chỉ cần tên vị trí. */
   async createPastedJd(body: CreatePastedJdRequest): Promise<JobDescription> {
+    await delay(400)
+    return clone(jdMock.createPasted(`jd-p-${Date.now().toString(36)}`, body))
+  },
+
+  /** POST /jd/parse: tách toàn văn bằng quy tắc (mock không gọi AI). */
+  async parseJd(text: string): Promise<JdDraft> {
+    await delay(900)
+    return clone(jdMock.parse(text))
+  },
+
+  async listPastedJds(): Promise<JobDescription[]> {
     await delay(300)
-    if (!body.title.trim()) throw new ApiError(422, "Hãy nhập tiêu đề vị trí tuyển dụng.", "jd_title_required")
-    const words = countJdWords(body.text)
-    if (words < JD_MIN_WORDS) {
-      throw new ApiError(422, `Nội dung JD quá ngắn (${words} từ). Hãy bổ sung tối thiểu ${JD_MIN_WORDS} từ.`, "jd_too_short")
-    }
-    const jd = buildPastedJd(`jd-p-${Date.now().toString(36)}${pastedJds.length}`, body, mockJdLibrary)
-    pastedJds = [jd, ...pastedJds]
-    return clone(jd)
+    return clone(jdMock.pastedJds())
+  },
+
+  async updatePastedJd(id: string, fields: JdFields): Promise<JobDescription> {
+    await delay(400)
+    return clone(jdMock.updatePasted(id, fields))
+  },
+
+  async deletePastedJd(id: string): Promise<void> {
+    await delay(300)
+    jdMock.deletePasted(id)
+    savedJds = savedJds.filter((s) => s.jd_id !== id)
+  },
+
+  // ---- Quản trị: thư viện JD (lib/mocks/jds.ts) ----
+  async listAdminJds(): Promise<AdminJdRow[]> {
+    await delay()
+    return clone(jdMock.adminLibrary())
+  },
+
+  async listUploadedJds(): Promise<AdminUploadedJd[]> {
+    await delay()
+    return clone(jdMock.adminUploaded())
+  },
+
+  async getAdminJd(id: string): Promise<AdminJdDetail> {
+    await delay(250)
+    return clone(jdMock.adminGet(id))
+  },
+
+  async createAdminJd(body: AdminJdUpsert): Promise<AdminJdDetail> {
+    await delay(600)
+    return clone(jdMock.adminCreate(body))
+  },
+
+  async updateAdminJd(id: string, body: AdminJdUpsert): Promise<AdminJdDetail> {
+    await delay(500)
+    return clone(jdMock.adminUpdate(id, body))
   },
 
   /** Mô phỏng POST /jd/compare: 2–3 JD khác nhau, chấm theo hồ sơ kỹ năng của CV, sắp giảm dần. */
@@ -1064,10 +1222,7 @@ export const mockApi = {
     analysisStartedAt[id] = Date.now()
     if (!libraryJd) {
       // Như backend: JD tự dán được lưu lại để chạy lại, so sánh hoặc lưu vào "Đã lưu".
-      pastedJds = [
-        buildPastedJd(analysis.jd.id, { title: body.jd_title!, company: body.jd_company, text: pasted }, mockJdLibrary),
-        ...pastedJds,
-      ]
+      jdMock.createPasted(analysis.jd.id, { title: body.jd_title!, company: body.jd_company, text: pasted })
     }
     cv.latest_analysis_id = id
     cv.target_title = analysis.jd.title
@@ -1466,9 +1621,15 @@ export const mockApi = {
     await delay(300)
     const key = `${body.kind}:${body.response_id}`
     const existing = submittedFeedback.get(key)
-    if (existing !== undefined) return { id: `fb-${key}`, already_submitted: true, value: existing }
+    // CSAT chỉ gửi một lần; like / dislike đổi được
+    if (existing !== undefined && body.kind === "csat") return { id: `fb-${key}`, already_submitted: true, value: existing }
     submittedFeedback.set(key, body.value)
     return { id: `fb-${key}`, already_submitted: false, value: body.value }
+  },
+
+  async deleteThumb(responseId: string): Promise<void> {
+    await delay(200)
+    submittedFeedback.delete(`thumb:${responseId}`)
   },
 
   async getFeedback(responseId: string, kind: "thumb" | "csat"): Promise<FeedbackStatus> {
@@ -1480,8 +1641,7 @@ export const mockApi = {
 
   async getAdvisorOverview(): Promise<AdvisorOverview> {
     await delay()
-    const minhAnhCsat = [...submittedFeedback].filter(([key]) => key.startsWith("csat:")).map(([, value]) => value)
-    return clone(overviewOf(advisorSources(), mockAdvisor.full_name, [...minhAnhCsat, ...cohort.flatMap((c) => c.csat)]))
+    return clone(overviewOf(advisorSources(), mockAdvisor.full_name))
   },
 
   async listConversations(role: Role): Promise<ConversationSummary[]> {

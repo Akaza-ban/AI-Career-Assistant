@@ -15,9 +15,10 @@ import type { Role } from "@/lib/types"
  * --tabbar-h để các thanh dính đáy (BottomActionBar) nằm trên thanh tab điện thoại.
  */
 export function AppShell({ role, children }: { role: Role; children: ReactNode }) {
+  // Quản trị viên không có tin nhắn (chỉ SV và cố vấn phụ trách nhắn cho nhau)
   return (
     <ProfileProvider role={role}>
-      <ChatProvider role={role}>
+      <ChatProvider role={role} enabled={role !== "admin"}>
         <div className="min-h-screen bg-background [--tabbar-h:68px] lg:[--tabbar-h:0px]">
           <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] overflow-y-auto border-r border-line bg-card lg:block">
             <SidebarNav role={role} />
@@ -34,7 +35,7 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
           </div>
           <MobileTabBar role={role} />
         </div>
-        <ChatPanel />
+        {role !== "admin" && <ChatPanel />}
       </ChatProvider>
     </ProfileProvider>
   )

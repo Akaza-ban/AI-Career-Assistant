@@ -4,6 +4,7 @@ import { useId, useState } from "react"
 import Link from "next/link"
 import { AlertCircle, ArrowRight, ChevronDown, FileUp, Lightbulb } from "lucide-react"
 
+import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { MatchBadge } from "@/components/common/match-badge"
 import { Zone } from "@/components/common/zone"
 import { HeartButton } from "@/components/student/library/library-bits"
@@ -26,6 +27,11 @@ interface RecommendationPanelProps {
   detailHref: (jdId: string) => string
   /** Điện thoại: chạm một gợi ý mở sheet mức phù hợp. */
   onOpen: (jdId: string) => void
+}
+
+/** Like / dislike mỗi gợi ý theo cặp CV – vị trí (đổi CV là một gợi ý mới). */
+function recFeedbackId(data: RecommendJdsResponse | undefined, jdId: string) {
+  return `rec_${data?.cv_version_id ?? "none"}_${jdId}`
 }
 
 /**
@@ -94,11 +100,11 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
             </div>
             <ol className="-mt-3 md:hidden">
               {shown.map((rec, i) => (
-                <li key={rec.jd_id} className="border-b border-line">
+                <li key={rec.jd_id} className="flex items-center gap-2 border-b border-line">
                   <button
                     type="button"
                     onClick={() => props.onOpen(rec.jd_id)}
-                    className="flex w-full items-center gap-3 py-3 text-left"
+                    className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left"
                   >
                     <span className="grid size-[26px] shrink-0 place-items-center rounded-full bg-surface text-xs font-semibold text-ink-2 tabular-nums">
                       {i + 1}
@@ -111,6 +117,7 @@ export function RecommendationPanel(props: RecommendationPanelProps) {
                     </span>
                     {rec.match_label && <MatchBadge label={rec.match_label} />}
                   </button>
+                  <FeedbackWidget variant="thumbs" responseId={recFeedbackId(data, rec.jd_id)} activity="job_recommendation" className="[&>span]:hidden" />
                 </li>
               ))}
             </ol>
@@ -127,6 +134,7 @@ function RecCard({
   rank,
   saved,
   detailHref,
+  data,
 }: { rec: JdRecommendationItem; rank: number } & RecommendationPanelProps) {
   return (
     <article className="flex min-w-0 flex-col gap-2.5 rounded-card border border-line bg-card px-[18px] pt-[18px] pb-4 shadow-xs transition-[transform,box-shadow] duration-200 ease-out-soft motion-safe:hover:-translate-y-[3px] motion-safe:hover:shadow-float">
@@ -153,13 +161,21 @@ function RecCard({
           <span className="text-ink-3">Đã có đủ kỹ năng chính</span>
         )}
       </p>
-      <Link
-        href={detailHref(rec.jd_id)}
-        className="mt-0.5 inline-flex w-fit items-center gap-1 text-sm font-semibold text-blue hover:text-accent-strong"
-      >
-        Xem chi tiết<span className="sr-only"> {rec.title}</span>
-        <ArrowRight className="size-3.5" aria-hidden />
-      </Link>
+      <div className="mt-0.5 flex items-center justify-between gap-3 border-t border-line pt-2.5">
+        <Link
+          href={detailHref(rec.jd_id)}
+          className="inline-flex w-fit items-center gap-1 text-sm font-semibold text-blue hover:text-accent-strong"
+        >
+          Xem chi tiết<span className="sr-only"> {rec.title}</span>
+          <ArrowRight className="size-3.5" aria-hidden />
+        </Link>
+        <FeedbackWidget
+          variant="thumbs"
+          responseId={recFeedbackId(data, rec.jd_id)}
+          activity="job_recommendation"
+          prompt="Hợp với bạn?"
+        />
+      </div>
     </article>
   )
 }

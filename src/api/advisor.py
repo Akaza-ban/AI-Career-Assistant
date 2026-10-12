@@ -33,7 +33,7 @@ router = APIRouter(prefix="/advisor", tags=["Advisor"])
 @router.get("/overview", response_model=AdvisorOverviewResponse)
 def get_overview(user: CurrentAdvisor, db: DbSession) -> dict[str, Any]:
     """
-    Tổng quan cả nhóm: số SV, tỷ lệ hoạt động 30 ngày, điểm TB và chênh lệch so với buổi đầu, CSAT, điểm TB theo tuần,
+    Tổng quan cả nhóm: số SV, tỷ lệ hoạt động 30 ngày, điểm TB và chênh lệch so với buổi đầu, điểm TB theo tuần,
     phân bố trạng thái, S/T/A/R của nhóm, SV cần chú ý, SV tiến bộ nhiều nhất và nhận xét đã gửi gần đây.
     """
     return advisor.overview(db, user, utcnow())

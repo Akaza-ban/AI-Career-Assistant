@@ -8,6 +8,7 @@ import { toast } from "sonner"
 
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
+import { RateRow } from "@/components/common/rate-dialog"
 import { Zone } from "@/components/common/zone"
 import { CvDocumentView } from "@/components/student/cv-document-view"
 import { sectionByLine } from "@/components/student/optimizer/cv-optimizer"
@@ -275,6 +276,19 @@ function ExportView({ session, resultCv, optimizerHref }: { session: OptimizerSe
               </NextRow>
             )}
           </section>
+
+          {/* US-SV-06: đánh giá trình tối ưu sau khi Hoàn tất; một lần cho mỗi lượt tối ưu */}
+          <RateRow
+            responseId={`opt_${session.analysis_id}`}
+            activity="optimizer"
+            title="Đánh giá trình tối ưu CV"
+            subtitle={`Lần tối ưu tạo CV ${resultCv.label} · ${session.jd.title}`}
+            question="Trình tối ưu CV có giúp được bạn?"
+            buttonLabel="Đánh giá trình tối ưu"
+            doneLabel="trình tối ưu"
+            stacked
+            className="border-t border-line pt-6 md:col-span-2 xl:col-span-1"
+          />
         </aside>
       </div>
 

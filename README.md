@@ -219,7 +219,7 @@ Giao diện sẽ mở tại: **http://localhost:3000**
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | URL backend |
 | `NEXT_PUBLIC_LIVE_APIS` | *(để trống)* | Nhóm API gọi backend thật; để trống = toàn bộ mock. Dùng `all` để bật hết |
 | `NEXT_PUBLIC_MOCK_SCENARIO` | `default` | Kịch bản mock: `default` / `new_student` |
-| `NEXT_PUBLIC_FEATURE_MULTI_JD` | `false` | Tính năng ngoài Gate 1 (không bật trong demo) |
+| `NEXT_PUBLIC_FEATURE_DRIVE_IMPORT` | `false` | Dòng "nhập từ Google Drive" khi tải CV (chưa có chức năng thật) |
 
 ---
 
