@@ -22,6 +22,8 @@ import type {
   ChangePasswordRequest,
   ChatMessage,
   ChangePasswordResponse,
+  CompareJDsRequest,
+  CompareJDsResponse,
   Conversation,
   ConversationSummary,
   CreateGapAnalysisRequest,
@@ -210,6 +212,12 @@ export const api = {
   listJdLibrary: (): Promise<JobDescription[]> => via("gap", () => mockApi.listJdLibrary(), () => request("/jd/library")),
   recommendJds: (body: RecommendJDsRequest): Promise<RecommendJDsResponse> =>
     via("gap", () => mockApi.recommendJds(body), () => request("/jd/recommend", json(body))),
+  compareJds: (body: CompareJDsRequest): Promise<CompareJDsResponse> =>
+    via("gap", () => mockApi.compareJds(body), () => request("/jd/compare", json(body))),
+  listComparisonHistory: (limit = 10): Promise<CompareJDsResponse[]> =>
+    via("gap", () => mockApi.listComparisonHistory(limit), () => request(`/jd/compare/history?limit=${limit}`)),
+  deleteComparisonHistory: (historyId: string): Promise<void> =>
+    via("gap", () => mockApi.deleteComparisonHistory(historyId), () => request(`/jd/compare/history/${encodeURIComponent(historyId)}`, { method: "DELETE" })),
   createGapAnalysis: (body: CreateGapAnalysisRequest): Promise<GapAnalysis> =>
     via("gap", () => mockApi.createGapAnalysis(body), () => request("/gap-analysis", json(body))),
   getGapAnalysis: (id: string): Promise<GapAnalysis> =>

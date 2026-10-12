@@ -48,6 +48,8 @@ import type {
   ChangePasswordResponse,
   ChatMessage,
   ChatParticipant,
+  CompareJDsRequest,
+  CompareJDsResponse,
   Conversation,
   ConversationSummary,
   CreateGapAnalysisRequest,
@@ -99,6 +101,7 @@ const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 const isNewStudent = MOCK_SCENARIO === "new_student"
 const submittedFeedback = new Map<string, number>()
 let cvVersions = isNewStudent ? [] : clone(mockCvVersions)
+let mockComparisonHistory: CompareJDsResponse[] = []
 
 // ---- Phiên bản CV theo từng CV (mô phỏng src/services/cv_versions.py) ----
 // cvVersions giữ mọi phiên bản của mọi CV; các phiên bản cùng family_id là một CV.
@@ -884,6 +887,67 @@ export const mockApi = {
         ],
       },
     }
+  },
+
+  async compareJds(body: CompareJDsRequest): Promise<CompareJDsResponse> {
+    await delay(700)
+    const selected = mockJdLibrary.filter((j) => body.jd_ids.includes(j.id))
+    const comparisons = selected.map((jd, idx) => {
+      const match_score = idx === 0 ? 84 : idx === 1 ? 72 : 58
+      return {
+        jd_id: jd.id,
+        rank: idx + 1,
+        title: jd.title,
+        company: jd.company,
+        industry: jd.industry,
+        level: jd.level,
+        match_score,
+        match_label: match_score >= 75 ? ("high" as const) : ("medium" as const),
+        matched_skills: jd.skills.slice(0, 3).map((s) => s.name),
+        partial_skills: jd.skills.slice(3, 4).map((s) => s.name),
+        missing_skills: jd.skills.slice(4).map((s) => s.name),
+        llm_summary: `CV của bạn đáp ứng ${match_score}% yêu cầu của ${jd.title}. Cần bổ sung thêm một số kỹ năng thực tế còn thiếu.`,
+        llm_used: true,
+      }
+    })
+
+    // Sắp xếp theo match_score giảm dần và cập nhật lại rank
+    comparisons.sort((a, b) => b.match_score - a.match_score)
+    comparisons.forEach((item, index) => {
+      item.rank = index + 1
+    })
+
+    // Tìm common_missing_skills
+    const common_missing_skills: string[] = []
+    if (comparisons.length > 0) {
+      const firstMissing = comparisons[0].missing_skills
+      for (const skill of firstMissing) {
+        if (comparisons.every((c) => c.missing_skills.some((s) => s.toLowerCase() === skill.toLowerCase()))) {
+          common_missing_skills.push(skill)
+        }
+      }
+    }
+
+    const result: CompareJDsResponse = {
+      id: `cmp-${Date.now().toString(36)}`,
+      cv_version_id: body.cv_version_id,
+      total_compared: comparisons.length,
+      comparisons,
+      common_missing_skills,
+      created_at: new Date().toISOString(),
+    }
+    mockComparisonHistory.unshift(result)
+    return clone(result)
+  },
+
+  async listComparisonHistory(limit = 10): Promise<CompareJDsResponse[]> {
+    await delay(300)
+    return clone(mockComparisonHistory.slice(0, limit))
+  },
+
+  async deleteComparisonHistory(historyId: string): Promise<void> {
+    await delay(200)
+    mockComparisonHistory = mockComparisonHistory.filter((item) => item.id !== historyId)
   },
 
   // US-SV-02 AC2: JD dán vào phải có ít nhất JD_MIN_WORDS từ. SV chỉ chọn một nguồn JD.

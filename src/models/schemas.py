@@ -229,12 +229,13 @@ class CompareJDsRequest(BaseModel):
 
     cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
     cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
-    jd_ids: list[str] = Field(..., min_length=2, max_length=3, description="Danh sách 2 đến 3 JD ID cần so sánh")
+    jd_ids: list[str] = Field(..., min_length=2, max_length=5, description="Danh sách 2 đến 5 JD ID cần so sánh")
 
 
 class CompareJDsResponse(BaseModel):
-    """Kết quả bảng so sánh 2-3 JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
+    """Kết quả bảng so sánh các JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
 
+    id: str | None = Field(default=None, description="Mã bản ghi lịch sử so sánh")
     cv_version_id: str | None = None
     cv_label: str | None = None
     cv_name: str | None = None
@@ -245,6 +246,7 @@ class CompareJDsResponse(BaseModel):
     common_missing_skills: list[str] = Field(
         default_factory=list, description="Các kỹ năng còn thiếu chung ở tất cả các JD được chọn"
     )
+    created_at: datetime | None = Field(default=None, description="Thời gian thực hiện so sánh")
 
 
 class CreateGapAnalysisRequest(BaseModel):
@@ -290,6 +292,14 @@ class RequirementAssessment(BaseModel):
         default=None,
         description="Đường dẫn lộ trình học kỹ năng trên roadmap.sh",
     )
+    is_it_supported: bool = Field(
+        default=True,
+        description="Đánh dấu kỹ năng có thuộc lĩnh vực IT được roadmap.sh hỗ trợ hay không",
+    )
+    roadmap_message: str | None = Field(
+        default=None,
+        description="Thông báo cho người dùng nếu kỹ năng không thuộc IT hoặc chưa có roadmap",
+    )
 
 
 class SkillRoadmapResponse(BaseModel):
@@ -298,6 +308,14 @@ class SkillRoadmapResponse(BaseModel):
     skill: str
     roadmap_url: str
     is_matched: bool
+    is_it_supported: bool = Field(
+        default=True,
+        description="Chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin (IT)",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Thông báo cho người dùng nếu kỹ năng không thuộc IT hoặc chưa có roadmap",
+    )
 
 
 class ScoreBreakdown(BaseModel):

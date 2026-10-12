@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { ArrowRight, ClipboardPaste, Library, Loader2, Sparkles, X } from "lucide-react"
+import { ArrowLeftRight, ArrowRight, ClipboardPaste, Library, Loader2, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 
 import { BottomActionBar } from "@/components/common/bottom-action-bar"
@@ -11,6 +11,7 @@ import { CvPickStep } from "@/components/student/analysis/cv-pick-step"
 import {
   IntegrityBox,
   JD_TABS,
+  JdComparisonPicker,
   JdLibraryPicker,
   JdPasteForm,
   JdRecommendationPicker,
@@ -82,18 +83,22 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
   const pasteReady = paste.title.trim() !== "" && countWords(paste.text) >= JD_MIN_WORDS
   // SV chọn một nguồn JD: tab đang mở quyết định gửi JD thư viện / gợi ý hay JD tự dán.
   const isJdSelected = libraryJd !== null
-  const ready = tab === "recommended" || tab === "library" ? isJdSelected : pasteReady
+  const ready = tab === "recommended" || tab === "library" || tab === "compare" ? isJdSelected : pasteReady
   const missingHint =
     tab === "recommended"
       ? "Hãy chọn một vị trí được AI gợi ý ở trên."
       : tab === "library"
       ? "Hãy chọn một vị trí trong thư viện JD."
+      : tab === "compare"
+      ? "Hãy chọn 1 vị trí trong bảng so sánh để tiến hành phân tích."
       : `Nhập tiêu đề và tối thiểu ${JD_MIN_WORDS} từ nội dung JD.`
   const selectionLabel =
     tab === "recommended"
       ? libraryJd && { text: libraryJd.title, source: "AI Gợi ý", icon: Sparkles }
       : tab === "library"
       ? libraryJd && { text: libraryJd.title, source: "Thư viện", icon: Library }
+      : tab === "compare"
+      ? libraryJd && { text: libraryJd.title, source: "Bảng so sánh", icon: ArrowLeftRight }
       : paste.title.trim() && { text: paste.title.trim(), source: "Dán tay", icon: ClipboardPaste }
 
   function reset() {
@@ -106,7 +111,7 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
     setSubmitting(true)
     try {
       const analysis = await api.createGapAnalysis(
-        tab === "recommended" || tab === "library"
+        tab === "recommended" || tab === "library" || tab === "compare"
           ? { cv_version_id: selectedCv.id, jd_id: libraryJd!.id }
           : {
               cv_version_id: selectedCv.id,
@@ -202,6 +207,13 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
             />
           ) : tab === "library" ? (
             <JdLibraryPicker items={library} selected={libraryJd} onSelect={setLibraryJd} />
+          ) : tab === "compare" ? (
+            <JdComparisonPicker
+              selectedCv={selectedCv}
+              libraryJds={library}
+              selectedJd={libraryJd}
+              onSelectJd={setLibraryJd}
+            />
           ) : (
             <JdPasteForm value={paste} onChange={setPaste} showErrors={pasteTouched} />
           )}

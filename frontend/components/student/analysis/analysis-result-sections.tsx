@@ -7,7 +7,9 @@ import {
   ChevronDown,
   CircleCheck,
   Clock,
+  Compass,
   Copy,
+  ExternalLink,
   Info,
   Lightbulb,
   MessagesSquare,
@@ -278,6 +280,30 @@ function EvidenceRow({ row, expanded, onToggle }: { row: RequirementAssessment; 
           <p className="text-xs text-ink-3">
             Mức khớp {formatNumber(row.match)} × trọng số {row.weight} = {formatNumber(row.match * row.weight)} điểm
           </p>
+
+          {/* Lộ trình học tập roadmap.sh */}
+          {row.is_it_supported && row.roadmap_url ? (
+            <div className="pt-1">
+              <a
+                href={row.roadmap_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-blue/30 bg-blue-soft/50 px-3 py-1.5 text-xs font-semibold text-blue transition-colors hover:bg-blue-soft"
+              >
+                <Compass className="size-3.5" aria-hidden />
+                Xem lộ trình học {row.skill} trên roadmap.sh
+                <ExternalLink className="size-3" aria-hidden />
+              </a>
+            </div>
+          ) : (
+            <div className="flex items-start gap-1.5 rounded-lg border border-line/60 bg-surface/70 px-3 py-2 text-xs text-ink-3">
+              <Info className="mt-0.5 size-3.5 shrink-0 text-ink-3" aria-hidden />
+              <span>
+                {row.roadmap_message ||
+                  "Lộ trình roadmap.sh hiện chỉ hỗ trợ các chuyên ngành Công nghệ thông tin (IT). Với kỹ năng này, vui lòng tham khảo tài liệu chuyên ngành tương ứng."}
+              </span>
+            </div>
+          )}
         </div>
       )}
     </li>
@@ -351,21 +377,69 @@ export function SuggestionList({ analysis }: { analysis: GapAnalysis }) {
 
         {/* Chống bịa: kỹ năng thiếu không được sinh câu CV mới, chỉ gợi ý tự kiểm tra hoặc học thêm */}
         {missing.length > 0 && (
-          <section className="m-5 mt-0 grid gap-2 rounded-xl bg-warn-soft/50 p-4">
+          <section className="m-5 mt-0 grid gap-3 rounded-xl bg-warn-soft/50 p-4">
             <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
               <Lightbulb className="size-4 text-warn" aria-hidden />
-              Bạn có thể cân nhắc
+              Kỹ năng còn thiếu & Lộ trình học tập
             </h3>
-            <ul className="flex flex-wrap gap-1.5">
-              {missing.map((r) => (
-                <li key={r.id} className="rounded-md bg-card px-2 py-0.5 text-xs font-medium text-ink ring-1 ring-line">
-                  {r.skill}
-                </li>
-              ))}
+
+            {/* Thông báo định hướng: Lộ trình roadmap.sh chỉ hỗ trợ các lĩnh vực IT */}
+            <div className="flex items-start gap-2.5 rounded-xl border border-line bg-card/90 p-3 text-xs leading-5 text-ink-2 shadow-xs">
+              <Info className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
+              <div>
+                <strong className="font-semibold text-ink">Lưu ý về Lộ trình học tập:</strong>{" "}
+                Tính năng liên kết lộ trình từ <strong>roadmap.sh</strong> hiện chỉ hỗ trợ các chuyên ngành thuộc{" "}
+                <strong>Công nghệ thông tin (IT / Kỹ thuật phần mềm / Data / Cloud / AI)</strong>. Với các kỹ năng ngoài IT (tài chính, kinh tế, marketing, kỹ năng mềm...), hệ thống chưa có roadmap riêng, bạn vui lòng tham khảo tài liệu chuyên môn hoặc trao đổi trực tiếp với Cố vấn học tập.
+              </div>
+            </div>
+
+            <ul className="flex flex-wrap gap-2 pt-1">
+              {missing.map((r) => {
+                const hasRoadmap = r.is_it_supported !== false && Boolean(r.roadmap_url)
+                return hasRoadmap ? (
+                  <li key={r.id}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <a
+                            href={r.roadmap_url || "#"}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue/30 bg-card px-2.5 py-1 text-xs font-semibold text-blue shadow-xs transition-colors hover:bg-blue-soft"
+                          >
+                            <Compass className="size-3.5 text-blue" aria-hidden />
+                            {r.skill}
+                            <ExternalLink className="size-3 text-ink-3" aria-hidden />
+                          </a>
+                        }
+                      />
+                      <TooltipContent className="text-xs">
+                        Mở bản đồ lộ trình học {r.skill} trên roadmap.sh
+                      </TooltipContent>
+                    </Tooltip>
+                  </li>
+                ) : (
+                  <li key={r.id}>
+                    <Tooltip>
+                      <TooltipTrigger
+                        render={
+                          <span className="inline-flex cursor-help items-center gap-1.5 rounded-lg bg-surface px-2.5 py-1 text-xs font-medium text-ink-2 ring-1 ring-line">
+                            {r.skill}
+                            <Info className="size-3 text-ink-3" aria-hidden />
+                          </span>
+                        }
+                      />
+                      <TooltipContent className="max-w-xs text-xs">
+                        {r.roadmap_message ||
+                          "Kỹ năng ngoài lĩnh vực IT — roadmap.sh chưa hỗ trợ lộ trình này."}
+                      </TooltipContent>
+                    </Tooltip>
+                  </li>
+                )
+              })}
             </ul>
-            <p className="text-sm leading-6 text-ink-2">
-              Nếu bạn thực sự đã làm việc với các kỹ năng này, hãy bổ sung vào CV kèm mô tả cụ thể; nếu chưa, đây là kỹ năng
-              nên học thêm.
+            <p className="text-xs leading-5 text-ink-2">
+              Nếu bạn thực sự đã có kinh nghiệm với các kỹ năng này, hãy bổ sung vào CV kèm mô tả cụ thể; nếu chưa, bạn có thể bấm vào kỹ năng IT ở trên để xem lộ trình học chuẩn từ cộng đồng.
             </p>
           </section>
         )}

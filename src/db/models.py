@@ -412,7 +412,21 @@ class AssistantFeedback(Base):
     turn_id: Mapped[str] = mapped_column(ForeignKey("assistant_turns.id", ondelete="CASCADE"), index=True)
     # 1: hữu ích; -1: không hữu ích
     rating: Mapped[int] = mapped_column(Integer)
-    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
-
     turn: Mapped["AssistantTurn"] = relationship("AssistantTurn", back_populates="feedback")
+
+
+class JobComparisonHistory(Base):
+    """Lịch sử các lần so sánh nhiều JD của sinh viên (Multi-JD Matching History)."""
+
+    __tablename__ = "jd_comparison_history"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    cv_version_id: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    cv_label: Mapped[str | None] = mapped_column(String(32), default=None)
+    cv_name: Mapped[str | None] = mapped_column(String(255), default=None)
+    jd_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    total_compared: Mapped[int] = mapped_column(Integer, default=0)
+    comparisons: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    common_missing_skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

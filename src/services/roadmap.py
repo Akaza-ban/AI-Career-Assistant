@@ -150,11 +150,27 @@ def get_roadmap_url(skill_name: str | None) -> str:
 
 
 def get_roadmap_info(skill_name: str | None) -> dict[str, Any]:
-    """Trả về chi tiết gồm tên kỹ năng, link roadmap và cờ xác định có khớp chính xác không."""
+    """
+    Trả về chi tiết gồm tên kỹ năng, link roadmap, cờ xác định có khớp chính xác không
+    và thông báo định hướng (chỉ hỗ trợ chuyên sâu các lĩnh vực IT / Phần mềm).
+    """
     url = get_roadmap_url(skill_name)
     is_matched = url != DEFAULT_ROADMAP_URL
+    is_it_supported = is_matched
+
+    if is_it_supported:
+        message = "Lộ trình học tập chi tiết trên roadmap.sh dành cho kỹ năng Công nghệ thông tin (IT)."
+    else:
+        message = (
+            "Lộ trình roadmap.sh hiện tại chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin (IT). "
+            f"Kỹ năng '{skill_name or 'này'}' không thuộc IT hoặc chưa có lộ trình riêng trên roadmap.sh. "
+            "Vui lòng tham khảo tài liệu chuyên ngành tương ứng hoặc trao đổi với Cố vấn học tập."
+        )
+
     return {
         "skill": skill_name or "",
         "roadmap_url": url,
         "is_matched": is_matched,
+        "is_it_supported": is_it_supported,
+        "message": message,
     }

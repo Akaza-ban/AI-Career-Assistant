@@ -138,6 +138,40 @@ export interface RecommendJDsResponse {
   advice?: CareerAdvice | null
 }
 
+export interface JDComparisonItem {
+  jd_id: string
+  rank: number
+  title: string
+  company?: string | null
+  industry?: string | null
+  level?: string | null
+  match_score: number
+  match_label: MatchLabel
+  matched_skills: string[]
+  partial_skills: string[]
+  missing_skills: string[]
+  breakdown?: ScoreBreakdown[]
+  llm_summary?: string | null
+  llm_used?: boolean
+}
+
+export interface CompareJDsRequest {
+  cv_version_id?: string | null
+  cv_text?: string | null
+  jd_ids: string[]
+}
+
+export interface CompareJDsResponse {
+  id?: string | null
+  cv_version_id?: string | null
+  cv_label?: string | null
+  cv_name?: string | null
+  total_compared: number
+  comparisons: JDComparisonItem[]
+  common_missing_skills: string[]
+  created_at?: string | null
+}
+
 // ---------- Phân tích khoảng cách (US-SV-02, US-SV-05, PRD mục 5.2) ----------
 
 export type AnalysisStatus = "processing" | "completed" | "failed"
@@ -174,6 +208,12 @@ export interface RequirementAssessment {
   evidence: CvEvidence | null
   /** Ví dụ "FastAPI → tính là Python (taxonomy)". */
   note: string | null
+  /** Link lộ trình roadmap.sh cho kỹ năng này (nếu có). */
+  roadmap_url?: string | null
+  /** Đánh dấu kỹ năng có thuộc lĩnh vực IT được roadmap.sh hỗ trợ hay không. */
+  is_it_supported?: boolean
+  /** Thông báo định hướng (chỉ hỗ trợ IT/Non-IT). */
+  roadmap_message?: string | null
 }
 
 /** Phân rã điểm theo mức độ yêu cầu (hiển thị khi bấm "Xem thêm"). */

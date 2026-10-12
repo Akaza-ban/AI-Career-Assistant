@@ -30,32 +30,53 @@ def test_get_roadmap_url_fallback():
 
 
 def test_get_roadmap_info():
-    """Kiểm tra hàm get_roadmap_info trả về đầy đủ metadata."""
+    """Kiểm tra hàm get_roadmap_info trả về đầy đủ metadata và phân biệt kỹ năng IT / Non-IT."""
     info_matched = get_roadmap_info("Docker")
     assert info_matched["skill"] == "Docker"
     assert info_matched["roadmap_url"] == "https://roadmap.sh/docker"
     assert info_matched["is_matched"] is True
+    assert info_matched["is_it_supported"] is True
+    assert "roadmap.sh" in info_matched["message"]
 
-    info_fallback = get_roadmap_info("UncommonSkillX")
-    assert info_fallback["skill"] == "UncommonSkillX"
-    assert info_fallback["roadmap_url"] == DEFAULT_ROADMAP_URL
-    assert info_fallback["is_matched"] is False
+    info_non_it = get_roadmap_info("Kế toán tài chính")
+    assert info_non_it["skill"] == "Kế toán tài chính"
+    assert info_non_it["roadmap_url"] == DEFAULT_ROADMAP_URL
+    assert info_non_it["is_matched"] is False
+    assert info_non_it["is_it_supported"] is False
+    assert "chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin" in info_non_it["message"]
 
 
 def test_assessment_includes_roadmap_url():
-    """Kiểm tra hàm assessment gán trường roadmap_url vào kết quả."""
+    """Kiểm tra hàm assessment gán trường roadmap_url và cờ is_it_supported vào kết quả."""
     req = {"id": "r1", "name": "Docker", "importance": "required"}
     result = assessment(req, match=0, evidence_line=None, note=None, source="rule")
     assert result["status"] == "missing"
     assert result["roadmap_url"] == "https://roadmap.sh/docker"
+    assert result["is_it_supported"] is True
+
+    req_non_it = {"id": "r2", "name": "Kỹ năng kế toán", "importance": "required"}
+    result_non_it = assessment(req_non_it, match=0, evidence_line=None, note=None, source="rule")
+    assert result_non_it["status"] == "missing"
+    assert result_non_it["is_it_supported"] is False
+    assert "chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin" in result_non_it["roadmap_message"]
 
 
 def test_api_skill_roadmap_endpoint():
-    """Kiểm tra gọi API GET /api/v1/skills/roadmap."""
+    """Kiểm tra gọi API GET /api/v1/skills/roadmap cho cả kỹ năng IT và kỹ năng Non-IT."""
     client = TestClient(app)
+    # 1. Kỹ năng IT
     response = client.get("/api/v1/skills/roadmap", params={"skill": "PostgreSQL"})
     assert response.status_code == 200
     data = response.json()
     assert data["skill"] == "PostgreSQL"
     assert data["roadmap_url"] == "https://roadmap.sh/postgresql"
     assert data["is_matched"] is True
+    assert data["is_it_supported"] is True
+
+    # 2. Kỹ năng Non-IT
+    response_non_it = client.get("/api/v1/skills/roadmap", params={"skill": "Kế toán"})
+    assert response_non_it.status_code == 200
+    data_non_it = response_non_it.json()
+    assert data_non_it["skill"] == "Kế toán"
+    assert data_non_it["is_it_supported"] is False
+    assert "chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin" in data_non_it["message"]

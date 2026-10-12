@@ -35,15 +35,23 @@ def build_soniox_config(session_id: str | None, db: Session | None) -> dict[str,
                 jd = db.query(JobDescription).filter(JobDescription.id == session.jd_id).first()
                 if jd:
                     title = jd.title
-                    skills = []
-                    if isinstance(jd.required_skills, list):
-                        skills.extend(str(s) for s in jd.required_skills[:10])
-                    if isinstance(jd.tools, list):
-                        skills.extend(str(t) for t in jd.tools[:10])
+                    skills: list[str] = []
+
+                    # Trong bảng job_descriptions, kỹ năng lưu ở cột `skills` (JSON list các dict [{"name": ...}])
+                    raw_skills = getattr(jd, "skills", None) or []
+                    if isinstance(raw_skills, list):
+                        for item in raw_skills:
+                            if isinstance(item, dict) and "name" in item:
+                                skills.append(str(item["name"]))
+                            elif isinstance(item, str):
+                                skills.append(item)
+
+                    # Giới hạn tối đa 20 từ khóa chuyên môn ngữ cảnh cho Soniox
+                    top_skills = skills[:20]
 
                     context_items = [{"key": "domain", "value": f"Phỏng vấn vị trí {title}"}]
-                    if skills:
-                        context_items.append({"key": "terms", "value": ", ".join(skills)})
+                    if top_skills:
+                        context_items.append({"key": "terms", "value": ", ".join(top_skills)})
 
                     config["context"] = {"general": context_items}
         except Exception as e:
@@ -129,10 +137,24 @@ async def proxy_soniox_stream(
                             data = json.loads(raw)
                             # Kiểm tra lỗi trả về từ Soniox
                             if data.get("error_code") or data.get("error_message"):
+                                err_code = data.get("error_code", "")
+                                err_msg = data.get("error_message", "Soniox transcription error")
+                                if (
+                                    err_code == "organization_balance_exhausted"
+                                    or "balance exhausted" in err_msg.lower()
+                                ):
+                                    friendly_msg = (
+                                        "Tài khoản Soniox STT đã hết số dư khả dụng (Organization balance exhausted). "
+                                        "Vui lòng nạp thêm tiền tại console.soniox.com hoặc cập nhật SONIOX_API_KEY mới trong .env."
+                                    )
+                                else:
+                                    friendly_msg = f"Lỗi Soniox STT: {err_msg}"
+
                                 await client_ws.send_json(
                                     {
                                         "type": "error",
-                                        "message": data.get("error_message", "Soniox transcription error"),
+                                        "error_code": err_code,
+                                        "message": friendly_msg,
                                     }
                                 )
                                 break

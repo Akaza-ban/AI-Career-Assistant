@@ -327,9 +327,11 @@ export function JdPasteForm({ value, onChange, showErrors }: JdPasteFormProps) {
 export const JD_TABS = [
   { value: "recommended", label: "AI gợi ý theo CV", icon: Sparkles },
   { value: "library", label: "Chọn từ thư viện JD", icon: Library },
+  { value: "compare", label: "So sánh 2–5 JD", icon: ArrowLeftRight },
   { value: "paste", label: "Dán JD của bạn", icon: ClipboardPaste },
 ] as const
 
 export type JdTab = (typeof JD_TABS)[number]["value"]
 
 export { JdRecommendationPicker } from "./jd-recommendation-picker"
+export { JdComparisonPicker } from "./jd-comparison-picker"
