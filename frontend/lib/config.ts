@@ -42,5 +42,6 @@ export function isLive(group: ApiGroup): boolean {
  */
 export const OPTIMIZER_AVAILABLE = isLive("optimizer") || !isLive("gap")
 
-// Kịch bản dữ liệu mock để xem các trạng thái rỗng: "default" | "new_student".
-export const MOCK_SCENARIO = process.env.NEXT_PUBLIC_MOCK_SCENARIO ?? "default"
+// Kịch bản dữ liệu mock: "empty" (mặc định, tài khoản demo sinh viên chưa có gì, giống tài khoản mới tạo)
+// | "sample" (Minh Anh có sẵn CV, phân tích, phỏng vấn… để xem thiết kế). Cố vấn demo luôn có nhóm SV mẫu.
+export const MOCK_SCENARIO = process.env.NEXT_PUBLIC_MOCK_SCENARIO ?? "empty"

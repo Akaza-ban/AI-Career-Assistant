@@ -550,6 +550,9 @@ async def test_overview_aggregates_assigned_students(client):
     [review] = body["recent_reviews"]
     assert (review["student_id"], review["session_id"], review["seen_at"]) == (flagged, flagged_sessions[-1], None)
     assert review["comment"] == "Nhận xét buổi gần nhất." and review["jd"]["id"] == BA
+    # Buổi đã chia sẻ còn chờ nhận xét: nút "Nhận xét" ở Tổng quan mở thẳng đúng buổi
+    [pending] = body["pending_sessions"]
+    assert (pending["student_id"], pending["session_id"], pending["jd"]["id"]) == (flagged, flagged_sessions[-2], BA)
 
 
 @pytest.mark.asyncio

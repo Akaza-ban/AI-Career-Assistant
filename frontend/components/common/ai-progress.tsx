@@ -21,7 +21,7 @@ export function AiProgress({ title, description, steps, current, className }: Ai
       className={cn("flex flex-col gap-5 rounded-panel border border-line bg-card p-6 sm:p-8", className)}
     >
       <div>
-        <h2 className="font-heading text-xl font-bold text-ink">{title}</h2>
+        <h2 className="font-heading text-xl font-semibold text-ink">{title}</h2>
         {description && <p className="mt-1 text-sm text-ink-3">{description}</p>}
       </div>
       <ol className="flex flex-wrap gap-x-7 gap-y-2.5">

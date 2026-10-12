@@ -400,3 +400,30 @@ def test_apply_changes_keeps_layout():
     assert apply_changes(text, {3: "Dòng một mới", 5: "Dòng ba mới"}) == (
         "Tên\n\nKINH NGHIỆM\n  • Dòng một mới\n- Dòng hai\nDòng ba mới"
     )
+
+
+@pytest.mark.asyncio
+async def test_suggestion_with_placeholder_asks_for_context(client):
+    _, analysis_id = await setup_analysis(client)
+    with SessionLocal() as db:
+        analysis = db.get(GapAnalysis, analysis_id)
+        result = dict(analysis.result)
+        result["suggestions"] = [
+            suggestion("sg_num", "Agile/Scrum", 8, TEAM_LINE, "Làm việc theo Scrum với [số] thành viên, sprint 2 tuần.")
+        ]
+        analysis.result = result
+        db.commit()
+    [s] = (await client.get(url(analysis_id), headers=STUDENT)).json()["suggestions"]
+    assert s["needs_context"] is True and s["context_question"]
+
+    empty = await client.post(url(analysis_id, "/suggestions/sg_num/context"), json={"answer": " "}, headers=STUDENT)
+    assert empty.json()["code"] == "context_required"
+    res = await client.post(
+        url(analysis_id, "/suggestions/sg_num/context"), json={"answer": "Nhóm có 5 người"}, headers=STUDENT
+    )
+    [s] = res.json()["suggestions"]
+    # Không có LLM (test): điền theo quy tắc bằng đúng số SV đưa ra
+    assert (s["needs_context"], s["proposed_text"]) == (False, "Làm việc theo Scrum với 5 thành viên, sprint 2 tuần.")
+    assert (await decide(client, analysis_id, "sg_num", "accept")).status_code == 200
+    [s] = (await client.get(url(analysis_id), headers=STUDENT)).json()["suggestions"]
+    assert s["final_text"] == "Làm việc theo Scrum với 5 thành viên, sprint 2 tuần."

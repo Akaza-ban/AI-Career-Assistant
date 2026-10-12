@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from src.agents.interview.graph import interview_agent
 from src.api.errors import AppError
 from src.db.models import CvVersion, InterviewSession, InterviewTurn, JobDescription, User
+from src.services import notifications
 from src.services.guardrails import check_input_safety
 
 QUESTION_COUNT = 4
@@ -332,6 +333,18 @@ def _complete(db: Session, session: InterviewSession, now: datetime) -> None:
     session.completed_at = now
     session.question_deadline = None
     session.paused_at = None
+    owner = db.get(User, session.owner_id)
+    jd = db.get(JobDescription, session.jd_id)
+    if owner is not None and jd is not None:
+        notifications.notify(
+            db,
+            owner,
+            "interview_report",
+            f"Báo cáo phỏng vấn {jd.title} đã sẵn sàng",
+            f"Điểm AI {notifications.score_text(session.overall_score)}. Xem điểm từng tiêu chí STAR và phần nên luyện thêm.",
+            action_label="Xem báo cáo",
+            action_href=f"/student/interview/{session.id}/report",
+        )
 
 
 # ---------- Tạm dừng / kết thúc sớm ----------

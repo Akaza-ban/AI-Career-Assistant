@@ -338,7 +338,8 @@ export function ProgressMetrics({ overview }: { overview: StudentOverview }) {
 
   return (
     <Zone id="progress-title" title="Tiến độ của bạn" aside={<ZoneLink href="/student/history">Xem tất cả</ZoneLink>}>
-      <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Hai chỉ số có biểu đồ chiếm phần rộng; số buổi tuần này chỉ là một con số nên cột hẹp, gần vuông */}
+      <div className="grid gap-x-12 gap-y-10 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_200px]">
         <MetricColumn
           label="Độ khớp CV gần nhất"
           value={match?.score != null ? `${formatPercent(match.score)}%` : "—"}
@@ -375,13 +376,14 @@ export function ProgressMetrics({ overview }: { overview: StudentOverview }) {
           link={{ label: "Xem thêm", href: "/student/history" }}
           note={latest && `Cập nhật ${shortDate(latest.completed_at)}`}
         />
-        <MetricColumn
-          label="Buổi phỏng vấn tuần này"
-          value={overview.interview_week_count}
-          compare={`tổng ${overview.interview_count} buổi`}
-          link={{ label: "Xem thêm", href: "/student/history" }}
-          note={latest && `Gần nhất ${formatRelativeTime(latest.completed_at).toLowerCase()}`}
-        />
+        <div className="sm:col-span-2 sm:max-w-[200px] lg:col-span-1">
+          <MetricColumn
+            label="Buổi phỏng vấn tuần này"
+            value={overview.interview_week_count}
+            compare={`tổng ${overview.interview_count} buổi`}
+            link={{ label: "Xem thêm", href: "/student/history" }}
+          />
+        </div>
       </div>
     </Zone>
   )
@@ -570,58 +572,6 @@ export function RecentInterviews({ items }: { items: InterviewRow[] }) {
               aside={<span className="text-[15px] font-semibold text-ink tabular-nums">{formatScore(row.overall_score)} / 5</span>}
             />
           ))}
-        </ul>
-      )}
-    </Widget>
-  )
-}
-
-export function StarAverage({ star }: { star: StudentOverview["star"] }) {
-  return (
-    <Widget
-      id="star-average"
-      title="Điểm trung bình STAR"
-      footer={
-        star
-          ? { link: { label: "Xem tiến bộ", href: "/student/history" }, note: `${star.session_count} buổi gần nhất, thang 0–5` }
-          : undefined
-      }
-    >
-      {!star ? (
-        <ListEmpty
-          icon={MessagesSquare}
-          title="Chưa có dữ liệu STAR"
-          text="Hoàn thành buổi phỏng vấn thử đầu tiên để xem điểm từng tiêu chí."
-        />
-      ) : (
-        <ul>
-            {STAR_ORDER.map((key) => {
-              const score = star.average[key]
-              const weakest = key === star.weakest
-              return (
-                <li key={key} className="flex items-center gap-3 border-b border-line py-3 sm:gap-3.5">
-                  <span className="grid size-6 shrink-0 place-items-center rounded-md bg-blue-soft text-xs font-bold text-accent-strong">
-                    {STAR_META[key].letter}
-                  </span>
-                  <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1 text-[15px] font-medium text-ink">
-                    {STAR_META[key].label}
-                    {weakest && <Badge variant="warn">Yếu nhất</Badge>}
-                  </span>
-                  <span
-                    role="progressbar"
-                    aria-label={STAR_META[key].label}
-                    aria-valuenow={score}
-                    aria-valuemin={0}
-                    aria-valuemax={5}
-                  >
-                    <Bar value={score / 5} tone={weakest ? "bg-warn" : "bg-blue"} />
-                  </span>
-                  <span className="w-[52px] shrink-0 text-right text-[13px] text-ink-2 tabular-nums">
-                    {formatScore(score)} / 5
-                  </span>
-                </li>
-              )
-            })}
         </ul>
       )}
     </Widget>

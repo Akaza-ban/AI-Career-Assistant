@@ -62,6 +62,34 @@ class Settings(BaseSettings):
     # Tạo nhóm SV giả định do cố vấn demo phụ trách (dữ liệu minh hoạ cho các trang Cố vấn)
     seed_demo_cohort: bool = True
 
+    # Tài khoản: phiên đăng nhập lưu trong cookie HttpOnly
+    session_cookie_name: str = "careerx_session"
+    session_days: int = Field(default=30, ge=1, le=365)
+    # Bật trên môi trường HTTPS (cookie chỉ gửi qua kết nối an toàn)
+    session_cookie_secure: bool = False
+    # Vào bằng header X-Demo-Role thay cho đăng nhập (chỉ dùng cho test tự động). Frontend luôn đăng nhập,
+    # kể cả tài khoản demo, nên mặc định tắt.
+    demo_login_enabled: bool = False
+    # Mật khẩu đặt cho 2 tài khoản demo (để thử trang Đăng nhập). Để trống thì không đăng nhập được bằng mật khẩu.
+    demo_account_password: str = "careerx123"
+    # Nhập sai mật khẩu quá số lần này thì tạm khoá trong login_lock_minutes phút
+    login_max_attempts: int = 5
+    login_lock_minutes: int = 15
+    password_reset_minutes: int = 30
+
+    # Địa chỉ frontend, dùng để tạo link đặt lại mật khẩu trong email
+    frontend_url: str = "http://localhost:3000"
+    # SMTP gửi email. Để trống smtp_host thì không gửi, chỉ ghi link vào log (môi trường phát triển).
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "CareerX <no-reply@careerx.vn>"
+    smtp_starttls: bool = True
+
+    # Dung lượng lưu CV cho mỗi sinh viên
+    storage_limit_mb: int = 50
+
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
 

@@ -866,6 +866,7 @@ export interface UpdateSharingRequest {
 // ---------- Cài đặt & Quyền riêng tư ----------
 
 export interface StudentSettings {
+  full_name: string
   /** Email đăng nhập (email cá nhân, không cần email trường). */
   email: string
   phone: string | null
@@ -930,6 +931,14 @@ export interface PasswordResetConfirmRequest {
 
 export interface ChangePasswordResponse {
   password_updated_at: ISODateString
+}
+
+/** Sửa hồ sơ cá nhân; trường không gửi thì giữ nguyên. Email dùng đăng nhập nên không đổi ở đây. */
+export interface UpdateProfileRequest {
+  full_name?: string
+  phone?: string
+  /** YYYY-MM-DD */
+  date_of_birth?: string
 }
 
 export interface UpdateSettingsRequest {
@@ -1102,6 +1111,17 @@ export interface RecentReview extends AdvisorReviewInfo {
   jd: InterviewJdRef
 }
 
+/** Buổi SV đã chia sẻ mà cố vấn chưa nhận xét (nút "Nhận xét" mở thẳng đúng buổi). */
+export interface PendingReviewSession {
+  session_id: string
+  student_id: string
+  student_name: string
+  avatar_url: string | null
+  jd: InterviewJdRef
+  completed_at: ISODateString
+  overall_score: number | null
+}
+
 /** Tổng quan cả nhóm SV phụ trách (chỉ số liệu tổng hợp). Mục tiêu theo PRD mục 9. */
 export interface AdvisorOverview {
   advisor_name: string
@@ -1133,6 +1153,8 @@ export interface AdvisorOverview {
   top_improvers: AssignedStudent[]
   /** Tối đa 5 nhận xét bạn gửi gần đây, bản mới nhất trước. */
   recent_reviews: RecentReview[]
+  /** Buổi chờ nhận xét, chờ lâu nhất trước (tối đa 10). */
+  pending_sessions: PendingReviewSession[]
 }
 
 // ---------- Tin nhắn SV ↔ cố vấn phụ trách ----------

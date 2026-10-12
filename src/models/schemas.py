@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
@@ -171,7 +171,9 @@ class JDRecommendationItem(BaseModel):
     matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
     partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
     missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
-    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    breakdown: list[dict[str, Any]] = Field(
+        default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
+    )
 
 
 class CareerAdvice(BaseModel):
@@ -215,7 +217,9 @@ class JDComparisonItem(BaseModel):
     matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
     partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
     missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
-    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    breakdown: list[dict[str, Any]] = Field(
+        default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
+    )
     llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
     llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
 
@@ -400,7 +404,9 @@ class OptimizerSuggestion(BaseModel):
     rationale: str = ""
     evidence_span: EvidenceSpan
     status: Literal["pending", "accepted", "edited", "rejected"]
-    needs_context: bool = Field(default=False, description="US-SV-03 AC2 (chưa làm): cần SV bổ sung ngữ cảnh")
+    needs_context: bool = Field(
+        default=False, description="US-SV-03 AC2: câu đề xuất còn chỗ trống [ ] cần SV bổ sung số liệu thật"
+    )
     context_question: str | None = None
 
 
@@ -1094,6 +1100,9 @@ class AdvisorOverviewResponse(BaseModel):
     flagged_students: list[AssignedStudentResponse]
     top_improvers: list[AssignedStudentResponse]
     recent_reviews: list[RecentReview]
+    pending_sessions: list["PendingReviewSession"] = Field(
+        default_factory=list, description="Buổi SV đã chia sẻ mà bạn chưa nhận xét, cũ nhất trước (tối đa 10)"
+    )
 
 
 class ReviewRequest(BaseModel):
@@ -1154,3 +1163,159 @@ class SendMessageRequest(BaseModel):
 
 class UnreadCountResponse(BaseModel):
     count: int
+
+
+# ============================================================================
+# Tài khoản: đăng nhập, đăng ký, quên / đổi mật khẩu
+# ============================================================================
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    role: Literal["student", "advisor"]
+    profile: UserProfile
+
+
+class RegisterRequest(BaseModel):
+    """Chỉ sinh viên tự đăng ký. Email là email cá nhân."""
+
+    full_name: str
+    date_of_birth: date
+    phone: str
+    email: str
+    password: str
+    consent: bool = Field(..., description="Đồng ý xử lý CV và câu trả lời phỏng vấn")
+    integrity_pledge: bool = Field(..., description="Cam kết chỉ đưa vào CV kinh nghiệm có thật")
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ChangePasswordResponse(BaseModel):
+    password_updated_at: UtcDatetime
+
+
+# ============================================================================
+# Cài đặt & hồ sơ sinh viên
+# ============================================================================
+
+
+class StorageInfo(BaseModel):
+    used_bytes: int
+    limit_bytes: int
+    allocated_by: str
+
+
+class PrivacySettings(BaseModel):
+    anonymous_contribution: bool = False
+
+
+class NotificationSettings(BaseModel):
+    advisor_comment: bool = True
+    report_ready: bool = True
+    weekly_reminder: bool = False
+    email: bool = False
+
+
+class StudentSettingsResponse(BaseModel):
+    """Khớp StudentSettings trong frontend/lib/types.ts."""
+
+    full_name: str
+    email: str
+    phone: str | None = None
+    date_of_birth: date | None = None
+    password_updated_at: UtcDatetime | None = None
+    consent_accepted_at: UtcDatetime | None = None
+    storage: StorageInfo
+    privacy: PrivacySettings
+    notifications: NotificationSettings
+
+
+class UpdateSettingsRequest(BaseModel):
+    privacy: dict[str, bool] | None = None
+    notifications: dict[str, bool] | None = None
+
+
+class UpdateProfileRequest(BaseModel):
+    """Sửa hồ sơ cá nhân; trường bỏ trống (None) giữ nguyên."""
+
+    full_name: str | None = None
+    phone: str | None = None
+    date_of_birth: date | None = None
+
+
+class DataExportResponse(BaseModel):
+    download_url: str | None = Field(default=None, description="Đường dẫn tải file JSON toàn bộ dữ liệu")
+
+
+# ============================================================================
+# Thông báo
+# ============================================================================
+
+
+class NotificationResponse(BaseModel):
+    id: str
+    kind: Literal[
+        "advisor_comment", "interview_report", "gap_analysis", "integrity_alert", "student_activity", "student_inactive"
+    ]
+    title: str
+    body: str
+    created_at: UtcDatetime
+    read: bool
+    action_label: str | None = None
+    action_href: str | None = None
+
+
+# ============================================================================
+# JD đã lưu, JD tự dán
+# ============================================================================
+
+
+class SavedJdResponse(BaseModel):
+    jd_id: str
+    saved_at: UtcDatetime
+
+
+class CreatePastedJdRequest(BaseModel):
+    title: str
+    company: str | None = None
+    level: Literal["intern", "fresher", "junior"] | None = None
+    industry: str | None = None
+    text: str = Field(..., description="Toàn văn JD (tối thiểu 50 từ)")
+
+
+class SuggestionContextRequest(BaseModel):
+    answer: str
+
+
+# ============================================================================
+# Cố vấn: buổi chờ nhận xét (Tổng quan)
+# ============================================================================
+
+
+class PendingReviewSession(BaseModel):
+    session_id: str
+    student_id: str
+    student_name: str
+    avatar_url: str | None = None
+    jd: InterviewJd
+    completed_at: UtcDatetime
+    overall_score: float | None = None
+
+
+AdvisorOverviewResponse.model_rebuild()

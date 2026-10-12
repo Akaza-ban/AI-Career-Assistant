@@ -13,8 +13,17 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
-from src.db.models import AdvisorAssignment, AdvisorReview, CvVersion, GapAnalysis, JobDescription, ShareGrant, User
-from src.services import cv_versions, progress
+from src.db.models import (
+    AdvisorAssignment,
+    AdvisorReview,
+    CvVersion,
+    GapAnalysis,
+    InterviewSession,
+    JobDescription,
+    ShareGrant,
+    User,
+)
+from src.services import cv_versions, notifications, progress
 
 KIND_CV = "cv"
 KIND_INTERVIEW = "interview"
@@ -130,8 +139,11 @@ def update(db: Session, student: User, item_ids: list[str], shared: bool, now: d
 
     grants = grants_of(db, student.id)
     if shared:
+        advisor = advisor_of(db, student)
         for item_id in dict.fromkeys(item_ids):
             if item_id not in grants:
+                if advisor is not None:
+                    _notify_shared(db, advisor, student, kinds[item_id], item_id)
                 db.add(
                     ShareGrant(
                         id=f"sh_{uuid.uuid4().hex[:12]}",
@@ -144,6 +156,34 @@ def update(db: Session, student: User, item_ids: list[str], shared: bool, now: d
     else:
         db.execute(delete(ShareGrant).where(ShareGrant.owner_id == student.id, ShareGrant.item_id.in_(item_ids)))
     db.commit()
+
+
+def _notify_shared(db: Session, advisor: User, student: User, kind: str, item_id: str) -> None:
+    if kind == KIND_INTERVIEW:
+        session = db.get(InterviewSession, item_id)
+        jd = db.get(JobDescription, session.jd_id) if session else None
+        notifications.notify(
+            db,
+            advisor,
+            "student_activity",
+            f"{student.full_name} vừa chia sẻ buổi phỏng vấn {jd.title if jd else ''}".strip(),
+            f"Điểm AI {notifications.score_text(session.overall_score if session else None)}. Buổi này đang chờ bạn nhận xét.",
+            action_label="Nhận xét",
+            action_href=f"/advisor/students/{student.id}?review={item_id}",
+        )
+    else:
+        cv = db.scalar(
+            select(CvVersion).where(CvVersion.family_id == item_id).order_by(CvVersion.version.desc()).limit(1)
+        )
+        notifications.notify(
+            db,
+            advisor,
+            "student_activity",
+            f"{student.full_name} vừa chia sẻ CV",
+            cv.file_name if cv else "",
+            action_label="Xem CV",
+            action_href=f"/advisor/students/{student.id}?tab=cv",
+        )
 
 
 def unshare_deleted(db: Session, item_id: str) -> None:

@@ -12,7 +12,7 @@ from src.api.errors import AppError
 from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
-from src.services import cv_versions
+from src.services import cv_versions, notifications
 from src.services.skill_matching import match_label
 
 logger = logging.getLogger(__name__)
@@ -176,7 +176,26 @@ async def run_analysis(analysis_id: str) -> None:
             analysis.result = _build_result(final)
             analysis.llm_calls = final.get("llm_calls", 0)
             analysis.completed_at = utcnow()
+            _notify_completed(db, analysis)
         db.commit()
+
+
+def _notify_completed(db: Session, analysis: GapAnalysis) -> None:
+    owner = db.get(User, analysis.owner_id)
+    jd = db.get(JobDescription, analysis.jd_id)
+    if owner is None or jd is None:
+        return
+    score = analysis.match_score
+    label = "" if score is None else (" · Cao" if score >= 75 else " · Khá" if score >= 50 else " · Trung bình")
+    notifications.notify(
+        db,
+        owner,
+        "gap_analysis",
+        f"Phân tích CV với {jd.title} đã xong",
+        f"{analysis.cv_file_name} · Mức phù hợp {round(score) if score is not None else '—'}%{label}",
+        action_label="Xem kết quả",
+        action_href=f"/student/analysis/{analysis.id}",
+    )
 
 
 def to_response(analysis: GapAnalysis, jd: JobDescription) -> GapAnalysisResponse:

@@ -5,11 +5,13 @@ import { usePathname } from "next/navigation"
 import { useState } from "react"
 import { LogOut, Menu } from "lucide-react"
 
+import { useSignOut } from "@/components/shell/account-actions"
 import { advisorShell, isNavActive, studentShell } from "@/components/shell/nav-config"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
+const sheetItem = "flex items-center gap-3 rounded-[10px] px-3 py-3 text-[15px] font-medium text-ink-2 hover:bg-surface"
 const tabClass = "flex h-[52px] flex-col items-center justify-center gap-0.5 text-[11px] transition-colors"
 
 /**
@@ -19,6 +21,7 @@ const tabClass = "flex h-[52px] flex-col items-center justify-center gap-0.5 tex
 export function MobileTabBar({ role }: { role: Role }) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const signOut = useSignOut()
   const config = role === "advisor" ? advisorShell : studentShell
   const tabs = config.nav.filter((item) => item.tab)
   const rest = config.nav.filter((item) => !item.tab)
@@ -79,14 +82,17 @@ export function MobileTabBar({ role }: { role: Role }) {
                 </Link>
               )
             })}
-            <Link
-              href="/login?demo=1"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-3 rounded-[10px] px-3 py-3 text-[15px] font-medium text-ink-2 hover:bg-surface"
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                void signOut()
+              }}
+              className={cn(sheetItem, "w-full text-left")}
             >
               <LogOut className="size-5" strokeWidth={1.75} aria-hidden />
-              Đổi vai trò
-            </Link>
+              Đăng xuất
+            </button>
           </div>
         </SheetContent>
       </Sheet>

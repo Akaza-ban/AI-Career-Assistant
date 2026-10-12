@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { api, ApiError } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 import { MIN_ANSWER_CHARS, PAUSE_MAX_SECONDS, QUESTION_COUNT, SECONDS_PER_QUESTION } from "@/lib/interview"
+import { SetFocusTitle } from "@/components/shell/focus-title"
 import { useApi } from "@/lib/use-api"
 
 const MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
@@ -143,6 +144,7 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
 
   return (
     <Centered>
+      <SetFocusTitle title={`Phòng chờ · ${jd.title}`} />
       <div className="flex items-center gap-3.5">
         <span
           className="grid size-[52px] shrink-0 place-items-center rounded-2xl bg-ink text-[15px] font-semibold tracking-[0.02em] text-white"

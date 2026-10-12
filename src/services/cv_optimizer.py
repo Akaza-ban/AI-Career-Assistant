@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
 from src.db.models import CvEditAudit, CvExport, CvOptimization, CvVersion, GapAnalysis, JobDescription, User
-from src.services import cv_files, cv_versions
+from src.services import cv_files, cv_versions, llm
 from src.services.skill_matching import (
     BULLET_PREFIX,
     IMPORTANCE_LABELS,
@@ -104,6 +104,85 @@ def _suggestions(analysis: GapAnalysis, lines: list[dict[str, Any]]) -> list[dic
     return result
 
 
+_PLACEHOLDER = re.compile(r"\[[^\]]{1,40}\]")
+CONTEXT_QUESTION = "Câu này cần số liệu thật. Bạn đã làm được bao nhiêu (số lượng, tỷ lệ, thời gian…)?"
+
+
+def _with_context(suggestions: list[dict[str, Any]], optimization: CvOptimization) -> list[dict[str, Any]]:
+    """
+    Gợi ý còn chỗ trống [ ] cần SV bổ sung số liệu thật (US-SV-03 AC2). Đã bổ sung thì dùng câu đã điền số
+    thay cho câu AI đề xuất ban đầu; AI không bao giờ tự đặt số liệu.
+    """
+    contexts = optimization.contexts or {}
+    out = []
+    for s in suggestions:
+        ctx = contexts.get(s["id"])
+        text = ctx["proposed_text"] if ctx else s["suggested_text"]
+        out.append({**s, "suggested_text": text, "needs_context": ctx is None and bool(_PLACEHOLDER.search(text))})
+    return out
+
+
+def _fill_by_rules(proposed: str, answer: str) -> str:
+    """Điền lần lượt các số trong câu trả lời vào chỗ trống; không đủ số thì nối câu trả lời vào cuối câu."""
+    numbers = re.findall(r"\d+(?:[.,]\d+)?\s*%?", answer)
+    holes = _PLACEHOLDER.findall(proposed)
+    if numbers and len(numbers) >= len(holes):
+        filled = proposed
+        for number in numbers[: len(holes)]:
+            filled = _PLACEHOLDER.sub(number.strip(), filled, count=1)
+        return filled
+    return f"{_PLACEHOLDER.sub('', proposed).rstrip(' .')} – {answer.rstrip('.')}."
+
+
+async def _fill_with_llm(original: str, proposed: str, answer: str) -> str | None:
+    prompt = (
+        "Bạn sửa một câu trong CV. Câu đề xuất có chỗ trống dạng [ ] cần số liệu thật.\n"
+        f"Câu gốc: {original}\nCâu đề xuất: {proposed}\nSinh viên cung cấp: {answer}\n"
+        "Điền chỗ trống CHỈ bằng thông tin sinh viên cung cấp; không thêm số, kỹ năng hay thành tích khác. "
+        "Thông tin không đủ cho chỗ trống nào thì bỏ cụm có chỗ trống đó. Giữ câu ngắn gọn, cùng giọng văn.\n"
+        'Trả về JSON: {"text": "<câu hoàn chỉnh>"}'
+    )
+    try:
+        data = await llm.invoke_json(prompt, timeout=30.0)
+    except Exception:
+        return None
+    text = " ".join(str(data.get("text", "")).split())
+    if not text or _PLACEHOLDER.search(text) or len(text) > MAX_EDIT_CHARS:
+        return None
+    # Chống bịa số: mọi số trong câu mới phải có trong câu gốc hoặc câu trả lời của SV
+    allowed = set(re.findall(r"\d+", f"{original} {answer}"))
+    if any(n not in allowed for n in re.findall(r"\d+", text)):
+        return None
+    return text
+
+
+async def provide_context(
+    db: Session, user: User, analysis_id: str, suggestion_id: str, answer: str, now: datetime
+) -> None:
+    """SV bổ sung số liệu cho gợi ý còn chỗ trống; câu đề xuất được điền lại và quyết định cũ (nếu có) bị bỏ."""
+    analysis, cv, optimization = _load(db, user, analysis_id)
+    _require_draft(optimization)
+    text = " ".join(answer.split())
+    if not text:
+        raise AppError(422, "Hãy nhập ngữ cảnh trước khi gửi.", "context_required")
+    if len(text) > MAX_CONTEXT_CHARS:
+        raise AppError(422, f"Ngữ cảnh tối đa {MAX_CONTEXT_CHARS} ký tự.", "context_too_long")
+    base = next((s for s in _suggestions(analysis, split_cv_lines(cv.content_text)) if s["id"] == suggestion_id), None)
+    if base is None:
+        raise AppError(404, "Không tìm thấy gợi ý.", "suggestion_not_found")
+    proposed = None
+    if llm.llm_configured():
+        proposed = await _fill_with_llm(base["original_text"], base["suggested_text"], text)
+    proposed = proposed or _fill_by_rules(base["suggested_text"], text)
+    contexts = dict(optimization.contexts or {})
+    contexts[suggestion_id] = {"answer": text, "proposed_text": proposed, "answered_at": now.isoformat()}
+    optimization.contexts = contexts
+    decisions = dict(optimization.decisions or {})
+    decisions.pop(suggestion_id, None)
+    optimization.decisions = decisions
+    db.commit()
+
+
 def _kind(skill: str, original: str, proposed: str) -> str:
     """ats_keyword: câu mới dùng đúng tên kỹ năng trong JD mà câu gốc chưa có; còn lại là diễn đạt lại."""
     return "ats_keyword" if contains_term(skill, proposed) and not contains_term(skill, original) else "rephrase"
@@ -122,6 +201,8 @@ def _suggestion_out(s: dict[str, Any], decision: dict[str, Any] | None) -> dict[
         "rationale": s.get("reason", ""),
         "evidence_span": {"text": s["original_text"], "line_start": s["line_no"], "line_end": s["line_no"]},
         "status": status,
+        "needs_context": s.get("needs_context", False),
+        "context_question": CONTEXT_QUESTION if s.get("needs_context") else None,
     }
 
 
@@ -213,7 +294,8 @@ def session(db: Session, user: User, analysis_id: str) -> dict[str, Any]:
         "document": cv_document(cv),
         "result_document": cv_document(result_cv) if result_cv else None,
         "suggestions": [
-            _suggestion_out(s, (optimization.decisions or {}).get(s["id"])) for s in _suggestions(analysis, lines)
+            _suggestion_out(s, (optimization.decisions or {}).get(s["id"]))
+            for s in _with_context(_suggestions(analysis, lines), optimization)
         ],
         "capability_checks": [_check_out(r, jd, answers.get(r["id"])) for r in _missing(analysis)],
         "finalized_at": optimization.finalized_at,
@@ -233,7 +315,12 @@ def decide(
     analysis, cv, optimization = _load(db, user, analysis_id)
     _require_draft(optimization)
     suggestion = next(
-        (s for s in _suggestions(analysis, split_cv_lines(cv.content_text)) if s["id"] == suggestion_id), None
+        (
+            s
+            for s in _with_context(_suggestions(analysis, split_cv_lines(cv.content_text)), optimization)
+            if s["id"] == suggestion_id
+        ),
+        None,
     )
     if suggestion is None:
         raise AppError(404, "Không tìm thấy gợi ý.", "suggestion_not_found")

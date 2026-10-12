@@ -18,13 +18,14 @@ import {
   type FieldHint,
 } from "@/components/auth/auth-fields"
 import { PolicySections, PolicySummary } from "@/components/auth/data-policy-dialog"
+import { PasswordRuleList } from "@/components/common/password-rules"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
 import { DATA_POLICY_UPDATED_AT } from "@/lib/data-policy"
+import { setAuthMode } from "@/lib/session"
 import { isStrongPassword } from "@/lib/password"
 import { cn } from "@/lib/utils"
 
-const PASSWORD_HINT = "Ít nhất 8 ký tự, có cả chữ và số, không có khoảng trắng"
 
 /** Tuổi tối thiểu 15; ngày sinh không ở tương lai. */
 function dobError(v: string): string | null {
@@ -62,16 +63,12 @@ export function RegisterForm() {
     dob: dobError(form.dob),
     phone: !form.phone.trim() ? "Hãy nhập số điện thoại." : !normalizePhone(form.phone) ? "Cần đủ 10 chữ số, bắt đầu bằng 0." : null,
     email: !form.email.trim() ? "Hãy nhập email." : !isEmail(form.email) ? "Email chưa đúng định dạng." : null,
-    password: !isStrongPassword(form.password) ? `Mật khẩu cần ${PASSWORD_HINT.charAt(0).toLowerCase()}${PASSWORD_HINT.slice(1)}.` : null,
+    password: !isStrongPassword(form.password) ? "Mật khẩu chưa đạt các điều kiện bên dưới." : null,
     confirm: !form.confirm ? "Hãy nhập lại mật khẩu." : form.confirm !== form.password ? "Hai mật khẩu chưa khớp." : null,
   }
   const valid = Object.values(errors).every((e) => !e)
   const show = (key: keyof typeof errors): FieldHint => (submitted && errors[key] ? { tone: "error", text: errors[key] } : null)
 
-  const passwordHint: FieldHint =
-    submitted && errors.password
-      ? { tone: "error", text: errors.password }
-      : { tone: isStrongPassword(form.password) ? "ok" : "muted", text: PASSWORD_HINT }
   const confirmHint: FieldHint =
     form.confirm && form.confirm === form.password
       ? { tone: "ok", text: "Đã khớp" }
@@ -107,6 +104,7 @@ export function RegisterForm() {
         consent: true,
         integrity_pledge: true,
       })
+      setAuthMode({ role: "student" })
       router.push("/student")
     } catch (err) {
       if (err instanceof ApiError && err.code === "email_taken") setEmailTaken(true)
@@ -147,7 +145,10 @@ export function RegisterForm() {
             />
           </div>
           <TextField label="Email" type="email" autoComplete="email" inputMode="email" value={form.email} onChange={set("email")} hint={emailHint} disabled={busy} />
-          <PasswordField label="Mật khẩu" autoComplete="new-password" value={form.password} onChange={set("password")} hint={passwordHint} disabled={busy} />
+          <div className="grid gap-2.5">
+            <PasswordField label="Mật khẩu" autoComplete="new-password" value={form.password} onChange={set("password")} hint={show("password")} disabled={busy} />
+            <PasswordRuleList password={form.password} showErrors={submitted} />
+          </div>
           <PasswordField label="Xác nhận mật khẩu" autoComplete="new-password" value={form.confirm} onChange={set("confirm")} hint={confirmHint} disabled={busy} />
           <p className="text-sm text-ink-2 max-lg:hidden">
             Đã có tài khoản?{" "}

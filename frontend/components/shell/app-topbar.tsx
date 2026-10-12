@@ -2,11 +2,12 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useEffect, useState } from "react"
-import { ChevronRight, Repeat2, Search } from "lucide-react"
-import { toast } from "sonner"
+import { useCallback, useEffect, useState } from "react"
+import { ChevronRight, LogOut, Search } from "lucide-react"
 
 import { ChatLauncher } from "@/components/chat/chat-launcher"
+import { useSignOut } from "@/components/shell/account-actions"
+import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette"
 import { advisorShell, getBreadcrumb, studentShell } from "@/components/shell/nav-config"
 import { floatingSurface, NotificationMenu } from "@/components/shell/notification-menu"
 import { useProfile } from "@/components/shell/profile-context"
@@ -23,7 +24,8 @@ import {
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-const searchSoon = () => toast.info("Tìm kiếm nhanh đang được xây dựng.")
+const menuItem =
+  "h-10 gap-2.5 rounded-xl px-3 text-sm font-medium text-ink-2 focus:bg-panel focus:text-ink [&_svg]:text-ink-3"
 
 /** Ở đầu trang header trong suốt để thấy dải pastel; cuộn xuống thì có nền mờ và đường kẻ. */
 function useScrolled(threshold = 4) {
@@ -42,9 +44,13 @@ export function AppTopbar({ role }: { role: Role }) {
   const pathname = usePathname()
   const config = role === "advisor" ? advisorShell : studentShell
   const profile = useProfile()
+  const signOut = useSignOut()
   const crumbs = getBreadcrumb(config, pathname)
   const pageTitle = crumbs[crumbs.length - 1]?.label
   const scrolled = useScrolled()
+  const [searchOpen, setSearchOpen] = useState(false)
+  const openSearch = useCallback(() => setSearchOpen(true), [])
+  useCommandShortcut(openSearch)
 
   return (
     <header
@@ -55,7 +61,7 @@ export function AppTopbar({ role }: { role: Role }) {
     >
       <button
         type="button"
-        onClick={searchSoon}
+        onClick={openSearch}
         className="glass hidden h-10 max-w-[520px] flex-1 items-center gap-2.5 rounded-[10px] px-3.5 text-sm text-ink-3 shadow-xs transition-colors hover:text-ink-2 lg:flex"
       >
         <Search className="size-4" strokeWidth={1.75} aria-hidden />
@@ -70,7 +76,7 @@ export function AppTopbar({ role }: { role: Role }) {
       <div className="flex shrink-0 items-center gap-0.5">
         <button
           type="button"
-          onClick={searchSoon}
+          onClick={openSearch}
           aria-label="Tìm kiếm"
           className="grid size-10 place-items-center rounded-full text-ink-2 transition-colors hover:bg-surface hover:text-ink lg:hidden"
         >
@@ -93,16 +99,14 @@ export function AppTopbar({ role }: { role: Role }) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator className="mx-1 my-1 bg-line" />
-            <DropdownMenuItem
-              render={<Link href="/login?demo=1" />}
-              className="h-10 gap-2.5 rounded-xl px-3 text-sm font-medium text-ink-2 focus:bg-panel focus:text-ink [&_svg]:text-ink-3"
-            >
-              <Repeat2 className="size-4" strokeWidth={1.75} aria-hidden />
-              Đổi vai trò
+            <DropdownMenuItem onClick={signOut} className={menuItem}>
+              <LogOut className="size-4" strokeWidth={1.75} aria-hidden />
+              Đăng xuất
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+      <CommandPalette role={role} open={searchOpen} onOpenChange={setSearchOpen} />
     </header>
   )
 }

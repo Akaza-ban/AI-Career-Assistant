@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { Loader2 } from "lucide-react"
 
 import { AuthCard, AuthHeading, OrDivider } from "@/components/auth/auth-shell"
@@ -10,17 +10,26 @@ import { FormAlert, PasswordField, TextField, isEmail, type FieldHint } from "@/
 import { DemoRoleDialog } from "@/components/auth/demo-role-dialog"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
+import { homeOf, setAuthMode } from "@/lib/session"
 
-export const homeOf = (role: "student" | "advisor") => (role === "advisor" ? "/advisor" : "/student")
-
-export function LoginForm({ demoOpen: initialDemoOpen = false }: { demoOpen?: boolean }) {
+export function LoginForm({ expired = false }: { expired?: boolean }) {
   const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<{ message: string; wrongPassword: boolean } | null>(null)
-  const [demoOpen, setDemoOpen] = useState(initialDemoOpen)
+  const [demoOpen, setDemoOpen] = useState(false)
+  const submitRef = useRef<HTMLButtonElement>(null)
+
+  // Tài khoản demo: điền sẵn rồi đưa focus về nút Đăng nhập để chỉ cần bấm Enter
+  function fillDemo(demoEmail: string, demoPassword: string) {
+    setEmail(demoEmail)
+    setPassword(demoPassword)
+    setError(null)
+    setSubmitted(false)
+    setTimeout(() => submitRef.current?.focus(), 0)
+  }
 
   const emailHint: FieldHint =
     submitted && !email.trim() ? { tone: "error", text: "Hãy nhập email." } : submitted && !isEmail(email) ? { tone: "error", text: "Email chưa đúng định dạng." } : null
@@ -34,6 +43,7 @@ export function LoginForm({ demoOpen: initialDemoOpen = false }: { demoOpen?: bo
     setError(null)
     try {
       const { role } = await api.login({ email: email.trim(), password })
+      setAuthMode({ role })
       router.push(homeOf(role))
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : null
@@ -49,7 +59,15 @@ export function LoginForm({ demoOpen: initialDemoOpen = false }: { demoOpen?: bo
     <AuthCard>
       <AuthHeading title="Đăng nhập" description="Chào mừng bạn quay lại CareerX." />
       <form onSubmit={submit} noValidate className="grid gap-5">
-        {error && <FormAlert>{error.message}</FormAlert>}
+        {error ? (
+          <FormAlert>{error.message}</FormAlert>
+        ) : (
+          expired && (
+            <p role="status" className="rounded-xl bg-panel px-3.5 py-3 text-sm leading-[21px] text-ink-2">
+              Phiên đăng nhập đã hết. Hãy đăng nhập lại để tiếp tục.
+            </p>
+          )
+        )}
         <TextField
           label="Email"
           type="email"
@@ -81,7 +99,7 @@ export function LoginForm({ demoOpen: initialDemoOpen = false }: { demoOpen?: bo
             </Link>
           }
         />
-        <Button type="submit" variant="dark" size="brand" className="h-12 w-full" disabled={busy}>
+        <Button ref={submitRef} type="submit" variant="dark" size="brand" className="h-12 w-full" disabled={busy}>
           {busy && <Loader2 className="animate-spin" aria-hidden />}
           {busy ? "Đang đăng nhập…" : "Đăng nhập"}
         </Button>
@@ -96,7 +114,7 @@ export function LoginForm({ demoOpen: initialDemoOpen = false }: { demoOpen?: bo
           Tạo tài khoản
         </Link>
       </p>
-      <DemoRoleDialog open={demoOpen} onOpenChange={setDemoOpen} />
+      <DemoRoleDialog open={demoOpen} onOpenChange={setDemoOpen} onPick={fillDemo} />
     </AuthCard>
   )
 }

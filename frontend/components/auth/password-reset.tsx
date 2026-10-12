@@ -7,10 +7,11 @@ import { Loader2, Mail, TriangleAlert } from "lucide-react"
 
 import { AuthCard, AuthHeading } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField, TextField, isEmail, type FieldHint } from "@/components/auth/auth-fields"
-import { homeOf } from "@/components/auth/login-form"
+import { PasswordRuleList } from "@/components/common/password-rules"
 import { Button } from "@/components/ui/button"
 import { api, ApiError } from "@/lib/api"
 import { isStrongPassword } from "@/lib/password"
+import { homeOf, setAuthMode } from "@/lib/session"
 
 const RESEND_SECONDS = 60
 const BACK_LINK = (
@@ -130,10 +131,6 @@ export function ResetPassword({ token }: { token: string | null }) {
   }
 
   const strong = isStrongPassword(password)
-  const passwordHint: FieldHint =
-    submitted && !strong
-      ? { tone: "error", text: "Mật khẩu cần ít nhất 8 ký tự, có cả chữ và số, không có khoảng trắng." }
-      : { tone: strong ? "ok" : "muted", text: "Ít nhất 8 ký tự, có cả chữ và số, không có khoảng trắng" }
   const confirmHint: FieldHint =
     confirm && confirm === password
       ? { tone: "ok", text: "Đã khớp" }
@@ -149,6 +146,7 @@ export function ResetPassword({ token }: { token: string | null }) {
     setError(null)
     try {
       const { role } = await api.confirmPasswordReset({ token: token!, new_password: password })
+      setAuthMode({ role })
       router.push(homeOf(role))
     } catch (err) {
       const apiErr = err instanceof ApiError ? err : null
@@ -162,7 +160,10 @@ export function ResetPassword({ token }: { token: string | null }) {
       <AuthHeading title="Đặt mật khẩu mới" description="Chọn mật khẩu mới cho tài khoản CareerX của bạn." />
       <form onSubmit={submit} noValidate className="grid gap-5">
         {error && <FormAlert>{error.message}</FormAlert>}
-        <PasswordField label="Mật khẩu mới" autoComplete="new-password" value={password} onChange={setPassword} hint={passwordHint} disabled={busy} autoFocus />
+        <div className="grid gap-2.5">
+          <PasswordField label="Mật khẩu mới" autoComplete="new-password" value={password} onChange={setPassword} disabled={busy} autoFocus />
+          <PasswordRuleList password={password} showErrors={submitted} />
+        </div>
         <PasswordField label="Nhập lại mật khẩu" autoComplete="new-password" value={confirm} onChange={setConfirm} hint={confirmHint} disabled={busy} />
         <Button type="submit" variant="dark" size="brand" className="h-12 w-full" disabled={busy}>
           {busy && <Loader2 className="animate-spin" aria-hidden />}

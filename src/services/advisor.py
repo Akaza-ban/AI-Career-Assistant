@@ -28,7 +28,7 @@ from src.db.models import (
     ShareGrant,
     User,
 )
-from src.services import cv_versions, interview, progress, sharing
+from src.services import cv_versions, interview, notifications, progress, sharing
 from src.services.skill_matching import match_label
 
 # Chênh lệch ≥ +0,3 là tiến bộ rõ, ≤ −0,3 là giảm (PRD mục 5.1)
@@ -467,6 +467,29 @@ def _recent_reviews(db: Session, advisor: User, data: list[StudentData]) -> list
     return result
 
 
+PENDING_SESSIONS = 10
+
+
+def _pending_sessions(data: list["StudentData"]) -> list[dict[str, Any]]:
+    """Buổi SV đã chia sẻ mà bạn chưa nhận xét, chờ lâu nhất trước (nút "Nhận xét" mở thẳng đúng buổi)."""
+    rows = [
+        {
+            "session_id": s.id,
+            "student_id": d.student.id,
+            "student_name": d.student.full_name,
+            "avatar_url": d.student.avatar_url,
+            "jd": interview.jd_out(d.jds[s.jd_id]),
+            "completed_at": s.completed_at,
+            "overall_score": s.overall_score,
+        }
+        for d in data
+        for s in d.sessions
+        if d.shared(s.id) and s.id not in d.reviews
+    ]
+    rows.sort(key=lambda r: r["completed_at"])
+    return rows[:PENDING_SESSIONS]
+
+
 def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
     """
     Tổng quan cả nhóm SV phụ trách: số liệu chính (PRD mục 9), điểm TB theo tuần, phân bố trạng thái,
@@ -507,6 +530,7 @@ def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
         "flagged_students": flagged,
         "top_improvers": improvers[:TOP_IMPROVERS],
         "recent_reviews": _recent_reviews(db, advisor, data),
+        "pending_sessions": _pending_sessions(data),
     }
 
 
@@ -560,6 +584,17 @@ def save_review(
             updated_at=now,
         )
         db.add(review)
+        session = db.get(InterviewSession, session_id)
+        jd = db.get(JobDescription, session.jd_id) if session else None
+        notifications.notify(
+            db,
+            student,
+            "advisor_comment",
+            f"{advisor.full_name} đã nhận xét buổi phỏng vấn {jd.title if jd else ''}".strip(),
+            f"“{text[:140]}{'…' if len(text) > 140 else ''}”",
+            action_label="Xem nhận xét",
+            action_href=f"/student/interview/{session_id}/report",
+        )
     else:
         review.comment = text
         review.updated_at = now

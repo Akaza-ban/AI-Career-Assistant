@@ -133,7 +133,7 @@ function ProcessingView({ analysis }: { analysis: GapAnalysis }) {
   const index = ANALYSIS_STEPS.findIndex((s) => s.key === analysis.current_step)
   return (
     <AiProgress
-      className="rounded-none border-0 border-b bg-transparent px-0 pt-0 pb-8 sm:px-0 sm:pt-0"
+      className="rounded-none! border-0 border-b bg-transparent px-0 pt-0 pb-8 sm:px-0 sm:pt-0"
       title="Đang phân tích…"
       description={
         slow

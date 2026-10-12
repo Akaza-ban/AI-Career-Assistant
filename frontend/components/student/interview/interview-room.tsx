@@ -18,6 +18,7 @@ import { PAUSE_MAX_SECONDS, QUESTION_THEMES, SECONDS_PER_QUESTION, STAR_META, ST
 import { setLeaveGuard } from "@/lib/leave-guard"
 import type { InterviewSession, InterviewTurn } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
+import { SetFocusTitle } from "@/components/shell/focus-title"
 import { cn } from "@/lib/utils"
 
 /** Hết giờ mà gửi thất bại (mất mạng...) thì thử lại sau ngần này. */
@@ -225,6 +226,7 @@ function Room({ initial }: { initial: InterviewSession }) {
 
   return (
     <div className="grid gap-8">
+      <SetFocusTitle title={initial.jd.title} />
       <RoomHeader
         title={initial.jd.title}
         tone={finished ? "done" : paused ? "paused" : "live"}

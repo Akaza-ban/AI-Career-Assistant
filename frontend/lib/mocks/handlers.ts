@@ -47,6 +47,7 @@ import type {
   CapabilityAnswerRequest,
   CapabilityCheck,
   ChangePasswordRequest,
+  UpdateProfileRequest,
   LoginRequest,
   LoginResponse,
   PasswordResetConfirmRequest,
@@ -107,7 +108,7 @@ const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms))
 const clone = <T>(value: T): T => structuredClone(value)
 
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024
-const isNewStudent = MOCK_SCENARIO === "new_student"
+const isNewStudent = MOCK_SCENARIO !== "sample"
 const submittedFeedback = new Map<string, number>()
 let cvVersions = isNewStudent ? [] : clone(mockCvVersions)
 // Vị trí đã lưu ("Đã lưu" ở Thư viện JD); backend chưa có endpoint nên chỉ sống trong phiên mock.
@@ -186,8 +187,9 @@ function appendCvVersion(
   return created
 }
 const notifications: Record<Role, AppNotification[]> = {
-  student: clone(mockStudentNotifications),
-  advisor: clone(mockAdvisorNotifications),
+  student: isNewStudent ? [] : clone(mockStudentNotifications),
+  // Thông báo đầu tiên nói về buổi của Minh Anh: chỉ có khi Minh Anh có dữ liệu mẫu
+  advisor: clone(isNewStudent ? mockAdvisorNotifications.slice(1) : mockAdvisorNotifications),
 }
 
 // ---- Trình tối ưu CV (lưu trong bộ nhớ, mô phỏng src/services/cv_optimizer.py) ----
@@ -536,7 +538,7 @@ function sharingFeedback(): AdvisorFeedback[] {
 
 function currentSettings(): StudentSettings {
   const used = cvVersions.reduce((sum, cv) => sum + cv.size_bytes, 0)
-  return clone({ ...settings, storage: { ...settings.storage, used_bytes: used } })
+  return clone({ ...settings, full_name: mockStudent.full_name, storage: { ...settings.storage, used_bytes: used } })
 }
 
 const IMPORTANCE_ORDER = { required: 0, preferred: 1, additional: 2 }
@@ -1411,6 +1413,22 @@ export const mockApi = {
     }
     cvVersions = cvVersions.filter((c) => c.family_id !== familyId)
     shared.delete(familyId)
+  },
+
+  async updateProfile(body: UpdateProfileRequest): Promise<StudentSettings> {
+    await delay(400)
+    if (body.full_name !== undefined) {
+      const name = body.full_name.trim().split(/\s+/).join(" ")
+      if (name.length < 2) throw new ApiError(422, "Hãy nhập họ và tên (2–120 ký tự).", "invalid_full_name")
+      mockStudent.full_name = name
+    }
+    if (body.phone !== undefined) {
+      const digits = body.phone.replace(/[\s.-]/g, "").replace(/^\+84/, "0")
+      if (!/^0\d{9}$/.test(digits)) throw new ApiError(422, "Số điện thoại cần đủ 10 chữ số, bắt đầu bằng 0.", "invalid_phone")
+      settings = { ...settings, phone: `${digits.slice(0, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}` }
+    }
+    if (body.date_of_birth !== undefined) settings = { ...settings, date_of_birth: body.date_of_birth }
+    return currentSettings()
   },
 
   async withdrawConsent(): Promise<StudentSettings> {

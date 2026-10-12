@@ -138,7 +138,7 @@ function TaskRow({
   metaClassName,
   action,
 }: {
-  student: AssignedStudent
+  student: Pick<AssignedStudent, "id" | "full_name" | "avatar_url">
   meta: ReactNode
   metaClassName?: string
   action: ReactNode
@@ -158,14 +158,12 @@ function TaskRow({
 const PILL_SM = "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold transition-[background-color,transform] active:scale-[.97]"
 
 /**
- * "Chờ nhận xét": SV có buổi đã chia sẻ chưa được nhận xét (từ danh sách SV phụ trách).
+ * "Chờ nhận xét": buổi SV đã chia sẻ mà bạn chưa nhận xét, chờ lâu nhất trước; "Nhận xét" mở thẳng dialog của buổi đó.
  * "Cần chú ý": SV bị gắn cờ 2 vòng liên tiếp không tăng điểm (US-ADV-02), kèm nút nhắn tin.
  */
-export function AdvisorTasks({ data, students }: { data: AdvisorOverview; students: AssignedStudent[] }) {
+export function AdvisorTasks({ data }: { data: AdvisorOverview }) {
   const { openChat } = useChat()
-  const pending = students
-    .filter((s) => s.pending_reviews > 0)
-    .sort((a, b) => b.pending_reviews - a.pending_reviews || (b.last_active_at ?? "").localeCompare(a.last_active_at ?? ""))
+  const pending = data.pending_sessions ?? []
   const flagged = data.flagged_students
 
   return (
@@ -181,19 +179,22 @@ export function AdvisorTasks({ data, students }: { data: AdvisorOverview; studen
           link={{ label: "Xem tất cả", href: "/advisor/students?status=pending" }}
           empty={{ icon: BadgeCheck, text: "Bạn đã nhận xét hết các buổi được chia sẻ." }}
         >
-          {pending.slice(0, TASK_LIMIT).map((s) => (
+          {pending.slice(0, TASK_LIMIT).map((p) => (
             <TaskRow
-              key={s.id}
-              student={s}
+              key={p.session_id}
+              student={{ id: p.student_id, full_name: p.student_name, avatar_url: p.avatar_url }}
               meta={[
-                s.target?.title ?? "Chưa chọn vị trí",
-                s.pending_reviews > 1 ? `${s.pending_reviews} buổi chờ` : null,
-                s.last_active_at ? formatRelativeTime(s.last_active_at).toLowerCase() : null,
+                p.jd.title,
+                p.overall_score !== null ? `${formatScore(p.overall_score)} / 5` : null,
+                formatRelativeTime(p.completed_at).toLowerCase(),
               ]
                 .filter(Boolean)
                 .join(" · ")}
               action={
-                <Link href={profileHref(s.id, "interviews")} className={cn(PILL_SM, "bg-ink text-white hover:bg-ink/85")}>
+                <Link
+                  href={`/advisor/students/${encodeURIComponent(p.student_id)}?review=${encodeURIComponent(p.session_id)}`}
+                  className={cn(PILL_SM, "bg-ink text-white hover:bg-ink/85")}
+                >
                   Nhận xét
                 </Link>
               }

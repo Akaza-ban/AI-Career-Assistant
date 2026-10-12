@@ -5,7 +5,7 @@ from pathlib import Path
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
-from src.db.models import AdvisorAssignment, GapAnalysis, JobDescription, User
+from src.db.models import AdvisorAssignment, GapAnalysis, JobDescription, User, utcnow
 
 # Người dùng demo cho giai đoạn chưa có đăng nhập thật.
 # Trùng id/tên với dữ liệu mock của frontend (frontend/lib/mocks/data.ts) để giao diện nhất quán
@@ -51,8 +51,25 @@ def seed_demo_users(db: Session) -> None:
             if getattr(user, key) is None:
                 setattr(user, key, value)
     db.flush()
+    _set_demo_passwords(db)
     assign(db, DEMO_ADVISOR_ID, DEMO_STUDENT_ID)
     db.commit()
+
+
+def _set_demo_passwords(db: Session) -> None:
+    """Đặt mật khẩu DEMO_ACCOUNT_PASSWORD cho tài khoản demo chưa có mật khẩu (để thử trang Đăng nhập)."""
+    from src.config import get_settings
+    from src.services.auth import hash_password
+
+    password = get_settings().demo_account_password
+    if not password:
+        return
+    for user_id in (DEMO_STUDENT_ID, DEMO_ADVISOR_ID):
+        user = db.get(User, user_id)
+        if user is not None and user.password_hash is None:
+            user.password_hash = hash_password(password)
+            if user.role == "student" and user.consent_accepted_at is None:
+                user.consent_accepted_at = utcnow()
 
 
 LEGACY_FIELDS = ("subtitle", "email", "title", "office")

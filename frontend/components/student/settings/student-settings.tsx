@@ -7,7 +7,6 @@ import { toast } from "sonner"
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
-import { useProfile } from "@/components/shell/profile-context"
 import {
   AccountSection,
   DataSection,
@@ -25,7 +24,6 @@ import { useApi } from "@/lib/use-api"
 
 // Bản vẽ CaiDat. Quản lý tệp CV nằm ở trang CV của tôi.
 export function StudentSettingsPage() {
-  const profile = useProfile()
   const settingsQuery = useApi(api.getSettings)
   const sharingQuery = useApi(api.getSharing)
   // Bản sau lần cập nhật gần nhất; null = dùng dữ liệu vừa tải.
@@ -147,8 +145,8 @@ export function StudentSettingsPage() {
           </aside>
           <div className="flex max-w-[960px] min-w-0 flex-1 flex-col gap-14 md:gap-16">
             <AccountSection
-              fullName={profile?.full_name ?? ""}
               settings={settings}
+              onSettingsChange={setSettings}
               onPasswordChanged={(at) => setSettings({ ...settings, password_updated_at: at })}
             />
             <PrivacySection

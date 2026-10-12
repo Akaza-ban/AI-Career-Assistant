@@ -122,7 +122,7 @@ function Running({ count }: { count: number }) {
     <div className="grid gap-14">
       <PageHeader title={`So sánh ${count} vị trí`} />
       <AiProgress
-        className="rounded-none border-0 border-b bg-transparent px-0 pt-0 pb-8 sm:px-0 sm:pt-0"
+        className="rounded-none! border-0 border-b bg-transparent px-0 pt-0 pb-8 sm:px-0 sm:pt-0"
         title="Đang so sánh…"
         description={
           slow

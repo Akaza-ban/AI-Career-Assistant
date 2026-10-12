@@ -11,12 +11,14 @@ from src.models.schemas import (
     CompareJDsRequest,
     CompareJDsResponse,
     CreateGapAnalysisRequest,
+    CreatePastedJdRequest,
     GapAnalysisResponse,
     JobDescriptionResponse,
     RecommendJDsRequest,
     RecommendJDsResponse,
+    SavedJdResponse,
 )
-from src.services import gap_analysis
+from src.services import gap_analysis, jds
 from src.services.jd_recommendation import (
     compare_selected_jds_with_llm,
     generate_career_advice_with_llm,
@@ -170,6 +172,30 @@ def list_my_jds(user: CurrentStudent, db: DbSession) -> list[JobDescription]:
         .order_by(JobDescription.created_at.desc())
     )
     return [*library, *pasted]
+
+
+@router.post("/jd", response_model=JobDescriptionResponse, status_code=status.HTTP_201_CREATED, tags=["Gap Analysis"])
+def create_pasted_jd(body: CreatePastedJdRequest, user: CurrentStudent, db: DbSession) -> JobDescription:
+    """Lưu một JD tự dán để dùng lại (ví dụ khi so sánh nhiều vị trí, POST /jd/compare chỉ nhận jd_ids)."""
+    return jds.create_pasted(
+        db, user, title=body.title, text=body.text, company=body.company, level=body.level, industry=body.industry
+    )
+
+
+@router.get("/jd/saved", response_model=list[SavedJdResponse], tags=["Gap Analysis"])
+def list_saved_jds(user: CurrentStudent, db: DbSession) -> list[dict]:
+    """Vị trí SV đã lưu (♥), mới lưu trước."""
+    return [jds.saved_out(s) for s in jds.list_saved(db, user)]
+
+
+@router.put("/jd/{jd_id}/saved", response_model=SavedJdResponse, tags=["Gap Analysis"])
+def save_jd(jd_id: str, user: CurrentStudent, db: DbSession) -> dict:
+    return jds.saved_out(jds.save(db, user, jd_id))
+
+
+@router.delete("/jd/{jd_id}/saved", status_code=status.HTTP_204_NO_CONTENT, tags=["Gap Analysis"])
+def unsave_jd(jd_id: str, user: CurrentStudent, db: DbSession) -> None:
+    jds.unsave(db, user, jd_id)
 
 
 @router.post(

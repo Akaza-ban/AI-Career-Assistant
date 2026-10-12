@@ -45,6 +45,7 @@ export const mockInitialReviews: Record<string, { comment: string; days: number;
 }
 
 export const mockSettings: StudentSettings = {
+  full_name: "Nguyễn Minh Anh",
   email: "minhanh.nguyen@gmail.com",
   phone: "0912 345 678",
   date_of_birth: "2003-05-14",

@@ -2,11 +2,12 @@
 
 import { useId, useMemo, useState } from "react"
 import Link from "next/link"
-import { ArrowRight, ChevronRight, ChevronUp, Heart, MessagesSquare, SearchX } from "lucide-react"
+import { ArrowRight, ChevronRight, ChevronUp, Heart, MessagesSquare, CloudOff, SearchX } from "lucide-react"
 
 import { BottomActionBar } from "@/components/common/bottom-action-bar"
 import { MatchBadge } from "@/components/common/match-badge"
 import { PageHeader } from "@/components/common/page-header"
+import { EmptyState } from "@/components/common/empty-state"
 import { Panel } from "@/components/common/panel"
 import { WidgetFooter, Zone } from "@/components/common/zone"
 import { MatchSummary, SkillChip, Widget, type MatchSummaryProps } from "@/components/student/library/library-bits"
@@ -47,12 +48,22 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
 
   if (library.error) {
     return (
-      <Panel className="mx-auto mt-6 grid max-w-lg justify-items-center gap-3 py-12 text-center">
-        <p className="font-heading font-bold">Không tải được vị trí</p>
-        <p className="text-sm text-ink-2">{library.error.message}</p>
-        <Button variant="soft" className="h-10 rounded-full px-5" onClick={library.reload}>
-          Thử lại
-        </Button>
+      <Panel className="mx-auto mt-10 max-w-xl">
+        <EmptyState
+          icon={CloudOff}
+          title="Không tải được vị trí"
+          description={library.error.message}
+          action={
+            <div className="flex flex-wrap justify-center gap-2.5">
+              <Button variant="dark" size="brand" onClick={library.reload}>
+                Thử lại
+              </Button>
+              <Button variant="soft" size="brand" nativeButton={false} render={<Link href="/student/library" />}>
+                Về Thư viện JD
+              </Button>
+            </div>
+          }
+        />
       </Panel>
     )
   }
@@ -61,15 +72,17 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
   const jd = library.data.find((j) => j.id === id)
   if (!jd) {
     return (
-      <Panel className="mx-auto mt-6 grid max-w-lg justify-items-center gap-3 py-12 text-center">
-        <span className="grid size-11 place-items-center rounded-full bg-surface text-ink-3">
-          <SearchX className="size-5" strokeWidth={1.75} aria-hidden />
-        </span>
-        <p className="font-heading font-bold">Không tìm thấy vị trí</p>
-        <p className="text-sm text-ink-2">Vị trí này không còn trong thư viện hoặc đường dẫn chưa đúng.</p>
-        <Button className="h-10 rounded-full px-5" nativeButton={false} render={<Link href="/student/library" />}>
-          Về Thư viện JD
-        </Button>
+      <Panel className="mx-auto mt-10 max-w-xl">
+        <EmptyState
+          icon={SearchX}
+          title="Không tìm thấy vị trí"
+          description="Vị trí này không còn trong thư viện hoặc đường dẫn chưa đúng."
+          action={
+            <Button variant="dark" size="brand" nativeButton={false} render={<Link href="/student/library" />}>
+              Về Thư viện JD
+            </Button>
+          }
+        />
       </Panel>
     )
   }

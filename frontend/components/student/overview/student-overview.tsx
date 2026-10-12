@@ -15,7 +15,6 @@ import {
   RecentAnalyses,
   RecentInterviews,
   SkillsToLearn,
-  StarAverage,
   isNewStudent,
 } from "@/components/student/overview/overview-sections"
 import { Button } from "@/components/ui/button"
@@ -82,10 +81,9 @@ export function StudentOverview() {
             title="Hoạt động gần đây"
             aside={<ZoneLink href="/student/history">Xem lịch sử</ZoneLink>}
           >
-            <div className="grid gap-x-12 gap-y-10 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-x-12 gap-y-10 lg:grid-cols-2">
               <RecentAnalyses items={overview.recent_analyses} />
               <RecentInterviews items={overview.recent_interviews} />
-              <StarAverage star={overview.star} />
             </div>
           </Zone>
         </>

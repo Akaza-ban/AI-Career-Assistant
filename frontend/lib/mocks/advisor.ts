@@ -702,5 +702,21 @@ export function overviewOf(sources: StudentSource[], advisorName: string, csat: 
       .sort((a, b) => b.score_delta! - a.score_delta!)
       .slice(0, TOP_IMPROVERS),
     recent_reviews: reviews.sort((a, b) => time(b.updated_at) - time(a.updated_at)).slice(0, RECENT_REVIEWS),
+    pending_sessions: sources
+      .flatMap((src) =>
+        src.sessions
+          .filter((s) => src.shared.has(s.id) && !src.reviews[s.id])
+          .map((s) => ({
+            session_id: s.id,
+            student_id: src.profile.id,
+            student_name: src.profile.full_name,
+            avatar_url: src.profile.avatar_url,
+            jd: s.jd,
+            completed_at: s.completed_at,
+            overall_score: s.overall_score,
+          })),
+      )
+      .sort((a, b) => time(a.completed_at) - time(b.completed_at))
+      .slice(0, 10),
   }
 }

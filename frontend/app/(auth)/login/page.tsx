@@ -5,7 +5,7 @@ import { LoginForm } from "@/components/auth/login-form"
 export const metadata: Metadata = { title: "Đăng nhập" }
 
 export default async function Page({ searchParams }: PageProps<"/login">) {
-  // ?demo=1: mở sẵn hộp chọn vai trò demo ("Đổi vai trò" trong menu avatar trỏ tới đây).
-  const { demo } = await searchParams
-  return <LoginForm demoOpen={demo === "1"} />
+  // ?expired=1: bị chuyển về vì phiên đăng nhập đã hết.
+  const { expired } = await searchParams
+  return <LoginForm expired={expired === "1"} />
 }

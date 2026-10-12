@@ -365,15 +365,11 @@ Chi tiết từng màn ở `WIREFRAMES.md`, phần C.
 
 | Tính năng | Cần thêm |
 |---|---|
-| Lưu vị trí yêu thích | endpoint lưu / bỏ lưu / liệt kê JD đã lưu |
-| Dán JD theo mục | endpoint tạo JD tự dán nhận các mục (tổng quan, mô tả, yêu cầu, khác), trả `jd_id` để dùng cho `/jd/compare` |
-| Mức phù hợp của vị trí ngoài Top gợi ý | endpoint chấm nhanh theo quy tắc cho một hoặc nhiều JD |
+| Mức phù hợp của vị trí ngoài Top gợi ý | endpoint chấm nhanh theo quy tắc cho một hoặc nhiều JD (Thư viện hiện ghi "—" cho vị trí ngoài Top) |
 | Chi tiết vị trí chia theo mục | JD trong thư viện cần trường riêng cho mô tả, yêu cầu, quyền lợi |
-| Thông báo khi tác vụ AI chạy nền xong | endpoint thông báo, gồm đánh dấu một thông báo đã đọc `POST /notifications/{id}/read` (frontend đang dùng mock) |
-| "Nhận xét" mở đúng buổi từ Tổng quan cố vấn | API tổng quan trả danh sách buổi chờ nhận xét (`session_id`, sinh viên, vị trí). Hồ sơ đã hỗ trợ `?review=<session_id>`; hiện nút chỉ mở tab Phỏng vấn |
-| Đăng ký, đăng nhập, quên mật khẩu | endpoint tài khoản thật (hiện đăng nhập tạm bằng header `X-Demo-Role`); bảng `users` đã có `phone`, `date_of_birth` |
-| Lịch sử chia sẻ, đổi họ tên | endpoint cho khối "Gần đây" ở trang Chia sẻ và ô họ tên ở Cài đặt (frontend đang dùng mock) |
-| Cài đặt, đổi mật khẩu, xuất / xoá dữ liệu | các endpoint `/students/me/settings`, `/auth/change-password`… (frontend đang dùng mock) |
+| Gửi email thật | cấu hình `SMTP_*` trong `.env`; chưa cấu hình thì link đặt lại mật khẩu chỉ ghi vào log backend |
+
+**Đã có (frontend nối được bằng `NEXT_PUBLIC_LIVE_APIS`):** tài khoản `auth` (đăng ký, đăng nhập bằng cookie phiên HttpOnly, đăng xuất, quên / đổi mật khẩu, tạm khoá sau 5 lần sai), thông báo (`notifications`, tạo khi có nhận xét mới, báo cáo / phân tích xong, SV chia sẻ buổi mới; tôn trọng công tắc trong Cài đặt), Cài đặt và sửa hồ sơ, xuất / xoá dữ liệu, JD đã lưu, tạo JD tự dán (`POST /jd`), bổ sung số liệu cho gợi ý còn chỗ trống `[ ]` (US-SV-03 AC2), danh sách buổi chờ nhận xét ở Tổng quan cố vấn. Bản demo (header `X-Demo-Role`) vẫn dùng được khi `DEMO_LOGIN_ENABLED=true`.
 
 Ràng buộc hiện tại: gợi ý trả tối đa 6 vị trí; so sánh nhận 2–3 JD; thư viện có 8 JD và chỉ gồm JD đã index vào Chroma.
 

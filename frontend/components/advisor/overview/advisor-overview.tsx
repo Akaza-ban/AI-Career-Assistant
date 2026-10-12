@@ -64,7 +64,7 @@ export function AdvisorOverview() {
             />
           </SoftPanel>
         ) : (
-          <AdvisorTasks data={data} students={students.data} />
+          <AdvisorTasks data={data} />
         )}
       </div>
       {data.student_count > 0 && (

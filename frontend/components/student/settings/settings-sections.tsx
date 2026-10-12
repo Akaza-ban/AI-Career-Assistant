@@ -22,7 +22,11 @@ import { Switch } from "@/components/ui/switch"
 import { api, ApiError } from "@/lib/api"
 import { features } from "@/lib/features"
 import { formatBytes, formatDate, formatTime } from "@/lib/format"
-import { isStrongPassword, PASSWORD_RULES } from "@/lib/password"
+import { isStrongPassword } from "@/lib/password"
+import { PasswordRuleList } from "@/components/common/password-rules"
+import { DataPolicyDialog } from "@/components/auth/data-policy-dialog"
+import { dobToIso, formatDob, normalizePhone } from "@/components/auth/auth-fields"
+import { useReloadProfile } from "@/components/shell/profile-context"
 import type { StudentSettings } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
@@ -132,28 +136,141 @@ export function SettingsNav({ active, onSelect }: { active: SettingsSectionId; o
 
 // ---------- Tài khoản ----------
 
+type ProfileFieldName = "full_name" | "date_of_birth" | "phone"
+
+/** Kiểm tra trước khi gửi; trả về [giá trị gửi lên backend, lỗi]. */
+function prepareProfileValue(field: ProfileFieldName, raw: string): [string, string | null] {
+  if (field === "full_name") {
+    const name = raw.trim().split(/\s+/).join(" ")
+    return [name, name.length < 2 ? "Hãy nhập họ và tên." : null]
+  }
+  if (field === "phone") {
+    const phone = normalizePhone(raw)
+    return [phone ?? "", phone ? null : "Cần đủ 10 chữ số, bắt đầu bằng 0."]
+  }
+  const iso = dobToIso(raw)
+  return [iso ?? "", iso ? null : "Ngày sinh cần có dạng dd/mm/yyyy."]
+}
+
+/** Một dòng hồ sơ sửa được tại chỗ: giá trị + "Sửa" → ô nhập + Lưu / Huỷ. */
+function ProfileRow({
+  field,
+  label,
+  display,
+  initial,
+  onSave,
+}: {
+  field: ProfileFieldName
+  label: string
+  display: string | null
+  initial: string
+  onSave: (field: ProfileFieldName, value: string) => Promise<void>
+}) {
+  const id = useId()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(initial)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    const [prepared, invalid] = prepareProfileValue(field, value)
+    if (invalid) {
+      setError(invalid)
+      return
+    }
+    setSaving(true)
+    try {
+      await onSave(field, prepared)
+      setEditing(false)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Chưa lưu được. Hãy thử lại.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (!editing) {
+    return (
+      <SettingRow label={label} inline>
+        <span className="flex min-w-0 items-center justify-end gap-3 sm:justify-start">
+          <span className={cn("wrap-anywhere tabular-nums", display ? "text-ink-2" : "text-ink-3")}>{display ?? "Chưa cập nhật"}</span>
+          <Button
+            variant="ghost"
+            className="h-8 shrink-0 rounded-full px-3 text-sm font-semibold text-blue hover:bg-blue-soft hover:text-accent-strong"
+            onClick={() => {
+              setValue(initial)
+              setError(null)
+              setEditing(true)
+            }}
+          >
+            Sửa
+          </Button>
+        </span>
+      </SettingRow>
+    )
+  }
+  return (
+    <SettingRow label={label} htmlFor={id}>
+      <form onSubmit={save} noValidate className="grid gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            id={id}
+            value={value}
+            onChange={(e) => setValue(field === "date_of_birth" ? formatDob(e.target.value) : e.target.value)}
+            inputMode={field === "full_name" ? undefined : field === "phone" ? "tel" : "numeric"}
+            autoComplete={field === "full_name" ? "name" : field === "phone" ? "tel" : "bday"}
+            aria-invalid={error ? true : undefined}
+            disabled={saving}
+            autoFocus
+            className="h-10 min-w-0 flex-[1_1_200px] rounded-[10px] border-line-strong bg-card tabular-nums"
+          />
+          <Button type="submit" disabled={saving} className="h-9 rounded-full bg-ink px-4 font-semibold text-white hover:bg-ink/85">
+            {saving && <Loader2 className="animate-spin" aria-hidden />}
+            Lưu
+          </Button>
+          <Button type="button" variant="ghost" disabled={saving} className="h-9 rounded-full px-3 text-ink-2" onClick={() => setEditing(false)}>
+            Huỷ
+          </Button>
+        </div>
+        {error && <p className="text-xs text-bad">{error}</p>}
+      </form>
+    </SettingRow>
+  )
+}
+
 export function AccountSection({
-  fullName,
   settings,
+  onSettingsChange,
   onPasswordChanged,
 }: {
-  fullName: string
   settings: StudentSettings
+  onSettingsChange: (settings: StudentSettings) => void
   onPasswordChanged: (updatedAt: string) => void
 }) {
   const [changing, setChanging] = useState(false)
+  const reloadProfile = useReloadProfile()
   const updatedAt = settings.password_updated_at
+
+  async function saveProfile(field: ProfileFieldName, value: string) {
+    const next = await api.updateProfile({ [field]: value })
+    onSettingsChange(next)
+    if (field === "full_name") reloadProfile()
+    toast.success("Đã lưu")
+  }
+
   return (
     <SettingsZone id="account" title="Tài khoản">
-      <SettingRow label="Họ tên">
-        <span className="wrap-anywhere text-ink-2">{fullName}</span>
-      </SettingRow>
-      <SettingRow label="Ngày sinh">
-        <span className="text-ink-2 tabular-nums">{settings.date_of_birth ? dayMonthYear(settings.date_of_birth) : "Chưa cập nhật"}</span>
-      </SettingRow>
-      <SettingRow label="Số điện thoại">
-        <span className="text-ink-2 tabular-nums">{settings.phone ?? "Chưa cập nhật"}</span>
-      </SettingRow>
+      <ProfileRow field="full_name" label="Họ tên" display={settings.full_name || null} initial={settings.full_name} onSave={saveProfile} />
+      <ProfileRow
+        field="date_of_birth"
+        label="Ngày sinh"
+        display={settings.date_of_birth ? dayMonthYear(settings.date_of_birth) : null}
+        initial={settings.date_of_birth ? dayMonthYear(settings.date_of_birth) : ""}
+        onSave={saveProfile}
+      />
+      <ProfileRow field="phone" label="Số điện thoại" display={settings.phone} initial={settings.phone ?? ""} onSave={saveProfile} />
       <SettingRow label="Email" hint="Dùng để đăng nhập, không đổi được">
         <span className="wrap-anywhere text-ink-2">{settings.email}</span>
       </SettingRow>
@@ -326,18 +443,7 @@ function PasswordDialog({
             error={fieldError("next")}
             describedBy={rulesId}
           />
-          <ul id={rulesId} className="grid gap-1.5 text-sm" aria-label="Mật khẩu mới cần có">
-            {PASSWORD_RULES.map((rule) => {
-              const ok = rule.test(next)
-              return (
-                <li key={rule.label} className={cn("flex items-center gap-2", ok ? "text-good" : "text-ink-3")}>
-                  <Check className={cn("size-3.5 shrink-0", !ok && "opacity-40")} aria-hidden />
-                  {rule.label}
-                  <span className="sr-only">{ok ? "(đã đạt)" : "(chưa đạt)"}</span>
-                </li>
-              )
-            })}
-          </ul>
+          <PasswordRuleList id={rulesId} password={next} />
           <PasswordField
             label="Nhập lại mật khẩu mới"
             value={confirm}
@@ -363,13 +469,6 @@ function PasswordDialog({
 // ---------- Quyền riêng tư ----------
 
 // Nội dung pháp lý của phần đồng ý: giữ nguyên văn.
-const CONSENT_TERMS = [
-  "Hệ thống dùng CV, JD và câu trả lời phỏng vấn của bạn để phân tích khoảng trống kỹ năng và gợi ý cách diễn đạt.",
-  "AI chỉ gợi ý dựa trên kinh nghiệm có thật do bạn cung cấp, không tự thêm kỹ năng hay thành tích bạn chưa có.",
-  "Bạn tự kiểm tra và chịu trách nhiệm về tính trung thực của nội dung CV cuối cùng.",
-  "Điểm số và nhận xét chỉ mang tính tham khảo, không đảm bảo kết quả tuyển dụng.",
-  "Cố vấn phụ trách thấy số liệu tổng hợp (điểm, mức tiến bộ); nội dung chỉ thấy khi bạn bật chia sẻ và thu hồi được bất cứ lúc nào.",
-]
 
 type SettingsPatch = { privacy?: Partial<StudentSettings["privacy"]>; notifications?: Partial<StudentSettings["notifications"]> }
 
@@ -452,24 +551,8 @@ export function PrivacySection({
         )}
       </SettingRow>
 
-      <Dialog open={viewing} onOpenChange={setViewing}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Điều khoản xử lý dữ liệu & Cam kết liêm chính</DialogTitle>
-            <DialogDescription>Nội dung bạn đã đồng ý khi bắt đầu sử dụng CareerX.</DialogDescription>
-          </DialogHeader>
-          <ol className="grid list-decimal gap-2 pl-5 text-sm leading-6 text-ink">
-            {CONSENT_TERMS.map((t) => (
-              <li key={t}>{t}</li>
-            ))}
-          </ol>
-          <DialogFooter>
-            <Button variant="soft" onClick={() => setViewing(false)}>
-              Đóng
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Cùng nội dung với phần chính sách ở trang Đăng ký (lib/data-policy.ts) */}
+      <DataPolicyDialog open={viewing} onOpenChange={setViewing} />
 
       <ConfirmDialog
         open={withdrawing}
@@ -532,9 +615,15 @@ export function DataSection({
   async function exportAll() {
     setExporting(true)
     try {
-      const { download_url } = await api.requestDataExport()
-      if (download_url) window.open(download_url, "_blank", "noopener")
-      else toast.success("Đã tạo gói dữ liệu. Bản demo không có file thật để tải.")
+      const file = await api.downloadDataExport()
+      if (file) {
+        const href = URL.createObjectURL(file)
+        const a = document.createElement("a")
+        a.href = href
+        a.download = "careerx-du-lieu-cua-toi.json"
+        a.click()
+        URL.revokeObjectURL(href)
+      } else toast.success("Đã tạo gói dữ liệu. Bản demo không có file thật để tải.")
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không tạo được gói dữ liệu.")
     } finally {
