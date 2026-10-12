@@ -1,5 +1,8 @@
 import type { ReactNode } from "react"
 
+import { AssistantProvider } from "@/components/assistant/assistant-provider"
+import { ChatPanel as AssistantPanel } from "@/components/assistant/chat-panel"
+import { ChatTrigger } from "@/components/assistant/chat-trigger"
 import { ChatProvider } from "@/components/chat/chat-context"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { AppTopbar, PageCrumbs } from "@/components/shell/app-topbar"
@@ -13,8 +16,20 @@ import type { Role } from "@/lib/types"
  * dưới đáy. Nội dung trải hết chiều rộng còn lại (chỉ có lề), header dính trên cùng khi cuộn.
  * Dải pastel nằm ở đầu vùng nội dung, phía sau header và phần đầu trang.
  * --tabbar-h để các thanh dính đáy (BottomActionBar) nằm trên thanh tab điện thoại.
+ * Trợ lý AI hướng dẫn chỉ có ở khu sinh viên và cố vấn; phòng phỏng vấn dùng FocusShell nên không có.
  */
 export function AppShell({ role, children }: { role: Role; children: ReactNode }) {
+  if (role === "admin") return <Shell role={role}>{children}</Shell>
+  return (
+    <AssistantProvider>
+      <Shell role={role} assistant>
+        {children}
+      </Shell>
+    </AssistantProvider>
+  )
+}
+
+function Shell({ role, assistant = false, children }: { role: Role; assistant?: boolean; children: ReactNode }) {
   // Quản trị viên không có tin nhắn (chỉ SV và cố vấn phụ trách nhắn cho nhau)
   return (
     <ProfileProvider role={role}>
@@ -34,6 +49,12 @@ export function AppShell({ role, children }: { role: Role; children: ReactNode }
             </div>
           </div>
           <MobileTabBar role={role} />
+          {assistant && (
+            <>
+              <ChatTrigger />
+              <AssistantPanel />
+            </>
+          )}
         </div>
         {role !== "admin" && <ChatPanel />}
       </ChatProvider>

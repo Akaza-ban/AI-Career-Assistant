@@ -307,6 +307,26 @@
   }
 }
 
+@keyframes assistant-gradient {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+.assistant-markdown > :first-child { margin-top: 0; }
+.assistant-markdown > :last-child { margin-bottom: 0; }
+.assistant-markdown p { margin: 0.5rem 0; }
+.assistant-markdown :is(ul, ol) { margin: 0.5rem 0; padding-left: 1.25rem; }
+.assistant-markdown ul { list-style-type: disc; }
+.assistant-markdown ol { list-style-type: decimal; }
+.assistant-markdown li + li { margin-top: 0.25rem; }
+.assistant-markdown :is(h1, h2, h3, h4, h5, h6) { margin: 0.75rem 0 0.5rem; font-size: 1rem; font-weight: 700; }
+.assistant-markdown a { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.assistant-markdown pre { margin: 0.75rem 0; overflow-x: auto; border-radius: 0.75rem; background: var(--surface); padding: 0.75rem; }
+.assistant-markdown code { font-family: ui-monospace, monospace; font-size: 0.8125rem; }
+.assistant-markdown :not(pre) > code { border-radius: 0.25rem; background: var(--surface); padding: 0.125rem 0.25rem; }
+.assistant-markdown blockquote { margin: 0.75rem 0; border-left: 3px solid var(--blue); padding-left: 0.75rem; color: var(--ink-2); }
+.assistant-markdown hr { margin: 0.75rem 0; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

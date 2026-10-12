@@ -93,6 +93,17 @@ class Settings(BaseSettings):
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
 
+    # Assistant & Knowledge Base RAG
+    assistant_chroma_collection: str = "assistant_knowledge"
+    assistant_chroma_persist_dir: str = "./data/chroma_assistant"
+    assistant_embedding_model: str = "intfloat/multilingual-e5-small"
+    assistant_embedding_device: str = "cpu"
+    assistant_docs_dir: str = "./docs/user-guide"
+    assistant_top_k: int = 5
+    assistant_similarity_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    assistant_llm_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
+    assistant_history_turns: int = Field(default=6, ge=0, le=20)
+
     def get_llm_credentials(self) -> tuple[str, str]:
         """
         Lấy (api_key, base_url) dựa theo provider đang được kích hoạt.

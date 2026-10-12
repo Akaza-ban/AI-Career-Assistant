@@ -109,7 +109,7 @@ export function ResultScoreCard({ analysis }: { analysis: GapAnalysis }) {
         </div>
       }
     >
-      <div className="flex flex-wrap items-center gap-x-12 gap-y-10">
+      <div data-agent-target="match-score-badge" className="flex flex-wrap items-center gap-x-12 gap-y-10">
         <div className="flex min-w-0 flex-[1_1_380px] items-center gap-5 sm:gap-7">
           <div
             className="relative size-24 shrink-0 sm:size-[124px]"

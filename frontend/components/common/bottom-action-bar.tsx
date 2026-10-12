@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils"
  * Thanh hành động cố định sát đáy màn hình (ví dụ "Đã chọn: … [Phân tích]"), trải hết vùng nội dung và chừa
  * sidebar 252px của AppShell trên desktop; trên điện thoại nằm ngay trên thanh tab (--tabbar-h). Tự chèn khoảng trống
  * bằng đúng chiều cao thanh để nội dung cuối trang không bị che. Dùng component này cho mọi thanh kiểu này.
+ * Chiều cao được ghi vào biến --actionbar-h để nút trợ lý AI nổi phía trên thanh.
  */
 export function BottomActionBar({ children, className }: { children: ReactNode; className?: string }) {
   const barRef = useRef<HTMLDivElement>(null)
@@ -16,9 +17,16 @@ export function BottomActionBar({ children, className }: { children: ReactNode; 
   useEffect(() => {
     const bar = barRef.current
     if (!bar) return
-    const observer = new ResizeObserver(() => setHeight(bar.offsetHeight))
+    const root = document.documentElement
+    const observer = new ResizeObserver(() => {
+      setHeight(bar.offsetHeight)
+      root.style.setProperty("--actionbar-h", `${bar.offsetHeight}px`)
+    })
     observer.observe(bar)
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      root.style.removeProperty("--actionbar-h")
+    }
   }, [])
 
   return (

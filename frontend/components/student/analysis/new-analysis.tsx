@@ -30,6 +30,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import type { CvVersion } from "@/lib/types"
+import { useAgentActions } from "@/lib/use-agent-actions"
 import { useApi } from "@/lib/use-api"
 
 type Mode = "single" | "multi"
@@ -177,6 +178,20 @@ function SinglePicker({ cv, picks, initialJdId, industries }: SinglePickerProps)
   const pasteReady = Object.keys(pasteErrors(paste)).length === 0
   const ready = tab === "list" ? selected !== null : pasteReady
   const hint = tab === "list" ? "Hãy chọn một vị trí." : pasteMissingHint(paste)
+  // Trợ lý AI: báo vị trí đang chọn và cho phép đặt lại lựa chọn.
+  useAgentActions({
+    getContext: () => ({
+      selected_cv_id: cv.id,
+      page_state: { active_tab: tab, selected_jd_id: tab === "list" ? selected?.id : undefined },
+    }),
+    resetView: ({ clear_filters }) => {
+      if (!clear_filters || submitting) return
+      setTab("list")
+      setPaste(EMPTY_PASTE)
+      setSelected(picks.items?.find((item) => item.id === initialJdId) ?? picks.items?.[0] ?? null)
+    },
+  })
+
   const chosen =
     tab === "list"
       ? selected && metaLine(selected.title, selected.company)
@@ -253,7 +268,13 @@ function SinglePicker({ cv, picks, initialJdId, industries }: SinglePickerProps)
             )}
           </div>
           {!ready && hint && <span className="text-[13px] text-ink-3">{hint}</span>}
-          <Button size="brand" onClick={submit} disabled={submitting || !ready} className="max-sm:w-full">
+          <Button
+            data-agent-target="btn-start-analysis"
+            size="brand"
+            onClick={submit}
+            disabled={submitting || !ready}
+            className="max-sm:w-full"
+          >
             {submitting && <Loader2 className="animate-spin" aria-hidden />}
             {submitting ? "Đang gửi…" : "Bắt đầu phân tích"}
             {!submitting && <ChevronRight aria-hidden />}

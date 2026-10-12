@@ -1,0 +1,122 @@
+[
+  {
+    "question": "Ở trang CV, định dạng và dung lượng nào được chấp nhận? A. PDF hoặc DOCX, tối đa 5 MB. B. Chỉ ảnh JPG. C. DOC không giới hạn dung lượng.",
+    "role": "student",
+    "current_route": "/student/cv",
+    "gold_context_keywords": ["PDF", "DOCX", "5 MB"],
+    "expected_answer": "Đáp án A; Hệ thống nhận PDF hoặc DOCX; Dung lượng tối đa 5 MB; Nên dùng tệp có văn bản đọc được.",
+    "expected_route": "/student/cv"
+  },
+  {
+    "question": "Muốn tải CV và chọn đúng phiên bản trước khi phân tích, tôi làm thế nào? A. Chỉ đổi tên tệp. B. Bấm Chọn file hoặc kéo thả tệp, rồi kiểm tra phiên bản trong danh sách Tất cả CV. C. Tải lên là tự chạy phân tích.",
+    "role": "student",
+    "current_route": "/student/cv",
+    "gold_context_keywords": ["Chọn file", "Tất cả CV", "phiên bản"],
+    "expected_answer": "Đáp án B; Mở /student/cv, kéo thả tệp hoặc bấm Chọn file; Sinh viên tự chọn tệp PDF hoặc DOCX từ máy; Kiểm tra tên tệp và phiên bản trong mục Tất cả CV trước khi phân tích.",
+    "expected_route": "/student/cv"
+  },
+  {
+    "question": "CV PDF tải lên thành công nhưng thiếu nội dung vì là ảnh quét, tôi nên làm gì? A. Chỉ đổi đuôi sang DOCX. B. Giữ nguyên vì hệ thống luôn đọc được ảnh. C. Kiểm tra chi tiết và xuất lại bản có văn bản từ tài liệu gốc.",
+    "role": "student",
+    "current_route": "/student/cv",
+    "gold_context_keywords": ["chi tiết", "ảnh quét", "văn bản", "phiên bản mới"],
+    "expected_answer": "Đáp án C; Mở chi tiết CV để kiểm tra nội dung trích xuất; Nếu PDF chỉ chứa ảnh quét thì xuất lại bản có văn bản từ tài liệu gốc; Tải phiên bản mới.",
+    "expected_route": "/student/cv"
+  },
+  {
+    "question": "Match Score 70% trong Gap Analysis có nghĩa gì? A. CV được đánh giá phù hợp khoảng 70% với yêu cầu JD. B. Chắc chắn có 70% khả năng được tuyển. C. Điểm STAR là 70 trên 100.",
+    "role": "student",
+    "current_route": "/student/analysis",
+    "gold_context_keywords": ["Match Score", "70%", "JD", "xác suất"],
+    "expected_answer": "Đáp án A; CV được đánh giá phù hợp khoảng 70% với yêu cầu JD theo cách chấm của hệ thống; Đây không phải xác suất được tuyển dụng; Cần đọc từng kỹ năng và nhận xét để biết cần cải thiện gì.",
+    "expected_route": "/student/analysis"
+  },
+  {
+    "question": "Tôi dán JD nhưng nút Bắt đầu phân tích chưa khả dụng. Điều kiện nào cần kiểm tra? A. Chỉ cần tên công ty. B. Có tên vị trí, mô tả công việc, yêu cầu ứng viên và tổng cộng ít nhất 50 từ, đồng thời không đang gửi yêu cầu. C. Chỉ cần dán một dòng bất kỳ.",
+    "role": "student",
+    "current_route": "/student/analysis",
+    "gold_context_keywords": ["tên vị trí", "mô tả công việc", "yêu cầu ứng viên", "50 từ", "đang gửi"],
+    "expected_answer": "Đáp án B; JD tự dán cần tên vị trí, mô tả công việc và yêu cầu ứng viên; Tổng cộng tối thiểu 50 từ; Nút tạm khóa khi đang gửi yêu cầu.",
+    "expected_route": "/student/analysis"
+  },
+  {
+    "question": "Sau Gap Analysis, cách nào cải thiện CV và theo dõi tiến bộ đúng? A. Thêm mọi kỹ năng còn thiếu dù chưa biết. B. So điểm với hai JD bất kỳ. C. Bổ sung kinh nghiệm thật có minh chứng, học kỹ năng thiếu rồi phân tích lại cùng JD.",
+    "role": "student",
+    "current_route": "/student/analysis",
+    "gold_context_keywords": ["minh chứng", "kỹ năng", "cùng JD"],
+    "expected_answer": "Đáp án C; Chỉ bổ sung kỹ năng và kinh nghiệm thực sự có kèm minh chứng; Với kỹ năng chưa có, lập kế hoạch học hoặc làm dự án thực hành; Phân tích lại với cùng JD để theo dõi thay đổi.",
+    "expected_route": "/student/analysis"
+  },
+  {
+    "question": "Trong Mock Interview, STAR gồm những phần nào? A. Situation, Task, Action, Result. B. Skill, Test, Award, Rank. C. Chỉ cần kể thành tích của cả nhóm.",
+    "role": "student",
+    "current_route": "/student/interview",
+    "gold_context_keywords": ["STAR", "Situation", "Task", "Action", "Result"],
+    "expected_answer": "Đáp án A; Situation là tình huống; Task là nhiệm vụ; Action là hành động cá nhân bạn thực hiện; Result là kết quả cụ thể.",
+    "expected_route": "/student/interview"
+  },
+  {
+    "question": "Quy trình bắt đầu Mock Interview đúng là gì? A. Không cần CV hay vị trí. B. Chọn CV và vị trí, còn lượt luyện, bấm Vào phòng chờ rồi Sẵn sàng. C. Chỉ mở báo cáo cũ.",
+    "role": "student",
+    "current_route": "/student/interview",
+    "gold_context_keywords": ["CV", "vị trí", "Vào phòng chờ", "Sẵn sàng"],
+    "expected_answer": "Đáp án B; Mở /student/interview/new và chọn CV cùng vị trí; Kiểm tra còn lượt luyện cho vị trí này; Bấm Vào phòng chờ rồi Sẵn sàng để tạo buổi phỏng vấn.",
+    "expected_route": "/student/interview"
+  },
+  {
+    "question": "Điểm STAR và Match Score có cùng thang đo không? A. Cả hai đều 0–100%. B. Cả hai đều 0–5. C. STAR là 0–5, còn Match Score là 0–100%.",
+    "role": "student",
+    "current_route": "/student/interview",
+    "gold_context_keywords": ["STAR", "0–5", "Match Score", "0–100%"],
+    "expected_answer": "Đáp án C; STAR dùng thang 0–5 để đánh giá câu trả lời phỏng vấn; Match Score dùng thang 0–100% để đánh giá mức phù hợp CV với JD; Hai chỉ số đo nội dung khác nhau.",
+    "expected_route": "/student/interview"
+  },
+  {
+    "question": "Ở trang Lịch sử & tiến bộ, có thể lọc dòng thời gian theo gì? A. Tất cả, Phỏng vấn hoặc Phân tích CV. B. Chỉ hôm nay. C. Luôn phải chọn riêng ngày bắt đầu và kết thúc.",
+    "role": "student",
+    "current_route": "/student/history",
+    "gold_context_keywords": ["Tất cả", "Phỏng vấn", "Phân tích CV", "Dòng thời gian"],
+    "expected_answer": "Đáp án A; Bộ lọc ở đầu trang gồm Tất cả, Phỏng vấn hoặc Phân tích CV; Bộ lọc áp dụng cho mục Dòng thời gian; Trang không có bộ lọc vị trí hay khoảng thời gian.",
+    "expected_route": "/student/history"
+  },
+  {
+    "question": "Lịch sử trống dù tôi muốn xem các buổi cũ, nên xử lý thế nào? A. Chỉ đổi tên CV. B. Chọn bộ lọc Tất cả, kiểm tra đã có hoạt động hay chưa. C. Chỉ xem mục Phỏng vấn.",
+    "role": "student",
+    "current_route": "/student/history",
+    "gold_context_keywords": ["Tất cả", "chưa có hoạt động"],
+    "expected_answer": "Đáp án B; Lịch sử có thể trống vì chưa có hoạt động hoặc bộ lọc chỉ hiện một loại; Chọn bộ lọc Tất cả; Nếu vẫn trống, hoàn thành một lượt phân tích hoặc buổi phỏng vấn đầu tiên.",
+    "expected_route": "/student/history"
+  },
+  {
+    "question": "Muốn mở chi tiết phiên cũ ở History, chọn đường dẫn nào? A. Cả hai loại phiên đều mở trang CV. B. Chỉ xem được biểu đồ. C. Phỏng vấn mở /student/interview/{id}/report, phân tích mở /student/analysis/{id}.",
+    "role": "student",
+    "current_route": "/student/history",
+    "gold_context_keywords": ["/student/interview/{id}/report", "/student/analysis/{id}"],
+    "expected_answer": "Đáp án C; Ở buổi phỏng vấn trong Dòng thời gian, bấm Báo cáo để mở /student/interview/{id}/report; Ở lượt phân tích, bấm Xem để mở /student/analysis/{id}; Mã id là mã thực tế của buổi hoặc lượt đó.",
+    "expected_route": "/student/history"
+  },
+  {
+    "question": "Trong Dashboard Cố vấn, at-risk có ý nghĩa gì và xem nhóm này ở đâu? A. Nhóm cần chú ý, xem lý do cảnh báo và danh sách status=flagged. B. Chắc chắn không đáp ứng công việc. C. Tất cả sinh viên đã sẵn sàng.",
+    "role": "advisor",
+    "current_route": "/advisor/dashboard",
+    "gold_context_keywords": ["at-risk", "cần chú ý", "lý do cảnh báo", "status=flagged"],
+    "expected_answer": "Đáp án A; At-risk là dấu hiệu sinh viên cần chú ý và hỗ trợ, không phải kết luận chắc chắn không đáp ứng công việc; Đọc lý do cảnh báo và lịch sử hồ sơ; Mở /advisor/students?status=flagged để xem nhóm cần chú ý.",
+    "expected_route": "/advisor/dashboard"
+  },
+  {
+    "question": "Tỷ lệ hoạt động 30 ngày qua trên Dashboard Cố vấn nên được hiểu thế nào? A. Xác suất mỗi sinh viên được tuyển dụng. B. Tỷ trọng sinh viên trong nhóm có hoạt động trong 30 ngày qua, cần xem cùng tổng số và mục tiêu. C. Điểm STAR trung bình.",
+    "role": "advisor",
+    "current_route": "/advisor/dashboard",
+    "gold_context_keywords": ["tỷ trọng", "30 ngày", "tổng số", "mục tiêu"],
+    "expected_answer": "Đáp án B; Đây là tỷ trọng sinh viên trong nhóm có hoạt động phân tích CV hoặc phỏng vấn thử trong 30 ngày qua; Xem cùng tổng số sinh viên và mục tiêu hiển thị; Tỷ lệ không phải cam kết tuyển dụng.",
+    "expected_route": "/advisor/dashboard"
+  },
+  {
+    "question": "Cố vấn muốn tìm buổi phỏng vấn chờ nhận xét nhưng không mở được nội dung chi tiết, cần làm gì? A. Chỉ nhìn điểm là được quyền đọc CV. B. Đổi sang tài khoản sinh viên bất kỳ. C. Xem nhóm status=pending và cần sinh viên bật quyền chia sẻ nội dung.",
+    "role": "advisor",
+    "current_route": "/advisor/dashboard",
+    "gold_context_keywords": ["Chờ nhận xét", "status=pending", "quyền chia sẻ", "/student/share"],
+    "expected_answer": "Đáp án C; Ở khung Chờ nhận xét bấm Xem tất cả hoặc mở /advisor/students?status=pending; Cố vấn thấy số liệu tổng hợp của nhóm phụ trách; Nội dung CV hoặc báo cáo chi tiết cần sinh viên bật quyền chia sẻ tại /student/share.",
+    "expected_route": "/advisor/dashboard"
+  }
+]

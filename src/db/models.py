@@ -1,8 +1,9 @@
 from datetime import UTC, date, datetime
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.database import Base
 
@@ -440,3 +441,78 @@ class InterviewTurn(Base):
     feedback: Mapped[str | None] = mapped_column(Text, default=None)
     asked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     answered_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+
+class AssistantConversation(Base):
+    """Hội thoại của người dùng với trợ lý hướng dẫn."""
+
+    __tablename__ = "assistant_conversations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(16), default="student")
+    title: Mapped[str] = mapped_column(String(255), default="Cuộc trò chuyện mới")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    turns: Mapped[list["AssistantTurn"]] = relationship(
+        "AssistantTurn", back_populates="conversation", cascade="all, delete-orphan"
+    )
+
+
+class AssistantTurn(Base):
+    """Một lượt hỏi đáp, kèm ngữ cảnh giao diện và nguồn trích dẫn."""
+
+    __tablename__ = "assistant_turns"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
+    )
+    user_message: Mapped[str] = mapped_column(Text)
+    assistant_message: Mapped[str] = mapped_column(Text)
+    intent: Mapped[str] = mapped_column(String(16))
+    context_json: Mapped[dict[str, Any] | list[Any]] = mapped_column(JSON, default=dict)
+    sources_json: Mapped[dict[str, Any] | list[Any]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    conversation: Mapped["AssistantConversation"] = relationship("AssistantConversation", back_populates="turns")
+    actions: Mapped[list["AgentActionLog"]] = relationship(
+        "AgentActionLog", back_populates="turn", cascade="all, delete-orphan"
+    )
+    feedback: Mapped[list["AssistantFeedback"]] = relationship(
+        "AssistantFeedback", back_populates="turn", cascade="all, delete-orphan"
+    )
+
+
+class AgentActionLog(Base):
+    """Nhật ký đề xuất và thực thi hành động giao diện của trợ lý."""
+
+    __tablename__ = "agent_action_logs"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    turn_id: Mapped[str] = mapped_column(ForeignKey("assistant_turns.id", ondelete="CASCADE"), index=True)
+    action_type: Mapped[str] = mapped_column(String(32))
+    params_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # "pending" | "confirmed" | "executed" | "rejected" | "failed"
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    client_executed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    turn: Mapped["AssistantTurn"] = relationship("AssistantTurn", back_populates="actions")
+
+
+class AssistantFeedback(Base):
+    """Đánh giá của người dùng cho một lượt trả lời của trợ lý."""
+
+    __tablename__ = "assistant_feedback"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    turn_id: Mapped[str] = mapped_column(ForeignKey("assistant_turns.id", ondelete="CASCADE"), index=True)
+    # 1: hữu ích; -1: không hữu ích
+    rating: Mapped[int] = mapped_column(Integer)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+    turn: Mapped["AssistantTurn"] = relationship("AssistantTurn", back_populates="feedback")

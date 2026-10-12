@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
+import { useAgentActions } from "@/lib/use-agent-actions"
 import { useApi } from "@/lib/use-api"
 
 const FILTERS: { value: TimelineFilter; label: string }[] = [
@@ -26,6 +27,18 @@ const FILTERS: { value: TimelineFilter; label: string }[] = [
   { value: "analysis", label: "Phân tích CV" },
 ]
 
+// Tên loại phiên trợ lý AI có thể gửi tới, quy về bộ lọc dòng thời gian.
+const FILTER_ALIASES: Record<string, TimelineFilter> = {
+  all: "all",
+  interview: "interview",
+  interviews: "interview",
+  mock_interview: "interview",
+  "mock interview": "interview",
+  analysis: "analysis",
+  analyses: "analysis",
+  gap_analysis: "analysis",
+}
+
 // Bản vẽ TienBo. Điểm phỏng vấn thang 0–5, chỉ so sánh trong cùng vị trí (PRD mục 5.1).
 export function StudentHistory() {
   const fetchProgress = useCallback(() => api.getProgress("all", null), [])
@@ -33,6 +46,20 @@ export function StudentHistory() {
   // Chỉ để gắn badge "Cố vấn đã nhận xét"; lỗi thì bỏ qua badge.
   const { data: sharing } = useApi(api.getSharing)
   const [filter, setFilter] = useState<TimelineFilter>("all")
+
+  // Trợ lý AI chỉ lọc được theo loại phiên, vì trang không có ô tìm kiếm hay lọc vị trí, thời gian.
+  useAgentActions({
+    fillFilter: (name, value) => {
+      if (name !== "type" && name !== "active_tab") return false
+      const next = FILTER_ALIASES[String(value).toLowerCase()]
+      if (!next) return false
+      setFilter(next)
+      return true
+    },
+    resetView: ({ clear_filters }) => {
+      if (clear_filters) setFilter("all")
+    },
+  })
 
   const reviewedIds = useMemo(
     () =>
@@ -68,13 +95,15 @@ export function StudentHistory() {
         title="Lịch sử & tiến bộ"
         actions={
           !noActivity && (
-            <SegmentedControl
-              options={FILTERS}
-              value={filter}
-              onChange={setFilter}
-              aria-label="Lọc dòng thời gian"
-              className="w-full sm:w-auto"
-            />
+            <div data-agent-target="history-type-filter" className="w-full sm:w-auto">
+              <SegmentedControl
+                options={FILTERS}
+                value={filter}
+                onChange={setFilter}
+                aria-label="Lọc dòng thời gian"
+                className="w-full sm:w-auto"
+              />
+            </div>
           )
         }
       />
@@ -92,14 +121,16 @@ export function StudentHistory() {
             </div>
           </Zone>
           <Zone id="timeline-title" title="Dòng thời gian">
-            {/* key: về trang đầu khi đổi bộ lọc */}
-            <Timeline
-              key={filter}
-              filter={filter}
-              interviews={progress.interviews}
-              analyses={progress.analyses}
-              reviewedIds={reviewedIds}
-            />
+            <div data-agent-target="history-session-list">
+              {/* key: về trang đầu khi đổi bộ lọc */}
+              <Timeline
+                key={filter}
+                filter={filter}
+                interviews={progress.interviews}
+                analyses={progress.analyses}
+                reviewedIds={reviewedIds}
+              />
+            </div>
           </Zone>
         </div>
       )}

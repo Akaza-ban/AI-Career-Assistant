@@ -20,9 +20,11 @@ import {
 } from "@/components/student/cv/cv-sections"
 import { CV_ACCEPT, useCvUpload } from "@/components/student/cv/use-cv-upload"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import type { CvVersion } from "@/lib/types"
+import { useAgentActions } from "@/lib/use-agent-actions"
 import { useApi } from "@/lib/use-api"
 
 function sortCvs(list: CvVersion[], sort: CvSort): CvVersion[] {
@@ -46,6 +48,32 @@ export function MyCv() {
   const [previewCv, setPreviewCv] = useState<CvVersion | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleting, setDeleting] = useState<CvVersion | null>(null)
+  // Trợ lý AI không mở được hộp chọn file khi chưa có thao tác của người dùng, nên mở hộp thoại có nút chọn file.
+  const [uploadOpen, setUploadOpen] = useState(false)
+
+  useAgentActions({
+    fillFilter: (name, value) => {
+      if (name !== "keyword") return false
+      setQuery(String(value))
+      return true
+    },
+    openModal: (id) => {
+      if (id !== "upload-cv-modal") return false
+      setUploadOpen(true)
+      return true
+    },
+    resetView: ({ clear_filters, close_modals }) => {
+      if (clear_filters) {
+        setQuery("")
+        setSort("recent")
+      }
+      if (close_modals) {
+        setUploadOpen(false)
+        setPreviewOpen(false)
+        setDeleting(null)
+      }
+    },
+  })
 
   const cvs = useMemo(() => data ?? [], [data])
   const visible = useMemo(() => {
@@ -135,7 +163,7 @@ export function MyCv() {
             aside={<CvToolbar query={query} onQueryChange={setQuery} sort={sort} onSortChange={setSort} />}
           >
             {visible.length > 0 ? (
-              <div className={GRID}>
+              <div data-agent-target="cv-list" className={GRID}>
                 {visible.map((cv) => (
                   <CvCard
                     key={cv.id}
@@ -165,6 +193,21 @@ export function MyCv() {
 
       {data && <CvTips />}
 
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="sm:max-w-md" data-agent-target="upload-cv-modal">
+          <DialogTitle>Tải CV lên</DialogTitle>
+          <DialogDescription>Chọn file PDF hoặc DOCX từ máy tính để tạo CV mới.</DialogDescription>
+          <Button
+            size="brand"
+            onClick={() => {
+              setUploadOpen(false)
+              openPicker()
+            }}
+          >
+            Chọn file từ máy tính
+          </Button>
+        </DialogContent>
+      </Dialog>
       <CvPreviewDialog cv={previewCv} open={previewOpen} onOpenChange={setPreviewOpen} />
       <ConfirmDialog
         open={deleting !== null}
