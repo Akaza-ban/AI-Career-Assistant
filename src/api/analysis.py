@@ -1,6 +1,6 @@
 """Thư viện JD và phân tích khoảng cách CV–JD (US-SV-02, US-SV-05)."""
 
-from fastapi import APIRouter, BackgroundTasks, status
+from fastapi import APIRouter, BackgroundTasks, Query, status
 from sqlalchemy import select
 
 from src.api.deps import CurrentStudent, CurrentUser, DbSession
@@ -15,6 +15,7 @@ from src.models.schemas import (
     JobDescriptionResponse,
     RecommendJDsRequest,
     RecommendJDsResponse,
+    SkillRoadmapResponse,
 )
 from src.services import gap_analysis
 from src.services.jd_recommendation import (
@@ -22,6 +23,7 @@ from src.services.jd_recommendation import (
     generate_career_advice_with_llm,
     recommend_top_jds_from_cv,
 )
+from src.services.roadmap import get_roadmap_info
 
 router = APIRouter()
 
@@ -200,3 +202,12 @@ def get_gap_analysis(analysis_id: str, user: CurrentStudent, db: DbSession) -> G
     if analysis is None or analysis.owner_id != user.id:
         raise AppError(404, "Không tìm thấy kết quả phân tích.", "analysis_not_found")
     return gap_analysis.to_response(analysis, db.get(JobDescription, analysis.jd_id))
+
+
+@router.get("/skills/roadmap", response_model=SkillRoadmapResponse, tags=["Gap Analysis"])
+def get_skill_roadmap(
+    skill: str = Query(..., min_length=1, description="Tên kỹ năng cần tra cứu lộ trình học trên roadmap.sh"),
+) -> SkillRoadmapResponse:
+    """Tra cứu đường dẫn lộ trình học tập roadmap.sh cho một kỹ năng bất kỳ."""
+    info = get_roadmap_info(skill)
+    return SkillRoadmapResponse(**info)
