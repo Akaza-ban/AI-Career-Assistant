@@ -307,11 +307,6 @@
   }
 }
 
-@keyframes assistant-gradient {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-}
-
 .assistant-markdown > :first-child { margin-top: 0; }
 .assistant-markdown > :last-child { margin-bottom: 0; }
 .assistant-markdown p { margin: 0.5rem 0; }

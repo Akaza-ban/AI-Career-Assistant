@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
 import { ChevronRight, LogOut, Search } from "lucide-react"
 
+import { AssistantLauncher } from "@/components/assistant/assistant-launcher"
 import { ChatLauncher } from "@/components/chat/chat-launcher"
 import { useSignOut } from "@/components/shell/account-actions"
 import { CommandPalette, useCommandShortcut } from "@/components/shell/command-palette"
@@ -82,6 +83,7 @@ export function AppTopbar({ role }: { role: Role }) {
         >
           <Search className="size-[19px]" strokeWidth={1.75} aria-hidden />
         </button>
+        {role !== "admin" && <AssistantLauncher />}
         {role !== "admin" && <ChatLauncher />}
         <NotificationMenu role={role} />
         <DropdownMenu>

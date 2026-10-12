@@ -79,6 +79,11 @@ export async function submitFeedback(turnId: string, rating: number, comment?: s
   })
 }
 
+/** Huỷ đánh giá đã chọn (bấm lại nút thích / không thích). */
+export async function deleteFeedback(turnId: string): Promise<void> {
+  await request(`/feedback/${encodeURIComponent(turnId)}`, { method: "DELETE" })
+}
+
 /** Proposed history route; the current backend does not expose this endpoint yet. */
 export async function getConversationHistory(conversationId: string): Promise<ChatMessage[]> {
   const response = await request(`/conversations/${encodeURIComponent(conversationId)}/messages`)

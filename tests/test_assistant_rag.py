@@ -641,6 +641,46 @@ async def test_analysis_actions_require_accessible_cv_and_jd(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["library", "own", "hidden", "foreign", "own_deleted"])
+async def test_navigate_to_jd_detail_only_for_visible_jds(
+    client: AsyncClient, api_agent: AssistantAgent, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    with SessionLocal() as db:
+        jd = db.scalar(
+            select(JobDescription).where(
+                JobDescription.source == "library",
+                JobDescription.status.is_(None) | (JobDescription.status == "published"),
+            )
+        )
+        if kind != "library":
+            other = f"sv-{uuid4().hex[:12]}"
+            db.add(User(id=other, role="student", full_name="Other", email=f"{other}@example.test"))
+            jd = JobDescription(
+                id=f"jd-{uuid4().hex[:12]}",
+                source="library" if kind == "hidden" else "pasted",
+                owner_id=None if kind == "hidden" else (other if kind == "foreign" else "sv-0142"),
+                title="Business Analyst",
+                content="Phân tích yêu cầu, SQL",
+                status={"hidden": "hidden", "own_deleted": "deleted"}.get(kind),
+            )
+            db.add(jd)
+            db.commit()
+        route = f"/student/library/{jd.id}"
+    llm, _ = fake_llm(
+        {
+            "message": "Mở chi tiết vị trí trong Thư viện JD.",
+            "intent": "action",
+            "actions": [{"action_type": "NAVIGATE_PAGE", "params": {"route": route}, "description_vi": "Mở chi tiết JD"}],
+        }
+    )
+    monkeypatch.setattr(api_agent, "_llm", llm)
+    response = await client.post(f"{API}/chat", json=payload("Mở chi tiết JD trong thư viện JD"), headers=STUDENT)
+    assert response.status_code == 200, response.text
+    routes = [a["params"]["route"] for a in response.json()["actions"] if a["action_type"] == "NAVIGATE_PAGE"]
+    assert (route in routes) == (kind in ("library", "own"))
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -734,6 +774,12 @@ async def test_feedback_persists_and_updates_without_duplicate(client: AsyncClie
             == 1
         )
         assert db.get(AssistantFeedback, second.json()["id"]).comment == "Cần rõ hơn"
+    # Bấm lại nút đã chọn để huỷ; huỷ lần nữa vẫn thành công
+    for _ in range(2):
+        undo = await client.delete(f"{API}/feedback/{chat['turn_id']}", headers=STUDENT)
+        assert undo.status_code == 204
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(AssistantFeedback).where(AssistantFeedback.turn_id == chat["turn_id"])) == 0
 
 
 @pytest.mark.asyncio

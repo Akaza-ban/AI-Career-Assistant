@@ -134,7 +134,7 @@ test("analysis start button carries the agent target and reports the selection w
   let current = page
   const react = new Proxy({}, { get: (_, key) => current.react[key] })
   let handlers, jobs = 0
-  const cvs = [{ id: "cv-1", file_name: "CV.pdf", status: "ready", is_active: true }]
+  const cvs = [{ id: "cv-1", file_name: "CV.pdf", label: "v1.0", status: "ready", is_active: true }]
   const items = [{ id: "jd-1", title: "Backend Intern", company: "Công ty G" }]
   const api = { listCvVersions: () => cvs, createGapAnalysis: () => { jobs++ } }
   const { NewAnalysis } = load("components/student/analysis/new-analysis.tsx", {
@@ -170,7 +170,10 @@ test("analysis start button carries the agent target and reports the selection w
   const button = find(renderPicker(), (node) => node.props?.["data-agent-target"] === "btn-start-analysis")
   assert.equal(button.type, "button")
   assert.equal(button.props.disabled, false)
-  assert.deepEqual(JSON.parse(JSON.stringify(handlers.getContext())), { selected_cv_id: "cv-1", page_state: { active_tab: "list", selected_jd_id: "jd-1" } })
+  assert.deepEqual(JSON.parse(JSON.stringify(handlers.getContext())), {
+    selected_cv_id: "cv-1",
+    page_state: { active_tab: "list", selected_jd_id: "jd-1", selected_cv_name: "CV.pdf · v1.0", selected_jd_title: "Backend Intern · Công ty G" },
+  })
   handlers.resetView({ clear_filters: true, close_modals: true })
   assert.equal(jobs, 0)
 })
@@ -210,25 +213,32 @@ test("provider dialog approval persists consent before analysis, while cancellat
 test("confirmation dialog exposes confirm/cancel, fallback description and busy dismissal guards", () => {
   const jsx = (type, props) => ({ type, props })
   const { ActionConfirmationDialog } = load("components/assistant/action-confirmation-dialog.tsx", {
-    "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": { Loader2: "loader", ShieldCheck: "shield" },
+    react: { useMemo: (factory) => factory() },
+    "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": { Loader2: "loader" },
     "@/components/ui/button": { Button: "button" },
-    "@/components/ui/dialog": Object.fromEntries(["Dialog", "DialogContent", "DialogDescription", "DialogFooter", "DialogHeader", "DialogTitle"].map((name) => [name, name])),
+    "@/components/ui/dialog": Object.fromEntries(["Dialog", "DialogContent", "DialogDescription", "DialogTitle"].map((name) => [name, name])),
   })
+  const find = (tree, match, found = []) => {
+    if (!tree || typeof tree !== "object") return found
+    if (match(tree)) found.push(tree)
+    const children = Array.isArray(tree) ? tree : tree.props?.children
+    for (const child of Array.isArray(children) ? children : [children]) find(child, match, found)
+    return found
+  }
   let approved = 0, rejected = 0
   const props = { action: { description_vi: "Phân tích CV" }, busy: false, onConfirm: async () => { approved++ }, onReject: async () => { rejected++ } }
   assert.equal(ActionConfirmationDialog({ ...props, action: null }), null)
   const tree = ActionConfirmationDialog(props)
-  const content = tree.props.children
-  assert.equal(content.props.children[0].props.children[2].props.children, "Phân tích CV")
-  const buttons = content.props.children[2].props.children
-  buttons[0].props.onClick()
-  buttons[1].props.onClick()
+  assert.equal(find(tree, (node) => node.type === "DialogDescription")[0].props.children, "Phân tích CV")
+  const [cancel, confirm] = find(tree, (node) => node.type === "button")
+  cancel.props.onClick()
+  confirm.props.onClick()
   assert.equal(rejected, 1)
   assert.equal(approved, 1)
   const busy = ActionConfirmationDialog({ ...props, busy: true })
   busy.props.onOpenChange(false)
   assert.equal(rejected, 1)
-  assert.ok(busy.props.children.props.children[2].props.children.every((button) => button.props.disabled))
+  assert.ok(find(busy, (node) => node.type === "button").every((button) => button.props.disabled))
 })
 
 test("navigation resolves guide aliases and encodes query values", async () => {
@@ -464,15 +474,15 @@ test("fixed spotlight uses viewport coordinates and follows nested scrolling", (
   const f = highlighterFixture({ top: 200, left: 80, bottom: 240, right: 180, width: 100, height: 40 })
   assert.equal(f.element.scrolled, undefined)
   let style = f.render().props.children[0].props.style
-  assert.equal(style.top, 196)
-  assert.equal(style.left, 76)
-  assert.equal(style.width, 108)
+  assert.equal(style.top, 194)
+  assert.equal(style.left, 74)
+  assert.equal(style.width, 112)
   assert.equal(f.listeners.get("scroll").capture, true)
   f.move({ top: 300, left: 80, bottom: 340, right: 180, width: 100, height: 40 })
   f.listeners.get("scroll").callback()
   f.flush()
   style = f.render().props.children[0].props.style
-  assert.equal(style.top, 296)
+  assert.equal(style.top, 294)
   f.cleanup()
 })
 

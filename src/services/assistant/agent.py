@@ -220,9 +220,8 @@ class AssistantAgent:
             actions.append(
                 HighlightAction(params={"selector": source.selector}, description_vi="Chỉ vị trí nút trong hướng dẫn")
             )
-        message = "Theo tài liệu hướng dẫn:\n\n" + "\n\n".join(
-            f"{source.snippet}\n\nNguồn: [{source.title}]({source.route}) — {source.section}" for source in sources[:3]
-        )
+        # Nguồn đã hiện riêng dưới câu trả lời ("Theo hướng dẫn: …"), nên chỉ trích hai đoạn sát nhất.
+        message = "Theo tài liệu hướng dẫn:\n\n" + "\n\n".join(source.snippet for source in sources[:2])
         if any(action.action_type == "START_ANALYSIS" for action in actions):
             message += "\n\nVui lòng xác nhận trước khi bắt đầu phân tích."
         return AssistantResponse(message=message, intent=state["intent"], actions=actions, sources=sources)

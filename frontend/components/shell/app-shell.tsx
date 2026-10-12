@@ -1,8 +1,8 @@
 import type { ReactNode } from "react"
 
 import { AssistantProvider } from "@/components/assistant/assistant-provider"
+import { OnePanelAtATime } from "@/components/assistant/assistant-launcher"
 import { ChatPanel as AssistantPanel } from "@/components/assistant/chat-panel"
-import { ChatTrigger } from "@/components/assistant/chat-trigger"
 import { ChatProvider } from "@/components/chat/chat-context"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { AppTopbar, PageCrumbs } from "@/components/shell/app-topbar"
@@ -51,7 +51,7 @@ function Shell({ role, assistant = false, children }: { role: Role; assistant?: 
           <MobileTabBar role={role} />
           {assistant && (
             <>
-              <ChatTrigger />
+              <OnePanelAtATime />
               <AssistantPanel />
             </>
           )}

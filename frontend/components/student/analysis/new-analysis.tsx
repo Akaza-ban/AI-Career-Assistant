@@ -182,7 +182,13 @@ function SinglePicker({ cv, picks, initialJdId, industries }: SinglePickerProps)
   useAgentActions({
     getContext: () => ({
       selected_cv_id: cv.id,
-      page_state: { active_tab: tab, selected_jd_id: tab === "list" ? selected?.id : undefined },
+      page_state: {
+        active_tab: tab,
+        selected_jd_id: tab === "list" ? selected?.id : undefined,
+        // Tên hiển thị cho hộp xác nhận của trợ lý
+        selected_cv_name: `${cv.file_name} · ${cv.label}`,
+        selected_jd_title: tab === "list" && selected ? metaLine(selected.title, selected.company) : undefined,
+      },
     }),
     resetView: ({ clear_filters }) => {
       if (!clear_filters || submitting) return
