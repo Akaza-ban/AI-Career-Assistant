@@ -95,7 +95,7 @@ class CvVersionResponse(BaseModel):
     family_id: str = Field(..., description="Mã CV (các phiên bản cùng mã là một CV, một thẻ trong 'CV của tôi')")
     version_count: int = Field(default=1, description="Số phiên bản của CV này (có ở danh sách CV)")
     file_name: str = Field(..., description="Tên file gốc")
-    file_type: Literal["pdf", "docx"] = Field(..., description="Định dạng file")
+    file_type: Literal["pdf", "docx", "png", "jpg", "jpeg"] = Field(..., description="Định dạng file")
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
@@ -517,8 +517,9 @@ class InterviewSessionResponse(BaseModel):
     id: str
     status: Literal["in_progress", "completed"]
     jd: InterviewJd
-    cv_version_id: str
-    cv_file_name: str
+    cv_version_id: str | None = None
+    cv_file_name: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] = "with_cv"
     question_count: int
     seconds_per_question: int
     current_question: InterviewQuestion | None = Field(default=None, description="None khi đã hoàn thành")
@@ -531,10 +532,11 @@ class InterviewSessionResponse(BaseModel):
 
 
 class CreateInterviewRequest(BaseModel):
-    """Bắt đầu buổi phỏng vấn mới cho một vị trí (JD) và một phiên bản CV."""
+    """Bắt đầu buổi phỏng vấn mới cho một vị trí (JD) và tùy chọn phiên bản CV."""
 
     jd_id: str
-    cv_version_id: str
+    cv_version_id: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] | None = None
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -574,7 +576,8 @@ class InterviewReportResponse(BaseModel):
     id: str
     response_id: str = Field(..., description="Dùng cho khảo sát CSAT")
     jd: InterviewJd
-    cv_file_name: str
+    cv_file_name: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] = "with_cv"
     created_at: UtcDatetime
     completed_at: UtcDatetime
     duration_seconds: int

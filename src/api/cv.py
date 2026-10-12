@@ -96,7 +96,7 @@ def list_cvs(user: CurrentStudent, db: DbSession) -> list[CvVersionResponse]:
 def upload_cv(
     user: CurrentStudent,
     db: DbSession,
-    file: Annotated[UploadFile, File(description="File CV định dạng PDF hoặc DOCX, tối đa 5MB")],
+    file: Annotated[UploadFile, File(description="File CV định dạng PDF, DOCX hoặc ảnh (PNG, JPG, JPEG), tối đa 5MB")],
 ) -> CvVersionResponse:
     """
     Tải lên một CV mới (bản đầu tiên v1.0), không đụng tới các CV đã có.

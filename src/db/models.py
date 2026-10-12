@@ -299,8 +299,9 @@ class InterviewSession(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     jd_id: Mapped[str] = mapped_column(ForeignKey("job_descriptions.id"), index=True)
-    cv_version_id: Mapped[str] = mapped_column(String(64))
-    cv_file_name: Mapped[str] = mapped_column(String(255))
+    cv_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    cv_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    interview_mode: Mapped[str] = mapped_column(String(16), default="with_cv")
     # "in_progress" | "completed"
     status: Mapped[str] = mapped_column(String(16), default="in_progress", index=True)
     # Câu đang trả lời, đánh số từ 1

@@ -26,12 +26,25 @@ EVIDENCE_SECTIONS = {"experience", "projects", "education", "activities"}
 # Thứ tự quan trọng: từ khoá dài/cụ thể đặt trước để không bị từ khoá ngắn bắt nhầm.
 _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("experience", ("kinh nghiệm", "quá trình làm việc", "experience", "work history", "employment")),
-    ("projects", ("dự án", "project")),
+    ("projects", ("dự án", "academic projects", "project")),
     ("education", ("học vấn", "trình độ học vấn", "education", "đào tạo")),
     ("activities", ("hoạt động", "ngoại khóa", "ngoại khoá", "tình nguyện", "volunteer", "activities", "câu lạc bộ")),
     ("skills", ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies")),
-    ("certifications", ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "award")),
-    ("summary", ("mục tiêu", "giới thiệu", "tóm tắt", "objective", "summary", "profile", "about")),
+    ("certifications", ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award")),
+    (
+        "summary",
+        (
+            "mục tiêu",
+            "giới thiệu",
+            "tóm tắt",
+            "career objective",
+            "career",
+            "objective",
+            "summary",
+            "profile",
+            "about",
+        ),
+    ),
 ]
 
 SECTION_LABELS: dict[str, str] = {

@@ -1042,8 +1042,11 @@ export const mockApi = {
     await delay(500)
     const jd = mockJdLibrary.find((j) => j.id === body.jd_id)
     if (!jd) throw new ApiError(404, "Không tìm thấy vị trí ứng tuyển.", "jd_not_found")
-    const cv = cvVersions.find((c) => c.id === body.cv_version_id)
-    if (!cv) throw new ApiError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
+    const mode = body.interview_mode ?? (body.cv_version_id ? "with_cv" : "jd_only")
+    const cv = body.cv_version_id ? cvVersions.find((c) => c.id === body.cv_version_id) : null
+    if (mode === "with_cv" && !cv) {
+      throw new ApiError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
+    }
     if (interviewQuota(jd.id).remaining === 0) {
       throw new ApiError(429, `Bạn đã dùng hết ${WEEKLY_LIMIT} buổi phỏng vấn cho vị trí này trong tuần.`, "quota_exceeded")
     }
@@ -1054,8 +1057,9 @@ export const mockApi = {
         id,
         status: "in_progress",
         jd: { id: jd.id, title: jd.title, company: jd.company, source: jd.source },
-        cv_version_id: cv.id,
-        cv_file_name: cv.file_name,
+        cv_version_id: cv?.id ?? null,
+        cv_file_name: cv?.file_name ?? null,
+        interview_mode: mode,
         question_count: QUESTION_COUNT,
         seconds_per_question: QUESTION_SECONDS,
         current_question: mockQuestion(1, jd.title),

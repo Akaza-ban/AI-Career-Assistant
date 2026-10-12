@@ -22,7 +22,15 @@ import { useApi } from "@/lib/use-api"
  * Buổi phỏng vấn chỉ được tạo khi SV bấm "Sẵn sàng", vì đồng hồ câu 1 bắt đầu chạy ngay lúc tạo buổi
  * (create_session ở src/services/interview.py); "Quay lại" về trang Thiết lập, giữ nguyên vị trí và CV đã chọn.
  */
-export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: string | null }) {
+export function InterviewLobby({
+  jdId,
+  cvId,
+  initialMode,
+}: {
+  jdId: string | null
+  cvId: string | null
+  initialMode?: string | null
+}) {
   const router = useRouter()
   const profile = useProfile()
   const { data: jds, error: jdsError, reload: reloadJds } = useApi(api.listInterviewJds)
@@ -32,9 +40,12 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   const { data: quota } = useApi(fetchQuota)
   const [starting, setStarting] = useState(false)
 
+  const isJdOnly = initialMode === "jd_only" || !cvId
+
   const params = new URLSearchParams()
   if (jdId) params.set("jd", jdId)
   if (cvId) params.set("cv", cvId)
+  if (initialMode) params.set("mode", initialMode)
   const setupHref = `/student/interview/new${params.size > 0 ? `?${params}` : ""}`
 
   if (jdsError || cvsError) {
@@ -69,13 +80,17 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   }
 
   const jd = jds.find((j) => j.id === jdId)
-  const cv = cvs.find((c) => c.id === cvId)
-  if (!jd || !cv) {
+  const cv = isJdOnly ? null : cvs.find((c) => c.id === cvId)
+  if (!jd || (!isJdOnly && !cv)) {
     return (
       <Panel className="grid justify-items-center gap-3 py-12 text-center">
         <AlertCircle className="size-8 text-warn" aria-hidden />
-        <p className="font-heading font-bold">Chưa chọn vị trí hoặc CV cho buổi phỏng vấn</p>
-        <p className="max-w-md text-sm text-ink-2">Hãy chọn vị trí ứng tuyển và CV ở trang Thiết lập rồi bắt đầu lại.</p>
+        <p className="font-heading font-bold">Chưa chọn đủ thông tin cho buổi phỏng vấn</p>
+        <p className="max-w-md text-sm text-ink-2">
+          {isJdOnly
+            ? "Hãy chọn vị trí ứng tuyển ở trang Thiết lập rồi bắt đầu lại."
+            : "Hãy chọn vị trí ứng tuyển và CV ở trang Thiết lập rồi bắt đầu lại."}
+        </p>
         <Button nativeButton={false} render={<Link href={setupHref} />}>
           Về trang Thiết lập
         </Button>
@@ -86,10 +101,14 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   const exhausted = quota !== undefined && quota.remaining === 0
 
   async function ready() {
-    if (!jd || !cv) return
+    if (!jd || (!isJdOnly && !cv)) return
     setStarting(true)
     try {
-      const session = await api.createInterview({ jd_id: jd.id, cv_version_id: cv.id })
+      const session = await api.createInterview({
+        jd_id: jd.id,
+        cv_version_id: isJdOnly ? null : cv?.id,
+        interview_mode: isJdOnly ? "jd_only" : "with_cv",
+      })
       // replace: bấm Back trong phòng không quay lại phòng chờ (sẽ tạo thêm buổi mới)
       router.replace(`/student/interview/${encodeURIComponent(session.id)}`)
     } catch (err) {
@@ -97,6 +116,10 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
       setStarting(false)
     }
   }
+
+  const lobbyContext = isJdOnly
+    ? `${jd.title} · Phỏng vấn theo JD (không dùng CV)`
+    : `${jd.title} · ${cv?.file_name} (${cv?.label})`
 
   return (
     <div className="grid gap-6">
@@ -118,11 +141,19 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
             <p className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-heading font-bold text-violet">AI Career Coach</span>
               <Badge variant="violet">Người phỏng vấn</Badge>
+              {isJdOnly ? (
+                <Badge variant="neutral">Chế độ JD</Badge>
+              ) : (
+                <Badge variant="blue">Cá nhân hoá theo CV</Badge>
+              )}
             </p>
             <div className="rounded-2xl rounded-tl-sm border border-violet/15 bg-violet-soft/40 p-4 text-[15px] leading-7 text-ink">
               Chào {profile?.full_name ?? "bạn"}! Mình là AI Career Coach. Hôm nay mình sẽ phỏng vấn bạn cho vị trí{" "}
-              <strong>{jd.title}</strong> với {QUESTION_COUNT} câu hỏi hành vi. Khi bạn sẵn sàng, mình sẽ bắt đầu với câu hỏi
-              đầu tiên.
+              <strong>{jd.title}</strong> với {QUESTION_COUNT} câu hỏi hành vi{" "}
+              {isJdOnly
+                ? "dựa trực tiếp trên yêu cầu và bài toán thực tế của vị trí trong JD"
+                : `kết hợp kinh nghiệm từ CV (${cv?.file_name}) và yêu cầu vị trí`}
+              . Khi bạn sẵn sàng, mình sẽ bắt đầu với câu hỏi đầu tiên.
             </div>
           </div>
         </div>
@@ -132,7 +163,7 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
       </div>
 
       <RulesDialog
-        context={`${jd.title} · ${cv.file_name} (${cv.label})`}
+        context={lobbyContext}
         quota={quota ? `Còn ${quota.remaining}/${quota.limit} buổi cho vị trí này trong tuần` : null}
         exhausted={exhausted}
         starting={starting}

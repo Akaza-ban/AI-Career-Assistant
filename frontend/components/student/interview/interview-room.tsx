@@ -283,6 +283,7 @@ function Room({ initial }: { initial: InterviewSession }) {
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <InterviewChat
+            sessionId={initial.id}
             total={total}
             turns={turns}
             current={finished ? null : current}

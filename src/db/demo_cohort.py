@@ -30,7 +30,7 @@ from src.db.seed import DEMO_ADVISOR_ID, assign
 from src.services import cv_files
 from src.services.cv_optimizer import DEVELOPING_TITLE, cv_document
 from src.services.cv_versions import label
-from src.services.interview import CRITERIA, GUIDANCE, QUESTION_BANK
+from src.services.interview import CRITERIA, GUIDANCE
 from src.services.skill_matching import IMPORTANCE_WEIGHTS, compute_score
 
 # Nội dung CV theo vị trí (phần kinh nghiệm / dự án)
@@ -77,7 +77,7 @@ CV_EXPERIENCE = {
     ],
 }
 
-# Câu trả lời mẫu theo chủ đề câu hỏi (QUESTION_BANK), {role} là tên vị trí
+# Câu trả lời mẫu theo chủ đề câu hỏi STAR, {role} là tên vị trí
 ANSWERS = [
     "Trong đồ án môn học gần nhất, nhóm em làm sản phẩm sát với công việc {role}. Em phụ trách phần chính của nhóm, "
     "tự lên kế hoạch, chia việc và báo cáo tiến độ hằng tuần. Cuối kỳ nhóm bàn giao đúng hạn.",
@@ -337,6 +337,13 @@ def _add_session(
 ):
     completed = utcnow() - timedelta(days=days, hours=2)
     started = completed - timedelta(minutes=18)
+    exp_summary = (CV_EXPERIENCE.get(spec["jd"]) or ["dự án chuyên ngành"])[0]
+    questions = [
+        ("Nhiệm vụ & Kinh nghiệm tiêu biểu", f"Phân tích vai trò và giải pháp kỹ thuật của bạn khi thực hiện: {exp_summary}."),
+        ("Xử lý khó khăn & Thử thách kỹ thuật", f"Sự cố kỹ thuật hoặc lỗi phức tạp nhất bạn từng khắc phục khi làm việc với các công nghệ liên quan đến {jd.title} là gì?"),
+        ("Làm việc nhóm & Phối hợp", f"Cách bạn phối hợp và giải quyết xung đột ý kiến kỹ thuật khi làm việc nhóm trong các đồ án/dự án {jd.title}?"),
+        ("Học hỏi & Định hướng phát triển", f"Bài toán kỹ thuật nào trong JD {jd.title} bạn thấy thách thức nhất và giải pháp tiếp cận của bạn ra sao?"),
+    ]
     session = InterviewSession(
         id=f"iv_{spec['id'][3:]}_{days}",
         owner_id=spec["id"],
@@ -344,16 +351,16 @@ def _add_session(
         cv_version_id=cv.id,
         cv_file_name=cv.file_name,
         status="completed",
-        current_index=len(QUESTION_BANK) + 1,
+        current_index=len(questions) + 1,
         created_at=started,
         completed_at=completed,
     )
     offsets = _star_offsets(spec["weak"])
     turns = []
-    for index, (theme, template) in enumerate(QUESTION_BANK, start=1):
+    for index, (theme, q_text) in enumerate(questions, start=1):
         stars = {c: _clip(target + TURN_OFFSETS[index - 1] + offsets[c]) for c in CRITERIA}
         score = round(sum(stars.values()) / len(CRITERIA), 2)
-        is_timed_out = index > len(QUESTION_BANK) - timed_out
+        is_timed_out = index > len(questions) - timed_out
         weakest = min(CRITERIA, key=lambda c: stars[c])
         turns.append(
             InterviewTurn(
@@ -361,7 +368,7 @@ def _add_session(
                 session_id=session.id,
                 index=index,
                 theme=theme,
-                question=template.format(role=jd.title),
+                question=q_text,
                 answer=ANSWERS[index - 1].format(role=jd.title),
                 timed_out=is_timed_out,
                 score=score,

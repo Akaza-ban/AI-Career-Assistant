@@ -86,6 +86,9 @@ function ReportView({ report }: { report: Report }) {
           <Badge variant="blue" className="h-auto px-2.5 py-0.5">
             Vị trí: {report.jd.title}
           </Badge>
+          <Badge variant="neutral" className="h-auto px-2.5 py-0.5">
+            {report.interview_mode === "jd_only" ? "Phỏng vấn theo JD" : `CV: ${report.cv_file_name ?? "Đã nộp"}`}
+          </Badge>
         </div>
         <h1 className="font-heading text-[32px] leading-10 font-bold">Kết quả phỏng vấn thử</h1>
         <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-2">

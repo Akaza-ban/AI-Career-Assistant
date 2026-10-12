@@ -8,7 +8,7 @@ from src.db.models import CvVersion, GapAnalysis, ShareGrant, utcnow
 from src.db.seed import DEMO_STUDENT_ID
 from src.services import cv_files, cv_versions
 from src.services.cv_files import CV_MAX_BYTES, _split_diacritics
-from tests.helpers import ADVISOR, STUDENT, make_docx, make_pdf, upload_cv
+from tests.helpers import ADVISOR, STUDENT, make_docx, make_image, make_pdf, make_scanned_pdf, upload_cv
 
 CV_TEXT = "Nguyen Minh Anh - Python FastAPI Docker SQL developer with REST API and data pipeline experience"
 
@@ -281,3 +281,49 @@ def test_detects_pdf_text_with_split_vietnamese_letters():
     )
     assert _split_diacritics(broken) is True
     assert _split_diacritics(normal) is False
+
+
+@pytest.mark.asyncio
+async def test_upload_scanned_pdf_triggers_ocr(client):
+    """PDF scan (chỉ có ảnh, không có text layer) được OCR tự động trích xuất nội dung."""
+    scanned_data = make_scanned_pdf(CV_TEXT)
+    res = await upload(client, "scanned_cv.pdf", scanned_data)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["file_type"] == "pdf"
+    assert data["page_count"] == 1
+    assert data["status"] == "ready"
+
+    # Kiểm tra nội dung trích xuất qua text endpoint
+    text_res = await client.get(f"/api/v1/cv/{data['id']}/text", headers=STUDENT)
+    assert text_res.status_code == 200
+    assert "Python" in text_res.json()["text"]
+
+
+@pytest.mark.asyncio
+async def test_upload_image_cv_png_and_jpg_triggers_ocr(client):
+    """File ảnh PNG và JPG được OCR nhận diện và tạo phiên bản CV thành công."""
+    png_data = make_image(CV_TEXT, fmt="PNG")
+    res_png = await upload(client, "my_cv.png", png_data)
+    assert res_png.status_code == 201
+    png_json = res_png.json()
+    assert png_json["file_type"] == "png"
+    assert png_json["page_count"] == 1
+
+    file_res = await client.get(f"/api/v1/cv/{png_json['id']}/file", headers=STUDENT)
+    assert file_res.status_code == 200
+    assert file_res.headers["content-type"] == "image/png"
+
+    jpg_data = make_image(CV_TEXT, fmt="JPEG")
+    res_jpg = await upload(client, "my_cv.jpg", jpg_data)
+    assert res_jpg.status_code == 201
+    assert res_jpg.json()["file_type"] == "jpg"
+
+
+@pytest.mark.asyncio
+async def test_upload_blank_image_fails_extractable(client):
+    """Ảnh trắng không có chữ bị từ chối với lỗi cv_not_extractable."""
+    blank_png = make_image(None, fmt="PNG")
+    res = await upload(client, "blank.png", blank_png)
+    assert res.status_code == 422
+    assert res.json()["code"] == "cv_not_extractable"

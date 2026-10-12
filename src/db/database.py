@@ -60,6 +60,13 @@ def init_db() -> None:
     from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
     from src.services.cv_versions import backfill as backfill_cv_versions
 
+    # Tự động cập nhật bảng interview_sessions nếu cấu trúc cũ có NOT NULL trên cv_version_id
+    with engine.begin() as conn:
+        res = conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='interview_sessions'")).fetchone()
+        if res and res[0] and "cv_version_id VARCHAR(64) NOT NULL" in res[0]:
+            conn.execute(text("DROP TABLE IF EXISTS interview_turns"))
+            conn.execute(text("DROP TABLE IF EXISTS interview_sessions"))
+
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
     with SessionLocal() as db:

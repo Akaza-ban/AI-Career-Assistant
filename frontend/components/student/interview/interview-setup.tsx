@@ -41,9 +41,14 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
 
   const [jdId, setJdId] = useState<string | null>(initialJdId)
   const [cvId, setCvId] = useState<string | null>(initialCvId)
+  const [mode, setMode] = useState<"with_cv" | "jd_only">("with_cv")
   const [starting, setStarting] = useState(false)
   const [introOpen, setIntroOpen] = useState(() => !interviewIntroHidden())
   const [tourOpen, setTourOpen] = useState(false)
+
+  // Tự động chuyển sang jd_only nếu sinh viên chưa có CV nào
+  const hasCvs = Boolean(cvs && cvs.length > 0)
+  const effectiveMode = hasCvs ? mode : "jd_only"
 
   useAgentActions({
     resetView: ({ clear_filters, close_modals }) => {
@@ -66,9 +71,11 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
 
   // Vào phòng chờ: xem luật rồi bấm "Sẵn sàng" mới tạo buổi (đồng hồ câu 1 chạy ngay khi tạo buổi).
   function start() {
-    if (!jd || !activeCv || exhausted) return
+    if (!jd || exhausted) return
+    if (effectiveMode === "with_cv" && !activeCv) return
     setStarting(true)
-    router.push(`/student/interview/start?jd=${encodeURIComponent(jd.id)}&cv=${encodeURIComponent(activeCv.id)}`)
+    const cvParam = effectiveMode === "with_cv" && activeCv ? `&cv=${encodeURIComponent(activeCv.id)}` : ""
+    router.push(`/student/interview/start?jd=${encodeURIComponent(jd.id)}&mode=${effectiveMode}${cvParam}`)
   }
 
   if (!jds || !cvs) {
@@ -78,19 +85,6 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
         <Skeleton className="h-[180px] rounded-[20px]" />
         <Skeleton className="h-[200px] rounded-[20px]" />
       </div>
-    )
-  }
-
-  if (cvs.length === 0) {
-    return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <FileText className="size-8 text-ink-3" aria-hidden />
-        <p className="font-heading font-bold">Bạn cần tải CV lên trước khi luyện phỏng vấn</p>
-        <p className="max-w-md text-sm text-ink-2">AI dựa vào vị trí ứng tuyển và kinh nghiệm trong CV để đánh giá câu trả lời.</p>
-        <Button nativeButton={false} render={<Link href="/student/cv" />}>
-          Đến CV của tôi
-        </Button>
-      </Panel>
     )
   }
 
@@ -110,7 +104,7 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
           </Badge>
           <h1 className="font-heading text-[32px] leading-10 font-extrabold">Thiết lập phiên phỏng vấn thử</h1>
           <p className="max-w-2xl text-ink-2">
-            Chọn vị trí và CV, rồi trả lời {QUESTION_COUNT} câu hỏi hành vi như một buổi phỏng vấn thật.
+            Chọn vị trí và chế độ phỏng vấn để AI tạo các câu hỏi hành vi & kỹ thuật thực tế cho bạn.
           </p>
         </div>
         <Button variant="soft" className="h-10 px-4" onClick={() => setTourOpen(true)}>
@@ -119,12 +113,88 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
         </Button>
       </div>
 
+      {/* Thông báo nếu chưa có CV */}
+      {!hasCvs && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue/20 bg-blue-soft/40 p-4 text-sm text-ink">
+          <div className="flex items-center gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-blue/10 text-blue">
+              <FileText className="size-5" aria-hidden />
+            </span>
+            <div>
+              <p className="font-semibold text-ink">Bạn chưa tải CV lên</p>
+              <p className="text-xs text-ink-2">
+                Hệ thống sẽ tạo câu hỏi phỏng vấn dựa trực tiếp trên <strong>Mô tả công việc (JD)</strong>. Bạn cũng có thể tải CV lên để được phỏng vấn cá nhân hóa theo kinh nghiệm trong hồ sơ.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/student/cv" />}>
+            Tải CV lên
+          </Button>
+        </div>
+      )}
+
+      {/* Chọn chế độ phỏng vấn */}
+      {hasCvs && (
+        <section className="grid gap-3">
+          <SectionHeader title="Chọn hình thức phỏng vấn" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => setMode("with_cv")}
+              className={cn(
+                "flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-all",
+                effectiveMode === "with_cv"
+                  ? "border-violet bg-violet-soft/40 shadow-sm ring-1 ring-violet"
+                  : "border-line bg-card hover:border-violet/40 hover:bg-surface/50",
+              )}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="flex items-center gap-2 font-heading font-bold text-ink">
+                  <FileText className="size-4 text-violet" aria-hidden />
+                  Phỏng vấn dựa vào CV & JD
+                </span>
+                <Badge variant={effectiveMode === "with_cv" ? "violet" : "neutral"} className="text-[11px]">
+                  Cá nhân hóa sâu
+                </Badge>
+              </div>
+              <p className="text-xs leading-5 text-ink-2">
+                AI phân tích các dự án, kỹ năng trong CV của bạn và đối chiếu với yêu cầu JD để hỏi sâu vào bài toán thực tế bạn đã làm.
+              </p>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode("jd_only")}
+              className={cn(
+                "flex flex-col items-start gap-2 rounded-2xl border p-4 text-left transition-all",
+                effectiveMode === "jd_only"
+                  ? "border-violet bg-violet-soft/40 shadow-sm ring-1 ring-violet"
+                  : "border-line bg-card hover:border-violet/40 hover:bg-surface/50",
+              )}
+            >
+              <div className="flex w-full items-center justify-between">
+                <span className="flex items-center gap-2 font-heading font-bold text-ink">
+                  <Briefcase className="size-4 text-violet" aria-hidden />
+                  Phỏng vấn dựa vào JD
+                </span>
+                <Badge variant={effectiveMode === "jd_only" ? "violet" : "neutral"} className="text-[11px]">
+                  Theo yêu cầu vị trí
+                </Badge>
+              </div>
+              <p className="text-xs leading-5 text-ink-2">
+                AI tạo câu hỏi tình huống thực tế bám sát trách nhiệm và công nghệ trọng tâm của vị trí tuyển dụng (không dùng dữ liệu CV).
+              </p>
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Tiêu đề mục đặt ngoài ô như trang Tổng quan; data-tour bọc cả tiêu đề để hướng dẫn làm nổi bật cả mục */}
       <section data-tour="setup" className="grid gap-3">
-        <SectionHeader title="Chọn vị trí & CV" />
+        <SectionHeader title={effectiveMode === "with_cv" ? "Chọn vị trí & CV" : "Chọn vị trí ứng tuyển"} />
         <Panel className="grid gap-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Vị trí ứng tuyển" icon={Briefcase}>
+          <div className={cn("grid gap-3", effectiveMode === "with_cv" ? "sm:grid-cols-2" : "sm:grid-cols-1")}>
+            <Field label="Vị trí ứng tuyển (JD)" icon={Briefcase}>
               <Select items={jdItems} value={jd?.id ?? null} onValueChange={(v) => setJdId(String(v))}>
                 <SelectTrigger data-agent-target="select-jd" className="h-10 w-full min-w-0 bg-surface" aria-label="Vị trí ứng tuyển">
                   <SelectValue className="min-w-0 truncate" />
@@ -138,20 +208,23 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="CV dùng làm bối cảnh" icon={FileText}>
-              <Select items={cvItems} value={activeCv?.id ?? null} onValueChange={(v) => setCvId(String(v))}>
-                <SelectTrigger data-agent-target="select-cv" className="h-10 w-full min-w-0 bg-surface" aria-label="CV dùng làm bối cảnh">
-                  <SelectValue className="min-w-0 truncate" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cvItems.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
+
+            {effectiveMode === "with_cv" && (
+              <Field label="CV dùng làm bối cảnh" icon={FileText}>
+                <Select items={cvItems} value={activeCv?.id ?? null} onValueChange={(v) => setCvId(String(v))}>
+                  <SelectTrigger data-agent-target="select-cv" className="h-10 w-full min-w-0 bg-surface" aria-label="CV dùng làm bối cảnh">
+                    <SelectValue className="min-w-0 truncate" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cvItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            )}
           </div>
           {jd && jd.skills.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -170,13 +243,16 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
         <Panel className="grid gap-5 p-6">
           <div className="grid items-center gap-6 lg:grid-cols-[minmax(0,1fr)_auto]">
             <div className="grid min-w-0 gap-4">
-              {/* Cột CV rộng hơn để đủ chỗ cho tên file */}
               <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,0.7fr)_minmax(0,0.9fr)]">
                 <SummaryStat label="Vị trí" value={jd?.title ?? "—"} />
                 <SummaryStat
-                  label="CV"
-                  value={activeCv?.file_name ?? "—"}
-                  sub={activeCv ? `Phiên bản ${activeCv.label}` : undefined}
+                  label="Chế độ phỏng vấn"
+                  value={effectiveMode === "with_cv" ? (activeCv?.file_name ?? "—") : "Dựa theo JD tuyển dụng"}
+                  sub={
+                    effectiveMode === "with_cv"
+                      ? (activeCv ? `Phiên bản ${activeCv.label} & JD` : undefined)
+                      : "Trực tiếp theo bài toán JD"
+                  }
                 />
                 <SummaryStat label="Số câu hỏi" value={`${QUESTION_COUNT} câu`} highlight />
                 <SummaryStat label="Thời lượng" value={`Khoảng ${MINUTES} phút`} />
@@ -207,7 +283,13 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
               </div>
             </div>
             <div className="grid gap-2 lg:w-72">
-              <Button data-agent-target="btn-start-interview" variant="violet" size="brand" disabled={starting || !jd || !activeCv || !quota || exhausted} onClick={start}>
+              <Button
+                data-agent-target="btn-start-interview"
+                variant="violet"
+                size="brand"
+                disabled={starting || !jd || (effectiveMode === "with_cv" && !activeCv) || !quota || exhausted}
+                onClick={start}
+              >
                 {starting ? <Loader2 className="animate-spin" aria-hidden /> : null}
                 Bắt đầu phỏng vấn
                 {!starting && <ArrowRight aria-hidden />}

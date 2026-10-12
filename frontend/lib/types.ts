@@ -19,7 +19,7 @@ export interface UserProfile {
 
 // ---------- CV (US-SV-01) ----------
 
-export type CvFileType = "pdf" | "docx"
+export type CvFileType = "pdf" | "docx" | "png" | "jpg" | "jpeg"
 export type CvStatus = "processing" | "ready" | "failed"
 
 /**
@@ -385,8 +385,9 @@ export interface InterviewSession {
   id: string
   status: "in_progress" | "completed"
   jd: InterviewJdRef
-  cv_version_id: string
-  cv_file_name: string
+  cv_version_id?: string | null
+  cv_file_name?: string | null
+  interview_mode?: "jd_only" | "with_cv"
   question_count: number
   seconds_per_question: number
   /** null khi đã hoàn thành. */
@@ -402,7 +403,8 @@ export interface InterviewSession {
 
 export interface CreateInterviewRequest {
   jd_id: string
-  cv_version_id: string
+  cv_version_id?: string | null
+  interview_mode?: "jd_only" | "with_cv"
 }
 
 export interface SubmitAnswerRequest {
@@ -433,7 +435,8 @@ export interface InterviewReport {
   /** Dùng cho khảo sát CSAT. */
   response_id: string
   jd: InterviewJdRef
-  cv_file_name: string
+  cv_file_name?: string | null
+  interview_mode?: "jd_only" | "with_cv"
   created_at: ISODateString
   completed_at: ISODateString
   duration_seconds: number

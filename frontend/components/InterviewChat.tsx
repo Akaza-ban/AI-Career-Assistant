@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useRef, type KeyboardEvent } from "react"
-import { Bot, CircleCheck, Info, Lightbulb, Loader2, SendHorizontal, ShieldCheck, TimerOff } from "lucide-react"
+import { useCallback, useEffect, useRef, type KeyboardEvent } from "react"
+import { Bot, CircleCheck, Info, Lightbulb, Loader2, Mic, SendHorizontal, ShieldCheck, Square, TimerOff } from "lucide-react"
 
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { MAX_ANSWER_CHARS, MIN_ANSWER_CHARS } from "@/lib/interview"
 import type { InterviewQuestion, InterviewTurn } from "@/lib/types"
+import { useSonioxStt } from "@/lib/use-soniox-stt"
 import { cn } from "@/lib/utils"
 
 // S6: khung chat phỏng vấn. Logic đồng hồ / nộp bài nằm ở InterviewRoom; component này chỉ hiển thị.
@@ -22,6 +23,7 @@ export interface Rejection {
 }
 
 interface InterviewChatProps {
+  sessionId?: string
   total: number
   turns: InterviewTurn[]
   current: InterviewQuestion | null
@@ -39,20 +41,57 @@ interface InterviewChatProps {
 }
 
 export function InterviewChat(props: InterviewChatProps) {
-  const { total, turns, current, rejections, candidateName, candidateAvatar, draft, sending, paused, finished } = props
+  const { sessionId, total, turns, current, rejections, candidateName, candidateAvatar, draft, sending, paused, finished } = props
   const endRef = useRef<HTMLDivElement>(null)
   const length = draft.trim().length
-  const canSend = !sending && !paused && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
+
+  const baseDraftRef = useRef("")
+
+  const onTranscriptUpdate = useCallback(
+    (speechText: string) => {
+      const base = baseDraftRef.current
+      const updated = base ? (speechText ? `${base.trim()} ${speechText.trimStart()}` : base) : speechText
+      props.onDraftChange(updated)
+    },
+    [props],
+  )
+
+  const stt = useSonioxStt({
+    sessionId,
+    onTranscriptUpdate,
+  })
+
+  const canSend = !sending && !paused && !stt.isRecording && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
   }, [turns.length, current?.index, rejections.length, sending])
+
+  useEffect(() => {
+    if (paused || finished) {
+      stt.stop()
+    }
+  }, [paused, finished, stt])
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       if (canSend) props.onSend()
     }
+  }
+
+  function handleToggleRecord() {
+    if (!stt.isRecording && !stt.isConnecting) {
+      baseDraftRef.current = draft
+    }
+    stt.toggle()
+  }
+
+  function handleSend() {
+    if (stt.isRecording) {
+      stt.stop()
+    }
+    props.onSend()
   }
 
   const rejectionsOf = (index: number) => rejections.filter((r) => r.questionIndex === index)
@@ -108,25 +147,78 @@ export function InterviewChat(props: InterviewChatProps) {
                 Dựa trên trải nghiệm thật, không bịa số liệu.
               </span>
             </div>
+
+            {stt.isRecording && (
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft/80 px-3.5 py-2 text-xs font-medium text-bad ring-1 ring-bad/20">
+                <span className="flex items-center gap-2">
+                  <span className="relative flex size-2.5">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-bad opacity-75" />
+                    <span className="relative inline-flex size-2.5 rounded-full bg-bad" />
+                  </span>
+                  <span>Đang thu âm qua Soniox STT: Hãy nói tự nhiên bằng tiếng Việt hoặc thuật ngữ chuyên môn…</span>
+                </span>
+                <span className="text-[11px] opacity-80">Bấm &quot;Dừng nói&quot; khi hoàn tất</span>
+              </div>
+            )}
+
             <Textarea
               value={draft}
               onChange={(e) => props.onDraftChange(e.target.value)}
               onKeyDown={onKeyDown}
               maxLength={MAX_ANSWER_CHARS}
               disabled={paused || sending}
-              placeholder={paused ? "Đang tạm dừng…" : "Nhập câu trả lời của bạn…"}
+              placeholder={
+                paused
+                  ? "Đang tạm dừng…"
+                  : stt.isRecording
+                  ? "Đang lắng nghe và nhận diện giọng nói qua Soniox STT..."
+                  : "Nhập câu trả lời của bạn hoặc bấm 'Nói câu trả lời' để ghi âm trực tiếp…"
+              }
               aria-label={`Câu trả lời cho câu ${current.index}`}
-              className="min-h-28 resize-none border-0 bg-surface text-[15px] leading-6 focus-visible:ring-2"
+              className={cn(
+                "min-h-28 resize-none border-0 bg-surface text-[15px] leading-6 focus-visible:ring-2",
+                stt.isRecording && "ring-2 ring-bad/30 bg-bad-soft/10",
+              )}
             />
             <div className="flex items-center justify-between gap-2">
               <span className={cn("text-xs", length > 0 && length < MIN_ANSWER_CHARS ? "text-warn" : "text-ink-3")}>
                 {draft.length}/{MAX_ANSWER_CHARS} ký tự
                 {length < MIN_ANSWER_CHARS ? ` · tối thiểu ${MIN_ANSWER_CHARS}` : " · Ctrl + Enter để gửi"}
               </span>
-              <Button variant="violet" className="h-10 px-5" onClick={props.onSend} disabled={!canSend}>
-                {sending ? <Loader2 className="animate-spin" aria-hidden /> : <SendHorizontal aria-hidden />}
-                Gửi
-              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant={stt.isRecording ? "destructive" : "soft"}
+                  className={cn(
+                    "h-10 gap-2 px-3.5 transition-all",
+                    stt.isRecording && "animate-pulse ring-2 ring-bad/40",
+                  )}
+                  onClick={handleToggleRecord}
+                  disabled={paused || sending}
+                  title={stt.isRecording ? "Bấm để dừng nói" : "Bấm để nói câu trả lời qua Soniox STT"}
+                >
+                  {stt.isConnecting ? (
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  ) : stt.isRecording ? (
+                    <Square className="size-4 fill-current" aria-hidden />
+                  ) : (
+                    <Mic className="size-4 text-violet" aria-hidden />
+                  )}
+                  <span className="text-xs font-semibold">
+                    {stt.isConnecting
+                      ? "Đang nối STT…"
+                      : stt.isRecording
+                      ? "Dừng nói"
+                      : "Nói câu trả lời"}
+                  </span>
+                </Button>
+
+                <Button variant="violet" className="h-10 px-5" onClick={handleSend} disabled={!canSend}>
+                  {sending ? <Loader2 className="animate-spin" aria-hidden /> : <SendHorizontal aria-hidden />}
+                  Gửi
+                </Button>
+              </div>
             </div>
           </div>
         )

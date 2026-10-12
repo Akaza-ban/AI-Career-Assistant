@@ -80,7 +80,7 @@ export function UploadStatusBanner({ state, onDismiss }: { state: UploadState; o
             {uploading ? (
               <>
                 <Sparkles className="size-3.5 shrink-0" aria-hidden />
-                Đang tải lên và trích xuất nội dung CV…
+                Đang tải lên, quét OCR và trích xuất nội dung CV…
               </>
             ) : (
               state.message
@@ -420,7 +420,7 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
     if (disabled) return
     const files = Array.from(e.dataTransfer.files)
     if (files.length === 0) {
-      toast.info("Hãy kéo thả file PDF hoặc DOCX (ví dụ từ thư mục trên máy), không phải liên kết hay đoạn văn bản.")
+      toast.info("Hãy kéo thả file PDF, DOCX hoặc ảnh (PNG, JPG) (ví dụ từ thư mục trên máy), không phải liên kết hay đoạn văn bản.")
       return
     }
     if (files.length > 1) toast.info(`Mỗi lần chỉ tải lên một file. Đã chọn ${files[0].name}.`)
@@ -428,7 +428,7 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
   }
 
   const dropHandlers = { onDragOver: handleDragOver, onDragLeave: handleDragLeave, onDrop: handleDrop }
-  const limitNote = `PDF hoặc DOCX, tối đa ${CV_MAX_MB}MB mỗi file`
+  const limitNote = `PDF, DOCX hoặc ảnh (PNG, JPG), tối đa ${CV_MAX_MB}MB (hỗ trợ OCR cho bản scan)`
   const heading = dragging ? "Thả file vào đây để tải lên" : null
   const browseButton = (
     <Button

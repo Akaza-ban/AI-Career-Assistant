@@ -11,13 +11,20 @@ import { formatBytes } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-type Preview = { kind: "pdf"; url: string } | { kind: "text"; text: string } | { kind: "unavailable" }
+type Preview =
+  | { kind: "pdf"; url: string }
+  | { kind: "image"; url: string }
+  | { kind: "text"; text: string }
+  | { kind: "unavailable" }
 
-// Trình duyệt hiển thị được PDF; DOCX (hoặc PDF không có file, ví dụ ở chế độ mock) thì xem bằng văn bản đã trích.
+// Trình duyệt hiển thị được PDF và ảnh; DOCX thì xem bằng văn bản đã trích qua OCR / docx parser.
 async function loadPreview(cv: CvVersion): Promise<Preview> {
   if (cv.file_type === "pdf") {
     const blob = await api.getCvFile(cv.id)
     if (blob) return { kind: "pdf", url: URL.createObjectURL(blob) }
+  } else if (["png", "jpg", "jpeg"].includes(cv.file_type)) {
+    const blob = await api.getCvFile(cv.id)
+    if (blob) return { kind: "image", url: URL.createObjectURL(blob) }
   }
   const text = await api.getCvText(cv.id)
   return text !== null ? { kind: "text", text } : { kind: "unavailable" }
@@ -30,7 +37,7 @@ export function CvPreviewBody({ cv }: { cv: CvVersion }) {
 
   useEffect(() => {
     return () => {
-      if (data?.kind === "pdf") URL.revokeObjectURL(data.url)
+      if (data?.kind === "pdf" || data?.kind === "image") URL.revokeObjectURL(data.url)
     }
   }, [data])
 
@@ -55,6 +62,14 @@ export function CvPreviewBody({ cv }: { cv: CvVersion }) {
   }
   if (data.kind === "pdf") {
     return <iframe src={`${data.url}#view=FitH`} title={`Xem nhanh ${cv.file_name}`} className="size-full rounded-lg bg-surface" />
+  }
+  if (data.kind === "image") {
+    return (
+      <div className="flex h-full items-center justify-center overflow-auto rounded-lg bg-surface p-4">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={data.url} alt={`Xem nhanh ${cv.file_name}`} className="max-h-full max-w-full rounded object-contain shadow" />
+      </div>
+    )
   }
   if (data.kind === "text") {
     return (
