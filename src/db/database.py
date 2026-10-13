@@ -57,10 +57,12 @@ def init_db() -> None:
     """
     from src.db import models  # noqa: F401  (đăng ký các bảng vào Base.metadata)
     from src.db.demo_cohort import seed_demo_cohort
+    from src.db.migrations.auth import upgrade as upgrade_auth
     from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
     from src.services.cv_versions import backfill as backfill_cv_versions
 
     Base.metadata.create_all(bind=engine)
+    upgrade_auth(engine)
     _add_missing_columns()
     with SessionLocal() as db:
         seed_demo_users(db)

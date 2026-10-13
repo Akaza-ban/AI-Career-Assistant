@@ -25,6 +25,7 @@ class User(Base):
     # Ví dụ "KDQT - K2021" (sinh viên) hoặc "Khoa HTTT" (cố vấn)
     subtitle: Mapped[str] = mapped_column(String(255), default="")
     email: Mapped[str] = mapped_column(String(255), unique=True)
+    password_hash: Mapped[str | None] = mapped_column(String(255), default=None)
     avatar_url: Mapped[str | None] = mapped_column(String(1024), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     # Sinh viên: mã SV, ngành, khoá (lọc danh sách ở trang Cố vấn)
@@ -35,6 +36,17 @@ class User(Base):
     title: Mapped[str | None] = mapped_column(String(255), default=None)
     office: Mapped[str | None] = mapped_column(String(255), default=None)
     office_hours: Mapped[str | None] = mapped_column(String(255), default=None)
+
+
+class AuthSession(Base):
+    """Revocable session: the cookie token itself is never stored in the database."""
+
+    __tablename__ = "auth_sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class AdvisorAssignment(Base):
