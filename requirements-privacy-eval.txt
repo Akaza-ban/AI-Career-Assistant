@@ -1,0 +1,7 @@
+# Reproduce the three local CPU NER benchmarks (no hosted inference).
+-r requirements.txt
+underthesea==9.5.0
+spacy==3.8.16
+https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl
+transformers==5.18.0
+reportlab==5.0.1
