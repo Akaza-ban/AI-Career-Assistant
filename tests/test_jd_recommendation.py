@@ -17,13 +17,10 @@ def test_extract_cv_query():
     cv_text = """
     # Nguyen Van B
     Email: b@example.com
-    
     ## Kỹ năng
     - Python, FastAPI, Docker, PostgreSQL
-    
     ## Kinh nghiệm làm việc
     - Phát triển hệ thống backend e-commerce sử dụng FastAPI và Redis
-    
     ## Sở thích
     - Chơi bóng đá, đọc sách
     """
