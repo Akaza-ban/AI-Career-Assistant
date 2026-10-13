@@ -4,13 +4,22 @@ from pathlib import Path
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from src.config import get_settings
 from src.db.models import AdvisorAssignment, GapAnalysis, JobDescription, User
+from src.services.auth import hash_password
 
-# Người dùng demo cho giai đoạn chưa có đăng nhập thật.
-# Trùng id/tên với dữ liệu mock của frontend (frontend/lib/mocks/data.ts) để giao diện nhất quán
-# khi một số nhóm API gọi backend thật còn các nhóm khác vẫn dùng mock.
+# Individual development accounts. IDs are retained for existing records; these
+# accounts now require their own credentials and are never selected by role.
 DEMO_STUDENT_ID = "sv-0142"
+SECOND_STUDENT_ID = "sv-0143"
 DEMO_ADVISOR_ID = "cv-007"
+
+# Public development-only passwords, never used to provision production accounts.
+DEV_PASSWORDS = {
+    DEMO_STUDENT_ID: "Student-A-dev-only!",
+    SECOND_STUDENT_ID: "Student-B-dev-only!",
+    DEMO_ADVISOR_ID: "Advisor-dev-only!",
+}
 
 DEMO_USERS = [
     {
@@ -22,6 +31,16 @@ DEMO_USERS = [
         "student_code": "21125430",
         "major": "Kinh doanh quốc tế",
         "cohort": "K2021",
+    },
+    {
+        "id": SECOND_STUDENT_ID,
+        "role": "student",
+        "full_name": "Lê Thu Hà",
+        "subtitle": "HTTT - K2022",
+        "email": "thuha.k22@student.university.edu.vn",
+        "student_code": "22125431",
+        "major": "Hệ thống thông tin",
+        "cohort": "K2022",
     },
     {
         "id": DEMO_ADVISOR_ID,
@@ -37,20 +56,29 @@ DEMO_USERS = [
 
 
 def seed_demo_users(db: Session) -> None:
-    """
-    Thêm người dùng demo nếu chưa có và phân công SV demo cho cố vấn demo. Bản ghi đã có chỉ được bổ sung
-    các trường còn trống (ví dụ trường hồ sơ mới thêm), không ghi đè.
-    """
+    """Seed individual development accounts; preserve existing passwords and assignments."""
+    settings = get_settings()
+    if settings.app_env == "production":
+        return
+    passwords = {
+        DEMO_STUDENT_ID: settings.seed_student_a_password.get_secret_value() or DEV_PASSWORDS[DEMO_STUDENT_ID],
+        SECOND_STUDENT_ID: settings.seed_student_b_password.get_secret_value() or DEV_PASSWORDS[SECOND_STUDENT_ID],
+        DEMO_ADVISOR_ID: settings.seed_advisor_password.get_secret_value() or DEV_PASSWORDS[DEMO_ADVISOR_ID],
+    }
     for data in DEMO_USERS:
         user = db.get(User, data["id"])
         if user is None:
-            db.add(User(**data))
-            continue
-        for key, value in data.items():
-            if getattr(user, key) is None:
-                setattr(user, key, value)
+            user = User(**data)
+            db.add(user)
+        else:
+            for key, value in data.items():
+                if getattr(user, key) is None:
+                    setattr(user, key, value)
+        if not user.password_hash:
+            user.password_hash = hash_password(passwords[data["id"]])
     db.flush()
     assign(db, DEMO_ADVISOR_ID, DEMO_STUDENT_ID)
+    assign(db, DEMO_ADVISOR_ID, SECOND_STUDENT_ID)
     db.commit()
 
 
@@ -105,3 +133,10 @@ def seed_vector_store() -> int:
 
         logging.getLogger(__name__).warning("Không thể nạp JD Vector Store: %s", e)
         return 0
+
+
+if __name__ == "__main__":
+    # Run from the repository root: python -m src.db.seed.
+    from src.db.database import init_db
+
+    init_db()

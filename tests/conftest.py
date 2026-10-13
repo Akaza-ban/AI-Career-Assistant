@@ -23,6 +23,7 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
+from src.config import get_settings  # noqa: E402
 from src.db.database import SessionLocal, init_db  # noqa: E402
 from src.db.models import User  # noqa: E402
 from src.main import app  # noqa: E402
@@ -31,12 +32,22 @@ from tests.helpers import ADVISOR, STUDENT  # noqa: E402
 
 _AUTH_READY = False
 
+# Fail before any fixture can seed/delete records if configuration precedence ever
+# regresses. Local .env files must never redirect tests into the development DB.
+assert get_settings().database_url == os.environ["DATABASE_URL"]
+assert Path(get_settings().upload_dir).resolve() == (_TMP / "uploads").resolve()
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialized_database():
+    """Bootstrap once; individual fixtures may then control their own assignments."""
+    init_db()
+
 
 @pytest_asyncio.fixture
 async def client():
     """Async HTTP client for testing API endpoints."""
-    # ASGITransport không chạy lifespan của app nên tự tạo bảng và dữ liệu demo ở đây.
-    init_db()
+    # ASGITransport does not run lifespan; initialized_database bootstraps it once.
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         global _AUTH_READY

@@ -73,6 +73,9 @@ class Settings(BaseSettings):
 
     # Tạo nhóm SV giả định do cố vấn demo phụ trách (dữ liệu minh hoạ cho các trang Cố vấn)
     seed_demo_cohort: bool = True
+    seed_student_a_password: SecretStr = SecretStr("")
+    seed_student_b_password: SecretStr = SecretStr("")
+    seed_advisor_password: SecretStr = SecretStr("")
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"

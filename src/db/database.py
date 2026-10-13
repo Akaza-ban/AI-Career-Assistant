@@ -67,7 +67,7 @@ def init_db() -> None:
     with SessionLocal() as db:
         seed_demo_users(db)
         seed_jd_library(db)
-        if get_settings().seed_demo_cohort:
+        if get_settings().app_env != "production" and get_settings().seed_demo_cohort:
             seed_demo_cohort(db)
         fail_interrupted_analyses(db)
         # Phiên bản CV tạo trước khi có lịch sử phiên bản theo từng CV
