@@ -196,7 +196,7 @@ export function MyCv() {
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
         <DialogContent className="sm:max-w-md" data-agent-target="upload-cv-modal">
           <DialogTitle>Tải CV lên</DialogTitle>
-          <DialogDescription>Chọn file PDF hoặc DOCX từ máy tính để tạo CV mới.</DialogDescription>
+          <DialogDescription>Chọn file PDF, DOCX hoặc ảnh chụp CV (PNG, JPG) từ máy tính để tạo CV mới.</DialogDescription>
           <Button
             size="brand"
             onClick={() => {

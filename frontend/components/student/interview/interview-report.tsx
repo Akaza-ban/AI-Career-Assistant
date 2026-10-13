@@ -78,6 +78,7 @@ function ReportView({ report }: { report: Report }) {
     `${report.turns.length} câu`,
     `${minutes} phút`,
     report.timed_out_count > 0 ? `${report.timed_out_count} câu hết giờ` : null,
+    report.interview_mode === "jd_only" ? "Không dùng CV" : null,
   ]
     .filter(Boolean)
     .join(" · ")

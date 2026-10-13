@@ -995,8 +995,8 @@ export const mockApi = {
   async uploadCv(file: File): Promise<CvVersion> {
     await delay(900)
     const ext = file.name.split(".").pop()?.toLowerCase()
-    if (ext !== "pdf" && ext !== "docx") {
-      throw new ApiError(415, "Chỉ hỗ trợ file PDF hoặc DOCX.", "unsupported_file_type")
+    if (!ext || !["pdf", "docx", "png", "jpg", "jpeg"].includes(ext)) {
+      throw new ApiError(415, "Chỉ hỗ trợ file PDF, DOCX hoặc ảnh (PNG, JPG).", "unsupported_file_type")
     }
     if (file.size > MAX_UPLOAD_BYTES) {
       throw new ApiError(413, "File vượt quá dung lượng cho phép (tối đa 5MB).", "file_too_large")
@@ -1018,7 +1018,7 @@ export const mockApi = {
       family_id: `cv-v${version}`,
       version_count: 1,
       file_name: file.name,
-      file_type: ext,
+      file_type: ext as CvVersion["file_type"],
       size_bytes: file.size,
       page_count: null,
       uploaded_at: new Date().toISOString(),
@@ -1361,8 +1361,9 @@ export const mockApi = {
     await delay(500)
     const jd = mockJdLibrary.find((j) => j.id === body.jd_id)
     if (!jd) throw new ApiError(404, "Không tìm thấy vị trí ứng tuyển.", "jd_not_found")
-    const cv = cvVersions.find((c) => c.id === body.cv_version_id)
-    if (!cv) throw new ApiError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
+    // jd_only: phỏng vấn chỉ theo vị trí, không cần CV
+    const cv = body.interview_mode === "jd_only" ? null : cvVersions.find((c) => c.id === body.cv_version_id)
+    if (cv === undefined) throw new ApiError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
     if (interviewQuota(jd.id).remaining === 0) {
       throw new ApiError(429, `Bạn đã dùng hết ${WEEKLY_LIMIT} buổi phỏng vấn cho vị trí này trong tuần.`, "quota_exceeded")
     }
@@ -1373,8 +1374,9 @@ export const mockApi = {
         id,
         status: "in_progress",
         jd: { id: jd.id, title: jd.title, company: jd.company, source: jd.source },
-        cv_version_id: cv.id,
-        cv_file_name: cv.file_name,
+        interview_mode: cv ? "with_cv" : "jd_only",
+        cv_version_id: cv?.id ?? null,
+        cv_file_name: cv?.file_name ?? null,
         question_count: QUESTION_COUNT,
         seconds_per_question: QUESTION_SECONDS,
         current_question: mockQuestion(1, jd.title),

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useMemo, useState, type ReactNode } from "react"
-import { AlertCircle, ChevronRight, CircleHelp, FileText, Heart, Library, Loader2 } from "lucide-react"
+import { AlertCircle, ChevronRight, CircleHelp, Heart, Library, Loader2 } from "lucide-react"
 
 import { EmptyState } from "@/components/common/empty-state"
 import { MatchBadge } from "@/components/common/match-badge"
@@ -20,7 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import { formatDate } from "@/lib/format"
 import { QUESTION_COUNT, SECONDS_PER_QUESTION } from "@/lib/interview"
-import type { CvVersion, InterviewQuota, JobDescription, MatchLabel, StudentOverview } from "@/lib/types"
+import type { CvVersion, InterviewMode, InterviewQuota, JobDescription, MatchLabel, StudentOverview } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 import { cn } from "@/lib/utils"
 
@@ -57,11 +57,14 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
   const [jdId, setJdId] = useState<string | null>(initialJdId)
   const [cvId, setCvId] = useState<string | null>(initialCvId)
   const [source, setSource] = useState<Source | null>(null)
+  const [mode, setMode] = useState<InterviewMode>("with_cv")
   const [starting, setStarting] = useState(false)
   const [introOpen, setIntroOpen] = useState(() => !interviewIntroHidden())
   const [tourOpen, setTourOpen] = useState(false)
 
   const activeCv = cvs?.find((cv) => cv.id === cvId) ?? cvs?.find((cv) => cv.is_active) ?? cvs?.[0]
+  // Chưa có CV thì vẫn luyện được, câu hỏi chỉ dựa trên vị trí
+  const effectiveMode: InterviewMode = activeCv ? mode : "jd_only"
   const recs = useRecommendations(activeCv?.status === "ready" ? activeCv.id : null, false)
 
   const byId = useMemo(() => new Map((jds ?? []).map((j) => [j.id, j])), [jds])
@@ -120,9 +123,10 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
 
   // Vào phòng chờ: xem luật rồi bấm "Sẵn sàng" mới tạo buổi (đồng hồ câu 1 chạy ngay khi tạo buổi).
   function start() {
-    if (!jd || !activeCv || exhausted) return
+    if (!jd || exhausted || (effectiveMode === "with_cv" && !activeCv)) return
     setStarting(true)
-    router.push(`/student/interview/start?jd=${encodeURIComponent(jd.id)}&cv=${encodeURIComponent(activeCv.id)}`)
+    const target = effectiveMode === "with_cv" && activeCv ? `cv=${encodeURIComponent(activeCv.id)}` : "mode=jd_only"
+    router.push(`/student/interview/start?jd=${encodeURIComponent(jd.id)}&${target}`)
   }
 
   const header = (
@@ -189,26 +193,6 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
     )
   }
 
-  if (cvs.length === 0) {
-    return (
-      <div className="grid gap-10">
-        {header}
-        <Panel className="mx-auto w-full max-w-lg p-0">
-          <EmptyState
-            icon={FileText}
-            title="Bạn cần tải CV lên trước khi luyện phỏng vấn"
-            description="AI dựa vào vị trí ứng tuyển và kinh nghiệm trong CV để đánh giá câu trả lời."
-            action={
-              <Button size="brand" nativeButton={false} render={<Link href="/student/cv" />}>
-                Đến CV của tôi
-              </Button>
-            }
-          />
-        </Panel>
-      </div>
-    )
-  }
-
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-14 md:gap-[72px]">
       <div className="grid grid-cols-[minmax(0,1fr)] gap-10 md:gap-11">
@@ -216,8 +200,41 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
 
         <div className="flex flex-wrap items-start gap-x-14 gap-y-12">
           <div data-tour="setup" className="grid min-w-0 flex-[999_1_460px] gap-12 md:gap-14">
-            <Zone id="cv-pick-title" title="Chọn CV">
-              <CvPicker cvs={cvs} value={activeCv} onChange={setCvId} />
+            <Zone
+              id="cv-pick-title"
+              title="Chọn CV"
+              aside={
+                cvs.length > 0 && (
+                  <SegmentedControl<InterviewMode>
+                    aria-label="Cách đặt câu hỏi"
+                    size="sm"
+                    value={effectiveMode}
+                    onChange={setMode}
+                    options={[
+                      { value: "with_cv", label: "Theo CV" },
+                      { value: "jd_only", label: "Không dùng CV" },
+                    ]}
+                  />
+                )
+              }
+            >
+              {effectiveMode === "with_cv" ? (
+                <CvPicker cvs={cvs} value={activeCv} onChange={setCvId} />
+              ) : (
+                <p className="max-w-[560px] text-[15px] leading-6 text-ink-2">
+                  AI đặt câu hỏi dựa trên yêu cầu của vị trí.{" "}
+                  {cvs.length > 0 ? (
+                    "Chọn Theo CV để câu hỏi bám sát dự án và kinh nghiệm của bạn hơn."
+                  ) : (
+                    <>
+                      <Link href="/student/cv" className="font-semibold text-blue hover:underline">
+                        Tải CV lên
+                      </Link>{" "}
+                      để câu hỏi bám sát kinh nghiệm của bạn hơn.
+                    </>
+                  )}
+                </p>
+              )}
             </Zone>
             <Zone
               id="pick-position-title"
@@ -269,7 +286,7 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
 
           <SessionCard
             jd={jd}
-            cv={activeCv}
+            cv={effectiveMode === "with_cv" ? activeCv : null}
             quota={quota}
             starting={starting}
             onStart={start}
@@ -413,7 +430,8 @@ function CvPicker({ cvs, value, onChange }: { cvs: CvVersion[]; value: CvVersion
 
 interface SessionCardProps {
   jd: JobDescription | undefined
-  cv: CvVersion | undefined
+  /** null: phỏng vấn không dùng CV; undefined: chưa chọn được CV. */
+  cv: CvVersion | null | undefined
   quota: InterviewQuota | undefined
   starting: boolean
   onStart: () => void
@@ -423,7 +441,8 @@ function SessionCard({ jd, cv, quota, starting, onStart }: SessionCardProps) {
   const exhausted = quota !== undefined && quota.remaining === 0
   const rows: [string, string][] = [
     ["Vị trí", jd?.title ?? "—"],
-    ["CV", cv?.file_name ?? "—"],
+    // cv = null: phỏng vấn chỉ theo vị trí
+    ["CV", cv === null ? "Không dùng CV" : (cv?.file_name ?? "—")],
     ["Số câu", `${QUESTION_COUNT} câu · khoảng ${MINUTES} phút`],
     ["Chấm điểm", "Theo STAR, thang 5"],
   ]
@@ -453,7 +472,7 @@ function SessionCard({ jd, cv, quota, starting, onStart }: SessionCardProps) {
         data-agent-target="btn-start-interview"
         size="brand"
         className="mt-[18px] w-full"
-        disabled={starting || !jd || !cv || !quota || exhausted}
+        disabled={starting || !jd || cv === undefined || !quota || exhausted}
         onClick={onStart}
       >
         {starting && <Loader2 className="animate-spin" aria-hidden />}

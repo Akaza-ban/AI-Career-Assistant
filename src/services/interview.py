@@ -10,19 +10,48 @@ Quy tắc (đã chốt với nhóm):
 - Câu hỏi tạm lấy từ ngân hàng cố định (mock); chấm điểm dùng interview_agent (LLM, dự phòng bằng quy tắc).
 """
 
+import logging
 import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime, time, timedelta, timezone
+from time import monotonic
 from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from src.agents.interview.graph import interview_agent
+from src.agents.interview.question_generator import generate_interview_questions
 from src.api.errors import AppError
 from src.db.models import CvVersion, InterviewSession, InterviewTurn, JobDescription, User
 from src.services import notifications
 from src.services.guardrails import check_input_safety
+
+logger = logging.getLogger(__name__)
+
+# Dự phòng khi LLM không sinh được câu hỏi theo CV / JD: bộ câu hỏi chung dùng được cho mọi ngành.
+FALLBACK_QUESTIONS = [
+    (
+        "Nhiệm vụ & Kinh nghiệm tiêu biểu",
+        "Hãy kể về một dự án hoặc nhiệm vụ bạn tự hào nhất có liên quan đến vị trí {role}. Bối cảnh lúc đó thế nào, "
+        "bạn phụ trách phần việc gì, đã làm những gì và kết quả ra sao?",
+    ),
+    (
+        "Xử lý khó khăn & Thử thách",
+        "Hãy kể về một lần công việc hoặc dự án của bạn gặp trục trặc ngoài dự kiến. Bạn đã nhận ra vấn đề như thế nào, "
+        "xử lý ra sao và kết quả cuối cùng là gì?",
+    ),
+    (
+        "Làm việc nhóm & Phối hợp",
+        "Hãy chia sẻ một tình huống bạn có ý kiến khác với thành viên trong nhóm hoặc người hướng dẫn. Bạn đã trao đổi "
+        "và cùng đi đến thống nhất như thế nào?",
+    ),
+    (
+        "Học hỏi & Thích ứng",
+        "Hãy kể về một lần bạn phải học nhanh một kỹ năng hoặc công cụ mới, hoặc xử lý nhiều việc cùng lúc với deadline "
+        "gấp. Bạn đã sắp xếp ưu tiên và học như thế nào để hoàn thành?",
+    ),
+]
 
 QUESTION_COUNT = 4
 QUESTION_SECONDS = 5 * 60
@@ -37,29 +66,6 @@ MAX_ANSWER_CHARS = 3000
 VN_TZ = timezone(timedelta(hours=7))
 CRITERIA = ("situation", "task", "action", "result")
 
-# Ngân hàng câu hỏi tạm thời (mock), dùng được cho mọi ngành; sẽ thay bằng câu hỏi do agent sinh sau khi nhóm thống nhất.
-QUESTION_BANK = [
-    (
-        "Nhiệm vụ tiêu biểu",
-        "Hãy kể về một dự án hoặc nhiệm vụ bạn tự hào nhất có liên quan đến vị trí {role}. Bối cảnh lúc đó thế nào, "
-        "bạn phụ trách phần việc gì, đã làm những gì và kết quả ra sao?",
-    ),
-    (
-        "Xử lý khó khăn",
-        "Hãy kể về một lần công việc hoặc dự án của bạn gặp trục trặc ngoài dự kiến. Bạn đã nhận ra vấn đề như thế nào, "
-        "xử lý ra sao và kết quả cuối cùng là gì?",
-    ),
-    (
-        "Làm việc nhóm",
-        "Hãy chia sẻ một tình huống bạn có ý kiến khác với thành viên trong nhóm hoặc người hướng dẫn. Bạn đã trao đổi "
-        "và cùng đi đến thống nhất như thế nào?",
-    ),
-    (
-        "Học hỏi & ưu tiên",
-        "Hãy kể về một lần bạn phải học nhanh một kỹ năng hoặc công cụ mới, hoặc xử lý nhiều việc cùng lúc với deadline "
-        "gấp. Bạn đã sắp xếp ưu tiên và học như thế nào để hoàn thành?",
-    ),
-]
 
 # Hướng dẫn cải thiện theo tiêu chí yếu nhất: chỉ đưa khung, không viết sẵn câu trả lời (PRD mục 6)
 GUIDANCE = {
@@ -175,23 +181,27 @@ def turns_of(db: Session, session_id: str) -> list[InterviewTurn]:
 # ---------- Tạo buổi ----------
 
 
-def _new_turn(session: InterviewSession, index: int, role: str, now: datetime) -> InterviewTurn:
-    theme, template = QUESTION_BANK[index - 1]
-    return InterviewTurn(
-        id=f"it_{uuid.uuid4().hex[:12]}",
-        session_id=session.id,
-        index=index,
-        theme=theme,
-        question=template.format(role=role),
-        asked_at=now,
-    )
-
-
-def create_session(db: Session, user: User, jd_id: str, cv_version_id: str, now: datetime) -> InterviewSession:
+async def create_session(
+    db: Session,
+    user: User,
+    jd_id: str,
+    cv_version_id: str | None,
+    now: datetime,
+    mode: str | None = None,
+) -> InterviewSession:
     jd = _visible_jd(db, user, jd_id)
-    cv = db.get(CvVersion, cv_version_id)
-    if cv is None or cv.owner_id != user.id:
-        raise AppError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
+
+    # Xác định chế độ phỏng vấn: with_cv hoặc jd_only
+    if mode == "with_cv" or (mode is None and cv_version_id):
+        if not cv_version_id:
+            raise AppError(400, "Bạn cần chọn một phiên bản CV để phỏng vấn theo CV.", "cv_required")
+        cv = db.get(CvVersion, cv_version_id)
+        if cv is None or cv.owner_id != user.id:
+            raise AppError(404, "Không tìm thấy phiên bản CV đã chọn.", "cv_not_found")
+        interview_mode = "with_cv"
+    else:
+        cv = None
+        interview_mode = "jd_only"
 
     limit = quota(db, user, jd.id, now)
     if limit["remaining"] == 0:
@@ -212,15 +222,45 @@ def create_session(db: Session, user: User, jd_id: str, cv_version_id: str, now:
         id=f"iv_{uuid.uuid4().hex[:12]}",
         owner_id=user.id,
         jd_id=jd.id,
-        cv_version_id=cv.id,
-        cv_file_name=cv.file_name,
+        cv_version_id=cv.id if cv else None,
+        cv_file_name=cv.file_name if cv else None,
+        interview_mode=interview_mode,
         status="in_progress",
         current_index=1,
         question_deadline=now + timedelta(seconds=QUESTION_SECONDS),
         created_at=now,
     )
     db.add(session)
-    db.add(_new_turn(session, 1, jd.title, now))
+
+    # Sinh bộ 4 câu hỏi STAR bám sát nội dung JD hoặc CV+JD (không dùng câu hỏi cố định)
+    started = monotonic()
+    try:
+        questions = await generate_interview_questions(
+            role=jd.title,
+            jd_text=jd.content,
+            cv_text=cv.content_text if cv else None,
+            mode=interview_mode,
+        )
+        if len(questions) != len(FALLBACK_QUESTIONS):
+            raise ValueError(f"LLM trả {len(questions)} câu hỏi")
+    except Exception as e:
+        logger.warning("Không sinh được câu hỏi bằng LLM (%s); dùng bộ câu hỏi chung", e)
+        questions = [(theme, template.format(role=jd.title)) for theme, template in FALLBACK_QUESTIONS]
+    # Đồng hồ câu 1 tính từ lúc câu hỏi sẵn sàng, không trừ thời gian chờ LLM sinh câu hỏi
+    session.question_deadline += timedelta(seconds=monotonic() - started)
+
+    for i, (theme, q_text) in enumerate(questions, start=1):
+        db.add(
+            InterviewTurn(
+                id=f"it_{uuid.uuid4().hex[:12]}",
+                session_id=session.id,
+                index=i,
+                theme=theme,
+                question=q_text,
+                asked_at=now if i == 1 else None,
+            )
+        )
+
     db.commit()
     return session
 
@@ -308,8 +348,14 @@ async def submit_answer(
     scored_at = clock()
     next_turn = None
     if question_index < QUESTION_COUNT:
-        next_turn = _new_turn(session, question_index + 1, jd.title, scored_at)
-        db.add(next_turn)
+        next_turn = db.scalar(
+            select(InterviewTurn).where(
+                InterviewTurn.session_id == session.id,
+                InterviewTurn.index == question_index + 1,
+            )
+        )
+        if next_turn is not None:
+            next_turn.asked_at = scored_at
         session.current_index = question_index + 1
         session.question_deadline = scored_at + timedelta(seconds=QUESTION_SECONDS)
     else:
@@ -424,6 +470,7 @@ def build_report(db: Session, user: User, session_id: str, now: datetime) -> dic
         "response_id": session.id,
         "jd": jd_out(db.get(JobDescription, session.jd_id)),
         "cv_file_name": session.cv_file_name,
+        "interview_mode": getattr(session, "interview_mode", "with_cv") or "with_cv",
         "created_at": session.created_at,
         "completed_at": session.completed_at,
         "duration_seconds": int((session.completed_at - session.created_at).total_seconds()),
@@ -492,6 +539,7 @@ def session_out(db: Session, session: InterviewSession, now: datetime) -> dict[s
         "jd": jd_out(db.get(JobDescription, session.jd_id)),
         "cv_version_id": session.cv_version_id,
         "cv_file_name": session.cv_file_name,
+        "interview_mode": getattr(session, "interview_mode", "with_cv") or "with_cv",
         "question_count": QUESTION_COUNT,
         "seconds_per_question": QUESTION_SECONDS,
         "current_question": question_out(current) if current and session.status == "in_progress" else None,

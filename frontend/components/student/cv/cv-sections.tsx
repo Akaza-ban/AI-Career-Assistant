@@ -110,7 +110,7 @@ export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: Cv
     if (uploading) return
     const files = Array.from(e.dataTransfer.files)
     if (files.length === 0) {
-      toast.info("Hãy kéo thả file PDF hoặc DOCX (ví dụ từ thư mục trên máy), không phải liên kết hay đoạn văn bản.")
+      toast.info("Hãy kéo thả file PDF, DOCX hoặc ảnh PNG, JPG (ví dụ từ thư mục trên máy), không phải liên kết hay đoạn văn bản.")
       return
     }
     if (files.length > 1) toast.info(`Mỗi lần chỉ tải lên một file. Đã chọn ${files[0].name}.`)
@@ -171,7 +171,7 @@ export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: Cv
               {dragging ? "Thả file vào đây để tải lên" : "Tải CV đầu tiên của bạn lên"}
             </p>
             <p className="text-sm text-ink-2">
-              Kéo thả file PDF hoặc DOCX vào đây, hoặc chọn từ máy tính. Tối đa {CV_MAX_MB} MB.
+              Kéo thả file PDF, DOCX hoặc ảnh chụp CV (PNG, JPG) vào đây, hoặc chọn từ máy tính. Tối đa {CV_MAX_MB} MB.
             </p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2.5">
               {browse}
@@ -182,7 +182,7 @@ export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: Cv
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2.5">
             {icon}
             <span className="font-medium text-ink">
-              {dragging ? "Thả file vào đây để tải lên" : "Kéo thả file PDF hoặc DOCX vào đây"}
+              {dragging ? "Thả file vào đây để tải lên" : "Kéo thả file PDF, DOCX hoặc ảnh CV vào đây"}
             </span>
             <span className="text-ink-3">hoặc</span>
             {browse}

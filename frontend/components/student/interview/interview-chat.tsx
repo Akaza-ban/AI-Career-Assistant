@@ -1,14 +1,15 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useRef, type KeyboardEvent } from "react"
-import { Check, ChevronRight, Info, TimerOff } from "lucide-react"
+import { useCallback, useEffect, useRef, type KeyboardEvent } from "react"
+import { Check, ChevronRight, Info, Loader2, Mic, Square, TimerOff } from "lucide-react"
 
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MAX_ANSWER_CHARS, MIN_ANSWER_CHARS } from "@/lib/interview"
 import type { InterviewQuestion, InterviewTurn } from "@/lib/types"
+import { useSonioxStt } from "@/lib/use-soniox-stt"
 import { cn } from "@/lib/utils"
 
 // S6: khung hội thoại phỏng vấn (bản vẽ "Phòng phỏng vấn"). Logic đồng hồ / nộp bài nằm ở InterviewRoom;
@@ -22,6 +23,8 @@ export interface Rejection {
 }
 
 interface InterviewChatProps {
+  /** Buổi phỏng vấn đang diễn ra: gửi kèm khi ghi âm để nhận diện giọng nói theo từ vựng của vị trí. */
+  sessionId?: string
   total: number
   turns: InterviewTurn[]
   current: InterviewQuestion | null
@@ -39,11 +42,33 @@ interface InterviewChatProps {
 }
 
 export function InterviewChat(props: InterviewChatProps) {
-  const { total, turns, current, rejections, candidateName, candidateAvatar, draft, sending, paused, finished } = props
+  const { sessionId, total, turns, current, rejections, candidateName, candidateAvatar, draft, sending, paused, finished } = props
+  const { onDraftChange } = props
   const endRef = useRef<HTMLDivElement>(null)
+
+  // Nói câu trả lời: chữ nhận diện được ghi nối vào phần đã gõ trước khi bấm ghi âm
+  const typedBeforeRef = useRef("")
+  const onTranscriptUpdate = useCallback(
+    (speech: string) => {
+      const typed = typedBeforeRef.current.trim()
+      onDraftChange(typed && speech ? `${typed} ${speech.trimStart()}` : typed || speech)
+    },
+    [onDraftChange],
+  )
+  const stt = useSonioxStt({ sessionId, onTranscriptUpdate })
+  const { stop: stopRecording } = stt
+  useEffect(() => {
+    if (paused || finished) stopRecording()
+  }, [paused, finished, stopRecording])
+
   const length = draft.trim().length
-  const canSend = !sending && !paused && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
+  const canSend = !sending && !paused && !stt.isRecording && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
   const last = current?.index === total
+
+  function toggleRecording() {
+    if (!stt.isRecording && !stt.isConnecting) typedBeforeRef.current = draft
+    stt.toggle()
+  }
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
@@ -126,11 +151,25 @@ export function InterviewChat(props: InterviewChatProps) {
               onKeyDown={onKeyDown}
               maxLength={MAX_ANSWER_CHARS}
               disabled={paused || sending}
+              readOnly={stt.isRecording}
               placeholder={
-                paused ? "Đang tạm dừng…" : "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả…"
+                paused
+                  ? "Đang tạm dừng…"
+                  : stt.isRecording
+                    ? "Đang nghe…"
+                    : "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả, gõ hoặc bấm Nói câu trả lời…"
               }
               className="block min-h-32 w-full resize-y rounded-xl border border-line-strong bg-card px-4 py-3.5 text-base leading-[26px] text-ink transition-[border-color,box-shadow] outline-none placeholder:text-ink-3 focus:border-ink focus:shadow-[0_0_0_4px_var(--surface)] disabled:bg-panel disabled:opacity-70"
             />
+            {stt.isRecording && (
+              <p role="status" className="flex items-center gap-2 text-[13px] text-bad">
+                <span aria-hidden className="relative flex size-2.5">
+                  <span className="absolute inline-flex size-full rounded-full bg-bad opacity-60 motion-safe:animate-ping" />
+                  <span className="relative inline-flex size-2.5 rounded-full bg-bad" />
+                </span>
+                Đang nghe. Nói tự nhiên bằng tiếng Việt, có thể xen thuật ngữ tiếng Anh; bấm Dừng nói khi xong.
+              </p>
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <span className={cn("text-[13px] tabular-nums", length > 0 && length < MIN_ANSWER_CHARS ? "text-warn" : "text-ink-3")}>
                 {draft.length} / {MAX_ANSWER_CHARS} ký tự
@@ -139,6 +178,23 @@ export function InterviewChat(props: InterviewChatProps) {
                 {length < MIN_ANSWER_CHARS ? `Cần thêm ${MIN_ANSWER_CHARS - length} ký tự để gửi` : "Ctrl + Enter để gửi"}
               </span>
               <span className="flex-1" />
+              <Button
+                variant="outline"
+                size="brand"
+                onClick={toggleRecording}
+                disabled={paused || sending || stt.isConnecting}
+                aria-pressed={stt.isRecording}
+                className={cn(stt.isRecording && "border-bad text-bad hover:bg-bad-soft hover:text-bad")}
+              >
+                {stt.isConnecting ? (
+                  <Loader2 className="animate-spin" aria-hidden />
+                ) : stt.isRecording ? (
+                  <Square aria-hidden />
+                ) : (
+                  <Mic aria-hidden />
+                )}
+                {stt.isConnecting ? "Đang bật micro…" : stt.isRecording ? "Dừng nói" : "Nói câu trả lời"}
+              </Button>
               <Button size="brand" onClick={props.onSend} disabled={!canSend}>
                 {last ? "Gửi và kết thúc" : "Gửi câu trả lời"}
                 <ChevronRight aria-hidden />

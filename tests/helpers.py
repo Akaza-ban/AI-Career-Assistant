@@ -42,5 +42,29 @@ def make_docx(lines: list[str]) -> bytes:
     return buffer.getvalue()
 
 
+def make_image(text: str | None, fmt: str = "PNG") -> bytes:
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (800, 400), color=(255, 255, 255))
+    if text:
+        d = ImageDraw.Draw(img)
+        d.text((40, 40), text, fill=(0, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format=fmt)
+    return buf.getvalue()
+
+
+def make_scanned_pdf(text: str | None) -> bytes:
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (800, 600), color=(255, 255, 255))
+    if text:
+        d = ImageDraw.Draw(img)
+        d.text((50, 50), text, fill=(0, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="PDF")
+    return buf.getvalue()
+
+
 async def upload_cv(client, name: str, data: bytes, headers=STUDENT):
     return await client.post("/api/v1/cv/upload", files={"file": (name, data)}, headers=headers)

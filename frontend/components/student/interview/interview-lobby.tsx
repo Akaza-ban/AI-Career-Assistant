@@ -54,7 +54,17 @@ const RULES: { icon: LucideIcon; title: string; text: string }[] = [
  * Buổi phỏng vấn chỉ được tạo khi SV bấm "Sẵn sàng", vì đồng hồ câu 1 bắt đầu chạy ngay lúc tạo buổi
  * (create_session ở src/services/interview.py); "Đổi CV và vị trí" về trang Thiết lập, giữ nguyên lựa chọn.
  */
-export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: string | null }) {
+export function InterviewLobby({
+  jdId,
+  cvId,
+  initialMode = null,
+}: {
+  jdId: string | null
+  cvId: string | null
+  /** "jd_only" (?mode=jd_only): phỏng vấn chỉ theo vị trí, không cần CV. */
+  initialMode?: string | null
+}) {
+  const jdOnly = initialMode === "jd_only" || !cvId
   const router = useRouter()
   const { data: jds, error: jdsError, reload: reloadJds } = useApi(api.listInterviewJds)
   const { data: cvs, error: cvsError, reload: reloadCvs } = useApi(api.listCvVersions)
@@ -66,6 +76,7 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   const params = new URLSearchParams()
   if (jdId) params.set("jd", jdId)
   if (cvId) params.set("cv", cvId)
+  if (jdOnly) params.set("mode", "jd_only")
   const setupHref = `/student/interview/new${params.size > 0 ? `?${params}` : ""}`
 
   if (jdsError || cvsError) {
@@ -109,14 +120,14 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   }
 
   const jd = jds.find((j) => j.id === jdId)
-  const cv = cvs.find((c) => c.id === cvId)
-  if (!jd || !cv) {
+  const cv = jdOnly ? null : cvs.find((c) => c.id === cvId)
+  if (!jd || cv === undefined) {
     return (
       <Centered>
         <EmptyState
           icon={AlertCircle}
-          title="Chưa chọn vị trí hoặc CV cho buổi phỏng vấn"
-          description="Hãy chọn vị trí ứng tuyển và CV ở trang Thiết lập rồi vào lại phòng chờ."
+          title={jdOnly ? "Chưa chọn vị trí cho buổi phỏng vấn" : "Chưa chọn vị trí hoặc CV cho buổi phỏng vấn"}
+          description={`Hãy chọn vị trí ứng tuyển${jdOnly ? "" : " và CV"} ở trang Thiết lập rồi vào lại phòng chờ.`}
           action={
             <Button size="brand" nativeButton={false} render={<Link href={setupHref} />}>
               Về trang Thiết lập
@@ -130,10 +141,14 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   const exhausted = quota !== undefined && quota.remaining === 0
 
   async function ready() {
-    if (!jd || !cv) return
+    if (!jd || cv === undefined) return
     setStarting(true)
     try {
-      const session = await api.createInterview({ jd_id: jd.id, cv_version_id: cv.id })
+      const session = await api.createInterview({
+        jd_id: jd.id,
+        cv_version_id: cv?.id ?? null,
+        interview_mode: cv ? "with_cv" : "jd_only",
+      })
       // replace: bấm Back trong phòng không quay lại phòng chờ (sẽ tạo thêm buổi mới)
       router.replace(`/student/interview/${encodeURIComponent(session.id)}`)
     } catch (err) {
@@ -170,7 +185,9 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
           {jd.company && <span className="text-ink-2"> · {jd.company}</span>}
         </dd>
         <dt className="text-ink-3">CV</dt>
-        <dd className="break-words text-ink">{cv.file_name}</dd>
+        <dd className="break-words text-ink">
+          {cv ? cv.file_name : <span className="text-ink-2">Không dùng CV · câu hỏi dựa trên yêu cầu của vị trí</span>}
+        </dd>
       </dl>
 
       <ul className="mt-6 border-t border-line">

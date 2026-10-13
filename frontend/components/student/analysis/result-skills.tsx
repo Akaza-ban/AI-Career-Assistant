@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { ArrowUpRight } from "lucide-react"
 
 import { SegmentedControl } from "@/components/common/segmented-control"
 import { WidgetFooter, Zone } from "@/components/common/zone"
@@ -93,6 +94,8 @@ export function ResultSkills({ analysis }: { analysis: GapAnalysis }) {
 function SkillRow({ row }: { row: RequirementAssessment }) {
   const status = STATUS_META[row.status]
   const meta = [row.evidence ? `Mục ${row.evidence.section_label}` : null, row.note].filter(Boolean).join(" · ")
+  // Chỉ gợi ý lộ trình cho kỹ năng còn thiếu hoặc mới liệt kê, và chỉ khi roadmap.sh có lộ trình riêng cho kỹ năng đó.
+  const roadmap = row.status !== "matched" && row.is_it_supported !== false ? row.roadmap_url : null
 
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 border-b border-line py-3.5 sm:grid-cols-[200px_minmax(0,1fr)_auto] sm:gap-x-6">
@@ -101,9 +104,20 @@ function SkillRow({ row }: { row: RequirementAssessment }) {
         {row.evidence ? (
           <q className="text-ink-2">{row.evidence.text}</q>
         ) : (
-          <span className="text-ink-3">{row.note ?? "Chưa thấy trong CV."}</span>
+          <span className="block text-ink-3">{row.note ?? "Chưa thấy trong CV."}</span>
         )}
         {row.evidence && meta && <span className="mt-0.5 block text-[13px] leading-5 text-ink-3">{meta}</span>}
+        {roadmap && (
+          <a
+            href={roadmap}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 flex w-fit items-center gap-1 text-[13px] leading-5 font-semibold text-blue hover:text-accent-strong"
+          >
+            Lộ trình học trên roadmap.sh
+            <ArrowUpRight className="size-3.5" strokeWidth={2} aria-hidden />
+          </a>
+        )}
       </span>
       <Badge variant={status.badge} className="mt-0.5 h-[22px] px-2 sm:col-start-3 sm:row-start-1">
         <span className={cn("size-1.5 rounded-full border-[1.5px] border-current", status.dot)} aria-hidden />

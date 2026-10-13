@@ -13,6 +13,7 @@ from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
 from src.services import cv_versions, notifications
+from src.services.roadmap import get_roadmap_info
 from src.services.skill_matching import match_label
 
 logger = logging.getLogger(__name__)
@@ -115,8 +116,21 @@ def _fail(analysis_id: str, message: str) -> None:
     _update(analysis_id, status="failed", current_step=None, error_message=message, completed_at=utcnow())
 
 
+def _with_roadmap(requirement: dict[str, Any]) -> dict[str, Any]:
+    """Bổ sung lộ trình roadmap.sh cho một yêu cầu (cả kết quả cũ lưu trước khi có trường này)."""
+    if requirement.get("roadmap_url"):
+        return requirement
+    info = get_roadmap_info(requirement.get("skill"))
+    return {
+        **requirement,
+        "roadmap_url": info["roadmap_url"],
+        "is_it_supported": info["is_it_supported"],
+        "roadmap_message": info["message"],
+    }
+
+
 def _build_result(final: dict[str, Any]) -> dict[str, Any]:
-    requirements = [{k: v for k, v in a.items() if k != "source"} for a in final.get("assessments", [])]
+    requirements = [_with_roadmap({k: v for k, v in a.items() if k != "source"}) for a in final.get("assessments", [])]
     suggestions = [
         {
             "id": s["id"],
@@ -227,7 +241,7 @@ def _notify_completed(db: Session, analysis: GapAnalysis) -> None:
 
 def to_response(analysis: GapAnalysis, jd: JobDescription) -> GapAnalysisResponse:
     result = analysis.result or {}
-    requirements = result.get("requirements", [])
+    requirements = [_with_roadmap(r) for r in result.get("requirements", [])]
     return GapAnalysisResponse(
         id=analysis.id,
         response_id=analysis.id,

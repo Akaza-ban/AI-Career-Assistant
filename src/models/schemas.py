@@ -103,7 +103,7 @@ class CvVersionResponse(BaseModel):
     family_id: str = Field(..., description="Mã CV (các phiên bản cùng mã là một CV, một thẻ trong 'CV của tôi')")
     version_count: int = Field(default=1, description="Số phiên bản của CV này (có ở danh sách CV)")
     file_name: str = Field(..., description="Tên file gốc")
-    file_type: Literal["pdf", "docx"] = Field(..., description="Định dạng file")
+    file_type: Literal["pdf", "docx", "png", "jpg", "jpeg"] = Field(..., description="Định dạng file")
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
@@ -282,12 +282,13 @@ class CompareJDsRequest(BaseModel):
 
     cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
     cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
-    jd_ids: list[str] = Field(..., min_length=2, max_length=3, description="Danh sách 2 đến 3 JD ID cần so sánh")
+    jd_ids: list[str] = Field(..., min_length=2, max_length=5, description="Danh sách 2 đến 5 JD ID cần so sánh")
 
 
 class CompareJDsResponse(BaseModel):
-    """Kết quả bảng so sánh 2-3 JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
+    """Kết quả bảng so sánh các JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
 
+    id: str | None = Field(default=None, description="Mã bản ghi lịch sử so sánh")
     cv_version_id: str | None = None
     cv_label: str | None = None
     cv_name: str | None = None
@@ -298,6 +299,7 @@ class CompareJDsResponse(BaseModel):
     common_missing_skills: list[str] = Field(
         default_factory=list, description="Các kỹ năng còn thiếu chung ở tất cả các JD được chọn"
     )
+    created_at: datetime | None = Field(default=None, description="Thời gian thực hiện so sánh")
 
 
 class CreateGapAnalysisRequest(BaseModel):
@@ -339,6 +341,34 @@ class RequirementAssessment(BaseModel):
     status: Literal["matched", "partial", "missing"]
     evidence: Evidence | None = Field(default=None, description="None khi không tìm thấy trong CV — không tự điền")
     note: str | None = Field(default=None, description="Ghi chú, ví dụ 'FastAPI → tính là Python (taxonomy)'")
+    roadmap_url: str | None = Field(
+        default=None,
+        description="Đường dẫn lộ trình học kỹ năng trên roadmap.sh",
+    )
+    is_it_supported: bool = Field(
+        default=True,
+        description="Đánh dấu kỹ năng có thuộc lĩnh vực IT được roadmap.sh hỗ trợ hay không",
+    )
+    roadmap_message: str | None = Field(
+        default=None,
+        description="Thông báo cho người dùng nếu kỹ năng không thuộc IT hoặc chưa có roadmap",
+    )
+
+
+class SkillRoadmapResponse(BaseModel):
+    """Thông tin đường dẫn lộ trình học tập roadmap.sh cho một kỹ năng."""
+
+    skill: str
+    roadmap_url: str
+    is_matched: bool
+    is_it_supported: bool = Field(
+        default=True,
+        description="Chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin (IT)",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Thông báo cho người dùng nếu kỹ năng không thuộc IT hoặc chưa có roadmap",
+    )
 
 
 class ScoreBreakdown(BaseModel):
@@ -576,8 +606,9 @@ class InterviewSessionResponse(BaseModel):
     id: str
     status: Literal["in_progress", "completed"]
     jd: InterviewJd
-    cv_version_id: str
-    cv_file_name: str
+    cv_version_id: str | None = None
+    cv_file_name: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] = "with_cv"
     question_count: int
     seconds_per_question: int
     current_question: InterviewQuestion | None = Field(default=None, description="None khi đã hoàn thành")
@@ -590,10 +621,11 @@ class InterviewSessionResponse(BaseModel):
 
 
 class CreateInterviewRequest(BaseModel):
-    """Bắt đầu buổi phỏng vấn mới cho một vị trí (JD) và một phiên bản CV."""
+    """Bắt đầu buổi phỏng vấn mới cho một vị trí (JD) và tùy chọn phiên bản CV."""
 
     jd_id: str
-    cv_version_id: str
+    cv_version_id: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] | None = None
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -633,7 +665,8 @@ class InterviewReportResponse(BaseModel):
     id: str
     response_id: str = Field(..., description="Dùng cho khảo sát CSAT")
     jd: InterviewJd
-    cv_file_name: str
+    cv_file_name: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] = "with_cv"
     created_at: UtcDatetime
     completed_at: UtcDatetime
     duration_seconds: int

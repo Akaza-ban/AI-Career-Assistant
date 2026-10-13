@@ -1,11 +1,13 @@
 """Thư viện JD và phân tích khoảng cách CV–JD (US-SV-02, US-SV-05)."""
 
-from fastapi import APIRouter, BackgroundTasks, status
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Query, status
 from sqlalchemy import select
 
 from src.api.deps import CurrentStudent, CurrentUser, DbSession
 from src.api.errors import AppError
-from src.db.models import CvVersion, GapAnalysis, JobDescription
+from src.db.models import CvVersion, GapAnalysis, JobComparisonHistory, JobDescription, utcnow
 from src.models.schemas import (
     CareerAdvice,
     CompareJDsRequest,
@@ -20,6 +22,7 @@ from src.models.schemas import (
     RecommendJDsRequest,
     RecommendJDsResponse,
     SavedJdResponse,
+    SkillRoadmapResponse,
 )
 from src.services import gap_analysis, jd_parser, jds
 from src.services.jd_recommendation import (
@@ -27,6 +30,7 @@ from src.services.jd_recommendation import (
     generate_career_advice_with_llm,
     recommend_top_jds_from_cv,
 )
+from src.services.roadmap import get_roadmap_info
 
 router = APIRouter()
 
@@ -71,8 +75,8 @@ async def compare_jds(
         raise AppError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
 
     unique_jd_ids = list(dict.fromkeys(body.jd_ids))
-    if len(unique_jd_ids) < 2 or len(unique_jd_ids) > 3:
-        raise AppError(400, "Vui lòng chọn từ 2 đến 3 vị trí JD khác nhau để so sánh.", "invalid_jd_selection")
+    if len(unique_jd_ids) < 2 or len(unique_jd_ids) > 5:
+        raise AppError(400, "Vui lòng chọn từ 2 đến 5 vị trí JD khác nhau để so sánh.", "invalid_jd_selection")
 
     # Kiểm tra bảo mật: nếu là JD tự dán, phải thuộc quyền sở hữu của chính sinh viên
     pasted_jds = db.scalars(
@@ -96,14 +100,83 @@ async def compare_jds(
     if missing_ids:
         raise AppError(404, f"Không tìm thấy thông tin JD: {', '.join(missing_ids)}.", "jd_not_found")
 
+    # Lưu lịch sử so sánh vào cơ sở dữ liệu
+    history_id = f"cmp-{uuid.uuid4().hex[:12]}"
+    history_record = JobComparisonHistory(
+        id=history_id,
+        owner_id=user.id,
+        cv_version_id=body.cv_version_id,
+        cv_label=cv_label,
+        cv_name=cv_name,
+        jd_ids=unique_jd_ids,
+        total_compared=len(result["comparisons"]),
+        comparisons=result["comparisons"],
+        common_missing_skills=result["common_missing_skills"],
+        created_at=utcnow(),
+    )
+    db.add(history_record)
+    db.commit()
+
     return CompareJDsResponse(
+        id=history_id,
         cv_version_id=body.cv_version_id,
         cv_label=cv_label,
         cv_name=cv_name,
         total_compared=len(result["comparisons"]),
         comparisons=result["comparisons"],
         common_missing_skills=result["common_missing_skills"],
+        created_at=history_record.created_at,
     )
+
+
+@router.get(
+    "/jd/compare/history",
+    response_model=list[CompareJDsResponse],
+    tags=["Gap Analysis"],
+)
+def list_comparison_history(
+    user: CurrentStudent,
+    db: DbSession,
+    limit: int = Query(default=10, ge=1, le=50, description="Số lượng lượt so sánh gần nhất"),
+) -> list[CompareJDsResponse]:
+    """Lấy danh sách các lượt so sánh JD của sinh viên (mới nhất trước)."""
+    records = db.scalars(
+        select(JobComparisonHistory)
+        .where(JobComparisonHistory.owner_id == user.id)
+        .order_by(JobComparisonHistory.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        CompareJDsResponse(
+            id=r.id,
+            cv_version_id=r.cv_version_id,
+            cv_label=r.cv_label,
+            cv_name=r.cv_name,
+            total_compared=r.total_compared,
+            comparisons=r.comparisons,
+            common_missing_skills=r.common_missing_skills,
+            created_at=r.created_at,
+        )
+        for r in records
+    ]
+
+
+@router.delete(
+    "/jd/compare/history/{history_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Gap Analysis"],
+)
+def delete_comparison_history(
+    history_id: str,
+    user: CurrentStudent,
+    db: DbSession,
+) -> None:
+    """Xóa một lượt so sánh khỏi lịch sử."""
+    record = db.get(JobComparisonHistory, history_id)
+    if record and record.owner_id == user.id:
+        db.delete(record)
+        db.commit()
 
 
 @router.post(
@@ -253,3 +326,13 @@ def get_gap_analysis(analysis_id: str, user: CurrentStudent, db: DbSession) -> G
     if analysis is None or analysis.owner_id != user.id:
         raise AppError(404, "Không tìm thấy kết quả phân tích.", "analysis_not_found")
     return gap_analysis.to_response(analysis, db.get(JobDescription, analysis.jd_id))
+
+
+@router.get("/skills/roadmap", response_model=SkillRoadmapResponse, tags=["Gap Analysis"])
+def get_skill_roadmap(
+    user: CurrentUser,
+    skill: str = Query(..., min_length=1, description="Tên kỹ năng cần tra cứu lộ trình học trên roadmap.sh"),
+) -> SkillRoadmapResponse:
+    """Tra cứu đường dẫn lộ trình học tập roadmap.sh cho một kỹ năng bất kỳ."""
+    info = get_roadmap_info(skill)
+    return SkillRoadmapResponse(**info)

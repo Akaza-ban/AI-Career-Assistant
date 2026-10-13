@@ -21,7 +21,8 @@ export interface UserProfile {
 
 // ---------- CV (US-SV-01) ----------
 
-export type CvFileType = "pdf" | "docx"
+/** PNG / JPG: CV dạng ảnh, nội dung đọc bằng OCR. */
+export type CvFileType = "pdf" | "docx" | "png" | "jpg" | "jpeg"
 export type CvStatus = "processing" | "ready" | "failed"
 
 /**
@@ -298,6 +299,10 @@ export interface RequirementAssessment {
   evidence: CvEvidence | null
   /** Ví dụ "FastAPI → tính là Python (taxonomy)". */
   note: string | null
+  /** Lộ trình học kỹ năng trên roadmap.sh (chỉ có cho kỹ năng ngành CNTT). */
+  roadmap_url?: string | null
+  /** false khi kỹ năng không thuộc CNTT, khi đó roadmap_url chỉ là trang danh sách chung. */
+  is_it_supported?: boolean
 }
 
 /** Phân rã điểm theo mức độ yêu cầu (hiển thị khi bấm "Xem thêm"). */
@@ -541,12 +546,16 @@ export interface InterviewTurn {
  * Trạng thái buổi phỏng vấn. Mỗi buổi 4 câu, mỗi câu có hạn chót do backend giữ (seconds_left);
  * tạm dừng được 1 lần, tối đa 1 phút. Buổi bỏ dở bị xoá và không tính lượt.
  */
+/** with_cv: câu hỏi dựa trên CV và JD; jd_only: chỉ dựa trên vị trí, không cần CV. */
+export type InterviewMode = "with_cv" | "jd_only"
+
 export interface InterviewSession {
   id: string
   status: "in_progress" | "completed"
   jd: InterviewJdRef
-  cv_version_id: string
-  cv_file_name: string
+  interview_mode?: InterviewMode
+  cv_version_id: string | null
+  cv_file_name: string | null
   question_count: number
   seconds_per_question: number
   /** null khi đã hoàn thành. */
@@ -562,7 +571,9 @@ export interface InterviewSession {
 
 export interface CreateInterviewRequest {
   jd_id: string
-  cv_version_id: string
+  /** Bỏ trống khi phỏng vấn chỉ theo vị trí (interview_mode = "jd_only"). */
+  cv_version_id: string | null
+  interview_mode: InterviewMode
 }
 
 export interface SubmitAnswerRequest {
@@ -593,7 +604,8 @@ export interface InterviewReport {
   /** Dùng cho khảo sát CSAT. */
   response_id: string
   jd: InterviewJdRef
-  cv_file_name: string
+  interview_mode?: InterviewMode
+  cv_file_name: string | null
   created_at: ISODateString
   completed_at: ISODateString
   duration_seconds: number

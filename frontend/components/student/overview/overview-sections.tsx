@@ -215,7 +215,7 @@ function nextStepTask(step: NextStep): TaskCardProps {
         icon: Upload,
         kind: kindOf("Tải CV"),
         title: "Tải CV đầu tiên của bạn",
-        meta: "PDF hoặc DOCX, tối đa 5MB",
+        meta: "PDF, DOCX hoặc ảnh, tối đa 5MB",
         progress,
         footnote: "Cần CV để đối chiếu với JD",
         action: { label: "Tải CV lên", href: "/student/cv" },

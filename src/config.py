@@ -25,11 +25,12 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
-    # LLM Provider Configuration (Groq / OpenRouter / OpenAI)
-    llm_provider: Literal["groq", "openrouter", "openai"] = Field(
+    # LLM Provider Configuration (DeepSeek / Groq / OpenRouter / OpenAI)
+    llm_provider: Literal["deepseek", "groq", "openrouter", "openai"] = Field(
         default="groq",
-        description="LLM provider: groq, openrouter, hoặc openai",
+        description="LLM provider: deepseek, groq, openrouter, hoặc openai",
     )
+    deepseek_api_key: str = Field(default="", description="API key cho DeepSeek")
     groq_api_key: str = Field(default="", description="API key cho Groq")
     openrouter_api_key: str = Field(default="", description="API key cho OpenRouter")
     openai_api_key: str = Field(default="", description="API key cho OpenAI")
@@ -42,6 +43,14 @@ class Settings(BaseSettings):
     llm_base_url: str | None = Field(
         default=None,
         description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng",
+    )
+
+    # Soniox Speech-to-Text (Voice Transcribe)
+    soniox_api_key: str = Field(default="", description="API key cho Soniox Speech-to-Text")
+    soniox_model: str = Field(default="stt-rt-v5", description="Model Soniox STT mặc định")
+    soniox_ws_url: str = Field(
+        default="wss://stt-rt.soniox.com/transcribe-websocket",
+        description="Soniox WebSocket endpoint",
     )
 
     # LangSmith Tracing (AI Logs - Deliverable #4)
@@ -110,10 +119,18 @@ class Settings(BaseSettings):
         Hỗ trợ fallback tự động nếu key của provider ưu tiên chưa được set.
         """
         provider = self.llm_provider.lower()
+        if provider == "deepseek":
+            api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+            base_url = self.llm_base_url or "https://api.deepseek.com"
+            return api_key, base_url
+
         if provider == "groq":
             api_key = self.groq_api_key or os.getenv("GROQ_API_KEY", "")
             base_url = self.llm_base_url or "https://api.groq.com/openai/v1"
-            if not api_key and (self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")):
+            if not api_key and (self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY")):
+                api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+                base_url = self.llm_base_url or "https://api.deepseek.com"
+            elif not api_key and (self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")):
                 api_key = self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", "")
                 base_url = self.llm_base_url or "https://openrouter.ai/api/v1"
             elif not api_key and (self.openai_api_key or os.getenv("OPENAI_API_KEY")):
@@ -124,7 +141,10 @@ class Settings(BaseSettings):
         if provider == "openrouter":
             api_key = self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", "")
             base_url = self.llm_base_url or "https://openrouter.ai/api/v1"
-            if not api_key and (self.groq_api_key or os.getenv("GROQ_API_KEY")):
+            if not api_key and (self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY")):
+                api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+                base_url = self.llm_base_url or "https://api.deepseek.com"
+            elif not api_key and (self.groq_api_key or os.getenv("GROQ_API_KEY")):
                 api_key = self.groq_api_key or os.getenv("GROQ_API_KEY", "")
                 base_url = self.llm_base_url or "https://api.groq.com/openai/v1"
             return api_key, base_url
@@ -135,18 +155,21 @@ class Settings(BaseSettings):
         return api_key, base_url
 
     def get_chat_model(self, **kwargs: Any):
-        """Khởi tạo Chat Model tương thích OpenAI API (hỗ trợ Groq, OpenRouter, OpenAI)."""
+        """Khởi tạo Chat Model tương thích OpenAI API (hỗ trợ DeepSeek, Groq, OpenRouter, OpenAI)."""
+        import httpx
         from langchain_openai import ChatOpenAI
 
         api_key, base_url = self.get_llm_credentials()
         temperature = kwargs.pop("temperature", self.llm_temperature)
-        model = kwargs.pop("model", self.model_name)
+        default_model = "deepseek-chat" if self.llm_provider.lower() == "deepseek" else self.model_name
+        model = kwargs.pop("model", default_model)
 
         return ChatOpenAI(
             model=model,
             api_key=api_key or "sk-dummy-key-for-init",
             base_url=base_url,
             temperature=temperature,
+            http_async_client=httpx.AsyncClient(),
             **kwargs,
         )
 
