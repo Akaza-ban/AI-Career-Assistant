@@ -362,6 +362,8 @@ class AssistantConversation(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(16), default="student")
+    # Assigned atomically by the privacy vault on first use, retained across TTL.
+    pii_nonce: Mapped[str | None] = mapped_column(String(32), default=None)
     title: Mapped[str] = mapped_column(String(255), default="Cuộc trò chuyện mới")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
