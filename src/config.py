@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     pii_document_max_bytes: int = Field(default=20_000_000, ge=1)
     pii_document_max_pages: int = Field(default=30, ge=1, le=100)
 
+    pii_vault_key: SecretStr = SecretStr("")
+    pii_vault_ttl_hours: float = Field(default=24, gt=0, le=8760)
+
     @model_validator(mode="after")
     def configure_session_key(self) -> "Settings":
         key = self.auth_secret_key.get_secret_value()
