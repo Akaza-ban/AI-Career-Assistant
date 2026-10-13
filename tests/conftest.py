@@ -9,6 +9,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP / 'test.db').as_posix()}"
 os.environ["UPLOAD_DIR"] = str(_TMP / "uploads")
 # Test tự tạo dữ liệu cần dùng; không nạp nhóm SV giả định của bản demo.
 os.environ["SEED_DEMO_COHORT"] = "false"
+os.environ["APP_ENV"] = "test"
 
 # Không gọi LLM thật khi chạy test (chậm, tốn credit): key rỗng → agent dùng quy tắc dự phòng.
 # Biến môi trường được ưu tiên hơn file .env nên ghi đè được key thật trong .env.
@@ -22,8 +23,13 @@ import pytest  # noqa: E402
 import pytest_asyncio  # noqa: E402
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
-from src.db.database import init_db  # noqa: E402
+from src.db.database import SessionLocal, init_db  # noqa: E402
+from src.db.models import User  # noqa: E402
 from src.main import app  # noqa: E402
+from src.services.auth import hash_password  # noqa: E402
+from tests.helpers import ADVISOR, STUDENT  # noqa: E402
+
+_AUTH_READY = False
 
 
 @pytest_asyncio.fixture
@@ -33,6 +39,27 @@ async def client():
     init_db()
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        global _AUTH_READY
+        if not _AUTH_READY:
+            accounts = [
+                ("sv-0142", "Student-A-dev-only!", STUDENT),
+                ("cv-007", "Advisor-dev-only!", ADVISOR),
+            ]
+            with SessionLocal() as db:
+                for user_id, password, _ in accounts:
+                    # Test-only credential provisioning; every cookie below still
+                    # comes from the real login endpoint, never a dependency override.
+                    db.get(User, user_id).password_hash = hash_password(password)
+                db.commit()
+            for user_id, password, headers in accounts:
+                with SessionLocal() as db:
+                    email = db.get(User, user_id).email
+                response = await ac.post("/api/v1/auth/login", json={"email": email, "password": password})
+                assert response.status_code == 200, response.text
+                headers.clear()
+                headers["Cookie"] = response.headers["set-cookie"].split(";", 1)[0]
+                ac.cookies.clear()
+            _AUTH_READY = True
         yield ac
 
 

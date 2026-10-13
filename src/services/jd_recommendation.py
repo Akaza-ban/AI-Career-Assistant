@@ -117,7 +117,9 @@ def recommend_top_jds_from_cv(
     jd_ids = [doc.metadata.get("jd_id") for doc, _ in candidates if doc.metadata.get("jd_id")]
     db_jds: dict[str, Any] = {}
     if db is not None and jd_ids:
-        db_records = db.scalars(select(JobDescription).where(JobDescription.id.in_(jd_ids))).all()
+        db_records = db.scalars(
+            select(JobDescription).where(JobDescription.id.in_(jd_ids), JobDescription.source == "library")
+        ).all()
         db_jds = {jd.id: jd for jd in db_records}
 
     fixtures = _get_fixture_jds()
@@ -130,6 +132,10 @@ def recommend_top_jds_from_cv(
 
         # Lấy thông tin chi tiết của JD
         jd_obj = db_jds.get(jd_id)
+        # Vector metadata is not an authorization source. Recommendations are from
+        # the public library; missing/private database records never fall back to it.
+        if db is not None and jd_obj is None:
+            continue
         if jd_obj:
             title = jd_obj.title
             company = jd_obj.company or ""

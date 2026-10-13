@@ -1,13 +1,14 @@
 import os
+import secrets
 from functools import lru_cache
 from typing import Any, Literal
 
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load .env file explicitly so os.environ is populated early
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 
 class Settings(BaseSettings):
@@ -24,6 +25,17 @@ class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    auth_secret_key: SecretStr = SecretStr("")
+    auth_session_ttl_seconds: int = Field(default=28800, ge=300, le=86400)
+
+    @model_validator(mode="after")
+    def configure_session_key(self) -> "Settings":
+        key = self.auth_secret_key.get_secret_value()
+        if not key and self.app_env != "production":
+            self.auth_secret_key = SecretStr(secrets.token_urlsafe(48))
+        elif len(key.encode()) < 32:
+            raise ValueError("AUTH_SECRET_KEY must contain at least 32 bytes; production requires an explicit key")
+        return self
 
     # LLM Provider Configuration (Groq / OpenRouter / OpenAI)
     llm_provider: Literal["groq", "openrouter", "openai"] = Field(

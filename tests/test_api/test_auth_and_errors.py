@@ -1,13 +1,15 @@
 import pytest
 
+from tests.helpers import ADVISOR, STUDENT
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("role", "expected_id"),
     [("student", "sv-0142"), ("advisor", "cv-007")],
 )
-async def test_me_returns_demo_user_for_role(client, role, expected_id):
-    response = await client.get("/api/v1/me", headers={"X-Demo-Role": role})
+async def test_me_returns_authenticated_individual(client, role, expected_id):
+    response = await client.get("/api/v1/me", headers=STUDENT if role == "student" else ADVISOR)
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == expected_id
@@ -17,7 +19,7 @@ async def test_me_returns_demo_user_for_role(client, role, expected_id):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("headers", [{}, {"X-Demo-Role": "admin"}])
-async def test_me_without_valid_role_is_unauthenticated(client, headers):
+async def test_me_without_session_is_unauthenticated(client, headers):
     response = await client.get("/api/v1/me", headers=headers)
     assert response.status_code == 401
     assert response.json()["code"] == "unauthenticated"
@@ -27,7 +29,7 @@ async def test_me_without_valid_role_is_unauthenticated(client, headers):
 @pytest.mark.asyncio
 async def test_validation_error_has_string_detail(client):
     response = await client.post(
-        "/api/v1/gap-analysis", json={"jd_id": "jd-da-intern"}, headers={"X-Demo-Role": "student"}
+        "/api/v1/gap-analysis", json={"jd_id": "jd-da-intern"}, headers=STUDENT
     )
     assert response.status_code == 422
     data = response.json()

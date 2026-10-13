@@ -117,6 +117,7 @@ def _visible_jd(db: Session, user: User, jd_id: str) -> JobDescription:
 
 
 def quota(db: Session, user: User, jd_id: str, now: datetime) -> dict[str, Any]:
+    _visible_jd(db, user, jd_id)
     start = week_start(now)
     used = db.scalar(
         select(func.count())

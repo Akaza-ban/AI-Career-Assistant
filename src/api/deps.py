@@ -1,29 +1,18 @@
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
 from src.db.database import get_db
 from src.db.models import User
-from src.db.seed import DEMO_ADVISOR_ID, DEMO_STUDENT_ID
+from src.services.auth import COOKIE_NAME, session_user
 
 DbSession = Annotated[Session, Depends(get_db)]
 
-# Đăng nhập tạm thời: frontend gửi vai trò đang chọn qua header X-Demo-Role và backend
-# ánh xạ sang người dùng demo cố định. Khi có đăng nhập bằng mật khẩu, chỉ cần thay phần thân
-# get_current_user (đọc session/JWT) — các route dùng CurrentUser không phải sửa.
-_DEMO_USER_BY_ROLE = {"student": DEMO_STUDENT_ID, "advisor": DEMO_ADVISOR_ID}
-
-
-def get_current_user(db: DbSession, x_demo_role: Annotated[str | None, Header()] = None) -> User:
-    user_id = _DEMO_USER_BY_ROLE.get(x_demo_role or "")
-    if user_id is None:
-        raise AppError(401, "Bạn chưa đăng nhập. Hãy chọn vai trò ở trang chủ.", "unauthenticated")
-    user = db.get(User, user_id)
-    if user is None:
-        raise AppError(401, "Không tìm thấy tài khoản demo. Hãy khởi động lại backend.", "unauthenticated")
-    return user
+def get_current_user(request: Request, db: DbSession) -> User:
+    """Only a verified session establishes identity; roles are read from the database."""
+    return session_user(db, request.cookies.get(COOKIE_NAME))
 
 
 CurrentUser = Annotated[User, Depends(get_current_user)]

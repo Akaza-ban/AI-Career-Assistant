@@ -4,8 +4,9 @@ import io
 
 from docx import Document
 
-STUDENT = {"X-Demo-Role": "student"}
-ADVISOR = {"X-Demo-Role": "advisor"}
+# Populated by the client fixture using real credential login.
+STUDENT: dict[str, str] = {}
+ADVISOR: dict[str, str] = {}
 
 
 def make_pdf(text: str | None) -> bytes:

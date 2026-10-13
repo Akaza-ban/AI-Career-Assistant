@@ -7,6 +7,7 @@ from src.agents.graph import agent
 from src.api import advisor as advisor_routes
 from src.api import analysis as analysis_routes
 from src.api import assistant as assistant_routes
+from src.api import auth as auth_routes
 from src.api import cv as cv_routes
 from src.api import feedback as feedback_routes
 from src.api import interviews as interview_routes
@@ -20,6 +21,7 @@ from src.db.models import User
 from src.models.schemas import AgentStatusResponse, ChatRequest, ChatResponse, UserProfile
 
 router = APIRouter()
+router.include_router(auth_routes.router)
 router.include_router(cv_routes.router)
 router.include_router(analysis_routes.router)
 router.include_router(feedback_routes.router)
@@ -52,7 +54,7 @@ async def agent_status() -> AgentStatusResponse:
 
 @router.get("/me", response_model=UserProfile, tags=["Auth"])
 def get_me(user: CurrentUser) -> User:
-    """Hồ sơ người dùng đang đăng nhập (tạm thời xác định qua header X-Demo-Role)."""
+    """Hồ sơ người dùng được xác thực bằng phiên đăng nhập."""
     return user
 
 
@@ -62,7 +64,7 @@ def get_me(user: CurrentUser) -> User:
 
 
 @router.post("/chat", response_model=ChatResponse, tags=["General Chat"])
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest, user: CurrentUser) -> ChatResponse:
     """Chat với AI agent hỗ trợ định hướng chung."""
     try:
         result = await agent.ainvoke({"query": request.message})

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.errors import register_error_handlers
 from src.api.routes import router
+from src.api.security import OriginProtectionMiddleware
 from src.config import get_settings
 from src.db.database import init_db
 from src.models.schemas import HealthResponse
@@ -83,6 +84,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(OriginProtectionMiddleware)
 
 # Chuẩn hoá lỗi về {"detail": str, "code": str}
 register_error_handlers(app)
