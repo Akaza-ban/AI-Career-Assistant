@@ -1,8 +1,8 @@
 {
-  "measured_at": "2026-10-13T15:07:47.613161+00:00",
+  "measured_at": "2026-10-13T15:44:43.547989+00:00",
   "dataset_sha256": "ae3e083b8ea6ee9fa89254fd3439a69aff1b26da4a3bb3f6ea54a805f4fd16b2",
   "source_sha256": {
-    "src/services/privacy/detectors.py": "3b7fa34822076eba1f17d0ed7860a4aa89d73b0590eb09b279ec67b93dce1616",
+    "src/services/privacy/detectors.py": "982b78b9623d324bd0d23032aacd96f0150a8265206ca382a0d36a24addacc7a",
     "src/services/privacy/ner.py": "60d9d7853c5c72ffceac89b4fec5307076ea84650fc3146b69bf9b64faba5845",
     "src/services/privacy/extract.py": "27b6baea199ad32cfcc564d85ca78e59f00d2ffda0d5071fb3d75afa0516e056",
     "src/services/privacy/masker.py": "cd4ce80903fe91e4c819648ee8dc6035ee6b82189b3c0a6c7d36cc210c851a74",
@@ -139,7 +139,7 @@
         },
         "micro_precision": 0.08073973838520523,
         "failed_inputs": [],
-        "elapsed_seconds": 7.0
+        "elapsed_seconds": 7.906
       },
       "pipeline_raw": {
         "samples": 90,
@@ -249,7 +249,7 @@
         },
         "micro_precision": 0.9834437086092715,
         "failed_inputs": [],
-        "elapsed_seconds": 7.594
+        "elapsed_seconds": 9.547
       },
       "by_language": {
         "vi": {
@@ -360,7 +360,7 @@
           },
           "micro_precision": 0.9867549668874173,
           "failed_inputs": [],
-          "elapsed_seconds": 2.703
+          "elapsed_seconds": 2.891
         },
         "en": {
           "samples": 30,
@@ -470,7 +470,7 @@
           },
           "micro_precision": 0.9768211920529801,
           "failed_inputs": [],
-          "elapsed_seconds": 2.625
+          "elapsed_seconds": 2.781
         },
         "mixed": {
           "samples": 30,
@@ -580,7 +580,7 @@
           },
           "micro_precision": 0.9867549668874173,
           "failed_inputs": [],
-          "elapsed_seconds": 2.5
+          "elapsed_seconds": 2.969
         }
       },
       "gate_failures_raw": [],
@@ -692,7 +692,7 @@
         },
         "micro_precision": 0.982281284606866,
         "failed_inputs": [],
-        "elapsed_seconds": 7.844
+        "elapsed_seconds": 8.984
       },
       "gate_failures_documents": []
     },
@@ -814,7 +814,7 @@
         },
         "micro_precision": 0.18072289156626506,
         "failed_inputs": [],
-        "elapsed_seconds": 64.844
+        "elapsed_seconds": 65.593
       },
       "pipeline_raw": {
         "samples": 90,
@@ -924,7 +924,7 @@
         },
         "micro_precision": 0.9977553310886644,
         "failed_inputs": [],
-        "elapsed_seconds": 67.875
+        "elapsed_seconds": 69.469
       },
       "by_language": {
         "vi": {
@@ -1035,7 +1035,7 @@
           },
           "micro_precision": 0.9966216216216216,
           "failed_inputs": [],
-          "elapsed_seconds": 22.641
+          "elapsed_seconds": 22.766
         },
         "en": {
           "samples": 30,
@@ -1145,7 +1145,7 @@
           },
           "micro_precision": 1.0,
           "failed_inputs": [],
-          "elapsed_seconds": 22.328
+          "elapsed_seconds": 23.218
         },
         "mixed": {
           "samples": 30,
@@ -1255,7 +1255,7 @@
           },
           "micro_precision": 0.9966329966329966,
           "failed_inputs": [],
-          "elapsed_seconds": 23.468
+          "elapsed_seconds": 23.141
         }
       },
       "gate_failures_raw": [],
@@ -1367,7 +1367,7 @@
         },
         "micro_precision": 0.9954853273137697,
         "failed_inputs": [],
-        "elapsed_seconds": 68.266
+        "elapsed_seconds": 68.781
       },
       "gate_failures_documents": []
     },
@@ -1488,7 +1488,7 @@
         },
         "micro_precision": 0.2203742203742204,
         "failed_inputs": [],
-        "elapsed_seconds": 3.344
+        "elapsed_seconds": 3.469
       },
       "pipeline_raw": {
         "samples": 90,
@@ -1598,7 +1598,7 @@
         },
         "micro_precision": 0.9206703910614525,
         "failed_inputs": [],
-        "elapsed_seconds": 3.453
+        "elapsed_seconds": 3.594
       },
       "by_language": {
         "vi": {
@@ -1819,7 +1819,7 @@
           },
           "micro_precision": 0.8466666666666667,
           "failed_inputs": [],
-          "elapsed_seconds": 1.156
+          "elapsed_seconds": 1.093
         },
         "mixed": {
           "samples": 30,
@@ -1929,7 +1929,7 @@
           },
           "micro_precision": 0.9395973154362416,
           "failed_inputs": [],
-          "elapsed_seconds": 1.156
+          "elapsed_seconds": 1.188
         }
       },
       "gate_failures_raw": [
@@ -2048,7 +2048,7 @@
         },
         "micro_precision": 0.9563758389261745,
         "failed_inputs": [],
-        "elapsed_seconds": 3.547
+        "elapsed_seconds": 3.672
       },
       "gate_failures_documents": [
         "ID recall below 0.99",

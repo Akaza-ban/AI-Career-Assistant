@@ -190,7 +190,13 @@ def _ner_spans(text: str, ner: Ner) -> list[Span]:
     except Exception:
         raise NerUnavailableError("Local NER inference failed; provider calls are forbidden") from None
     spans: list[Span] = []
-    keep_contexts = [match.span(1) for match in _KEEP_CONTEXT.finditer(text)]
+    keep_contexts = []
+    for match in _KEEP_CONTEXT.finditer(text):
+        start, end = match.span(1)
+        suffix = _KEEP_SUFFIX.search(text, start, end)
+        if suffix is not None and suffix.start() > start:
+            end = suffix.start()
+        keep_contexts.append((start, end))
     opaque_spans = [match.span() for match in _ESCAPED_OPAQUE.finditer(text)]
     for span in found:
         if any(start <= span.start and span.end <= end for start, end in opaque_spans):

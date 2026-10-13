@@ -144,3 +144,14 @@ def test_street_ward_district_labels_and_city_only_address_preservation():
     text = "Đường: Hoa Mai\nPhường: An Phú\nDistrict: Central\nStreet:Oak Road\nAddress: Hà Nội\nTP. Hồ Chí Minh"
     spans = Detector(EmptyNer()).detect(text)
     assert [text[s.start : s.end] for s in spans] == ["Hoa Mai", "An Phú", "Central", "Oak Road"]
+
+
+def test_employer_prose_preservation_does_not_hide_recruiter_after_comma():
+    text = "Worked at Acme Labs, contact Alice Smith"
+
+    class NameNer:
+        def detect(self, text):
+            return [Span(text.index("Acme"), text.index(","), "PERSON"), Span(text.index("Alice"), len(text), "PERSON")]
+
+    spans = Detector(NameNer()).detect(text, document_type="jd")
+    assert [text[s.start : s.end] for s in spans] == ["Alice Smith"]
