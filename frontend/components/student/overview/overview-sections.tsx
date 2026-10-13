@@ -126,7 +126,7 @@ export function Greeting({ fullName, overview }: { fullName: string; overview: S
         <Button
           variant="ghost"
           size="brand"
-          className="glass text-ink shadow-xs hover:bg-white"
+          className="glass text-ink shadow-xs hover:bg-card"
           nativeButton={false}
           render={<Link href={secondary.href} />}
         >

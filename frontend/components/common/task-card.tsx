@@ -54,7 +54,7 @@ export function TaskCard({ icon: Icon, kind, title, meta, progress, footnote, ac
         <span className="min-w-0 truncate text-[13px] text-ink-3">{footnote}</span>
         <Link
           href={action.href}
-          className="inline-flex h-9 shrink-0 items-center rounded-full bg-ink px-4 text-[13px] font-semibold text-white transition-transform active:scale-[0.97]"
+          className="inline-flex h-9 shrink-0 items-center rounded-full bg-ink px-4 text-[13px] font-semibold text-on-ink transition-transform active:scale-[0.97]"
         >
           {action.label}
         </Link>

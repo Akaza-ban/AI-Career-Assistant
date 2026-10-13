@@ -148,7 +148,7 @@ export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: Cv
         className={cn(
           "rounded-card border-[1.5px] border-dashed px-5 text-center transition-colors duration-150",
           prominent ? "py-14" : "py-[26px]",
-          dragging ? "border-blue bg-blue-soft" : "border-line-strong bg-white/60",
+          dragging ? "border-blue bg-blue-soft" : "border-line-strong bg-card/60",
           !uploading && "hover:border-blue hover:bg-blue-soft",
         )}
       >
@@ -209,7 +209,7 @@ export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: Cv
             type="button"
             onClick={onDismiss}
             aria-label="Đóng thông báo lỗi"
-            className="-my-1 -mr-1.5 grid size-7 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-white hover:text-ink"
+            className="-my-1 -mr-1.5 grid size-7 shrink-0 place-items-center rounded-full text-ink-3 hover:bg-card hover:text-ink"
           >
             <X className="size-4" strokeWidth={1.75} aria-hidden />
           </button>

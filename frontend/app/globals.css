@@ -3,9 +3,11 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Sidebar đã thu gọn (lib/sidebar.ts đặt data-sidebar="collapsed" trên <html>) */
+@custom-variant sidebar-collapsed (&:where([data-sidebar="collapsed"] *));
 
 /*
- * CareerX design tokens v2 — nguồn: docs/design/DESIGN.md (mục 3).
+ * CareerV design tokens v2 — nguồn: docs/design/DESIGN.md (mục 3).
  * Token gốc (--bg, --ink, --blue...) được ánh xạ sang biến của shadcn (--background, --primary...).
  * Tên "accent" thuộc shadcn (= --surface), nên màu nhấn iris dùng qua class blue: text-blue, bg-blue, bg-blue-soft.
  */
@@ -29,6 +31,8 @@
   --color-blue: var(--blue);
   --color-blue-soft: var(--blue-soft);
   --color-on-blue: var(--on-blue);
+  --color-on-ink: var(--on-ink);
+  --color-brand-v: var(--brand-v);
   --color-violet: var(--violet);
   --color-violet-soft: var(--violet-soft);
   --color-gold: var(--gold);
@@ -120,6 +124,12 @@
   --blue: var(--accent-color);
   --blue-soft: var(--accent-soft);
   --on-blue: #ffffff;
+  /* Chữ trên nền đậm (bg-ink, bg-bad, bg-good...): trắng ở chế độ sáng, đen ở chế độ tối */
+  --on-ink: #ffffff;
+  /* Logo CareerV: mặt trắng trên nền sáng, trong suốt trên nền tối; chữ "V" vàng đậm hơn trên nền trắng */
+  --brand-face: #ffffff;
+  --brand-v: #d9a93a;
+  --glass: rgb(255 255 255 / 0.7);
   --violet: #6e56cf;
   --violet-soft: #f2eefc;
   --gold: #e0b852;
@@ -151,7 +161,7 @@
   --popover: var(--card);
   --popover-foreground: var(--ink);
   --primary: var(--ink);
-  --primary-foreground: #ffffff;
+  --primary-foreground: var(--on-ink);
   --secondary: var(--surface);
   --secondary-foreground: var(--ink);
   --muted: var(--surface);
@@ -170,7 +180,7 @@
   --sidebar: var(--card);
   --sidebar-foreground: var(--ink-2);
   --sidebar-primary: var(--ink);
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: var(--on-ink);
   --sidebar-accent: var(--surface);
   --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--line);
@@ -178,34 +188,45 @@
 }
 
 /*
- * DARK MODE — TẠM TẮT: giai đoạn đầu chỉ dùng bảng màu sáng để dễ theo dõi và bắt lỗi.
- * Khi làm tính năng đổi sáng/tối: bỏ comment khối .dark bên dưới VÀ bỏ forcedTheme="light"
- * trong components/theme-provider.tsx.
- * --gold và --navy giữ nguyên ở dark mode.
-
+ * Chế độ tối: tông xám trung tính, cùng họ với chữ đen #18181b của logo CareerV (bản vẽ CareerVToi).
+ * Đổi bằng nút trong menu tài khoản, Cài đặt > Giao diện, hoặc nút mặt trời / mặt trăng ở landing.
+ */
 .dark {
-  --bg: #070d1b;
-  --surface: #0c1428;
-  --card: #101a32;
-  --ink: #edf1fa;
-  --ink-2: #b4bfd6;
-  --ink-3: #8894ae;
-  --line: #202c48;
-  --blue: #7c9dff;
-  --blue-soft: #16234a;
-  --on-blue: #07101f;
+  color-scheme: dark;
+  --bg: #0e0e11;
+  --surface: #222228;
+  --panel: #1b1b20;
+  --card: #16161a;
+  --ink: #f4f4f5;
+  --night: #131318;
+  --ink-2: #b4b4bc;
+  --ink-3: #8b8b94;
+  --line: #27272d;
+  --line-strong: #36363d;
+  --accent-color: #9c9cf6;
+  --accent-strong: #b7b7fa;
+  --accent-soft: #23234a;
+  --on-blue: #0e0e11;
+  --on-ink: #18181b;
+  --brand-face: transparent;
+  --brand-v: #e0b852;
+  --glass: rgb(28 28 33 / 0.72);
   --violet: #a996ff;
-  --violet-soft: #221d4a;
+  --violet-soft: #26203f;
+  --gold-soft: #3a2e12;
   --good: #5cd19a;
-  --good-soft: #123b2c;
+  --good-soft: #12302a;
+  --good-line: #1e4a3b;
   --warn: #f0b24d;
   --warn-soft: #3a2c12;
+  --warn-line: #5a4318;
   --bad: #ff8f86;
   --bad-soft: #3f1c1a;
-  --shadow-token: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 36px -16px rgba(0, 0, 0, 0.7);
-  --shadow-sm-token: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px -8px rgba(0, 0, 0, 0.6);
+  --shadow-xs-token: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm-token: 0 1px 2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgb(255 255 255 / 0.03);
+  --shadow-token: 0 16px 36px -16px rgba(0, 0, 0, 0.7);
+  --shadow-lg-token: 0 24px 60px -20px rgba(0, 0, 0, 0.8);
 }
-*/
 
 @layer base {
   * {
@@ -264,6 +285,10 @@
       height: 260px;
     }
   }
+  /* Nền tối: dải pastel dịu đi để không chói */
+  .dark .aurora-band {
+    opacity: 0.35;
+  }
 
   /* Thanh tiến độ tác vụ AI: gradient pastel chạy ngang (DESIGN.md mục 4, ngoại lệ có chủ đích) */
   .ai-run {
@@ -274,7 +299,7 @@
 
   /* Nền mờ cho ô tìm kiếm và nút phụ đặt trên dải pastel */
   .glass {
-    background-color: rgb(255 255 255 / 0.7);
+    background-color: var(--glass);
     backdrop-filter: blur(8px);
   }
 }

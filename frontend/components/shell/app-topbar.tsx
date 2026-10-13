@@ -12,6 +12,7 @@ import { CommandPalette, useCommandShortcut } from "@/components/shell/command-p
 import { getBreadcrumb, shellOf } from "@/components/shell/nav-config"
 import { floatingSurface, NotificationMenu } from "@/components/shell/notification-menu"
 import { useProfile } from "@/components/shell/profile-context"
+import { ThemeToggleButton } from "@/components/shell/theme-switch"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import {
   DropdownMenu,
@@ -86,6 +87,7 @@ export function AppTopbar({ role }: { role: Role }) {
         {role !== "admin" && <AssistantLauncher />}
         {role !== "admin" && <ChatLauncher />}
         <NotificationMenu role={role} />
+        <ThemeToggleButton />
         <DropdownMenu>
           <DropdownMenuTrigger render={<button type="button" className="ml-1 rounded-full" aria-label="Tài khoản" />}>
             <UserAvatar name={profile?.full_name} src={profile?.avatar_url} className="size-[34px]" />

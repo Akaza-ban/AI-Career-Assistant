@@ -28,7 +28,7 @@ const PAGE_SIZE = 20
 const ROW_GRID =
   "@4xl:grid @4xl:grid-cols-[22px_minmax(220px,1.6fr)_130px_minmax(170px,1.1fr)_110px_120px_64px] @4xl:items-center @4xl:gap-4"
 const CHECKBOX =
-  "size-[18px] rounded-[5px] border-line-strong bg-card data-checked:border-ink data-checked:bg-ink data-checked:text-white data-indeterminate:border-ink data-indeterminate:bg-ink data-indeterminate:text-white"
+  "size-[18px] rounded-[5px] border-line-strong bg-card data-checked:border-ink data-checked:bg-ink data-checked:text-on-ink data-indeterminate:border-ink data-indeterminate:bg-ink data-indeterminate:text-on-ink"
 
 const matchesFilter = (s: AdminStudent, filter: AssignFilter) =>
   filter === "all" || (filter === "unassigned" ? s.advisor === null : s.advisor !== null)
@@ -332,16 +332,16 @@ export function AdminStudentList({
 
           {selected.size > 0 && (
             <div className="sticky bottom-[calc(var(--tabbar-h)+16px)] z-20 mt-7">
-              <div className="flex items-center gap-3 rounded-card bg-ink py-3 pr-3 pl-4 text-white shadow-[0_20px_40px_-18px_rgba(24,24,27,.5)] sm:gap-3.5 sm:pr-3.5 sm:pl-5">
+              <div className="flex items-center gap-3 rounded-card bg-ink py-3 pr-3 pl-4 text-on-ink shadow-[0_20px_40px_-18px_rgba(24,24,27,.5)] sm:gap-3.5 sm:pr-3.5 sm:pl-5">
                 <span className="font-semibold whitespace-nowrap tabular-nums">
                   Đã chọn {formatCount(selected.size)}
                   <span className="max-sm:hidden"> sinh viên</span>
                 </span>
-                <button type="button" onClick={() => setSelected(new Set())} className="text-sm whitespace-nowrap text-night-mute hover:text-white">
+                <button type="button" onClick={() => setSelected(new Set())} className="text-sm whitespace-nowrap text-on-ink/70 hover:text-on-ink">
                   Bỏ chọn
                 </button>
                 <span className="flex-1" />
-                <Button className="h-[38px] rounded-full bg-white px-4 text-sm font-semibold text-ink hover:bg-white/90" onClick={() => setAssigning(selectedStudents)}>
+                <Button className="h-[38px] rounded-full bg-on-ink px-4 text-sm font-semibold text-ink hover:bg-on-ink/90" onClick={() => setAssigning(selectedStudents)}>
                   Gán cố vấn
                 </Button>
               </div>

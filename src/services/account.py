@@ -54,7 +54,7 @@ def settings_of(db: Session, user: User) -> dict[str, Any]:
         "storage": {
             "used_bytes": int(used or 0),
             "limit_bytes": get_settings().storage_limit_mb * 1024 * 1024,
-            "allocated_by": "CareerX",
+            "allocated_by": "CareerV",
         },
         "privacy": prefs["privacy"],
         "notifications": prefs["notifications"],

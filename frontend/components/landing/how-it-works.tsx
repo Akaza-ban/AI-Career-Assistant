@@ -175,7 +175,7 @@ function PaneInterview() {
           <svg viewBox="0 0 150 70" width="150" height="70" aria-hidden>
             <path className={styles.draw} d="M6 58 L52 50 L98 32 L144 16" fill="none" stroke="var(--accent)" strokeWidth="2" />
             {points.map(([x, y]) => (
-              <circle key={x} cx={x} cy={y} r="3.5" fill="#fff" stroke="var(--accent)" strokeWidth="2" />
+              <circle key={x} cx={x} cy={y} r="3.5" fill="var(--card)" stroke="var(--accent)" strokeWidth="2" />
             ))}
           </svg>
           <p className="text-[13px] text-ink-3 tabular-nums">

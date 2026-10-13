@@ -2,6 +2,7 @@ import Link from "next/link"
 import type { ReactNode } from "react"
 
 import { Logo } from "@/components/brand/logo"
+import { ThemeToggleButton } from "@/components/shell/theme-switch"
 import { cn } from "@/lib/utils"
 
 /** Khung chung của các trang tài khoản: dải pastel, logo, một thẻ trắng ở giữa (DESIGN.md 7). */
@@ -11,9 +12,12 @@ export function AuthShell({ children }: { children: ReactNode }) {
       <div className="aurora-band" aria-hidden />
       <header className="relative z-10 flex h-16 items-center justify-between px-4 sm:h-[76px] sm:px-10">
         <Logo />
-        <Link href="/" className="text-sm font-semibold text-ink-2 hover:text-ink max-sm:hidden">
-          Về trang giới thiệu
-        </Link>
+        <span className="flex items-center gap-3">
+          <Link href="/" className="text-sm font-semibold text-ink-2 hover:text-ink max-sm:hidden">
+            Về trang giới thiệu
+          </Link>
+          <ThemeToggleButton className="-mr-2" />
+        </span>
       </header>
       <main className="relative z-10 grid justify-items-center px-4 pt-6 pb-16 sm:pt-12 sm:pb-20">{children}</main>
     </div>

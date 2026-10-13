@@ -183,7 +183,7 @@ function RateForm({ responseId, activity, title, subtitle, askReuse, onDone }: R
                     onClick={() => toggleTag(tag)}
                     className={cn(
                       "inline-flex h-[34px] items-center gap-1.5 rounded-full px-3.5 text-sm font-medium transition-colors",
-                      on ? "bg-ink text-white" : "bg-card text-ink-2 shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-panel",
+                      on ? "bg-ink text-on-ink" : "bg-card text-ink-2 shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-panel",
                     )}
                   >
                     {on && <Check className="size-3.5" strokeWidth={2.25} aria-hidden />}
@@ -225,7 +225,7 @@ function RateForm({ responseId, activity, title, subtitle, askReuse, onDone }: R
                   onClick={() => setReuse(reuse === v ? null : v)}
                   className={cn(
                     "inline-flex h-[34px] items-center gap-1.5 rounded-full px-3.5 font-medium transition-colors",
-                    reuse === v ? "bg-ink text-white" : "bg-card text-ink-2 shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-panel",
+                    reuse === v ? "bg-ink text-on-ink" : "bg-card text-ink-2 shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-panel",
                   )}
                 >
                   {reuse === v && <Check className="size-3.5" strokeWidth={2.25} aria-hidden />}

@@ -219,7 +219,7 @@ function ProfileRow({
             autoFocus
             className="h-10 min-w-0 flex-[1_1_200px] rounded-[10px] border-line-strong bg-card tabular-nums"
           />
-          <Button type="submit" disabled={saving} className="h-9 rounded-full bg-ink px-4 font-semibold text-white hover:bg-ink/85">
+          <Button type="submit" disabled={saving} className="h-9 rounded-full bg-ink px-4 font-semibold text-on-ink hover:bg-ink/85">
             {saving && <Loader2 className="animate-spin" aria-hidden />}
             Lưu
           </Button>

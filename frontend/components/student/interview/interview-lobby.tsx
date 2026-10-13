@@ -147,7 +147,7 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
       <SetFocusTitle title={`Phòng chờ · ${jd.title}`} />
       <div className="flex items-center gap-3.5">
         <span
-          className="grid size-[52px] shrink-0 place-items-center rounded-2xl bg-ink text-[15px] font-semibold tracking-[0.02em] text-white"
+          className="grid size-[52px] shrink-0 place-items-center rounded-2xl bg-ink text-[15px] font-semibold tracking-[0.02em] text-on-ink"
           aria-hidden
         >
           AI

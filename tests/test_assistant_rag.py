@@ -262,7 +262,7 @@ async def test_unrelated_question_is_refused_without_sources(
     assert state["confidence"] == "low" and state["sources"] == []
     response = await agent.respond(message, context())
     assert response.sources == []
-    assert response.message.startswith("Xin lỗi,") and "CareerX" in response.message
+    assert response.message.startswith("Xin lỗi,") and "CareerV" in response.message
     assert response.actions == []
     structured.ainvoke.assert_not_called()
 
@@ -408,7 +408,7 @@ async def test_llm_receives_history_and_returns_only_grounded_safe_actions(
         "Xin lỗi, tài liệu hướng dẫn hiện tại chưa có thông tin chi tiết về nội dung này.",
         "Xin lỗi, hiện tại tài liệu hướng dẫn chưa có thông tin chi tiết về nội dung này. "
         "Bạn vui lòng nêu rõ thao tác cần hỗ trợ.",
-        "Tôi chỉ hỗ trợ tính năng CareerX và không thể trả lời chủ đề đó.",
+        "Tôi chỉ hỗ trợ tính năng CareerV và không thể trả lời chủ đề đó.",
     ],
 )
 @pytest.mark.parametrize("refusal_flag", [True, False, None])
@@ -902,7 +902,7 @@ async def test_low_confidence_with_stale_sources_never_echoes_documents() -> Non
     )
     response = result["response"]
     assert (
-        response.message == "Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerX."
+        response.message == "Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerV."
     )
     assert response.actions == [] and response.sources == []
     structured.ainvoke.assert_not_called()
@@ -920,7 +920,7 @@ async def test_chat_api_refuses_out_of_scope_without_actions_or_sources(
     result = await client.post(f"{API}/chat", json=payload(message), headers=STUDENT)
     assert result.status_code == 200, result.text
     data = result.json()
-    assert data["message"].startswith("Xin lỗi,") and "CareerX" in data["message"]
+    assert data["message"].startswith("Xin lỗi,") and "CareerV" in data["message"]
     assert data["actions"] == [] and data["sources"] == []
     assert "Bộ lọc thời gian" not in data["message"]
     assert "thought" not in data

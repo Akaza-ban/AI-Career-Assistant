@@ -168,7 +168,7 @@ function StudentQuickView({ student }: { student: AssignedStudent }) {
         </button>
         <Link
           href={`/advisor/students/${encodeURIComponent(student.id)}`}
-          className={cn(PILL_SM, "bg-ink text-white hover:bg-ink/85")}
+          className={cn(PILL_SM, "bg-ink text-on-ink hover:bg-ink/85")}
         >
           Mở hồ sơ
           <ChevronRight className="size-[15px]" aria-hidden />

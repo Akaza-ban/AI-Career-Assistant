@@ -75,7 +75,7 @@ export function AdvisorGreeting({ data }: { data: AdvisorOverview }) {
           <Button
             variant="ghost"
             size="brand"
-            className="glass text-ink shadow-xs hover:bg-white"
+            className="glass text-ink shadow-xs hover:bg-card"
             nativeButton={false}
             render={<Link href="/advisor/students" />}
           >
@@ -193,7 +193,7 @@ export function AdvisorTasks({ data }: { data: AdvisorOverview }) {
               action={
                 <Link
                   href={`/advisor/students/${encodeURIComponent(p.student_id)}?review=${encodeURIComponent(p.session_id)}`}
-                  className={cn(PILL_SM, "bg-ink text-white hover:bg-ink/85")}
+                  className={cn(PILL_SM, "bg-ink text-on-ink hover:bg-ink/85")}
                 >
                   Nhận xét
                 </Link>

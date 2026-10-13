@@ -21,7 +21,7 @@ const TILE_TONE = {
   violet: { from: "#D3C8FF", to: "#9F86FF", fg: "#fff" },
   pink: { from: "#FFC6DF", to: "#FF8FB8", fg: "#fff" },
   peach: { from: "#FFD3C4", to: "#FF9E7E", fg: "#fff" },
-  white: { from: "#FFFFFF", to: "#FFFFFF", fg: "var(--ink)" },
+  white: { from: "var(--card)", to: "var(--card)", fg: "var(--ink)" },
 } as const
 export type TileTone = keyof typeof TILE_TONE
 

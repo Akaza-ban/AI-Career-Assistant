@@ -114,7 +114,7 @@ export function CvDetail({ id }: { id: string }) {
             <Button
               variant="ghost"
               size="brand"
-              className="glass text-ink shadow-xs hover:bg-white"
+              className="glass text-ink shadow-xs hover:bg-card"
               onClick={() => void downloadCv(selected)}
             >
               <Download strokeWidth={1.75} aria-hidden />
@@ -130,7 +130,7 @@ export function CvDetail({ id }: { id: string }) {
               onSetActive={setActive}
               onDelete={setDeleting}
               deleteBlocked={false}
-              className="glass size-[46px] text-ink shadow-xs hover:bg-white"
+              className="glass size-[46px] text-ink shadow-xs hover:bg-card"
             />
           </>
         }

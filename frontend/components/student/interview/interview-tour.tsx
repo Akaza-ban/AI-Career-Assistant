@@ -55,7 +55,7 @@ function IntroArt() {
     <div aria-hidden className="relative hidden overflow-hidden bg-panel md:block">
       <div className="absolute inset-0 grid place-content-center gap-3 px-10">
         <div className="grid w-60 gap-2 rounded-xl bg-card p-3 shadow-card">
-          <span className="w-fit rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-white">
+          <span className="w-fit rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-on-ink">
             Câu 1 / {QUESTION_COUNT}
           </span>
           <span className="h-1.5 w-11/12 rounded bg-line-strong" />
@@ -81,7 +81,7 @@ function IntroArt() {
             >
               {STAR_META[key].letter}
               {i < 3 && (
-                <span className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full bg-good text-white">
+                <span className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full bg-good text-on-ink">
                   <Check className="size-2.5" />
                 </span>
               )}
@@ -439,7 +439,7 @@ export function InterviewTour({ open, onClose, weeklyLimit }: InterviewTourProps
             ))}
           </div>
           <div className="flex items-start gap-3.5">
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-ink text-base font-semibold text-white">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-ink text-base font-semibold text-on-ink">
               {index + 1}
             </span>
             <div className="grid min-w-0 flex-1 gap-0.5">

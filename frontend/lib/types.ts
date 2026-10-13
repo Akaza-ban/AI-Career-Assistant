@@ -952,7 +952,7 @@ export interface ChangePasswordRequest {
 }
 
 // ---------- Tài khoản: đăng ký, đăng nhập, quên mật khẩu ----------
-// Chỉ sinh viên tự đăng ký; tài khoản cố vấn do CareerX cấp. Email là email cá nhân (không cần email trường).
+// Chỉ sinh viên tự đăng ký; tài khoản cố vấn do CareerV cấp. Email là email cá nhân (không cần email trường).
 
 export interface LoginRequest {
   email: string

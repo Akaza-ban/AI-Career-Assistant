@@ -218,7 +218,7 @@ export function ChatPanel() {
       className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card text-ink sm:inset-auto sm:right-6 sm:bottom-[calc(var(--tabbar-h,0px)+var(--actionbar-h,0px)+1rem)] sm:h-[min(620px,calc(100dvh-var(--tabbar-h,0px)-var(--actionbar-h,0px)-6rem))] sm:w-[400px] sm:rounded-[18px] sm:shadow-dialog sm:ring-1 sm:ring-line print:hidden"
     >
       <PanelHeader
-        subtitle="Hỏi cách dùng CareerX"
+        subtitle="Hỏi cách dùng CareerV"
         onClose={closeChat}
         onNewChat={() => { clearChat(); setDraft(""); inputRef.current?.focus() }}
         canReset={messages.length > 0 && !isExecutingAction}
@@ -258,7 +258,7 @@ export function ChatPanel() {
           <div role="log" aria-label="Trò chuyện với trợ lý" aria-live="polite" aria-relevant="additions" aria-busy={isThinking} className="grid gap-4">
             {messages.map((message) =>
               message.sender === "user" ? (
-                <p key={message.id} className="max-w-[85%] justify-self-end rounded-[18px] rounded-br-md bg-ink px-3.5 py-2 text-sm leading-[22px] whitespace-pre-wrap text-white wrap-anywhere">
+                <p key={message.id} className="max-w-[85%] justify-self-end rounded-[18px] rounded-br-md bg-ink px-3.5 py-2 text-sm leading-[22px] whitespace-pre-wrap text-on-ink wrap-anywhere">
                   <span className="sr-only">Bạn: </span>
                   {message.content}
                 </p>
@@ -350,7 +350,7 @@ export function ChatPanel() {
             type="submit"
             disabled={!draft.trim() || busy}
             aria-label="Gửi câu hỏi"
-            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-white transition-colors disabled:bg-surface disabled:text-ink-3"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-colors disabled:bg-surface disabled:text-ink-3"
           >
             <ArrowUp className="size-4" strokeWidth={2} aria-hidden />
           </button>

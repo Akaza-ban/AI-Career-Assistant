@@ -8,10 +8,10 @@ import { cn } from "@/lib/utils"
 import { SectionHeading } from "./landing-bits"
 
 const FAQS = [
-  ["CareerX có mất phí không?", "Không. Sinh viên dùng miễn phí. Mỗi vị trí có 3 buổi phỏng vấn thử mỗi tuần để giữ chất lượng chấm điểm."],
+  ["CareerV có mất phí không?", "Không. Sinh viên dùng miễn phí. Mỗi vị trí có 3 buổi phỏng vấn thử mỗi tuần để giữ chất lượng chấm điểm."],
   [
     "AI có tự thêm kỹ năng vào CV của tôi không?",
-    "Không. Khi JD yêu cầu điều bạn chưa có, CareerX hỏi bạn có kinh nghiệm hay không và chỉ ghi những gì bạn xác nhận. Kỹ năng đang học được ghi rõ là đang học.",
+    "Không. Khi JD yêu cầu điều bạn chưa có, CareerV hỏi bạn có kinh nghiệm hay không và chỉ ghi những gì bạn xác nhận. Kỹ năng đang học được ghi rõ là đang học.",
   ],
   ["CV cần định dạng gì?", "PDF hoặc DOCX, tối đa 10 MB. File PDF dạng ảnh chụp chưa đọc được chữ, bạn nên xuất PDF trực tiếp từ Word hoặc Google Docs."],
   ["Ai xem được CV và báo cáo phỏng vấn của tôi?", "Chỉ bạn. Cố vấn chỉ xem được những mục bạn bật chia sẻ, và bạn tắt lại bất cứ lúc nào."],

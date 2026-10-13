@@ -23,7 +23,7 @@ export function AssistantLauncher() {
       title="Hỏi trợ lý hướng dẫn"
       className={cn(
         "grid size-10 place-items-center rounded-full transition-[background-color,color,transform] duration-150 active:scale-[.97] lg:mr-1.5 lg:flex lg:h-9 lg:w-auto lg:gap-1.5 lg:pr-3.5 lg:pl-3 lg:text-sm lg:font-semibold",
-        isOpen ? "bg-ink text-white" : "text-blue hover:bg-surface lg:bg-white/70 lg:text-ink lg:shadow-xs lg:backdrop-blur-[8px] lg:hover:bg-card",
+        isOpen ? "bg-ink text-on-ink" : "text-blue hover:bg-surface lg:bg-card/70 lg:text-ink lg:shadow-xs lg:backdrop-blur-[8px] lg:hover:bg-card",
       )}
     >
       <Sparkles className="size-[19px] lg:size-4" strokeWidth={1.75} aria-hidden />

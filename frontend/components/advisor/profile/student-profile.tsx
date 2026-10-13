@@ -165,7 +165,7 @@ function ProfileHeader({ detail, onAddNote }: { detail: AdvisorStudentDetail; on
         <Button
           variant="ghost"
           size="brand"
-          className="glass flex-1 text-ink shadow-xs hover:bg-white sm:flex-none"
+          className="glass flex-1 text-ink shadow-xs hover:bg-card sm:flex-none"
           onClick={onAddNote}
         >
           <PenLine aria-hidden />

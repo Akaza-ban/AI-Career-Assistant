@@ -37,7 +37,7 @@ DEMO_USERS = [
     {
         "id": DEMO_ADMIN_ID,
         "role": "admin",
-        "full_name": "Quản trị CareerX",
+        "full_name": "Quản trị CareerV",
         "subtitle": "Quản trị hệ thống",
         "email": "admin@careerx.vn",
     },

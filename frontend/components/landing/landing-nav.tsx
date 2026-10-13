@@ -5,6 +5,7 @@ import { useEffect, useState } from "react"
 import { Menu } from "lucide-react"
 
 import { Logo } from "@/components/brand/logo"
+import { ThemeToggleButton } from "@/components/shell/theme-switch"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
@@ -44,6 +45,7 @@ export function LandingNav() {
           ))}
         </nav>
         <span className="flex-1" />
+        <ThemeToggleButton className="-mr-3 max-sm:-mr-4" />
         <Button variant="soft" size="brand" className="min-h-10 px-[18px] max-sm:min-h-9 max-sm:px-3.5 max-sm:text-sm" nativeButton={false} render={<Link href="/login" />}>
           Đăng nhập
         </Button>
@@ -55,7 +57,7 @@ export function LandingNav() {
             <Menu className="size-[22px]" strokeWidth={1.75} />
           </SheetTrigger>
           <SheetContent side="bottom" className="rounded-t-[22px] px-3 pt-3 pb-6">
-            <SheetTitle className="px-3 pb-1 text-lg font-semibold">CareerX</SheetTitle>
+            <SheetTitle className="px-3 pb-1 text-lg font-semibold">CareerV</SheetTitle>
             <nav aria-label="Mục trên trang" className="grid">
               {LANDING_LINKS.map((l) => (
                 <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="rounded-[10px] px-3 py-3 text-[15px] font-medium text-ink-2 hover:bg-surface">

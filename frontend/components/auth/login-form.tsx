@@ -58,7 +58,7 @@ export function LoginForm({ expired = false }: { expired?: boolean }) {
 
   return (
     <AuthCard>
-      <AuthHeading title="Đăng nhập" description="Chào mừng bạn quay lại CareerX." />
+      <AuthHeading title="Đăng nhập" description="Chào mừng bạn quay lại CareerV." />
       <form onSubmit={submit} noValidate className="grid gap-5">
         {error ? (
           <FormAlert>{error.message}</FormAlert>

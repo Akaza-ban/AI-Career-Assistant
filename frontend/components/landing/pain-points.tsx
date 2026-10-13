@@ -1,6 +1,6 @@
-import Image from "next/image"
 import { Check } from "lucide-react"
 
+import { BrandMark } from "@/components/brand/logo"
 import { cn } from "@/lib/utils"
 
 import { SectionHeading } from "./landing-bits"
@@ -26,16 +26,16 @@ const ROWS = [
 
 const COLS = "md:grid-cols-[minmax(0,0.8fr)_minmax(0,1fr)_minmax(0,1.15fr)]"
 
-/** Ngay dưới hero: so sánh tự chuẩn bị với dùng CareerX, dạng bảng kẻ mảnh (không thẻ, không icon). */
+/** Ngay dưới hero: so sánh tự chuẩn bị với dùng CareerV, dạng bảng kẻ mảnh (không thẻ, không icon). */
 export function PainPoints() {
   return (
     <section className="mx-auto max-w-[1200px] px-4 pt-8 pb-20 md:px-10 md:pt-16 md:pb-[120px]">
       <SectionHeading
         title="Bớt đoán, luyện đúng chỗ."
-        description="Khi tự chuẩn bị, rất khó biết CV còn thiếu gì hay câu trả lời đã đủ ý chưa. CareerX chỉ ra từng chỗ cụ thể."
+        description="Khi tự chuẩn bị, rất khó biết CV còn thiếu gì hay câu trả lời đã đủ ý chưa. CareerV chỉ ra từng chỗ cụ thể."
       />
       <Reveal className="mt-10 md:mt-14">
-        <div role="table" aria-label="So sánh tự chuẩn bị và dùng CareerX">
+        <div role="table" aria-label="So sánh tự chuẩn bị và dùng CareerV">
           {/* Hàng tiêu đề (desktop) */}
           <div role="row" className={cn("hidden md:grid", COLS)}>
             <span role="columnheader">
@@ -45,8 +45,8 @@ export function PainPoints() {
               Tự chuẩn bị
             </span>
             <span role="columnheader" className="flex items-center gap-2 rounded-t-[20px] bg-panel px-7 pt-6 pb-4 text-sm font-semibold text-ink">
-              <Image src="/brand/careerx-glyph.png" alt="" width={18} height={18} className="size-[18px]" />
-              Với CareerX
+              <BrandMark className="h-4" />
+              Với CareerV
             </span>
           </div>
           {ROWS.map((r, i) => {
@@ -70,7 +70,7 @@ export function PainPoints() {
                 >
                   <Check className="mt-[5px] size-4 shrink-0 text-good" strokeWidth={2.25} aria-hidden />
                   <span>
-                    <span className="mb-0.5 block text-[13px] font-semibold text-ink md:hidden">Với CareerX</span>
+                    <span className="mb-0.5 block text-[13px] font-semibold text-ink md:hidden">Với CareerV</span>
                     {r.careerx}
                   </span>
                 </span>

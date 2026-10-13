@@ -51,7 +51,7 @@ export const mockSettings: StudentSettings = {
   date_of_birth: "2003-05-14",
   password_updated_at: at(60, 20, 0),
   consent_accepted_at: at(21, 14, 20),
-  storage: { used_bytes: 0, limit_bytes: 50 * 1024 * 1024, allocated_by: "CareerX" },
+  storage: { used_bytes: 0, limit_bytes: 50 * 1024 * 1024, allocated_by: "CareerV" },
   privacy: { anonymous_contribution: false },
   notifications: { advisor_comment: true, report_ready: true, weekly_reminder: false, email: true },
 }

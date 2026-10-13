@@ -253,12 +253,12 @@ def request_password_reset(db: Session, email: str) -> None:
     link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
     send_email(
         user.email,
-        "Đặt lại mật khẩu CareerX",
+        "Đặt lại mật khẩu CareerV",
         "\n".join(
             [
                 f"Chào {user.full_name},",
                 "",
-                "Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản CareerX.",
+                "Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản CareerV.",
                 f"Mở link sau trong {settings.password_reset_minutes} phút để đặt mật khẩu mới:",
                 link,
                 "",

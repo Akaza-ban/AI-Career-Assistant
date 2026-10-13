@@ -111,7 +111,7 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
       type="button"
       aria-pressed={isSaved}
       onClick={() => saved.toggle(jd.id)}
-      className="glass inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-line-strong px-4 text-sm font-semibold text-ink shadow-xs transition-[background-color,transform] duration-150 hover:bg-white active:scale-[.96] lg:w-11 lg:px-0"
+      className="glass inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-full border border-line-strong px-4 text-sm font-semibold text-ink shadow-xs transition-[background-color,transform] duration-150 hover:bg-card active:scale-[.96] lg:w-11 lg:px-0"
     >
       <Heart
         className={cn("size-[18px] shrink-0", isSaved ? "fill-current text-bad" : "text-ink-2")}
@@ -156,7 +156,7 @@ export function JdDetail({ id, initialCvId }: { id: string; initialCvId: string 
               <Button
                 variant="ghost"
                 size="brand"
-                className="glass text-ink shadow-xs hover:bg-white"
+                className="glass text-ink shadow-xs hover:bg-card"
                 nativeButton={false}
                 render={<Link href={`/student/interview/new?jd=${jd.id}`} />}
               >

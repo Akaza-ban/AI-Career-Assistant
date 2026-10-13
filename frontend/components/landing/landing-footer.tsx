@@ -20,7 +20,7 @@ export function LandingCta() {
             <Button variant="dark" size="brand" className="h-[50px] px-6 text-base" nativeButton={false} render={<Link href="/register" />}>
               Tạo tài khoản miễn phí
             </Button>
-            <Button variant="ghost" size="brand" className="glass h-[50px] px-6 text-base text-ink shadow-xs hover:bg-white" nativeButton={false} render={<Link href="/login" />}>
+            <Button variant="ghost" size="brand" className="glass h-[50px] px-6 text-base text-ink shadow-xs hover:bg-card" nativeButton={false} render={<Link href="/login" />}>
               Đăng nhập
             </Button>
           </div>
@@ -93,7 +93,7 @@ export function LandingFooter() {
         ))}
       </div>
       <div className="mx-auto flex max-w-[1200px] flex-wrap items-center gap-x-6 gap-y-1.5 border-t border-line px-4 pt-5 pb-8 text-[13px] text-ink-3 md:px-10">
-        <span>© 2026 CareerX</span>
+        <span>© 2026 CareerV</span>
         <span>Thực hiện bởi nhóm T131 · Model Citizens</span>
       </div>
       <DataPolicyDialog open={policyOpen} onOpenChange={setPolicyOpen} />

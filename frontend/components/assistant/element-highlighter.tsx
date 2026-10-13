@@ -75,7 +75,7 @@ export function ElementHighlighter({ selector, tooltip, durationMs = 5000, onDis
       />
       <div
         role="status"
-        className="absolute flex max-w-[calc(100vw-1rem)] items-center gap-1.5 rounded-[10px] bg-ink px-3 py-[7px] text-[13px] font-semibold text-white shadow-[0_8px_20px_-6px_rgb(24_24_27/0.3)]"
+        className="absolute flex max-w-[calc(100vw-1rem)] items-center gap-1.5 rounded-[10px] bg-ink px-3 py-[7px] text-[13px] font-semibold text-on-ink shadow-[0_8px_20px_-6px_rgb(24_24_27/0.3)]"
         style={{
           top: above ? rect.top - 50 : Math.min(rect.bottom + 14, window.innerHeight - 44),
           left: Math.max(8, Math.min(rect.right - 260, window.innerWidth - 268)),

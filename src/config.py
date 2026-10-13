@@ -84,7 +84,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
-    smtp_from: str = "CareerX <no-reply@careerx.vn>"
+    smtp_from: str = "CareerV <no-reply@careerx.vn>"
     smtp_starttls: bool = True
 
     # Dung lượng lưu CV cho mỗi sinh viên

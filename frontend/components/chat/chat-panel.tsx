@@ -293,7 +293,7 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
                     <p
                       className={cn(
                         "rounded-[18px] px-3.5 py-2 text-sm leading-6 wrap-anywhere whitespace-pre-wrap",
-                        m.mine ? "rounded-br-md bg-ink text-white" : "rounded-bl-md bg-surface text-ink",
+                        m.mine ? "rounded-br-md bg-ink text-on-ink" : "rounded-bl-md bg-surface text-ink",
                       )}
                     >
                       <span className="sr-only">{m.mine ? "Bạn: " : `${conversation.counterpart.full_name}: `}</span>

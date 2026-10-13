@@ -266,7 +266,7 @@ function RoundButton({ label, onClick, children }: { label: string; onClick: () 
 }
 
 const PILL_TONE = {
-  dark: "bg-ink px-5 text-white hover:bg-ink/85",
+  dark: "bg-ink px-5 text-on-ink hover:bg-ink/85",
   soft: "bg-surface px-[18px] text-ink hover:bg-line",
   ghost: "px-3.5 text-ink-2 hover:bg-surface hover:text-ink",
 }

@@ -122,7 +122,7 @@ export function LandingHero() {
             <Words text="Phỏng vấn tự tin hơn." start={3} />
           </h1>
           <p className={cn(styles.fadeUp, "mx-auto mt-4 max-w-[520px] text-[17px] leading-[27px] text-ink-2 md:mt-6 md:text-[19px] md:leading-[30px]")} style={delayStyle(0.65)}>
-            CareerX so CV với mô tả công việc, gợi ý sửa từng câu và cho bạn luyện phỏng vấn thử theo khung STAR. Miễn phí cho sinh viên.
+            CareerV so CV với mô tả công việc, gợi ý sửa từng câu và cho bạn luyện phỏng vấn thử theo khung STAR. Miễn phí cho sinh viên.
           </p>
           <div className={cn(styles.fadeUp, "mt-7 grid justify-center gap-2.5 sm:flex md:mt-[34px] md:gap-3")} style={delayStyle(0.8)}>
             <Button variant="dark" size="brand" className="h-[50px] px-6 text-base" nativeButton={false} render={<Link href="/register" />}>

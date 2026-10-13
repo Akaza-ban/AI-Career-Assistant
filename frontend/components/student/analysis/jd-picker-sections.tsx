@@ -562,7 +562,7 @@ export function JdPasteForm({ value, onChange, showErrors, industries, idPrefix 
         <Checkbox
           checked={value.save}
           onCheckedChange={(checked) => set("save", checked === true)}
-          className="size-[17px] border-line-strong data-checked:border-ink data-checked:bg-ink data-checked:text-white"
+          className="size-[17px] border-line-strong data-checked:border-ink data-checked:bg-ink data-checked:text-on-ink"
         />
         Lưu JD này vào mục Đã lưu để dùng lại
       </label>

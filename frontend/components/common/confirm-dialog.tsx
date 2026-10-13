@@ -98,7 +98,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             size="brand"
-            className={cn(destructive && "bg-bad text-white hover:bg-bad/85")}
+            className={cn(destructive && "bg-bad text-on-ink hover:bg-bad/85")}
             onClick={confirm}
             disabled={busy}
           >

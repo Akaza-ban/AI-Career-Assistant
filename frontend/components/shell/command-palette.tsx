@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react"
 import {
   ArrowRight,
@@ -20,6 +21,7 @@ import {
 } from "lucide-react"
 
 import { shellOf } from "@/components/shell/nav-config"
+import { THEME_OPTIONS } from "@/components/shell/theme-switch"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { api } from "@/lib/api"
 import type { AdminAdvisor, AdminStudent, AssignedStudent, JobDescription, Role } from "@/lib/types"
@@ -34,6 +36,8 @@ interface PaletteItem {
   icon: LucideIcon
   /** Chuỗi dùng để lọc (không dấu, chữ thường). */
   haystack: string
+  /** Lệnh chạy tại chỗ (ví dụ đổi giao diện) thay cho chuyển trang. */
+  run?: () => void
 }
 
 /** Bỏ dấu tiếng Việt để gõ "phan tich" vẫn ra "Phân tích". */
@@ -141,6 +145,18 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
     [role, jds, students, people],
   )
 
+  // Đổi sáng / tối: chỉ hiện khi gõ ("toi", "sang", "giao dien", "dark"...) để danh sách mặc định gọn
+  const { theme, setTheme } = useTheme()
+  const themeItems = useMemo(
+    () =>
+      THEME_OPTIONS.filter((o) => o.value !== theme).map((o) => ({
+        ...item("Giao diện", o.value === "system" ? "Giao diện theo máy" : `Chuyển sang giao diện ${o.label.toLowerCase()}`, "#", o.icon, undefined, `giao dien che do theme ${o.value} sang toi dark light`),
+        id: `theme:${o.value}`,
+        run: () => setTheme(o.value),
+      })),
+    [theme, setTheme],
+  )
+
   const results = useMemo(() => {
     const q = fold(query.trim())
     const words = q.split(/\s+/).filter(Boolean)
@@ -149,9 +165,10 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
       records.filter((r) => (q ? matches(r) : false)).slice(0, GROUP_LIMIT),
       ACTIONS[role].filter((a) => !q || matches(a)),
       pages.filter((p) => !q || matches(p)),
+      themeItems.filter((t) => q && matches(t)),
     ]
     return groups.flat()
-  }, [query, records, pages, role])
+  }, [query, records, pages, role, themeItems])
 
   function close() {
     onOpenChange(false)
@@ -162,7 +179,8 @@ export function CommandPalette({ role, open, onOpenChange }: { role: Role; open:
   function go(it: PaletteItem | undefined) {
     if (!it) return
     close()
-    router.push(it.href)
+    if (it.run) it.run()
+    else router.push(it.href)
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {

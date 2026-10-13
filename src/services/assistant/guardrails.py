@@ -10,12 +10,12 @@ from html import unescape
 
 SAFETY_REFUSAL_MESSAGE = "Yêu cầu của bạn vi phạm chính sách an toàn của hệ thống."
 SCOPE_REFUSAL_MESSAGE = (
-    "Xin lỗi, tôi là trợ lý ảo chuyên hỗ trợ nền tảng CareerX "
+    "Xin lỗi, tôi là trợ lý ảo chuyên hỗ trợ nền tảng CareerV "
     "(hướng dẫn sử dụng tính năng, phân tích CV/JD và phỏng vấn thử). "
     "Tôi không có thông tin về các chủ đề ngoài hệ thống như thời tiết hay đời sống."
 )
 CHITCHAT_MESSAGE = (
-    "Chào bạn! Tôi là trợ lý ảo hỗ trợ nền tảng CareerX. "
+    "Chào bạn! Tôi là trợ lý ảo hỗ trợ nền tảng CareerV. "
     "Tôi luôn sẵn sàng giúp bạn quản lý CV, phân tích khoảng cách kỹ năng với JD "
     "và luyện tập phỏng vấn thử. Hôm nay bạn cần hỗ trợ gì trên hệ thống?"
 )
@@ -31,7 +31,7 @@ _CHITCHAT_PATTERN = re.compile(
 )
 
 _CAREERX_TOPIC_PATTERN = re.compile(
-    r"\b(?:careerx|edu\s*17|cv|jd|star|phong van|interview|sinh vien|student|advisor|"
+    r"\b(?:careerv|careerx|edu\s*17|cv|jd|star|phong van|interview|sinh vien|student|advisor|"
     r"ky nang|skill|tai lieu|lich su|history|diem|score|match|phan tich|analysis|"
     r"ho so|tai len|upload|chia se|co van|bo loc|filter|cai dat|settings|"
     r"dang nhap|dang ky|he thong|nen tang|thong ke|dashboard|nhan xet|feedback|"
@@ -88,9 +88,9 @@ def is_chitchat(message: str) -> tuple[bool, str]:
     if not text or not re.fullmatch(rf"(?:{_CHITCHAT_PATTERN.pattern})(?:\s+(?:{_CHITCHAT_PATTERN.pattern}))*", text):
         return False, ""
     if re.search(r"\b(?:tam biet|goodbye|bye)\b", text):
-        return True, "Tạm biệt bạn! Khi cần hỗ trợ về CareerX, CV/JD hoặc phỏng vấn thử, hãy quay lại nhé."
+        return True, "Tạm biệt bạn! Khi cần hỗ trợ về CareerV, CV/JD hoặc phỏng vấn thử, hãy quay lại nhé."
     if re.search(r"\b(?:cam on|thanks|thank you)\b", text):
-        return True, "Rất vui được hỗ trợ bạn! Bạn cứ hỏi khi cần hướng dẫn sử dụng CareerX nhé."
+        return True, "Rất vui được hỗ trợ bạn! Bạn cứ hỏi khi cần hướng dẫn sử dụng CareerV nhé."
     return True, CHITCHAT_MESSAGE
 
 

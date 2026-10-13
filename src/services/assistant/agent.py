@@ -191,7 +191,7 @@ class AssistantAgent:
             return AssistantResponse(message=reply, intent="qa", actions=[], sources=[])
         if state["confidence"] != "high" or not sources or not has_careerx_topic(state["message"]):
             return AssistantResponse(
-                message="Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerX.",
+                message="Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerV.",
                 intent=state["intent"],
                 actions=[],
                 sources=[],

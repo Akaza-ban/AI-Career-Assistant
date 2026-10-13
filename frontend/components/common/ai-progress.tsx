@@ -36,7 +36,7 @@ export function AiProgress({ title, description, steps, current, className }: Ai
               <span
                 className={cn(
                   "grid size-[22px] place-items-center rounded-full",
-                  done ? "bg-ink text-white" : active ? "bg-blue-soft text-blue" : "bg-surface",
+                  done ? "bg-ink text-on-ink" : active ? "bg-blue-soft text-blue" : "bg-surface",
                 )}
               >
                 {done && <Check className="size-3" strokeWidth={3} aria-hidden />}

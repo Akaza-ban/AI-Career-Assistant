@@ -12,7 +12,8 @@ import { SidebarNav } from "@/components/shell/sidebar-nav"
 import type { Role } from "@/lib/types"
 
 /**
- * Khung giao diện chính (DESIGN.md mục 5): sidebar 252px cố định từ 1024px trở lên, dưới 1024px thay bằng thanh tab
+ * Khung giao diện chính (DESIGN.md mục 5): sidebar 252px cố định từ 1024px trở lên (thu gọn còn 72px bằng nút cạnh logo
+ * hoặc Ctrl B, xem lib/sidebar.ts), dưới 1024px thay bằng thanh tab
  * dưới đáy. Nội dung trải hết chiều rộng còn lại (chỉ có lề), header dính trên cùng khi cuộn.
  * Dải pastel nằm ở đầu vùng nội dung, phía sau header và phần đầu trang.
  * --tabbar-h để các thanh dính đáy (BottomActionBar) nằm trên thanh tab điện thoại.
@@ -35,10 +36,10 @@ function Shell({ role, assistant = false, children }: { role: Role; assistant?: 
     <ProfileProvider role={role}>
       <ChatProvider role={role} enabled={role !== "admin"}>
         <div className="min-h-screen bg-background [--tabbar-h:68px] lg:[--tabbar-h:0px]">
-          <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] overflow-y-auto border-r border-line bg-card lg:block">
+          <aside className="fixed inset-y-0 left-0 z-40 hidden w-[252px] overflow-x-hidden overflow-y-auto border-r border-line bg-card transition-[width] duration-200 ease-out lg:block sidebar-collapsed:w-[72px] sidebar-collapsed:overflow-visible">
             <SidebarNav role={role} />
           </aside>
-          <div className="flex min-h-screen flex-col overflow-x-clip pb-[var(--tabbar-h)] lg:pl-[252px]">
+          <div className="flex min-h-screen flex-col overflow-x-clip pb-[var(--tabbar-h)] transition-[padding] duration-200 ease-out lg:pl-[252px] lg:sidebar-collapsed:pl-[72px]">
             <div className="relative flex flex-1 flex-col">
               <div className="aurora-band" aria-hidden />
               <AppTopbar role={role} />

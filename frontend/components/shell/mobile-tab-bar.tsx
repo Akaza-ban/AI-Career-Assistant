@@ -74,7 +74,7 @@ export function MobileTabBar({ role }: { role: Role }) {
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "flex items-center gap-3 rounded-[10px] px-3 py-3 text-[15px]",
-                    active ? "bg-ink font-semibold text-white" : "font-medium text-ink-2 hover:bg-surface",
+                    active ? "bg-ink font-semibold text-on-ink" : "font-medium text-ink-2 hover:bg-surface",
                   )}
                 >
                   <Icon className="size-5" strokeWidth={1.75} aria-hidden />

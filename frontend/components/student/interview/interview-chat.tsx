@@ -158,7 +158,7 @@ export function CoachMark({ className }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className={cn("grid size-10 shrink-0 place-items-center rounded-xl bg-ink text-[13px] font-semibold text-white", className)}
+      className={cn("grid size-10 shrink-0 place-items-center rounded-xl bg-ink text-[13px] font-semibold text-on-ink", className)}
     >
       AI
     </span>

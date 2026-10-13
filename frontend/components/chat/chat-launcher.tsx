@@ -25,7 +25,7 @@ export function ChatLauncher() {
       >
         <Mail className="size-[19px]" strokeWidth={1.75} aria-hidden />
         {unread > 0 && (
-          <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-blue px-1 text-[10px] leading-none font-semibold text-white">
+          <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-blue px-1 text-[10px] leading-none font-semibold text-on-blue">
             {unread > 9 ? "9+" : unread}
           </span>
         )}

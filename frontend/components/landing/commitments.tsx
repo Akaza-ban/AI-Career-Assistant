@@ -1,7 +1,7 @@
-import Image from "next/image"
 import type { ReactNode } from "react"
 import { Check, FileText, Info, LockKeyhole, ShieldCheck, Sparkles, Trash2, UserRound, type LucideIcon } from "lucide-react"
 
+import { BrandMark } from "@/components/brand/logo"
 import { cn } from "@/lib/utils"
 
 import { SectionHeading } from "./landing-bits"
@@ -67,8 +67,10 @@ function FlowDiagram() {
         style={{ background: "linear-gradient(160deg, rgb(158 212 255 / 0.16), rgb(255 159 203 / 0.12))" }}
       >
         <span className="flex items-center gap-2.5">
-          <Image src="/brand/careerx-glyph.png" alt="" width={26} height={26} className="size-[26px] invert" />
-          <b className="text-[17px] font-semibold text-white">CareerX</b>
+          <BrandMark onDark className="h-[22px]" />
+          <b className="text-[17px] font-semibold text-white">
+            Career<span className="text-gold">V</span>
+          </b>
         </span>
         <span className="text-[13px] text-night-mute">Đọc CV · So khớp JD · Gợi ý · Chấm STAR</span>
       </div>
@@ -88,7 +90,7 @@ function FlowList() {
     <div className="relative mt-8 grid gap-5 lg:hidden" aria-hidden>
       <span className="absolute top-8 bottom-8 left-[34px] w-0.5 bg-[linear-gradient(#9ED4FF,#B8A4FF,#FF9FCB)] opacity-60" />
       <Node icon={FileText} title="CV của bạn" sub="PDF hoặc DOCX" className="relative" />
-      <Node icon={Sparkles} title="CareerX" sub="Đọc CV · So khớp · Gợi ý · Chấm STAR" className="relative" />
+      <Node icon={Sparkles} title="CareerV" sub="Đọc CV · So khớp · Gợi ý · Chấm STAR" className="relative" />
       <Node icon={Check} title="Bạn duyệt từng gợi ý" sub="Áp dụng · Sửa · Bỏ qua" className="relative" />
       <Node icon={UserRound} title="Cố vấn" sub="Chỉ xem mục bạn bật" className="relative">
         <span className={styles.nightSwitch} />
@@ -108,7 +110,7 @@ export function Commitments() {
           dark
           eyebrow="Cam kết"
           title="Dữ liệu của bạn, quyền của bạn."
-          description="CareerX chỉ trình bày lại kinh nghiệm có thật trong CV. Mọi thay đổi đi qua tay bạn, và không ai khác thấy dữ liệu khi bạn chưa cho phép."
+          description="CareerV chỉ trình bày lại kinh nghiệm có thật trong CV. Mọi thay đổi đi qua tay bạn, và không ai khác thấy dữ liệu khi bạn chưa cho phép."
         />
         <FlowDiagram />
         <FlowList />

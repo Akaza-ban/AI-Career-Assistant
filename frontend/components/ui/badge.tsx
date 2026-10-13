@@ -18,7 +18,7 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
-        // Biến thể CareerX (DESIGN.md mục 6): nền -soft, viền mảnh, chữ cùng màu
+        // Biến thể CareerV (DESIGN.md mục 6): nền -soft, viền mảnh, chữ cùng màu
         blue: "border-line-strong bg-blue-soft text-accent-strong",
         violet: "border-violet/20 bg-violet-soft text-violet",
         good: "border-good-line bg-good-soft text-good",

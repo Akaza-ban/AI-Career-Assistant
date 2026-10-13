@@ -182,7 +182,7 @@ export function RegisterForm() {
           </div>
           <div className="grid gap-3">
             <CheckField checked={consent} onChange={setConsent} invalid={submitted && !consent}>
-              Tôi đồng ý để CareerX xử lý CV và câu trả lời phỏng vấn của tôi để đưa ra gợi ý.
+              Tôi đồng ý để CareerV xử lý CV và câu trả lời phỏng vấn của tôi để đưa ra gợi ý.
             </CheckField>
             <CheckField checked={pledge} onChange={setPledge} invalid={submitted && !pledge}>
               Tôi cam kết chỉ đưa vào CV những kinh nghiệm có thật.

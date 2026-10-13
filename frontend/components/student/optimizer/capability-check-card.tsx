@@ -90,7 +90,7 @@ export function CapabilityCheckCard({ check, editable, onAnswer }: CapabilityChe
               onClick={() => pick(o.value)}
               className={cn(
                 "h-9 rounded-full border px-3.5 text-[13px] font-semibold transition-[transform,background-color,color] active:scale-[0.97] disabled:cursor-default",
-                on ? "border-ink bg-ink text-white" : "border-line-strong bg-card text-ink hover:bg-panel",
+                on ? "border-ink bg-ink text-on-ink" : "border-line-strong bg-card text-ink hover:bg-panel",
                 !editable && !on && "opacity-60",
               )}
             >
@@ -149,7 +149,7 @@ export function CapabilityCheckCard({ check, editable, onAnswer }: CapabilityChe
           type="button"
           disabled={busy || !text}
           onClick={() => submit(choice)}
-          className="mt-2.5 inline-flex h-9 items-center gap-2 rounded-full bg-ink px-4 text-[13px] font-semibold text-white transition-[transform,background-color] hover:bg-ink/85 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
+          className="mt-2.5 inline-flex h-9 items-center gap-2 rounded-full bg-ink px-4 text-[13px] font-semibold text-on-ink transition-[transform,background-color] hover:bg-ink/85 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50"
         >
           {busy && <Loader2 className="size-3.5 animate-spin" aria-hidden />}
           Lưu câu trả lời

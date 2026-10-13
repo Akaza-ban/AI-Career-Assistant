@@ -158,7 +158,7 @@ export function ResetPassword({ token }: { token: string | null }) {
 
   return (
     <AuthCard className="max-w-[420px]">
-      <AuthHeading title="Đặt mật khẩu mới" description="Chọn mật khẩu mới cho tài khoản CareerX của bạn." />
+      <AuthHeading title="Đặt mật khẩu mới" description="Chọn mật khẩu mới cho tài khoản CareerV của bạn." />
       <form onSubmit={submit} noValidate className="grid gap-5">
         {error && <FormAlert>{error.message}</FormAlert>}
         <div className="grid gap-2.5">
@@ -247,7 +247,7 @@ export function ChangeTemporaryPassword() {
       </IconBadge>
       <AuthHeading
         title="Đặt mật khẩu của bạn"
-        description="Bạn đang dùng mật khẩu tạm do quản trị viên cấp. Hãy đặt mật khẩu mới để bắt đầu dùng CareerX."
+        description="Bạn đang dùng mật khẩu tạm do quản trị viên cấp. Hãy đặt mật khẩu mới để bắt đầu dùng CareerV."
       />
       <form onSubmit={submit} noValidate className="grid gap-5">
         {error && !error.wrongCurrent && <FormAlert>{error.message}</FormAlert>}

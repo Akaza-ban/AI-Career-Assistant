@@ -18,7 +18,7 @@ export const DATA_POLICY_SECTIONS: { title: string; items: string[] }[] = [
       "CV bạn tải lên và các phiên bản bạn tạo trong Trình tối ưu.",
       "JD bạn dán vào để phân tích.",
       "Câu trả lời phỏng vấn dạng chữ, điểm và báo cáo của từng buổi.",
-      "Đánh giá và góp ý bạn gửi cho CareerX.",
+      "Đánh giá và góp ý bạn gửi cho CareerV.",
     ],
   },
   {
@@ -44,7 +44,7 @@ export const DATA_POLICY_SECTIONS: { title: string; items: string[] }[] = [
       "Mặc định chỉ bạn xem được CV, câu trả lời và báo cáo của mình.",
       "Cố vấn phụ trách chỉ xem nội dung những mục bạn bật chia sẻ, và mất quyền xem ngay khi bạn tắt.",
       "Cố vấn luôn thấy số liệu tổng hợp: điểm từng buổi, mức thay đổi và ngày hoạt động gần nhất.",
-      "CareerX không bán dữ liệu và không chia sẻ cho nhà tuyển dụng.",
+      "CareerV không bán dữ liệu và không chia sẻ cho nhà tuyển dụng.",
     ],
   },
   {

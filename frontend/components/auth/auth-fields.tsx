@@ -117,7 +117,7 @@ export function CheckField({
         checked={checked}
         onCheckedChange={(v) => onChange(v === true)}
         aria-invalid={invalid || undefined}
-        className="mt-px size-5 rounded-md border-[1.5px] border-line-strong bg-card data-checked:border-ink data-checked:bg-ink data-checked:text-white"
+        className="mt-px size-5 rounded-md border-[1.5px] border-line-strong bg-card data-checked:border-ink data-checked:bg-ink data-checked:text-on-ink"
       />
       <span>{children}</span>
     </label>

@@ -17,10 +17,10 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
-        // Biến thể CareerX (DESIGN.md mục 6)
+        // Biến thể CareerV (DESIGN.md mục 6)
         soft: "bg-surface text-ink hover:bg-[color-mix(in_oklch,var(--surface),var(--ink)_6%)]",
-        violet: "bg-violet text-white hover:bg-violet/85",
-        dark: "bg-ink text-white hover:bg-ink/85",
+        violet: "bg-violet text-on-ink hover:bg-violet/85",
+        dark: "bg-ink text-on-ink hover:bg-ink/85",
       },
       size: {
         /** Nút chính theo DESIGN.md: cao 46px, dạng pill */

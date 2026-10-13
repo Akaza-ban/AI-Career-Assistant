@@ -25,7 +25,7 @@ const ago = (days: number) => new Date(Date.now() - days * DAY).toISOString()
 export const mockAdmin: UserProfile = {
   id: "qt-001",
   role: "admin",
-  full_name: "Quản trị CareerX",
+  full_name: "Quản trị CareerV",
   subtitle: "Quản trị hệ thống",
   avatar_url: null,
 }
