@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     auth_secret_key: SecretStr = SecretStr("")
     auth_session_ttl_seconds: int = Field(default=28800, ge=300, le=86400)
 
+    # Local privacy extraction (no cloud OCR).
+    pii_ocr_command: str = "tesseract"
+    pii_ocr_dpi: int = Field(default=200, ge=100, le=400)
+    pii_ocr_timeout_seconds: int = Field(default=30, ge=1, le=120)
+    pii_document_max_bytes: int = Field(default=20_000_000, ge=1)
+    pii_document_max_pages: int = Field(default=30, ge=1, le=100)
+
     @model_validator(mode="after")
     def configure_session_key(self) -> "Settings":
         key = self.auth_secret_key.get_secret_value()
