@@ -34,7 +34,7 @@ _AUTH_READY = False
 
 # Fail before any fixture can seed/delete records if configuration precedence ever
 # regresses. Local .env files must never redirect tests into the development DB.
-assert get_settings().database_url == os.environ["DATABASE_URL"]
+assert get_settings().database_url == f"sqlite:///{(_TMP / 'test.db').as_posix()}"
 assert Path(get_settings().upload_dir).resolve() == (_TMP / "uploads").resolve()
 
 
