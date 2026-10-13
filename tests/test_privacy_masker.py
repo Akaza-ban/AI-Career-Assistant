@@ -18,7 +18,6 @@ class TestVault:
     def store(self, original, kind, origin):
         for token, (old, old_kind, origins) in self.entries.items():
             if old == original:
-                assert old_kind == kind
                 origins.add(origin)
                 return token
         token = f"[[{kind}_{self.nonce}_{len(self.entries) + 1}]]"
@@ -102,6 +101,13 @@ def test_document_injection_names_and_filename(detector):
     assert resolve(doc.filename, vault, KINDS, {"jd:1"}) == "Alice_Smith.pdf"
 
 
+def test_filename_name_heuristic_without_identity_dictionary(detector):
+    vault = TestVault()
+    doc = mask_document("Skills: Python", vault, origin="cv:1", filename="Alice_Smith.pdf", detector=detector)
+    assert "Alice_Smith" not in doc.filename
+    assert resolve(doc.filename, vault, KINDS, {"cv:1"}) == "Alice_Smith.pdf"
+
+
 def test_fail_closed_stops_recording_provider(detector):
     calls = []
 
@@ -114,3 +120,22 @@ def test_fail_closed_stops_recording_provider(detector):
         calls.append(payload)
     assert calls == [] and "secret" not in str(error.value)
     assert escape_inbound("[[PERSON_1]]") == "&#91;&#91;PERSON_1]]"
+
+
+def test_pdf_path_returns_masked_text_and_filename_without_source_images_or_metadata(tmp_path, detector):
+    import pymupdf
+
+    path = tmp_path / "Alice_Smith.pdf"
+    with pymupdf.open() as pdf:
+        page = pdf.new_page()
+        page.insert_text((72, 72), "Name: Alice Smith\nEmail: a@example.test\nSkills: Python")
+        image = pymupdf.Pixmap(pymupdf.csRGB, (0, 0, 20, 20), False)
+        image.clear_with(255)
+        page.insert_image(pymupdf.Rect(400, 100, 440, 140), pixmap=image)
+        pdf.set_metadata({"author": "unexposed@example.test", "title": "private source metadata"})
+        pdf.save(path)
+    result = mask_document(path, TestVault(), origin="cv:1", detector=detector)
+    assert "Alice Smith" not in result.text and "a@example.test" not in result.text
+    assert "Alice_Smith" not in result.filename
+    assert "unexposed@example.test" not in result.text and "private source metadata" not in result.text
+    assert not hasattr(result, "images") and not hasattr(result, "bytes")

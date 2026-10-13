@@ -4,7 +4,7 @@ import re
 import unicodedata
 from collections.abc import Iterable
 
-from src.services.privacy.types import Identity, MaskingError, Ner, NerUnavailableError, Span
+from src.services.privacy.types import KINDS, Identity, MaskingError, Ner, NerUnavailableError, Span
 
 _WORD = r"[^\W\d_]+(?:[-'][^\W\d_]+)*"
 _NAME = rf"{_WORD}(?:[ \t]+{_WORD}){{1,5}}"
@@ -19,16 +19,39 @@ _ID_LABEL = re.compile(
 _DOB = re.compile(
     r"(?im)\b(?:DOB|date of birth|birthdate|ngày sinh|sinh ngày)\s*[:=-]?\s*(\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}|\d{1,2}\s+[A-Za-z]+\s+\d{4})"
 )
-_ADDRESS = re.compile(r"(?im)^\s*(?:home\s+address|address|địa chỉ|nơi ở|residence)\s*[:=-]\s*(\S[^\n;|]*)")
+_ADDRESS = re.compile(r"(?im)^\s*(?:home\s+address|address|địa chỉ|nơi ở|residence)\s*[:=-]\s*(\S[^\r\n;|]*)")
+_ADDRESS_LINE = re.compile(
+    r"(?im)^[ \t]*(?:đường|phố|street|phường|ward|quận|district)(?:[ \t]*[:=-][ \t]*|[ \t]+)(\S[^\r\n;|]*)"
+)
 _STREET = re.compile(
     r"(?im)(?<!\w)\d+[A-Za-z]?(?:[/.-]\d+)?[ \t]+(?:(?:đường|street|phố)[ \t]+)?"
-    r"[^\n;|]{1,100}?(?:\b(?:Street|St\.?|Road|Rd\.?|Lane|Ln\.?|Avenue|Ave\.?|Drive|Dr\.?)\b|"
-    r",\s*(?:phường|quận|ward|district)\s+[^\n;|]+)"
+    r"[^\r\n;|]{1,100}?(?:\b(?:Street|St\.?|Road|Rd\.?|Lane|Ln\.?|Avenue|Ave\.?|Drive|Dr\.?)\b|"
+    r",[ \t]*(?:phường|quận|ward|district)[ \t]+[^\r\n;|]+)"
 )
 _NAME_LABEL = re.compile(
     rf"(?im)\b(?:full name|candidate|name|họ và tên|họ tên|tên|referee|reference|recruiter|contact person|"
     rf"người tham chiếu|người tuyển dụng|sinh viên|student|advisor|cố vấn)\s*[:=-]\s*({_NAME})"
 )
+_PERSON_CONTEXT = re.compile(
+    rf"(?im)\b(?:my name is|I am|tôi là|tên tôi là|ứng viên|applicant|candidate)[ \t]+({_NAME})"
+)
+_REFEREE_CONTEXT = re.compile(
+    rf"(?m)^[ \t]*({_NAME})(?=[ \t]+(?:supervised|mentored|referred|reviewed|hướng dẫn|giới thiệu)\b)"
+)
+_PII_LABEL = re.compile(
+    r"(?i)^[ \t]*(?:full name|candidate|name|họ và tên|họ tên|tên|referee|reference|recruiter|"
+    r"contact person|người tham chiếu|người tuyển dụng|sinh viên|student|advisor|cố vấn|"
+    r"email|reference email|phone|điện thoại|sđt|CCCD|CMND|national ID|student ID|MSSV|passport|"
+    r"DOB|ngày sinh|date of birth|address|home address|địa chỉ|profile|handle|URL|employment|"
+    r"work experience|experience|summary|giới thiệu|literal user text|error|filename)[ \t]*[:=-][ \t]*"
+)
+_KEEP_CONTEXT = re.compile(
+    r"(?i)\b(?:worked at|employed by|làm việc tại|công ty|studied at|graduated from|học tại)[ \t]+([^.;\n|]+)"
+)
+_KEEP_SUFFIX = re.compile(
+    r"(?i)[;|]|(?:,[ \t]*)?\b(?:contact|recruiter|referee|contact person|người tham chiếu|người tuyển dụng|liên hệ)\b"
+)
+_ESCAPED_OPAQUE = re.compile(r"&#91;&#91;(?:" + "|".join(sorted(KINDS)) + r")_(?:[a-f0-9]{32}_)?[0-9]{1,39}\]\]")
 _KEEP_LABEL = re.compile(
     r"(?i)^\s*(?:skills?|kỹ năng|employer|company|công ty|school|university|education|học vấn|trường|project|dự án|location|city|job title|position)\s*:"
 )
@@ -83,13 +106,41 @@ def regex_spans(text: str) -> list[Span]:
         digits = re.sub(r"\D", "", value)
         if 8 <= len(digits) <= 15 and not re.fullmatch(r"\d{4}\s*[-.]\s*\d{4}", value):
             spans.append(Span(match.start(), match.end(), "PHONE", 2))
-    for kind, pattern in (("ID", _ID_LABEL), ("DOB", _DOB), ("ADDRESS", _ADDRESS), ("PERSON", _NAME_LABEL)):
+    for kind, pattern in (
+        ("ID", _ID_LABEL),
+        ("DOB", _DOB),
+        ("ADDRESS", _ADDRESS),
+        ("ADDRESS", _ADDRESS_LINE),
+        ("PERSON", _NAME_LABEL),
+    ):
         for match in pattern.finditer(text):
             start, end = match.span(1)
-            end -= len(text[start:end]) - len(text[start:end].rstrip(" .,"))
+            end -= len(text[start:end]) - len(text[start:end].rstrip(" .,\r\t"))
+            if (
+                kind == "ADDRESS"
+                and pattern is _ADDRESS
+                and not re.search(
+                    r"(?i)\d|\b(?:street|road|lane|avenue|drive|đường|phố|phường|quận|ward|district)\b", text[start:end]
+                )
+            ):
+                # A city/country-only address field is not a home/street address.
+                continue
             spans.append(Span(start, end, kind, 2))
     for match in _STREET.finditer(text):
         spans.append(Span(match.start(), match.end(), "ADDRESS", 2))
+    for pattern in (_PERSON_CONTEXT, _REFEREE_CONTEXT):
+        for match in pattern.finditer(text):
+            name = match.group(1)
+            words = list(re.finditer(_WORD, name))
+            capitalized = []
+            for word in words:
+                if not word.group()[0].isupper():
+                    break
+                capitalized.append(word)
+            if len(capitalized) >= 2:
+                end = capitalized[-1].end()
+                if not set(name[:end].casefold().split()) & _NOT_NAME:
+                    spans.append(Span(match.start(1), match.start(1) + end, "PERSON", 2))
     return spans
 
 
@@ -124,7 +175,7 @@ def merge_spans(spans: Iterable[Span], text_length: int) -> list[Span]:
             raise MaskingError("Invalid detector span")
         if result and span.start < result[-1].end:
             previous = result.pop()
-            best = min((previous, span), key=lambda s: (priority[s.kind], s.layer))
+            best = min((previous, span), key=lambda s: (s.layer, priority[s.kind]))
             result.append(Span(previous.start, max(previous.end, span.end), best.kind, min(previous.layer, span.layer)))
         else:
             result.append(span)
@@ -139,12 +190,36 @@ def _ner_spans(text: str, ner: Ner) -> list[Span]:
     except Exception:
         raise NerUnavailableError("Local NER inference failed; provider calls are forbidden") from None
     spans: list[Span] = []
+    keep_contexts = [match.span(1) for match in _KEEP_CONTEXT.finditer(text)]
+    opaque_spans = [match.span() for match in _ESCAPED_OPAQUE.finditer(text)]
     for span in found:
+        if any(start <= span.start and span.end <= end for start, end in opaque_spans):
+            continue
         line_start = text.rfind("\n", 0, span.start) + 1
         line_end = text.find("\n", span.end)
         line = text[line_start : line_end if line_end >= 0 else len(text)]
-        if _KEEP_LABEL.match(line):
+        keep_label = _KEEP_LABEL.match(line)
+        if keep_label is not None:
+            # Preserve the typed employer/school/skill value, while still running
+            # PERSON NER on recruiter/referee text later in the same line.
+            value_start = line_start + keep_label.end()
+            suffix = _KEEP_SUFFIX.search(line, keep_label.end())
+            value_end = line_start + (suffix.start() if suffix is not None else len(line))
+            if span.end <= value_start or value_start <= span.start and span.end <= value_end:
+                continue
+            if span.start < value_start and span.end <= value_end:
+                continue
+        if span.kind == "PERSON" and set(text[span.start : span.end].casefold().split()).issubset(_NOT_NAME):
             continue
+        if any(start <= span.start and span.end <= end for start, end in keep_contexts):
+            continue
+        label = _PII_LABEL.match(line)
+        if label is not None:
+            value_start = line_start + label.end()
+            if span.end <= value_start:
+                continue
+            if span.start < value_start:
+                span = Span(value_start, span.end, span.kind, span.layer)
         if span.kind == "ADDRESS":
             # NER LOCATION does not by itself distinguish a home from a city.
             if not re.search(

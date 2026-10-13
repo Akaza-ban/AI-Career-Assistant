@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 
 import pytest
@@ -109,3 +110,35 @@ def test_vault_cannot_commit_unrelated_business_work(vault_setup):
     vault.store("Alice Smith", "PERSON", "message")
     db.rollback()
     assert db.scalar(select(VaultRecord)) is None
+
+
+def test_random_conversation_nonce_is_stable_across_concurrent_sessions(tmp_path):
+    engine = create_engine(f"sqlite:///{(tmp_path / 'vault.db').as_posix()}")
+    upgrade(engine)
+    with Session(engine) as db:
+        db.add(AssistantConversation(id="race"))
+        db.commit()
+    settings = Settings(_env_file=None, pii_vault_key=Fernet.generate_key().decode())
+
+    def write(_):
+        with Session(engine) as db:
+            vault = PiiVault(db, "race", settings=settings)
+            token = vault.store("Alice Smith", "PERSON", "message")
+            db.commit()
+            return token
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        tokens = list(executor.map(write, range(6)))
+    assert len(set(tokens)) == 1
+    with Session(engine) as db:
+        assert len(list(db.scalars(select(VaultRecord)))) == 1
+
+
+def test_same_original_retains_canonical_kind_when_detection_changes(vault_setup):
+    _, vault, _, _ = vault_setup
+    original = "912345678"
+    phone = vault.store(original, "PHONE", "message")
+    assert vault.store(original, "ID", "cv:1") == phone
+    assert resolve(phone, vault, {"PHONE"}, {"cv:1"}) == original
+    with pytest.raises(ResolutionError):
+        resolve(phone, vault, {"ID"}, {"cv:1"})

@@ -22,6 +22,13 @@ if hasattr(sys.stdout, "reconfigure"):
 async def lifespan(app: FastAPI):
     settings = get_settings()
 
+    # Load the selected local CPU NER once, before startup can reach providers.
+    # Failure propagates as a sanitized PrivacyError; no regex-only fallback.
+    if settings.pii_masking_enabled:
+        from src.services.privacy.ner import initialize_privacy
+
+        initialize_privacy(settings)
+
     # Cấu hình biến môi trường LangSmith cho process nếu được kích hoạt
     if settings.langchain_tracing_v2:
         os.environ["LANGCHAIN_TRACING_V2"] = "true"

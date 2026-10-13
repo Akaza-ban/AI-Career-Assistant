@@ -66,3 +66,81 @@ def test_ner_failure_is_typed_and_does_not_echo_text():
     assert "secret" not in str(error.value)
     with pytest.raises(NerUnavailableError):
         Detector().detect("anything")
+
+
+def test_prose_candidate_referee_names_and_skill_negative_controls():
+    detector = Detector(EmptyNer())
+    for text, expected in [
+        ("I am Alice Morgan, seeking work", "Alice Morgan"),
+        ("Ứng viên Nguyễn Minh An - Backend Developer", "Nguyễn Minh An"),
+        ("Bùi Thảo Vy hướng dẫn dự án.", "Bùi Thảo Vy"),
+        ("Noah Bennett supervised the project.", "Noah Bennett"),
+        ("Upload failed for candidate Emma Brooks; contact support", "Emma Brooks"),
+    ]:
+        found = detector.detect(text)
+        assert expected in [text[s.start : s.end] for s in found]
+    assert detector.detect("I am a software engineer") == []
+    assert detector.detect("Applicant Machine Learning") == []
+
+
+def test_ner_does_not_mask_field_labels_or_employer_school_context():
+    text = "Address: 12 Oak Street\nWorked at Acme Labs; studied at Brown University."
+
+    class NoisyNer:
+        def detect(self, text):
+            return [Span(0, 21, "ADDRESS"), Span(text.index("Acme"), text.index(";"), "PERSON")]
+
+    spans = Detector(NoisyNer()).detect(text)
+    assert [text[s.start : s.end] for s in spans] == ["12 Oak Street"]
+
+
+def test_ner_job_titles_and_non_pii_field_labels_are_preserved():
+    text = "Software Engineer\nEmployment: 2020-2024\nLiteral user text: opaque value"
+
+    class NoisyNer:
+        def detect(self, text):
+            return [Span(0, 17, "PERSON"), Span(18, 28, "PERSON"), Span(40, 47, "PERSON")]
+
+    assert Detector(NoisyNer()).detect(text) == []
+
+
+def test_crlf_addresses_have_exact_value_boundaries():
+    text = "Address: 12 Oak Street\r\nĐịa chỉ: 11 đường Hoa, phường 4\r\n"
+    spans = Detector(EmptyNer()).detect(text)
+    assert [text[s.start : s.end] for s in spans] == ["12 Oak Street", "11 đường Hoa, phường 4"]
+
+
+def test_escaped_opaque_tokens_are_not_person_names_but_embedded_emails_are_masked():
+    from src.services.privacy.masker import escape_inbound
+
+    wire = escape_inbound("[[PERSON_1]] [[a@example.test]]")
+
+    class TokenNer:
+        def detect(self, text):
+            return [Span(0, 20, "PERSON")]
+
+    spans = Detector(TokenNer()).detect(wire)
+    assert [s.kind for s in spans] == ["EMAIL"]
+
+
+def test_identity_kind_takes_precedence_over_ambiguous_regex():
+    text = "912345678"
+    spans = Detector(EmptyNer()).detect(text, identities=[Identity(phone=text)])
+    assert len(spans) == 1 and spans[0].kind == "PHONE"
+
+
+def test_same_line_employer_does_not_hide_third_party_name():
+    text = "Employer: Acme Labs; contact Alice Smith"
+
+    class NameNer:
+        def detect(self, text):
+            return [Span(text.index("Acme"), text.index(";"), "PERSON"), Span(text.index("Alice"), len(text), "PERSON")]
+
+    spans = Detector(NameNer()).detect(text, document_type="jd")
+    assert [text[s.start : s.end] for s in spans] == ["Alice Smith"]
+
+
+def test_street_ward_district_labels_and_city_only_address_preservation():
+    text = "Đường: Hoa Mai\nPhường: An Phú\nDistrict: Central\nStreet:Oak Road\nAddress: Hà Nội\nTP. Hồ Chí Minh"
+    spans = Detector(EmptyNer()).detect(text)
+    assert [text[s.start : s.end] for s in spans] == ["Hoa Mai", "An Phú", "Central", "Oak Road"]

@@ -112,8 +112,8 @@ class PiiVault:
             if len(placeholder) > MAX_PLACEHOLDER_LENGTH:
                 raise VaultError("Invalid PII placeholder length")
             now = self._clock()
-            # Reject conflicting classification of one exact original: silently
-            # giving it a new token would violate conversation deduplication.
+            # One exact original has one canonical kind/token, even if another
+            # detector later classifies an ambiguous phone/ID differently.
             existing = list(
                 self._db.scalars(
                     select(VaultRecord).where(
@@ -124,8 +124,13 @@ class PiiVault:
                 )
             )
             for record in existing:
-                if record.kind != kind or self._decrypt(record) != original:
-                    raise VaultError("PII vault entry conflicts with existing classification")
+                if self._decrypt(record) != original:
+                    raise VaultError("PII vault integrity failure")
+                if record.placeholder != existing[0].placeholder or record.kind != existing[0].kind:
+                    raise VaultError("PII vault has inconsistent canonical entries")
+            if existing:
+                kind = existing[0].kind
+                placeholder = existing[0].placeholder
             record = self._db.get(VaultRecord, (self._conversation_id, placeholder, origin))
             if record is not None and record.created_at > now - self._ttl:
                 if record.kind != kind or self._decrypt(record) != original:

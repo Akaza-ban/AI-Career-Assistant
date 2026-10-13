@@ -37,6 +37,33 @@ class Settings(BaseSettings):
 
     pii_vault_key: SecretStr = SecretStr("")
     pii_vault_ttl_hours: float = Field(default=24, gt=0, le=8760)
+    pii_masking_enabled: bool = True
+    pii_mask_entity_types: tuple[str, ...] = ("PERSON", "EMAIL", "PHONE", "ID", "URL", "HANDLE", "DOB", "ADDRESS")
+    pii_keep_entity_types: tuple[str, ...] = (
+        "EMPLOYER",
+        "SCHOOL",
+        "JOB_TITLE",
+        "SKILL",
+        "PROJECT",
+        "EMPLOYMENT_DATE",
+        "CITY",
+        "COUNTRY",
+    )
+    pii_ner_backend: Literal["underthesea", "phobert", "spacy"] = "underthesea"
+    pii_spacy_model: str = "xx_ent_wiki_sm"
+    pii_phobert_model_dir: str = ""
+    pii_ner_cpu_threads: int = Field(default=2, ge=1, le=16)
+
+    @model_validator(mode="after")
+    def validate_privacy(self) -> "Settings":
+        from src.services.privacy.types import KINDS
+
+        if set(self.pii_mask_entity_types) != KINDS or set(self.pii_keep_entity_types) & KINDS:
+            raise ValueError("PII entity configuration must retain all required direct identifiers")
+        if self.app_env == "production":
+            if not self.pii_masking_enabled:
+                raise ValueError("Production requires PII_MASKING_ENABLED=true")
+        return self
 
     @model_validator(mode="after")
     def configure_session_key(self) -> "Settings":

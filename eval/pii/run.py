@@ -12,6 +12,7 @@ import time
 from collections import Counter
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
@@ -210,7 +211,18 @@ def main() -> int:
     samples = load_synthetic()
     real = load_real()
     report: dict[str, Any] = {
+        "measured_at": datetime.now(UTC).isoformat(),
         "dataset_sha256": hashlib.sha256((ROOT / "golden.jsonl").read_bytes()).hexdigest(),
+        "source_sha256": {
+            relative: hashlib.sha256((ROOT.parents[1] / relative).read_bytes()).hexdigest()
+            for relative in (
+                "src/services/privacy/detectors.py",
+                "src/services/privacy/ner.py",
+                "src/services/privacy/extract.py",
+                "src/services/privacy/masker.py",
+                "eval/pii/run.py",
+            )
+        },
         "review_status": "needs_human_review"
         if any(s.review_status != "human_reviewed" for s in samples)
         else "human_reviewed",

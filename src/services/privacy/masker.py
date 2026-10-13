@@ -19,6 +19,7 @@ from src.services.privacy.types import (
     MaskingError,
     PrivacyError,
     ResolutionError,
+    Span,
     Vault,
     validate_origin,
 )
@@ -59,7 +60,7 @@ def mask(
             chunks.append(escaped[cursor : span.start])
             placeholder = vault.store(_unescape(escaped[span.start : span.end]), span.kind, origin)
             match = PLACEHOLDER_RE.fullmatch(placeholder)
-            if match is None or match.group(1) != span.kind or len(placeholder) > MAX_PLACEHOLDER_LENGTH:
+            if match is None or match.group(1) not in KINDS or len(placeholder) > MAX_PLACEHOLDER_LENGTH:
                 raise MaskingError("Vault produced an invalid placeholder")
             chunks.append(placeholder)
             cursor = span.end
@@ -137,14 +138,15 @@ def mask_document(
 
         # Filename delimiters become spaces for detection; map offsets back to the
         # original via a detector wrapper, keeping exact round trips possible.
-        class FilenameDetector:
-            def detect(self, text: str, **kwargs: object) -> list:
+        class FilenameDetector(Detector):
+            def detect(self, text: str, **kwargs: object) -> list[Span]:
                 active = detector
                 if active is None:
                     from src.services.privacy.ner import get_detector
 
                     active = get_detector()
                 probe = re.sub(r"[_-]", " ", text)
+                probe = re.sub(r"\.(?:pdf|docx|txt)$", lambda m: " " * len(m.group()), probe, flags=re.I)
                 return active.detect(probe, identities=identities, document_type="cv")
 
         masked_filename = mask(filename, vault, origin=origin, detector=FilenameDetector()) if filename else ""
