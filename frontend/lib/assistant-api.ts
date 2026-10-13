@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api-error"
 import { API_BASE_URL } from "@/lib/config"
-import type { ActionStatus, ChatMessage, ChatRequestPayload, ChatResponsePayload, UserRole } from "@/types/assistant"
+import type { ActionStatus, ChatMessage, ChatRequestPayload, ChatResponsePayload } from "@/types/assistant"
 
 export interface AssistantStatusResponse {
   is_live: boolean
@@ -10,19 +10,13 @@ export interface AssistantStatusResponse {
   message?: string
 }
 
-function currentRole(): UserRole {
-  const pathname = typeof window === "undefined" ? "" : window.location.pathname
-  return pathname === "/advisor" || pathname.startsWith("/advisor/") ? "advisor" : "student"
-}
-
-async function request(path: string, init?: RequestInit, role: UserRole = currentRole()): Promise<Response> {
+async function request(path: string, init?: RequestInit): Promise<Response> {
   let response: Response
   try {
     response = await fetch(`${API_BASE_URL.replace(/\/$/, "")}/api/v1/assistant${path}`, {
       ...init,
       headers: {
         "Content-Type": "application/json",
-        "X-Demo-Role": role,
         ...init?.headers,
       },
       credentials: "include",
@@ -33,6 +27,9 @@ async function request(path: string, init?: RequestInit, role: UserRole = curren
   }
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.replace("/login")
+    }
     let detail = `Yêu cầu thất bại (${response.status}).`
     let code: string | undefined
     try {
@@ -53,7 +50,6 @@ export async function sendMessage(payload: ChatRequestPayload, signal?: AbortSig
   const response = await request(
     "/chat",
     { method: "POST", body: JSON.stringify(payload), signal },
-    payload.context.user_role,
   )
   return (await response.json()) as ChatResponsePayload
 }

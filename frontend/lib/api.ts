@@ -57,15 +57,6 @@ import type {
 
 export { ApiError }
 
-/**
- * Đăng nhập tạm: backend xác định người dùng demo qua header X-Demo-Role.
- * Vai trò suy ra từ khu vực đang mở (/advisor → cố vấn, còn lại → sinh viên).
- * Bỏ khi có đăng nhập thật.
- */
-function demoRole(): Role {
-  return typeof window !== "undefined" && window.location.pathname.startsWith("/advisor") ? "advisor" : "student"
-}
-
 /** Gửi request tới backend; lỗi mạng hoặc HTTP được đổi thành ApiError với thông báo hiển thị được. */
 async function send(path: string, init?: RequestInit): Promise<Response> {
   const isForm = init?.body instanceof FormData
@@ -75,7 +66,6 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
       ...init,
       headers: {
         ...(isForm ? {} : { "Content-Type": "application/json" }),
-        "X-Demo-Role": demoRole(),
         ...init?.headers,
       },
       credentials: "include",
@@ -84,6 +74,9 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     throw new ApiError(0, "Không kết nối được máy chủ. Hãy kiểm tra backend đang chạy.", "network_error")
   }
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.replace("/login")
+    }
     let body: Partial<ApiErrorBody> | null = null
     try {
       body = (await res.json()) as Partial<ApiErrorBody>
@@ -107,7 +100,6 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 
 const advisorStudentPath = (studentId: string) => `/advisor/students/${encodeURIComponent(studentId)}`
 const conversationPath = (studentId: string) => `/conversations/${encodeURIComponent(studentId)}`
-const asRole = (role: Role): RequestInit => ({ headers: { "X-Demo-Role": role } })
 const optimizerPath = (analysisId: string) => `/gap-analysis/${encodeURIComponent(analysisId)}/optimizer`
 
 /** Gọi backend khi nhóm đã bật trong NEXT_PUBLIC_LIVE_APIS, ngược lại dùng mock. */
@@ -117,8 +109,9 @@ function via<T>(group: ApiGroup, mock: () => Promise<T>, live: () => Promise<T>)
 
 export const api = {
   // ---- Người dùng ----
-  getMe: (role: Role): Promise<UserProfile> =>
-    via("me", () => mockApi.getMe(role), () => request("/me", { headers: { "X-Demo-Role": role } })),
+  login: (email: string, password: string): Promise<UserProfile> => request("/auth/login", json({ email, password })),
+  logout: (): Promise<void> => request("/auth/logout", { method: "POST" }),
+  getMe: (): Promise<UserProfile> => request("/me", { cache: "no-store" }),
   getOverview: (): Promise<StudentOverview> =>
     via("overview", () => mockApi.getOverview(), () => request("/students/me/overview")),
   /** jdId = null: mọi vị trí. */
@@ -135,38 +128,38 @@ export const api = {
     via(
       "notifications",
       () => mockApi.listNotifications(role),
-      () => request("/notifications", { headers: { "X-Demo-Role": role } }),
+      () => request("/notifications"),
     ),
   markAllNotificationsRead: (role: Role): Promise<void> =>
     via(
       "notifications",
       () => mockApi.markAllNotificationsRead(role),
-      () => request("/notifications/read-all", { method: "POST", headers: { "X-Demo-Role": role } }),
+      () => request("/notifications/read-all", { method: "POST" }),
     ),
 
   // ---- Tin nhắn SV ↔ cố vấn phụ trách (hội thoại theo mã SV) ----
   listConversations: (role: Role): Promise<ConversationSummary[]> =>
-    via("messages", () => mockApi.listConversations(role), () => request("/conversations", asRole(role))),
+    via("messages", () => mockApi.listConversations(role), () => request("/conversations")),
   getConversation: (role: Role, studentId: string): Promise<Conversation> =>
-    via("messages", () => mockApi.getConversation(role, studentId), () => request(conversationPath(studentId), asRole(role))),
+    via("messages", () => mockApi.getConversation(role, studentId), () => request(conversationPath(studentId))),
   sendMessage: (role: Role, studentId: string, body: string): Promise<ChatMessage> =>
     via(
       "messages",
       () => mockApi.sendMessage(role, studentId, body),
-      () => request(`${conversationPath(studentId)}/messages`, { ...json({ body }), ...asRole(role) }),
+      () => request(`${conversationPath(studentId)}/messages`, json({ body })),
     ),
   /** Đánh dấu đã đọc các tin người kia gửi (người kia thấy "Đã xem"). */
   markConversationRead: (role: Role, studentId: string): Promise<void> =>
     via(
       "messages",
       () => mockApi.markConversationRead(role, studentId),
-      () => request(`${conversationPath(studentId)}/read`, { method: "POST", ...asRole(role) }),
+      () => request(`${conversationPath(studentId)}/read`, { method: "POST" }),
     ),
   getUnreadMessageCount: (role: Role): Promise<number> =>
     via(
       "messages",
       () => mockApi.getUnreadMessageCount(role),
-      async () => (await request<{ count: number }>("/conversations/unread-count", asRole(role))).count,
+      async () => (await request<{ count: number }>("/conversations/unread-count")).count,
     ),
 
   // ---- CV ----

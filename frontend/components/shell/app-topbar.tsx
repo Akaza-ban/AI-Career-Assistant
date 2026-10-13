@@ -26,12 +26,24 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import type { Role } from "@/lib/types"
 import { cn } from "@/lib/utils"
+import { api } from "@/lib/api"
 
 export function AppTopbar({ role }: { role: Role }) {
   const pathname = usePathname()
   const config = role === "advisor" ? advisorShell : studentShell
   const profile = useProfile()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  async function logout() {
+    setLoggingOut(true)
+    try {
+      await api.logout()
+      window.location.replace("/login")
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Không thể đăng xuất.")
+      setLoggingOut(false)
+    }
+  }
   const crumbs = getBreadcrumb(config, pathname)
 
   return (
@@ -122,9 +134,9 @@ export function AppTopbar({ role }: { role: Role }) {
                   Cài đặt & Quyền riêng tư
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem render={<Link href="/" />}>
+              <DropdownMenuItem onClick={logout} disabled={loggingOut}>
                 <LogOut aria-hidden />
-                Đổi vai trò
+                Đăng xuất
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
