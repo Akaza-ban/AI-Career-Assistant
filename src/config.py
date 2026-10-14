@@ -40,6 +40,9 @@ class Settings(BaseSettings):
         description="Tên model LLM mặc định",
     )
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    # Model suy luận (gpt-oss, o-series, gpt-5): mức "medium" mặc định tiêu hết giới hạn đầu ra cho phần suy luận,
+    # JSON bị cắt giữa chừng. "low" đủ cho các bước chấm / trích của dự án. Để trống = dùng mặc định của nhà cung cấp.
+    llm_reasoning_effort: Literal["low", "medium", "high", ""] = Field(default="low")
     llm_base_url: str | None = Field(
         default=None,
         description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng",
@@ -163,6 +166,8 @@ class Settings(BaseSettings):
         temperature = kwargs.pop("temperature", self.llm_temperature)
         default_model = "deepseek-chat" if self.llm_provider.lower() == "deepseek" else self.model_name
         model = kwargs.pop("model", default_model)
+        if self.llm_reasoning_effort and is_reasoning_model(model):
+            kwargs.setdefault("reasoning_effort", self.llm_reasoning_effort)
 
         return ChatOpenAI(
             model=model,
@@ -172,6 +177,12 @@ class Settings(BaseSettings):
             http_async_client=httpx.AsyncClient(),
             **kwargs,
         )
+
+
+def is_reasoning_model(model: str) -> bool:
+    """Model nhận tham số reasoning_effort; model khác (Llama, DeepSeek chat...) không gửi để tránh lỗi 400."""
+    name = model.lower().rsplit("/", 1)[-1]
+    return name.startswith(("gpt-oss", "o1", "o3", "o4", "gpt-5"))
 
 
 @lru_cache

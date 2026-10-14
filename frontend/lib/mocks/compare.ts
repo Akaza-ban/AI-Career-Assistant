@@ -43,7 +43,14 @@ export function compareFromProfile(
       missing_skills: item.missing_skills,
       breakdown: item.breakdown,
     }
-    return { ...base, rank: i + 1, llm_summary: summaryFor(base, i + 1), llm_used: true }
+    return {
+      ...base,
+      rank: i + 1,
+      llm_summary: summaryFor(base, i + 1),
+      llm_used: true,
+      requirement_count: base.matched_skills.length + base.partial_skills.length + base.missing_skills.length,
+      requirements_source: "given" as const,
+    }
   })
   const common = comparisons.reduce<string[] | null>(
     (acc, c) => (acc === null ? [...c.missing_skills] : acc.filter((s) => c.missing_skills.includes(s))),

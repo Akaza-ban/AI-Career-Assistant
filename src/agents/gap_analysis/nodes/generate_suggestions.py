@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from src.agents.gap_analysis.state import GapAnalysisState
+from src.services.fit_summary import compose_summary
 from src.services.skill_matching import SECTION_LABELS, compute_score, is_descriptive
 
 MAX_SUGGESTIONS = 5
@@ -95,5 +96,5 @@ async def generate_suggestions_node(state: GapAnalysisState) -> dict[str, Any]:
         "recommendations": recommendations,
         "match_score": score,
         "score_breakdown": breakdown,
-        "gap_summary": state.get("llm_summary") or fallback_summary(assessments, score),
+        "gap_summary": compose_summary(assessments, state.get("cv_lines", [])) or fallback_summary(assessments, score),
     }

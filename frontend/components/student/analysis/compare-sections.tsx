@@ -67,8 +67,16 @@ function ScoreColumn({ item, index }: { item: JdComparisonItem; index: number })
   )
 }
 
+/** Dưới mức này coi là JD trích được quá ít yêu cầu, điểm dễ cao giả (ví dụ chỉ nhận ra Python và REST API). */
+const THIN_REQUIREMENTS = 4
+
+const isThin = (item: JdComparisonItem) =>
+  item.requirements_source === "dictionary" ||
+  (item.requirement_count !== undefined && item.requirement_count < THIN_REQUIREMENTS)
+
 export function CompareScores({ data }: { data: CompareJdsResponse }) {
   const n = data.comparisons.length
+  const thin = data.comparisons.filter(isThin)
   return (
     <Zone id="fit-title" title="Mức phù hợp">
       <ol className="grid grid-cols-[minmax(0,1fr)] items-end gap-6 md:grid-cols-(--cols)" style={colsStyle(n)}>
@@ -77,6 +85,23 @@ export function CompareScores({ data }: { data: CompareJdsResponse }) {
           <ScoreColumn key={item.jd_id} item={item} index={i} />
         ))}
       </ol>
+      {thin.length > 0 && (
+        <ul className="mt-6 grid gap-2">
+          {thin.map((item) => (
+            <li
+              key={item.jd_id}
+              className="flex items-start gap-2.5 rounded-[14px] bg-warn-soft px-[18px] py-3.5 text-sm leading-[22px] text-ink-2 ring-1 ring-warn-line ring-inset"
+            >
+              <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" aria-hidden />
+              <span>
+                Hệ thống chỉ nhận ra <b className="font-semibold text-ink">{item.requirement_count ?? 0} yêu cầu</b> từ JD{" "}
+                <b className="font-semibold text-ink">{item.title}</b>, nên điểm của vị trí này có thể chưa chính xác. Hãy
+                dán JD có đủ phần Yêu cầu ứng viên, hoặc so sánh lại sau ít phút.
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </Zone>
   )
 }
@@ -271,7 +296,7 @@ export function CompareSkills({ data }: { data: CompareJdsResponse }) {
   )
 }
 
-// ---------- Nhận xét của AI ----------
+// ---------- Nhận xét: ghép từ bảng kỹ năng cuối (src/services/fit_summary.py) nên luôn khớp với các chấm ----------
 
 export function CompareComments({ data }: { data: CompareJdsResponse }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set(data.comparisons.slice(0, 1).map((c) => c.jd_id)))
@@ -284,7 +309,7 @@ export function CompareComments({ data }: { data: CompareJdsResponse }) {
     })
 
   return (
-    <Zone id="ai-notes-title" title="Nhận xét của AI">
+    <Zone id="ai-notes-title" title="Nhận xét">
       <div className="-mt-7">
         {data.comparisons.map((c) => {
           const expanded = open.has(c.jd_id)

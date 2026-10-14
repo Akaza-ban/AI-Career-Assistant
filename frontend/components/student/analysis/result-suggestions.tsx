@@ -15,7 +15,7 @@ import type { GapAnalysis } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 /**
- * Vùng "Gợi ý cải thiện" (DESIGN.md 3.6): khối danh sách đánh số bên trái, khối "Nhận xét của AI" bên phải trên màn
+ * Vùng "Gợi ý cải thiện" (DESIGN.md 3.6): khối danh sách đánh số bên trái, khối "Nhận xét" bên phải trên màn
  * rộng. Cả hai không viền, có dòng chân ở đáy.
  */
 export function ResultSuggestions({ analysis }: { analysis: GapAnalysis }) {
@@ -138,11 +138,11 @@ export function ResultSuggestions({ analysis }: { analysis: GapAnalysis }) {
         {analysis.summary && (
           <ResultWidget
             id="ai-note-title"
-            title="Nhận xét của AI"
+            title="Nhận xét"
             icon={<Lightbulb className="size-4 text-blue" aria-hidden />}
           >
             <p className="border-b border-line py-3.5 text-[15px] leading-6 text-ink-2">{analysis.summary}</p>
-            <p className="mt-3.5 text-sm text-ink-3">Do AI tạo từ CV và JD; hãy tự kiểm chứng.</p>
+            <p className="mt-3.5 text-sm text-ink-3">Tổng hợp từ kết quả chấm từng kỹ năng ở trên; hãy tự kiểm chứng.</p>
           </ResultWidget>
         )}
       </div>

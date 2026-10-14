@@ -10,10 +10,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from src.db.models import JobDescription
+from src.services.fit_summary import compose_summary
+from src.services.jd_requirements import requirements_for
 from src.services.jd_store import get_jd_store
 from src.services.skill_matching import (
     assess_by_rules,
     compute_score,
+    lift_parents,
     match_label,
     normalize_requirements,
     split_cv_lines,
@@ -89,44 +92,90 @@ def extract_cv_query(cv_text: str, max_lines: int = 50) -> str:
     return query_text
 
 
+# Thư viện tới mức này thì chấm theo quy tắc cho mọi JD (vài mili-giây mỗi JD), không lọc trước bằng vector:
+# lọc top-6 trên 8 JD từng loại mất vị trí hợp nhất vì mô hình embedding chưa hiểu tốt tiếng Việt
+SCORE_ALL_LIBRARY_MAX = 200
+
+
+def _published_library(db: Session) -> list[JobDescription]:
+    return list(
+        db.scalars(
+            select(JobDescription).where(
+                JobDescription.source == "library",
+                (JobDescription.status.is_(None)) | (JobDescription.status == "published"),
+            )
+        )
+    )
+
+
+def _known_result(known: dict[str, Any]) -> dict[str, Any]:
+    """Kết quả gợi ý lấy từ lượt phân tích đã có của đúng CV và JD đó (khớp điểm sinh viên đã thấy)."""
+    requirements = known.get("requirements") or []
+    score = known.get("match_score")
+    return {
+        "match_score": score,
+        "match_label": match_label(score),
+        "matched_skills": [r["skill"] for r in requirements if r.get("status") == "matched"],
+        "partial_skills": [r["skill"] for r in requirements if r.get("status") == "partial"],
+        "missing_skills": [r["skill"] for r in requirements if r.get("status") == "missing"],
+        "breakdown": known.get("breakdown") or [],
+        "score_source": "analysis",
+        "analysis_id": known.get("analysis_id"),
+    }
+
+
 def recommend_top_jds_from_cv(
     cv_text: str,
     db: Session | None = None,
     top_n: int = 3,
     candidate_pool_size: int = 6,
+    known_scores: dict[str, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Quy trình 2 giai đoạn gợi ý JD từ CV (Two-Stage Pipeline):
-    1. Retrieval (Stage 1): Tìm candidate_pool_size JD gần nhất qua Chroma Vector Store.
-    2. Scoring (Stage 2): Chấm CV–JD Matching Score chuẩn PRD 5.2 (trọng số w=3,2,1) cho từng JD.
-    3. Re-ranking: Sắp xếp theo Matching Score (%) giảm dần và trả về Top-N JD phù hợp nhất.
+    Gợi ý JD từ CV:
+    1. Ứng viên: có DB thì mọi JD đang hiển thị trong thư viện (thư viện nhỏ); không có DB thì candidate_pool_size JD
+       gần nhất qua Chroma Vector Store.
+    2. Chấm CV–JD Matching Score theo PRD 5.2 (trọng số w=3,2,1) bằng quy tắc. JD đã có lượt phân tích của đúng CV
+       này (known_scores) thì dùng điểm của lượt phân tích để gợi ý khớp với kết quả sinh viên đã xem.
+    3. Sắp theo Matching Score giảm dần, bằng điểm thì theo độ tương đồng ngữ nghĩa; trả về Top-N.
     """
     if not cv_text or not cv_text.strip():
         return []
 
     cv_lines = split_cv_lines(cv_text)
     query_text = extract_cv_query(cv_text)
-
-    # Stage 1: Dense Retrieval qua Vector Store
+    known_scores = known_scores or {}
     jd_store = get_jd_store()
-    candidates = jd_store.search_candidates(query_text=query_text, top_k=candidate_pool_size)
-    if not candidates:
-        return []
 
-    # Lấy thông tin JD từ DB nếu có, hoặc fallback sang fixture
-    jd_ids = [doc.metadata.get("jd_id") for doc, _ in candidates if doc.metadata.get("jd_id")]
+    library = _published_library(db) if db is not None else []
     db_jds: dict[str, Any] = {}
-    if db is not None and jd_ids:
-        db_records = db.scalars(select(JobDescription).where(JobDescription.id.in_(jd_ids))).all()
-        db_jds = {jd.id: jd for jd in db_records}
+    metadata: dict[str, dict[str, Any]] = {}
+    if library and len(library) <= SCORE_ALL_LIBRARY_MAX:
+        db_jds = {jd.id: jd for jd in library}
+        sims = {
+            doc.metadata.get("jd_id"): float(sim)
+            for doc, sim in jd_store.search_candidates(query_text=query_text, top_k=len(library))
+        }
+        pool = [(jd.id, sims.get(jd.id, 0.0)) for jd in library]
+    else:
+        # Stage 1: Dense Retrieval qua Vector Store
+        candidates = jd_store.search_candidates(query_text=query_text, top_k=candidate_pool_size)
+        if not candidates:
+            return []
+        pool = [(doc.metadata.get("jd_id"), sim) for doc, sim in candidates]
+        metadata = {doc.metadata.get("jd_id"): doc.metadata for doc, _ in candidates}
+        jd_ids = [jd_id for jd_id, _ in pool if jd_id]
+        if db is not None and jd_ids:
+            db_records = db.scalars(select(JobDescription).where(JobDescription.id.in_(jd_ids))).all()
+            db_jds = {jd.id: jd for jd in db_records}
 
     fixtures = _get_fixture_jds()
 
     scored_jds: list[dict[str, Any]] = []
-    for doc, sim_score in candidates:
-        jd_id = doc.metadata.get("jd_id")
+    for jd_id, sim_score in pool:
         if not jd_id:
             continue
+        doc_meta = metadata.get(jd_id, {})
 
         # Lấy thông tin chi tiết của JD
         jd_obj = db_jds.get(jd_id)
@@ -147,25 +196,32 @@ def recommend_top_jds_from_cv(
             level = fix_item.get("level", "")
             raw_skills = fix_item.get("skills", [])
         else:
-            title = doc.metadata.get("title", "")
-            company = doc.metadata.get("company", "")
-            industry = doc.metadata.get("industry", "")
-            level = doc.metadata.get("level", "")
+            title = doc_meta.get("title", "")
+            company = doc_meta.get("company", "")
+            industry = doc_meta.get("industry", "")
+            level = doc_meta.get("level", "")
             raw_skills = []
 
-        # Stage 2: Tính Matching Score theo rubric PRD 5.2
+        base = {
+            "jd_id": jd_id,
+            "title": title,
+            "company": company,
+            "industry": industry,
+            "level": level,
+            "semantic_score": round(float(sim_score), 4),
+        }
+        if jd_id in known_scores:
+            scored_jds.append({**base, **_known_result(known_scores[jd_id])})
+            continue
+
+        # Stage 2: Tính Matching Score theo rubric PRD 5.2 (ước tính bằng quy tắc, chưa gọi AI)
         requirements = normalize_requirements(raw_skills)
         assessments = [assess_by_rules(req, cv_lines) for req in requirements]
         match_score, breakdown = compute_score(assessments)
 
         scored_jds.append(
             {
-                "jd_id": jd_id,
-                "title": title,
-                "company": company,
-                "industry": industry,
-                "level": level,
-                "semantic_score": round(float(sim_score), 4),
+                **base,
                 "match_score": match_score,
                 "match_label": match_label(match_score),
                 "matched_skills": [a["skill"] for a in assessments if a["status"] == "matched"],
@@ -173,6 +229,8 @@ def recommend_top_jds_from_cv(
                 "missing_skills": [a["skill"] for a in assessments if a["status"] == "missing"],
                 "breakdown": breakdown,
                 "assessments": assessments,
+                "score_source": "estimate",
+                "analysis_id": None,
             }
         )
 
@@ -213,11 +271,12 @@ async def generate_career_advice_with_llm(
     fallback_advice = {
         "summary": f"Hồ sơ của bạn phù hợp nhất với vị trí {top_title} với độ tương thích {top_score}%.",
         "top_position_advice": (
-            f"Bạn đã có thế mạnh ở các kỹ năng: {matched}. "
-            f"Đây là nền tảng rất tốt để ứng tuyển vị trí {top_title}."
+            f"Bạn đã có thế mạnh ở các kỹ năng: {matched}. Đây là nền tảng rất tốt để ứng tuyển vị trí {top_title}."
         ),
         "action_plan": [
-            f"Bổ sung và trau dồi các kỹ năng còn thiếu: {missing}." if missing != "không có" else "Tiếp tục hoàn thiện các dự án thực tế.",
+            f"Bổ sung và trau dồi các kỹ năng còn thiếu: {missing}."
+            if missing != "không có"
+            else "Tiếp tục hoàn thiện các dự án thực tế.",
             "Lượng hóa kết quả công việc trong CV theo phương pháp STAR.",
             "Tham gia luyện phỏng vấn thử trên hệ thống cho vị trí này.",
         ],
@@ -235,7 +294,7 @@ async def generate_career_advice_with_llm(
             f"--- HỒ SƠ ỨNG VIÊN TÓM TẮT ---\n{cv_summary[:800]}\n\n"
             f"--- VỊ TRÍ PHÙ HỢP HÀNG ĐẦU ---\n"
             f"- Vị trí: {top_title} (Doanh nghiệp: {top_jd.get('company', 'N/A')})\n"
-            f"- Điểm phù hợp (ATS Match): {top_score}%\n"
+            f"- Điểm phù hợp CV–JD: {top_score}%\n"
             f"- Kỹ năng đã đáp ứng: {matched}\n"
             f"- Kỹ năng còn thiếu theo yêu cầu: {missing}\n\n"
             "Hãy đưa ra nhận xét súc tích và lời khuyên mang tính hành động. "
@@ -275,6 +334,7 @@ async def compare_single_jd_with_llm(
     """
     raw_skills = jd_info.get("skills") or []
     requirements = normalize_requirements(raw_skills)
+    requirements_source = jd_info.get("requirements_source", "given")
     rule_results = {r["id"]: assess_by_rules(r, cv_lines) for r in requirements}
 
     llm_data: dict[str, Any] | None = None
@@ -304,6 +364,7 @@ async def compare_single_jd_with_llm(
                 llm_items[str(item["id"])] = item
 
     assessments = [_merge(r, rule_results[r["id"]], llm_items.get(r["id"]), lines_by_no) for r in requirements]
+    assessments = lift_parents(requirements, assessments, lines_by_no)
     match_score, breakdown = compute_score(assessments)
 
     return {
@@ -318,8 +379,11 @@ async def compare_single_jd_with_llm(
         "partial_skills": [a["skill"] for a in assessments if a["status"] == "partial"],
         "missing_skills": [a["skill"] for a in assessments if a["status"] == "missing"],
         "breakdown": breakdown,
-        "llm_summary": (llm_data or {}).get("summary"),
+        # Ghép từ bảng cuối (không dùng lời của LLM) để nhận xét luôn khớp với các chấm trong bảng kỹ năng
+        "llm_summary": compose_summary(assessments, cv_lines),
         "llm_used": llm_data is not None,
+        "requirement_count": len(requirements),
+        "requirements_source": requirements_source,
     }
 
 
@@ -355,8 +419,12 @@ async def compare_selected_jds_with_llm(
 
     for jd_id in jd_ids:
         jd_obj = db_jds.get(jd_id)
-        # JD đã ẩn khỏi thư viện (kho vector có thể chưa kịp cập nhật) không được gợi ý
-        if jd_obj is not None and (jd_obj.source != "library" or jd_obj.status == "hidden"):
+        # So sánh nhận JD thư viện đang hiển thị và JD sinh viên tự dán (API đã kiểm tra quyền sở hữu);
+        # bỏ JD thư viện đã ẩn và JD tự dán đã xoá.
+        if jd_obj is not None and (
+            (jd_obj.source == "library" and jd_obj.status == "hidden")
+            or (jd_obj.source == "pasted" and jd_obj.status == "deleted")
+        ):
             continue
         if jd_obj:
             jd_items.append(
@@ -367,6 +435,7 @@ async def compare_selected_jds_with_llm(
                     "industry": jd_obj.industry or "",
                     "level": jd_obj.level or "",
                     "skills": jd_obj.skills or [],
+                    "jd_obj": jd_obj,
                 }
             )
         elif jd_id in fixtures:
@@ -388,6 +457,14 @@ async def compare_selected_jds_with_llm(
             "common_missing_skills": [],
         }
 
+    # JD tự dán chỉ có kỹ năng theo từ điển (thường thiếu nhiều yêu cầu): trích lại bằng AI như ở Phân tích.
+    # Chạy lần lượt vì cùng dùng một phiên DB để lưu kết quả trích.
+    if db is not None:
+        for jd_info in jd_items:
+            jd_obj = jd_info.pop("jd_obj", None)
+            if jd_obj is not None:
+                jd_info["skills"], jd_info["requirements_source"] = await requirements_for(db, jd_obj)
+
     # 2. Chạy LLM đối soát song song cho tất cả các JD được chọn
     tasks = [compare_single_jd_with_llm(cv_lines, jd_info) for jd_info in jd_items]
     scored_items = await asyncio.gather(*tasks)
@@ -395,7 +472,7 @@ async def compare_selected_jds_with_llm(
 
     # 3. Sắp xếp theo Match Score (%) giảm dần
     scored_items.sort(
-        key=lambda x: (x["match_score"] if x["match_score"] is not None else -1),
+        key=lambda x: x["match_score"] if x["match_score"] is not None else -1,
         reverse=True,
     )
 

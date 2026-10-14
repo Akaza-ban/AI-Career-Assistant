@@ -161,13 +161,29 @@ def _mentions(term: str, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [line for line in lines if not line.get("is_heading") and _pattern(term).search(line["text"])]
 
 
+def _in_entry(line: dict[str, Any]) -> bool:
+    """Dòng liệt kê ("Technologies: ...") nằm trong một mục Kinh nghiệm / Dự án..."""
+    return line["section"] not in EVIDENCE_SECTIONS and line.get("block") in EVIDENCE_SECTIONS
+
+
 def evidence_of(line: dict[str, Any]) -> dict[str, Any]:
+    # Dòng công nghệ của một dự án hiện "Mục Dự án" (nơi sinh viên tìm thấy nó), không phải "Mục Kỹ năng"
+    shown = line["block"] if _in_entry(line) else line["section"]
     return {
         "line_no": line["line_no"],
         "text": line["text"],
         "section": line["section"],
-        "section_label": SECTION_LABELS.get(line["section"], line["section"]),
+        "section_label": SECTION_LABELS.get(shown, shown),
     }
+
+
+def listing_note(skill: str, line: dict[str, Any] | None) -> str:
+    """Ghi chú cho mức 0,5: kỹ năng mới được liệt kê, nói rõ cần thêm gì để thành bằng chứng."""
+    if line is not None and _in_entry(line):
+        return f"Có trong dòng công nghệ nhưng chưa có câu mô tả bạn đã dùng {skill} làm gì"
+    return (
+        f"Chỉ có trong danh sách kỹ năng, chưa có câu nào trong Kinh nghiệm hoặc Dự án mô tả bạn đã dùng {skill} làm gì"
+    )
 
 
 def assessment(
@@ -215,8 +231,34 @@ def assess_by_rules(requirement: dict[str, Any], lines: list[dict[str, Any]]) ->
     if term in child_terms:
         notes.append(f"{term} → tính là {name} (taxonomy)")
     if match == 0.5:
-        notes.append("Chỉ được liệt kê, chưa có dự án hoặc kinh nghiệm mô tả việc sử dụng")
+        notes.append(listing_note(name, line))
     return assessment(requirement, match, line, "; ".join(notes) or None, "rule")
+
+
+def lift_parents(
+    requirements: list[dict[str, Any]],
+    assessments: list[dict[str, Any]],
+    lines_by_no: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Sau khi kết hợp AI và quy tắc: kỹ năng con (FastAPI) được chấm cao hơn kỹ năng cha (Python) thì nâng kỹ năng cha
+    lên cùng mức, dùng chung dòng bằng chứng — tránh bảng ghi "FastAPI ● nhưng Python ◐".
+    """
+    by_skill = {a["skill"].lower(): a for a in assessments}
+    by_id = {r["id"]: r for r in requirements}
+    lifted = []
+    for item in assessments:
+        children = [by_skill.get(c.lower()) for c in get_child_skills(item["skill"])]
+        best = max((c for c in children if c and c["match"] > item["match"]), key=lambda c: c["match"], default=None)
+        if best is None or item["id"] not in by_id:
+            lifted.append(item)
+            continue
+        line = lines_by_no.get(best["evidence"]["line_no"]) if best.get("evidence") else None
+        note = f"{best['skill']} → tính là {item['skill']} (taxonomy)"
+        if best["match"] == 0.5:
+            note = listing_note(item["skill"], line)
+        lifted.append(assessment(by_id[item["id"]], best["match"], line, note, best["source"]))
+    return lifted
 
 
 # ---------- Điểm tổng ----------

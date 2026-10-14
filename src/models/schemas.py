@@ -230,6 +230,13 @@ class JDRecommendationItem(BaseModel):
     breakdown: list[dict[str, Any]] = Field(
         default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
     )
+    score_source: Literal["analysis", "estimate"] = Field(
+        default="estimate",
+        description="analysis: lấy từ lượt phân tích đã có của CV này; estimate: ước tính nhanh bằng quy tắc",
+    )
+    analysis_id: str | None = Field(
+        default=None, description="Lượt phân tích dùng làm điểm khi score_source = analysis"
+    )
 
 
 class CareerAdvice(BaseModel):
@@ -278,6 +285,11 @@ class JDComparisonItem(BaseModel):
     )
     llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
     llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
+    requirement_count: int = Field(default=0, description="Số yêu cầu kỹ năng trích được từ JD")
+    requirements_source: Literal["given", "llm", "dictionary"] = Field(
+        default="given",
+        description="given: có sẵn; llm: vừa trích bằng AI; dictionary: AI lỗi, chỉ có kỹ năng theo từ điển",
+    )
 
 
 class CompareJDsRequest(BaseModel):

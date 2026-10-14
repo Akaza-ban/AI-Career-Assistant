@@ -9,6 +9,8 @@ from src.services.skill_matching import (
     assess_by_rules,
     assessment,
     is_descriptive,
+    lift_parents,
+    listing_note,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,7 +48,8 @@ async def score_with_llm(
 ) -> dict[str, Any]:
     """
     LLM call #2 (PRD 5.2): chấm Match cho TOÀN BỘ yêu cầu trong một lần gọi (batch) theo bảng anchor,
-    kèm dòng bằng chứng, gợi ý diễn đạt lại và nhận xét tổng quan.
+    kèm dòng bằng chứng và gợi ý diễn đạt lại. Nhận xét tổng quan ghép bằng quy tắc từ bảng cuối (fit_summary)
+    để luôn khớp với bảng.
     """
     context = "\n".join(f"- {doc.get('title', '')}: {doc.get('content', '')}" for doc in retrieved_context[:4])
     prompt = (
@@ -57,7 +60,8 @@ async def score_with_llm(
         f"{_requirements_block(requirements)}\n\n"
         "=== BẢNG CHẤM MATCH (bắt buộc tuân theo) ===\n"
         "- 0: yêu cầu không xuất hiện ở bất kỳ đâu trong CV.\n"
-        "- 0.5: chỉ xuất hiện dạng liệt kê (mục Kỹ năng, Giới thiệu, Chứng chỉ...), không có mô tả đã dùng để làm gì.\n"
+        "- 0.5: chỉ xuất hiện dạng liệt kê (mục Kỹ năng, Giới thiệu, Chứng chỉ..., hoặc dòng 'Technologies: ...' / "
+        "'Công nghệ: ...' của một dự án), không có câu mô tả đã dùng để làm gì.\n"
         "- 1: có bằng chứng cụ thể trong Kinh nghiệm / Dự án / Học vấn / Hoạt động, mô tả đã dùng kỹ năng để làm gì.\n"
         "Taxonomy: FastAPI/Flask/Django tính là Python; PyTorch/TensorFlow tính là Machine Learning; "
         "React/Next.js/Vue/Angular tính là JavaScript.\n\n"
@@ -65,19 +69,18 @@ async def score_with_llm(
         f"{context or '- Chỉ công nhận kỹ năng có bằng chứng thật trong CV.'}\n\n"
         "=== NHIỆM VỤ ===\n"
         "1. Chấm match (0, 0.5 hoặc 1) cho TỪNG yêu cầu, kèm evidence_lines là số dòng CV làm bằng chứng "
-        "(match = 0 thì evidence_lines = []). note: ghi chú ngắn bằng tiếng Việt (có thể rỗng).\n"
+        "(match = 0 thì evidence_lines = []). note: ghi chú ngắn bằng tiếng Việt cho sinh viên đọc (có thể rỗng), "
+        "không ghi số điểm match.\n"
         f"2. Viết tối đa {MAX_SUGGESTIONS} gợi ý diễn đạt lại cho các dòng CV thuộc mục Kinh nghiệm / Dự án / Học vấn / "
         "Hoạt động đang là bằng chứng của yêu cầu có match > 0, giúp làm rõ kỹ năng mà JD cần (không viết lại dòng chỉ "
         "liệt kê kỹ năng). RÀNG BUỘC: chỉ đổi cách diễn đạt; KHÔNG thêm số liệu, công cụ, thành tích, "
         "quy mô, tên dự án không có trong dòng gốc; không viết câu cho kỹ năng CV chưa có.\n"
-        "3. summary: nhận xét tổng quan 2–3 câu bằng tiếng Việt, khách quan; không nói về khả năng trúng tuyển "
-        "hay khả năng qua ATS.\n\n"
         "CHỈ trả về JSON hợp lệ, không giải thích:\n"
         '{"requirements": [{"id": "r1", "match": 1, "evidence_lines": [5], "note": ""}], '
-        '"suggestions": [{"requirement_id": "r1", "line": 5, "rewrite": "...", "reason": "..."}], '
-        '"summary": "..."}'
+        '"suggestions": [{"requirement_id": "r1", "line": 5, "rewrite": "...", "reason": "..."}]}'
     )
-    return await invoke_json(prompt, temperature=0.1, timeout=60.0)
+    # temperature 0: cùng CV và JD thì chấm lại ra cùng kết quả nhiều nhất có thể
+    return await invoke_json(prompt, temperature=0.0, timeout=60.0)
 
 
 def _merge(
@@ -116,6 +119,9 @@ def _merge(
         # Anchor: bằng chứng chỉ là dòng liệt kê thì tối đa 0.5
         match = 0.5
     line = (descriptive or evidence_lines)[0]
+    if match == 0.5:
+        # Ghi chú cố định thay cho lời của LLM: nói rõ kỹ năng mới được liệt kê ở đâu và cần thêm gì
+        note = listing_note(requirement["name"], line)
     return assessment(requirement, match, line, note or rule["note"], "llm")
 
 
@@ -147,17 +153,16 @@ async def compare_gap_node(state: GapAnalysisState) -> dict[str, Any]:
 
     lines_by_no = {line["line_no"]: line for line in lines}
     assessments = [_merge(r, rule_results[r["id"]], llm_items.get(r["id"]), lines_by_no) for r in requirements]
+    assessments = lift_parents(requirements, assessments, lines_by_no)
 
     matched = [a["skill"] for a in assessments if a["match"] > 0]
     missing = [a["skill"] for a in assessments if a["match"] == 0]
     taxonomy_matches = {a["skill"]: a["note"] for a in assessments if a["note"] and "taxonomy" in a["note"]}
     raw_suggestions = [s for s in (llm_data or {}).get("suggestions") or [] if isinstance(s, dict)]
-    llm_summary = str((llm_data or {}).get("summary") or "").strip() or None
 
     return {
         "assessments": assessments,
         "raw_suggestions": raw_suggestions,
-        "llm_summary": llm_summary,
         "llm_used": llm_data is not None,
         "llm_calls": llm_calls,
         # Giữ các trường cũ cho script demo và báo cáo eval

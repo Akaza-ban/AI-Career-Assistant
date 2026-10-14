@@ -159,6 +159,24 @@ def test_inline_listing_inside_entry_keeps_section():
     assert assess_by_rules(python, lines)["match"] == 1
 
 
+def test_listing_note_says_where_the_skill_is_listed():
+    """Mức 0,5: ghi chú nói rõ kỹ năng nằm ở dòng công nghệ của mục nào và cần thêm câu mô tả gì."""
+    lines = split_cv_lines(
+        "PROJECTS\nMaintenance Platform\nTechnologies: Python, FastAPI, Redis\n"
+        "Sử dụng Redis để cache dữ liệu trạng thái thiết bị.\nSKILLS\nPython, FastAPI, Git"
+    )
+    fastapi, git = (
+        assess_by_rules(r, lines)
+        for r in normalize_requirements([{"name": "FastAPI", "importance": "preferred"}, {"name": "Git"}])
+    )
+    assert fastapi["match"] == 0.5
+    # Dòng công nghệ của dự án hiện "Mục Dự án", không phải "Mục Kỹ năng"
+    assert fastapi["evidence"]["section_label"] == "Dự án"
+    assert fastapi["note"] == "Có trong dòng công nghệ nhưng chưa có câu mô tả bạn đã dùng FastAPI làm gì"
+    assert git["match"] == 0.5 and git["evidence"]["section_label"] == "Kỹ năng"
+    assert git["note"].startswith("Chỉ có trong danh sách kỹ năng")
+
+
 def test_rule_anchor_levels():
     lines = split_cv_lines(CV_DATA_ANALYST)
     reqs = normalize_requirements(
@@ -262,5 +280,10 @@ async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
     assert [s["skill"] for s in result["suggestions"]] == ["Power BI"]
     assert len(result["manual_review_items"]) == 1
     assert result["match_score"] == round((3 * 1 + 3 * 0.5 + 0) / 8 * 100, 1)
-    assert result["gap_summary"] == "CV có bằng chứng tốt cho Power BI."
+    # Nhận xét ghép từ bảng cuối, không lấy lời LLM: Thống kê (Ưu tiên) thiếu, Excel mới liệt kê, Power BI đáp ứng
+    assert result["gap_summary"] == (
+        "Đáp ứng tốt: Power BI. Excel mới được liệt kê: thêm một câu mô tả bạn đã dùng kỹ năng này làm gì. "
+        "Còn thiếu yêu cầu Ưu tiên: Thống kê. Nên học và thực hành các kỹ năng này, ví dụ qua một dự án nhỏ, "
+        "trước khi ứng tuyển."
+    )
     assert len(calls) == 1 and result["llm_calls"] == 1

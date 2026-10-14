@@ -167,8 +167,8 @@ export interface RecommendJdsRequest {
 }
 
 /**
- * Một vị trí được gợi ý (JDRecommendationItem). Chấm theo quy tắc, không qua LLM: giao diện chỉ hiện match_label,
- * không hiện match_score (DESIGN.md 8.1).
+ * Một vị trí được gợi ý (JDRecommendationItem). Ước tính nhanh theo quy tắc, không qua LLM; JD đã có lượt phân tích
+ * của đúng CV này thì dùng điểm của lượt phân tích. Giao diện chỉ hiện match_label, không hiện match_score (DESIGN.md 8.1).
  */
 export interface JdRecommendationItem {
   jd_id: string
@@ -186,6 +186,9 @@ export interface JdRecommendationItem {
   partial_skills: string[]
   missing_skills: string[]
   breakdown: ScoreBreakdown[]
+  /** analysis: lấy từ lượt phân tích đã có của CV này; estimate: ước tính nhanh bằng quy tắc. */
+  score_source?: "analysis" | "estimate"
+  analysis_id?: string | null
 }
 
 /** Lời khuyên nghề nghiệp do LLM viết cho vị trí #1 (CareerAdvice). */
@@ -255,6 +258,10 @@ export interface JdComparisonItem {
   breakdown: ScoreBreakdown[]
   llm_summary: string | null
   llm_used: boolean
+  /** Số yêu cầu kỹ năng trích được từ JD (lượt so sánh cũ không có). */
+  requirement_count?: number
+  /** given: có sẵn; llm: vừa trích bằng AI; dictionary: AI lỗi, chỉ có kỹ năng nhận ra theo từ điển. */
+  requirements_source?: "given" | "llm" | "dictionary"
 }
 
 export interface CompareJdsResponse {
