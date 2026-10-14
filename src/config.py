@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     session_days: int = Field(default=30, ge=1, le=365)
     # Bật trên môi trường HTTPS (cookie chỉ gửi qua kết nối an toàn)
     session_cookie_secure: bool = False
+    # "lax" cho cùng domain/localhost, "none" cho cross-site (Frontend Vercel + Backend Render)
+    session_cookie_samesite: str = "lax"
     # Vào bằng header X-Demo-Role thay cho đăng nhập (chỉ dùng cho test tự động). Frontend luôn đăng nhập,
     # kể cả tài khoản demo, nên mặc định tắt.
     demo_login_enabled: bool = False

@@ -28,7 +28,7 @@ def _set_session_cookie(response: Response, token: str, expires: datetime) -> No
         max_age=settings.session_days * 86_400,
         httponly=True,
         secure=settings.session_cookie_secure,
-        samesite="lax",
+        samesite=settings.session_cookie_samesite,
         path="/",
     )
 
@@ -70,7 +70,13 @@ def register(body: RegisterRequest, db: DbSession, response: Response) -> LoginR
 def logout(db: DbSession, response: Response, session_token: SessionToken = None) -> None:
     """Kết thúc phiên hiện tại (gọi được cả khi phiên đã hết hạn)."""
     auth.end_session(db, session_token)
-    response.delete_cookie(get_settings().session_cookie_name, path="/")
+    settings = get_settings()
+    response.delete_cookie(
+        settings.session_cookie_name,
+        path="/",
+        secure=settings.session_cookie_secure,
+        samesite=settings.session_cookie_samesite,
+    )
 
 
 @router.post("/password-reset", status_code=status.HTTP_204_NO_CONTENT)
