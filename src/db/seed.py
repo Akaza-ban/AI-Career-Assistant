@@ -90,3 +90,18 @@ def fail_interrupted_analyses(db: Session) -> None:
         )
     )
     db.commit()
+
+
+def seed_vector_store() -> int:
+    """Nạp và index toàn bộ JD từ fixtures vào Vector Store (ChromaDB)."""
+    try:
+        from src.services.jd_store import get_jd_store
+
+        store = get_jd_store()
+        count = store.index_from_fixtures(str(JD_LIBRARY_FILE))
+        return count
+    except Exception as e:
+        import logging
+
+        logging.getLogger(__name__).warning("Không thể nạp JD Vector Store: %s", e)
+        return 0

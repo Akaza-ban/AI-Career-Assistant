@@ -39,6 +39,15 @@ async def lifespan(app: FastAPI):
 
     init_db()
 
+    # Tự động nạp thư viện JD vào ChromaDB document store
+    try:
+        from src.db.seed import seed_vector_store
+
+        indexed_count = seed_vector_store()
+        print(f"✅ Đã index {indexed_count} JD vào ChromaDB document store.")
+    except Exception as e:
+        print(f"⚠️ Indexing ChromaDB error: {e}")
+
     print("=" * 60)
     print(f"🚀 {settings.app_name} starting in [{settings.app_env}] mode")
     print(f"🤖 LLM Provider: {settings.llm_provider.upper()} (Model: {settings.model_name})")

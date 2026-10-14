@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, status
 from src.agents.graph import agent
 from src.api import advisor as advisor_routes
 from src.api import analysis as analysis_routes
+from src.api import assistant as assistant_routes
 from src.api import cv as cv_routes
 from src.api import feedback as feedback_routes
 from src.api import interviews as interview_routes
@@ -28,6 +29,7 @@ router.include_router(student_routes.router)
 router.include_router(sharing_routes.router)
 router.include_router(advisor_routes.router)
 router.include_router(message_routes.router)
+router.include_router(assistant_routes.router)
 
 
 # ============================================================================

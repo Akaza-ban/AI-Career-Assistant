@@ -124,6 +124,7 @@ export function CvToolbar({ query, onQueryChange, sort, onSortChange }: CvToolba
       <div className="relative min-w-60 flex-1">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
         <Input
+          data-agent-target="cv-search-input"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
           placeholder="Tìm theo tên file…"
@@ -431,6 +432,7 @@ export function CvDropzone({ onFile, onBrowse, disabled, prominent }: CvDropzone
   const heading = dragging ? "Thả file vào đây để tải lên" : null
   const browseButton = (
     <Button
+      data-agent-target="btn-upload-cv"
       variant="secondary"
       className="h-9 bg-blue-soft px-4 font-semibold text-blue"
       onClick={onBrowse}

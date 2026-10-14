@@ -18,10 +18,12 @@ import {
 import { CV_ACCEPT, useCvUpload } from "@/components/student/cv/use-cv-upload"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import type { CvVersion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
+import { useAgentActions } from "@/lib/use-agent-actions"
 
 function deleteDescription(cv: CvVersion | null): string {
   const kept = "Các báo cáo phân tích đã tạo từ CV này vẫn được giữ trong lịch sử."
@@ -48,6 +50,26 @@ export function MyCv() {
   const [previewCv, setPreviewCv] = useState<CvVersion | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleting, setDeleting] = useState<CvVersion | null>(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
+
+  useAgentActions({
+    fillFilter: (name, value) => {
+      if (name === "keyword") {
+        setQuery(String(value))
+        return true
+      }
+      return false
+    },
+    openModal: (id) => {
+      if (id !== "upload-cv-modal") return false
+      setUploadOpen(true)
+      return true
+    },
+    resetView: ({ clear_filters, close_modals }) => {
+      if (clear_filters) { setQuery(""); setSort("recent") }
+      if (close_modals) { setUploadOpen(false); setPreviewOpen(false); setDeleting(null) }
+    },
+  })
 
   const cvs = useMemo(() => data ?? [], [data])
   const visible = useMemo(() => {
@@ -141,7 +163,7 @@ export function MyCv() {
           <CvDropzone onFile={(f) => void upload(f)} onBrowse={openPicker} disabled={uploading} />
           <CvToolbar query={query} onQueryChange={setQuery} sort={sort} onSortChange={setSort} />
           {visible.length > 0 ? (
-            <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+            <div data-agent-target="cv-list" className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {visible.map((cv, index) => (
                 <CvCard
                   key={cv.id}
@@ -169,6 +191,13 @@ export function MyCv() {
       )}
 
       <CvPreviewDialog cv={previewCv} open={previewOpen} onOpenChange={setPreviewOpen} />
+      <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
+        <DialogContent className="sm:max-w-xl" data-agent-target="upload-cv-modal">
+          <DialogTitle>Tải lên CV</DialogTitle>
+          <DialogDescription>Chọn file PDF hoặc DOCX từ máy tính để tạo phiên bản CV mới.</DialogDescription>
+          <Button disabled={uploading} onClick={openPicker}>Chọn file từ máy tính</Button>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}

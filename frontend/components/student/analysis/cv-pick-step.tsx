@@ -30,7 +30,7 @@ export function CvPickStep({ cvs, selectedId, onSelect, onContinue }: CvPickStep
           </p>
         </div>
 
-        <div role="radiogroup" aria-label="Phiên bản CV" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div data-agent-target="select-cv" role="radiogroup" aria-label="Phiên bản CV" className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {cvs.map((cv) => {
             const checked = cv.id === selectedId
             return (
