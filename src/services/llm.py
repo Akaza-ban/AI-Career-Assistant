@@ -7,9 +7,9 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
 
 from src.config import get_settings
+from src.services.providers.gateway import GatewayChat, GatewayError, PreparedPayload, provider_scope, wrap_chat
 
 # Tiền tố của key mẫu trong .env.example; key như vậy coi như chưa cấu hình LLM.
 _PLACEHOLDER_PREFIXES = (
@@ -28,7 +28,7 @@ _llm_health_cache: tuple[str, float, dict[str, Any]] | None = None
 _llm_health_lock = asyncio.Lock()
 
 
-def get_llm() -> ChatOpenAI:
+def get_llm() -> GatewayChat:
     return get_settings().get_chat_model()
 
 
@@ -94,28 +94,37 @@ async def check_llm_health() -> dict[str, Any]:
                 max_tokens=8,
             )
             await asyncio.wait_for(
-                llm.ainvoke([HumanMessage(content="ping")]),
+                wrap_chat(llm, timeout=LLM_HEALTH_TIMEOUT_SECONDS).ainvoke([HumanMessage(content="ping")]),
                 timeout=LLM_HEALTH_TIMEOUT_SECONDS,
             )
             result.update(status="live", is_live=True)
         except TimeoutError:
             result["message"] = "LLM không phản hồi trong 3 giây. Đang dùng chế độ dự phòng."
-        except Exception as exc:
+        except Exception:
             # Provider error bodies can echo credentials; expose only the error class.
-            result["message"] = f"Không kết nối được LLM ({type(exc).__name__}). Đang dùng chế độ dự phòng."
+            result["message"] = "Không kết nối được LLM. Đang dùng chế độ dự phòng."
         _llm_health_cache = (signature, monotonic(), result)
         return dict(result)
 
 
-async def invoke_json(prompt: str, *, temperature: float = 0.1, timeout: float = 60.0) -> dict[str, Any]:
+async def invoke_json(
+    prompt: str | PreparedPayload, *, temperature: float = 0.1, timeout: float = 60.0
+) -> dict[str, Any]:
     """Gọi LLM một lần và trả về object JSON trong câu trả lời; báo lỗi nếu hết giờ hoặc không có JSON hợp lệ."""
-    llm = get_settings().get_chat_model(temperature=temperature)
-    response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=timeout)
-    content = response.content if isinstance(response.content, str) else str(response.content)
-    match = re.search(r"\{.*\}", content, re.DOTALL)
-    if not match:
-        raise ValueError(f"LLM không trả về JSON: {content[:200]}")
-    data = json.loads(match.group(0))
-    if not isinstance(data, dict):
-        raise ValueError("JSON trả về không phải object")
-    return data
+    with provider_scope() as scope:
+        llm = get_settings().get_chat_model(temperature=temperature, timeout=timeout)
+        response = await wrap_chat(llm, timeout=timeout).ainvoke(prompt)
+        data = None
+        try:
+            content = response.content if isinstance(response.content, str) else str(response.content)
+            match = re.search(r"\{.*\}", content, re.DOTALL)
+            if match is not None:
+                parsed = json.loads(match.group(0))
+                if isinstance(parsed, dict):
+                    # This helper's callers consume business records, never traces.
+                    data = scope.restore_business(parsed)
+        except Exception:
+            pass
+        if data is None:
+            raise GatewayError("LLM không trả về JSON object hợp lệ")
+        return data

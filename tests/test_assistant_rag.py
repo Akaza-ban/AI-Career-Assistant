@@ -353,6 +353,32 @@ def fake_llm(result: Any = None, error: Exception | None = None) -> tuple[MagicM
 
 
 @pytest.mark.asyncio
+async def test_business_filter_restores_name_but_provider_sees_only_placeholder(knowledge_base):
+    from src.services.privacy.types import Identity
+    from src.services.providers.gateway import provider_scope
+
+    llm, structured = fake_llm(
+        {
+            "message": "Đã chuẩn bị bộ lọc.",
+            "intent": "qa",
+            "actions": [
+                {
+                    "action_type": "FILL_FILTER",
+                    "description_vi": "Lọc theo tên",
+                    "params": {"filter_name": "keyword", "value": "Alice Morgan"},
+                }
+            ],
+        }
+    )
+    agent = AssistantAgent(retriever=knowledge_base, llm=llm)
+    with provider_scope(identities=(Identity(name="Alice Morgan"),)):
+        response = await agent.respond("Nút tải lên CV PDF DOCX ở đâu? Name: Alice Morgan", context())
+    structured.ainvoke.assert_awaited_once()
+    assert response.actions[0].params.value == "Alice Morgan"
+    assert "Alice Morgan" not in str(structured.ainvoke.call_args.args[0])
+
+
+@pytest.mark.asyncio
 async def test_llm_receives_history_and_returns_only_grounded_safe_actions(
     knowledge_base: AssistantHybridRetriever,
 ) -> None:
@@ -911,7 +937,7 @@ async def test_chat_history_question_uses_history_document_and_flat_schema(
     assert data["message"] == answer
     assert any(source["route"] == "/student/history" for source in data["sources"])
     assert "thought" not in data
-    assert "Assistant scope/evidence decision" in caplog.text
+    assert "Assistant scope/evidence decision" not in caplog.text
     assert "Assistant generation unavailable" not in caplog.text
     llm.with_structured_output.assert_called_once_with(AssistantLlmOutput, method="function_calling")
     structured.ainvoke.assert_awaited_once()

@@ -9,6 +9,7 @@ from threading import RLock
 from typing import Any, ClassVar
 
 from src.config import get_settings
+from src.services.providers.gateway import embedding_call, encode_e5, load_e5_model
 
 logger = logging.getLogger(__name__)
 
@@ -40,19 +41,7 @@ class AssistantEmbeddingService:
             self.model_name = settings.assistant_embedding_model
             self.dimension = 384
             try:
-                from sentence_transformers import SentenceTransformer
-
-                try:
-                    self._model = SentenceTransformer(
-                        self.model_name,
-                        device=settings.assistant_embedding_device,
-                        local_files_only=True,
-                    )
-                except Exception:
-                    self._model = SentenceTransformer(
-                        self.model_name,
-                        device=settings.assistant_embedding_device,
-                    )
+                self._model = load_e5_model(self.model_name, settings.assistant_embedding_device)
                 dimension = getattr(self._model, "get_embedding_dimension", None)
                 if callable(dimension):
                     self.dimension = int(dimension())
@@ -89,24 +78,19 @@ class AssistantEmbeddingService:
         with self._lock:
             if self._model is not None:
                 try:
-                    vectors = self._model.encode(
-                        [prefix + text for text in texts],
-                        normalize_embeddings=True,
-                        convert_to_numpy=True,
-                        show_progress_bar=False,
-                    )
+                    vectors = encode_e5(self._model, texts, prefix)
                     self._used_model = True
-                    return vectors.tolist()
-                except Exception as exc:
+                    return vectors
+                except Exception:
                     if self._used_model:
                         raise RuntimeError(
                             "E5 encoding failed; refusing to mix embeddings. Rebuild the index."
-                        ) from exc
+                        ) from None
                     self._model = None
                     self.dimension = 384
                     logger.warning("E5 encoding unavailable; using deterministic hashing embeddings")
             # Prefixes identify the E5 task; exclude them from lexical hashing.
-            return [self._hash(text) for text in texts]
+            return embedding_call(texts, lambda masked: [self._hash(text) for text in masked], local=True)
 
     def embed_query(self, query: str) -> list[float]:
         return self._encode([query], "query: ")[0]

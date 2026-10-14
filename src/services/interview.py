@@ -292,7 +292,11 @@ async def submit_answer(
     turn.timed_out = timed_out or late
     turn.answered_at = now
     if usable:
-        scored = await _score(jd.title, turn.question, text, question_index)
+        from src.services.privacy.types import Identity
+        from src.services.providers.gateway import provider_scope
+
+        with provider_scope(user_id=user.id, identities=(Identity(name=user.full_name, email=user.email),)):
+            scored = await _score(jd.title, turn.question, text, question_index)
         turn.answer = text
         for criterion in CRITERIA:
             setattr(turn, criterion, scored["star"][criterion])

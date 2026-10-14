@@ -197,12 +197,20 @@ async def _judge_answer_once(
         "retrieved_context": context,
         "expected_points": sample.expected_points,
     }
-    raw = await asyncio.wait_for(
-        llm.with_structured_output(AnswerJudgment, method="function_calling").ainvoke(
-            [SystemMessage(content=JUDGE_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))]
-        ),
-        timeout=timeout,
-    )
+    from src.services.providers.gateway import provider_scope, wrap_chat
+
+    with provider_scope() as scope:
+        raw = (
+            await wrap_chat(llm, timeout=timeout)
+            .with_structured_output(AnswerJudgment, method="function_calling")
+            .ainvoke(
+                [SystemMessage(content=JUDGE_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))]
+            )
+        )
+        if isinstance(raw, AnswerJudgment):
+            raw = AnswerJudgment.model_validate(scope.restore_business(raw.model_dump()))
+        else:
+            raw = scope.restore_business(raw)
     result = raw if isinstance(raw, AnswerJudgment) else AnswerJudgment.model_validate(raw)
     if [item.statement for item in result.expected_points] != sample.expected_points:
         raise ValueError("Judge changed, reordered or omitted reference points")
@@ -345,6 +353,9 @@ async def run_evaluation(
     samples: list[GoldenSample], top_k: int | None, judge_model: str | None = None, request_delay: float = 0.0
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     settings = get_settings()
+    from src.services.providers.gateway import initialize_gateway_runtime
+
+    initialize_gateway_runtime()
     configured = llm_configured()
     retriever = RecordingRetriever(top_k)
     if not retriever.chunks:

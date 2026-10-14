@@ -149,7 +149,10 @@ async def test_generic_query_cannot_echo_even_high_scoring_irrelevant_faq(
 
 @pytest.fixture
 def health_model(monkeypatch: pytest.MonkeyPatch) -> tuple[SimpleNamespace, AsyncMock]:
+    from langchain_core.messages import AIMessage
+
     model = AsyncMock()
+    model.ainvoke.return_value = AIMessage(content="pong")
     settings = SimpleNamespace(
         llm_provider="groq",
         model_name="test-model",

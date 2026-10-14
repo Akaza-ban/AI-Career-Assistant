@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from src.db.models import JobDescription
 from src.services.jd_store import get_jd_store
+from src.services.providers.gateway import provider_scope
 from src.services.skill_matching import (
     assess_by_rules,
     compute_score,
@@ -109,7 +110,9 @@ def recommend_top_jds_from_cv(
 
     # Stage 1: Dense Retrieval qua Vector Store
     jd_store = get_jd_store()
-    candidates = jd_store.search_candidates(query_text=query_text, top_k=candidate_pool_size)
+    with provider_scope() as scope:
+        scope.prime(cv_text, "message", document_type="cv")
+        candidates = jd_store.search_candidates(query_text=query_text, top_k=candidate_pool_size)
     if not candidates:
         return []
 
@@ -216,11 +219,12 @@ async def generate_career_advice_with_llm(
     fallback_advice = {
         "summary": f"Hồ sơ của bạn phù hợp nhất với vị trí {top_title} với độ tương thích {top_score}%.",
         "top_position_advice": (
-            f"Bạn đã có thế mạnh ở các kỹ năng: {matched}. "
-            f"Đây là nền tảng rất tốt để ứng tuyển vị trí {top_title}."
+            f"Bạn đã có thế mạnh ở các kỹ năng: {matched}. Đây là nền tảng rất tốt để ứng tuyển vị trí {top_title}."
         ),
         "action_plan": [
-            f"Bổ sung và trau dồi các kỹ năng còn thiếu: {missing}." if missing != "không có" else "Tiếp tục hoàn thiện các dự án thực tế.",
+            f"Bổ sung và trau dồi các kỹ năng còn thiếu: {missing}."
+            if missing != "không có"
+            else "Tiếp tục hoàn thiện các dự án thực tế.",
             "Lượng hóa kết quả công việc trong CV theo phương pháp STAR.",
             "Tham gia luyện phỏng vấn thử trên hệ thống cho vị trí này.",
         ],
@@ -260,10 +264,10 @@ async def generate_career_advice_with_llm(
             "top_position_advice": str(data.get("top_position_advice") or fallback_advice["top_position_advice"]),
             "action_plan": list(data.get("action_plan") or fallback_advice["action_plan"]),
         }
-    except Exception as e:
+    except Exception:
         import logging
 
-        logging.getLogger(__name__).warning("Không thể gọi LLM sinh Career Advice: %s. Dùng fallback.", e)
+        logging.getLogger(__name__).warning("Không thể gọi LLM sinh Career Advice. Dùng fallback.")
         return fallback_advice
 
 
@@ -288,13 +292,11 @@ async def compare_single_jd_with_llm(
             from src.agents.gap_analysis.nodes.compare_gap import score_with_llm
 
             llm_data = await score_with_llm(cv_lines, requirements, [])
-        except Exception as e:
+        except Exception:
             import logging
 
             logging.getLogger(__name__).warning(
-                "Gọi LLM so khớp JD %s thất bại: %s. Dùng fallback quy tắc.",
-                jd_info.get("jd_id"),
-                e,
+                "Gọi LLM so khớp JD thất bại. Dùng fallback quy tắc.",
             )
 
     from src.agents.gap_analysis.nodes.compare_gap import _merge
@@ -395,7 +397,7 @@ async def compare_selected_jds_with_llm(
 
     # 3. Sắp xếp theo Match Score (%) giảm dần
     scored_items.sort(
-        key=lambda x: (x["match_score"] if x["match_score"] is not None else -1),
+        key=lambda x: x["match_score"] if x["match_score"] is not None else -1,
         reverse=True,
     )
 

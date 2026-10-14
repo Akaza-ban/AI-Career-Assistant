@@ -29,7 +29,7 @@ class AgentStatusResponse(BaseModel):
     agent: str = Field(default="LangGraph Agent v1.0", description="Tên agent")
     llm_provider: str = Field(default="groq", description="Provider đang kích hoạt (groq / openrouter / openai)")
     model_name: str = Field(default="openai/gpt-oss-120b", description="Tên model đang dùng")
-    langsmith_tracing: bool = Field(default=True, description="Trạng thái LangSmith tracing")
+    langsmith_tracing: bool = Field(default=False, description="Trạng thái LangSmith tracing")
 
 
 class UserProfile(BaseModel):

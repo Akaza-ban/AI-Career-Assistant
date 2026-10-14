@@ -56,7 +56,7 @@ _KEEP_LABEL = re.compile(
     r"(?i)^\s*(?:skills?|kỹ năng|employer|company|công ty|school|university|education|học vấn|trường|project|dự án|location|city|job title|position)\s*:"
 )
 _NOT_NAME = frozenset(
-    "curriculum vitae resume cv software engineer developer backend frontend full stack data scientist "
+    "curriculum vitae resume cv jd json api software engineer developer backend frontend full stack data scientist "
     "machine learning deep learning artificial intelligence computer science university college school "
     "institute academy company corporation limited ltd inc bachelor master doctor python java javascript "
     "typescript react nextjs fastapi sql docker kubernetes microsoft amazon google fpt kỹ năng học vấn "

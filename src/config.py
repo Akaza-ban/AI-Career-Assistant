@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     )
 
     # LangSmith Tracing (AI Logs - Deliverable #4)
-    langchain_tracing_v2: bool = Field(default=True, description="Bật tracing LangSmith")
+    langchain_tracing_v2: bool = Field(default=False, description="Automatic tracing is disabled by privacy policy")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")
     langchain_project: str = Field(default="ai20k-p131", description="Tên project trên LangSmith")
     langchain_endpoint: str = Field(
@@ -128,6 +128,11 @@ class Settings(BaseSettings):
     assistant_llm_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
     assistant_history_turns: int = Field(default=6, ge=0, le=20)
 
+    # Deployment-specific tariff overrides. None means price unknown, not free.
+    provider_input_usd_per_million: float | None = Field(default=None, ge=0)
+    provider_output_usd_per_million: float | None = Field(default=None, ge=0)
+    provider_embedding_usd_per_million: float | None = Field(default=None, ge=0)
+
     def get_llm_credentials(self) -> tuple[str, str]:
         """
         Lấy (api_key, base_url) dựa theo provider đang được kích hoạt.
@@ -160,34 +165,17 @@ class Settings(BaseSettings):
 
     def get_chat_model(self, **kwargs: Any):
         """Khởi tạo Chat Model tương thích OpenAI API (hỗ trợ Groq, OpenRouter, OpenAI)."""
-        from langchain_openai import ChatOpenAI
+        from src.services.providers.gateway import GatewayChat
 
-        api_key, base_url = self.get_llm_credentials()
-        temperature = kwargs.pop("temperature", self.llm_temperature)
-        model = kwargs.pop("model", self.model_name)
-
-        return ChatOpenAI(
-            model=model,
-            api_key=api_key or "sk-dummy-key-for-init",
-            base_url=base_url,
-            temperature=temperature,
-            **kwargs,
-        )
+        return GatewayChat(settings=self, **kwargs)
 
 
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
-    # Đồng bộ hóa biến môi trường cho LangSmith
-    has_valid_key = bool(settings.langchain_api_key and not settings.langchain_api_key.startswith("your-"))
-    if settings.langchain_tracing_v2 and has_valid_key:
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-        if settings.langchain_project:
-            os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-        if settings.langchain_endpoint:
-            os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
-    elif not has_valid_key and os.getenv("LANGCHAIN_API_KEY", "").startswith("your-"):
-        os.environ["LANGCHAIN_TRACING_V2"] = "false"
-
+    # Never enable automatic tracing of business state, even via inherited env.
+    settings.langchain_tracing_v2 = False
+    for name in ("LANGCHAIN_TRACING", "LANGCHAIN_TRACING_V2", "LANGSMITH_TRACING"):
+        os.environ[name] = "false"
+    os.environ.pop("LANGCHAIN_HANDLER", None)
     return settings

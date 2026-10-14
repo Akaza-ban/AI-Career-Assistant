@@ -1,6 +1,5 @@
 """LangGraph Assistant: intent -> role-aware retrieval -> validated response."""
 
-import asyncio
 import json
 import logging
 import re
@@ -41,6 +40,7 @@ from src.services.assistant.guardrails import (
 )
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
 from src.services.llm import llm_configured
+from src.services.providers.gateway import provider_scope, wrap_chat
 
 logger = logging.getLogger(__name__)
 ASSISTANT_INDEX_LOCK = RLock()
@@ -295,30 +295,57 @@ class AssistantAgent:
                     [source.model_dump() for source in state["sources"]], ensure_ascii=False
                 ),
             }
-            messages = [
-                system,
-                HumanMessage(
-                    content="\n".join(
-                        f"<{tag}>{escape(value, quote=False)}</{tag}>" for tag, value in prompt_data.items()
-                    )
-                ),
-            ]
             try:
                 llm = self._llm or get_settings().get_chat_model(temperature=0.1)
-                structured = llm.with_structured_output(AssistantLlmOutput, method="function_calling")
-                result = await asyncio.wait_for(
-                    structured.ainvoke(messages), timeout=get_settings().assistant_llm_timeout_seconds
-                )
-                result = result if isinstance(result, AssistantLlmOutput) else AssistantLlmOutput.model_validate(result)
-                logger.debug("Assistant scope/evidence decision: %s", result.thought)
-                response = AssistantResponse(
-                    message=result.message,
-                    intent=result.intent,
-                    actions=[] if result.is_refusal else validate_llm_actions(result.actions),
-                    sources=[] if result.is_refusal else state["sources"],
-                )
-            except Exception as exc:
-                logger.warning("Assistant generation unavailable (%s); using grounded fallback", type(exc).__name__)
+                with provider_scope() as scope:
+                    # Escape/render only after privacy masking, preserving XML's
+                    # single encoding layer and literal-placeholder protection.
+                    masked_data = scope.mask_payload(prompt_data)
+                    messages = [
+                        system,
+                        HumanMessage(
+                            content="\n".join(
+                                f"<{tag}>{escape(value.replace('&amp;', '&'), quote=False)}</{tag}>"
+                                for tag, value in masked_data.items()
+                            )
+                        ),
+                    ]
+                    structured = wrap_chat(
+                        llm, timeout=get_settings().assistant_llm_timeout_seconds
+                    ).with_structured_output(AssistantLlmOutput, method="function_calling")
+                    result = await structured.ainvoke(scope.prepared(messages))
+                    result = (
+                        result if isinstance(result, AssistantLlmOutput) else AssistantLlmOutput.model_validate(result)
+                    )
+                    business_actions = []
+                    for action in result.actions:
+                        payload = action.model_dump()
+                        for key in ("description_vi", "confirmation_message"):
+                            if isinstance(payload.get(key), str):
+                                payload[key] = scope.restore_business(payload[key])
+                        params = dict(payload["params"])
+                        # Only text fields accept PII; IDs/routes/selectors stay opaque.
+                        if action.action_type == "FILL_FILTER" and params.get("filter_name") == "keyword":
+                            params["value"] = scope.restore_business(params.get("value"))
+                        if action.action_type in {"HIGHLIGHT_ELEMENT", "SCROLL_TO"} and isinstance(
+                            params.get("tooltip"), str
+                        ):
+                            params["tooltip"] = scope.restore_business(params["tooltip"])
+                        if action.action_type == "NAVIGATE_PAGE" and isinstance(params.get("query"), dict):
+                            params["query"] = {
+                                key: scope.restore_business(value) if key == "keyword" else value
+                                for key, value in params["query"].items()
+                            }
+                        payload["params"] = params
+                        business_actions.append(type(action).model_validate(payload))
+                    response = AssistantResponse(
+                        message=scope.restore_business(result.message),
+                        intent=result.intent,
+                        actions=[] if result.is_refusal else validate_llm_actions(business_actions),
+                        sources=[] if result.is_refusal else state["sources"],
+                    )
+            except Exception:
+                logger.warning("Assistant generation unavailable; using grounded fallback")
         return {"response": self._guard(response, state)}
 
     async def respond(
@@ -328,14 +355,16 @@ class AssistantAgent:
         history: list[dict[str, str]] | None = None,
         allowed_student_ids: list[str] | None = None,
     ) -> AssistantResponse:
-        result = await self.graph.ainvoke(
-            {
-                "message": message,
-                "context": context,
-                "history": history or [],
-                "allowed_student_ids": allowed_student_ids or [],
-            }
-        )
+        with provider_scope():
+            result = await self.graph.ainvoke(
+                {
+                    "message": message,
+                    "context": context,
+                    "history": history or [],
+                    "allowed_student_ids": allowed_student_ids or [],
+                },
+                config={"callbacks": []},
+            )
         return result["response"]
 
 

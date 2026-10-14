@@ -13,6 +13,8 @@ from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
 from src.services import cv_versions
+from src.services.llm import llm_configured
+from src.services.providers.gateway import provider_scope
 from src.services.skill_matching import match_label
 
 logger = logging.getLogger(__name__)
@@ -134,21 +136,26 @@ async def run_analysis(analysis_id: str) -> None:
             "llm_calls": 0,
         }
         jd_source, jd_id = jd.source, jd.id
+        owner_id, cv_id = analysis.owner_id, cv.id
 
     final = dict(state)
     try:
-        async with asyncio.timeout(ANALYSIS_TIMEOUT_SECONDS):
-            async for update in gap_analysis_agent.astream(state, stream_mode="updates"):
-                for node, delta in update.items():
-                    final.update(delta or {})
-                    index = STEPS.index(node) if node in STEPS else -1
-                    if 0 <= index < len(STEPS) - 1:
-                        _update(analysis_id, current_step=STEPS[index + 1])
+        with provider_scope(user_id=owner_id, origins=(f"cv:{cv_id}", f"jd:{jd_id}")) as scope:
+            if llm_configured():
+                scope.prime(state["cv_raw"], f"cv:{cv_id}")
+                scope.prime(state["jd_raw"], f"jd:{jd_id}")
+            async with asyncio.timeout(ANALYSIS_TIMEOUT_SECONDS):
+                async for update in gap_analysis_agent.astream(state, stream_mode="updates", config={"callbacks": []}):
+                    for node, delta in update.items():
+                        final.update(delta or {})
+                        index = STEPS.index(node) if node in STEPS else -1
+                        if 0 <= index < len(STEPS) - 1:
+                            _update(analysis_id, current_step=STEPS[index + 1])
     except TimeoutError:
         _fail(analysis_id, "Phân tích mất quá nhiều thời gian. Hãy thử lại sau ít phút.")
         return
     except Exception:
-        logger.exception("Phân tích %s thất bại", analysis_id)
+        logger.error("Phân tích thất bại")
         _fail(analysis_id, "Có lỗi xảy ra trong lúc phân tích. Hãy thử lại.")
         return
 

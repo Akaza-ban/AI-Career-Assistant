@@ -42,6 +42,16 @@ assert Path(get_settings().upload_dir).resolve() == (_TMP / "uploads").resolve()
 def initialized_database():
     """Bootstrap once; individual fixtures may then control their own assignments."""
     init_db()
+    # ASGITransport skips startup. Unit tests use a deterministic local NER
+    # double; adapter/failure and golden integration tests explicitly replace it.
+    from src.services.privacy import ner
+    from src.services.privacy.detectors import Detector
+    from tests.test_privacy_detectors import EmptyNer
+
+    previous = ner._detector
+    ner._detector = Detector(EmptyNer())
+    yield
+    ner._detector = previous
 
 
 @pytest_asyncio.fixture

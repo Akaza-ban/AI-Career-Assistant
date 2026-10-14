@@ -3,6 +3,7 @@ from typing import Any
 
 from src.agents.gap_analysis.state import GapAnalysisState
 from src.services.llm import invoke_json, llm_configured
+from src.services.providers.gateway import provider_scope
 from src.services.skill_matching import (
     IMPORTANCE_LABELS,
     SECTION_LABELS,
@@ -39,11 +40,11 @@ def _requirements_block(requirements: list[dict[str, Any]]) -> str:
     return "\n".join(rows)
 
 
-async def score_with_llm(
+def _score_prompt(
     lines: list[dict[str, Any]],
     requirements: list[dict[str, Any]],
     retrieved_context: list[dict[str, Any]],
-) -> dict[str, Any]:
+) -> str:
     """
     LLM call #2 (PRD 5.2): chấm Match cho TOÀN BỘ yêu cầu trong một lần gọi (batch) theo bảng anchor,
     kèm dòng bằng chứng, gợi ý diễn đạt lại và nhận xét tổng quan.
@@ -77,7 +78,22 @@ async def score_with_llm(
         '"suggestions": [{"requirement_id": "r1", "line": 5, "rewrite": "...", "reason": "..."}], '
         '"summary": "..."}'
     )
-    return await invoke_json(prompt, temperature=0.1, timeout=60.0)
+    return prompt
+
+
+async def score_with_llm(
+    lines: list[dict[str, Any]],
+    requirements: list[dict[str, Any]],
+    retrieved_context: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Mask document fields before adding trusted evidence/line delimiters."""
+    with provider_scope() as scope:
+        scope.prime("\n".join(line["text"] for line in lines), "message", document_type="cv")
+        fields = scope.mask_payload(
+            {"lines": lines, "requirements": requirements, "retrieved_context": retrieved_context}
+        )
+        prompt = _score_prompt(**fields)
+        return await invoke_json(scope.prepared(prompt), temperature=0.1, timeout=60.0)
 
 
 def _merge(
@@ -136,8 +152,8 @@ async def compare_gap_node(state: GapAnalysisState) -> dict[str, Any]:
             llm_calls += 1
             try:
                 llm_data = await score_with_llm(lines, requirements, state.get("retrieved_context", []))
-            except Exception as e:
-                logger.warning("Chấm Match bằng LLM thất bại (lần %d): %s", llm_calls, e)
+            except Exception:
+                logger.warning("Chấm Match bằng LLM thất bại (lần %d)", llm_calls)
 
     llm_items = {}
     if llm_data:

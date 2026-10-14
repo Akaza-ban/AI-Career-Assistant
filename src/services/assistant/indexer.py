@@ -42,9 +42,12 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
+        from src.services.providers.gateway import initialize_gateway_runtime
+
+        initialize_gateway_runtime()
         build_assistant_index(args.docs_dir)
-    except (OSError, ValueError, RuntimeError) as exc:
-        parser.exit(1, f"Assistant indexing failed: {exc}\n")
+    except (OSError, ValueError, RuntimeError):
+        parser.exit(1, "Assistant indexing unavailable\n")
 
 
 if __name__ == "__main__":

@@ -91,7 +91,7 @@ def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
     except AppError:
         raise
     except Exception as e:
-        logger.warning("Không đọc được file CV (%s): %s", file_type, e)
+        logger.warning("Không đọc được file CV (%s)", file_type)
         raise AppError(
             422, "File bị lỗi hoặc không đúng định dạng PDF/DOCX. Hãy kiểm tra lại file.", "cv_not_extractable"
         ) from e

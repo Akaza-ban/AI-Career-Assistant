@@ -13,6 +13,27 @@ def utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
+class ProviderUsage(Base):
+    """One physical dispatch, including failed/cancelled and system job calls.
+
+    Only numeric usage and server-controlled labels; never prompts or outputs.
+    Unknown prices/tokens remain explicit instead of masquerading as free calls.
+    """
+
+    __tablename__ = "provider_usage"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid4().hex)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    operation: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default="started")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    usage_known: Mapped[bool] = mapped_column(Boolean, default=False)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    cost_known: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class User(Base):
     """Người dùng hệ thống (sinh viên hoặc cố vấn)."""
 

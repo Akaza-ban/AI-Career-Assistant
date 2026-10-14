@@ -22,6 +22,8 @@ from src.services.jd_recommendation import (
     generate_career_advice_with_llm,
     recommend_top_jds_from_cv,
 )
+from src.services.privacy.types import Identity
+from src.services.providers.gateway import provider_scope
 
 router = APIRouter()
 
@@ -80,11 +82,12 @@ async def compare_jds(
         if pjd.owner_id != user.id:
             raise AppError(403, "Bạn không có quyền truy cập vị trí JD này.", "jd_forbidden")
 
-    result = await compare_selected_jds_with_llm(
-        cv_text=cv_text,
-        jd_ids=unique_jd_ids,
-        db=db,
-    )
+    with provider_scope(user_id=user.id, identities=(Identity(name=user.full_name, email=user.email),)):
+        result = await compare_selected_jds_with_llm(
+            cv_text=cv_text,
+            jd_ids=unique_jd_ids,
+            db=db,
+        )
 
     found_ids = {c["jd_id"] for c in result.get("comparisons", [])}
     missing_ids = [jid for jid in unique_jd_ids if jid not in found_ids]
@@ -129,19 +132,21 @@ async def recommend_jds(
     else:
         raise AppError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
 
-    results = recommend_top_jds_from_cv(
-        cv_text=cv_text,
-        db=db,
-        top_n=body.top_n,
-    )
-
-    advice = None
-    if body.generate_advice:
-        advice_data = await generate_career_advice_with_llm(
-            cv_summary=cv_text[:800],
-            recommendations=results,
+    with provider_scope(user_id=user.id, identities=(Identity(name=user.full_name, email=user.email),)) as scope:
+        scope.prime(cv_text, "message", document_type="cv")
+        results = recommend_top_jds_from_cv(
+            cv_text=cv_text,
+            db=db,
+            top_n=body.top_n,
         )
-        advice = CareerAdvice(**advice_data)
+
+        advice = None
+        if body.generate_advice:
+            advice_data = await generate_career_advice_with_llm(
+                cv_summary=cv_text[:800],
+                recommendations=results,
+            )
+            advice = CareerAdvice(**advice_data)
 
     return RecommendJDsResponse(
         cv_version_id=body.cv_version_id,

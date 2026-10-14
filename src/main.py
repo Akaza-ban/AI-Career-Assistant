@@ -1,4 +1,3 @@
-import os
 import sys
 from contextlib import asynccontextmanager
 
@@ -11,6 +10,9 @@ from src.api.security import OriginProtectionMiddleware
 from src.config import get_settings
 from src.db.database import init_db
 from src.models.schemas import HealthResponse
+from src.services.providers.gateway import install_telemetry_policy
+
+install_telemetry_policy()
 
 # Console Windows mặc định cp1252 không in được tiếng Việt/emoji khi output bị chuyển hướng
 # (ghi file, chạy nền) và làm app crash lúc khởi động.
@@ -29,21 +31,7 @@ async def lifespan(app: FastAPI):
 
         initialize_privacy(settings)
 
-    # Cấu hình biến môi trường LangSmith cho process nếu được kích hoạt
-    if settings.langchain_tracing_v2:
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        if settings.langchain_api_key:
-            os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
-        if settings.langchain_project:
-            os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
-        if settings.langchain_endpoint:
-            os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
-
-    tracing_status = (
-        f"Enabled (Project: {settings.langchain_project})"
-        if settings.langchain_tracing_v2 and settings.langchain_api_key
-        else "Disabled / Missing Key"
-    )
+    tracing_status = "Disabled (privacy policy)"
 
     init_db()
 
@@ -53,8 +41,8 @@ async def lifespan(app: FastAPI):
 
         indexed_count = seed_vector_store()
         print(f"✅ Đã index {indexed_count} JD vào ChromaDB document store.")
-    except Exception as e:
-        print(f"⚠️ Indexing ChromaDB error: {e}")
+    except Exception:
+        print("⚠️ Indexing ChromaDB unavailable")
 
     print("=" * 60)
     print(f"🚀 {settings.app_name} starting in [{settings.app_env}] mode")

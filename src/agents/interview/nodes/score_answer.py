@@ -1,5 +1,3 @@
-import asyncio
-import json
 import logging
 import re
 from typing import Any
@@ -8,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.agents.interview.state import InterviewState
 from src.config import get_settings
+from src.services.llm import invoke_json
 
 logger = logging.getLogger(__name__)
 
@@ -114,15 +113,7 @@ async def call_llm_for_scoring(
     if not api_key or is_placeholder:
         return None
 
-    llm = settings.get_chat_model(temperature=0.2)
-    response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=timeout)
-    content = response.content.strip()
-
-    json_match = re.search(r"\{.*\}", content, re.DOTALL)
-    if not json_match:
-        raise ValueError(f"LLM không trả về JSON hợp lệ: {content[:100]}")
-
-    return json.loads(json_match.group(0))
+    return await invoke_json(prompt, temperature=0.2, timeout=timeout)
 
 
 async def score_answer_with_llm(
@@ -181,8 +172,8 @@ async def score_answer_with_llm(
             if is_last_round:
                 validated.next_question = None
             return validated
-    except Exception as e:
-        logger.warning(f"Lần 1 chấm điểm LLM thất bại: {e}. Đang thực hiện RETRY lần 1...")
+    except Exception:
+        logger.warning("Lần 1 chấm điểm LLM thất bại. Đang thực hiện RETRY lần 1...")
 
     # Retry 1 lần (theo yêu cầu đề bài do dùng model free-tier)
     try:
@@ -197,8 +188,8 @@ async def score_answer_with_llm(
             if is_last_round:
                 validated.next_question = None
             return validated
-    except Exception as e:
-        logger.error(f"Retry lần 1 vẫn thất bại: {e}. Kích hoạt Rule-based Fallback.")
+    except Exception:
+        logger.error("Retry lần 1 vẫn thất bại. Kích hoạt Rule-based Fallback.")
 
     # Fallback an toàn nếu cả 2 lần đều không thành công
     return evaluate_answer_fallback(

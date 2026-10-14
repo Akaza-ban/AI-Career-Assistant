@@ -3,13 +3,14 @@ from typing import Any
 
 from src.agents.gap_analysis.state import GapAnalysisState
 from src.services.llm import invoke_json, llm_configured
+from src.services.providers.gateway import provider_scope
 from src.services.rag import get_rag_service
 from src.services.skill_matching import MAX_REQUIREMENTS, normalize_requirements
 
 logger = logging.getLogger(__name__)
 
 
-async def extract_requirements_with_llm(jd_text: str) -> list[dict[str, Any]]:
+def _extract_prompt(jd_text: str) -> str:
     """LLM call #1 (PRD 5.2): trích yêu cầu kỹ năng từ JD tự dán và gán mức Required / Preferred / Additional."""
     prompt = (
         "Bạn là chuyên gia tuyển dụng. Hãy trích xuất các yêu cầu về kỹ năng, kiến thức, công cụ, ngoại ngữ "
@@ -29,7 +30,13 @@ async def extract_requirements_with_llm(jd_text: str) -> list[dict[str, Any]]:
         "CHỈ trả về JSON hợp lệ, không giải thích:\n"
         '{"requirements": [{"name": "SQL", "importance": "required", "aliases": ["MySQL"]}]}'
     )
-    data = await invoke_json(prompt, temperature=0.0, timeout=30.0)
+    return prompt
+
+
+async def extract_requirements_with_llm(jd_text: str) -> list[dict[str, Any]]:
+    with provider_scope() as scope:
+        jd_wire = scope.mask_payload(jd_text[:6000])
+        data = await invoke_json(scope.prepared(_extract_prompt(jd_wire)), temperature=0.0, timeout=30.0)
     items = data.get("requirements")
     if not isinstance(items, list):
         raise ValueError("Thiếu trường requirements trong kết quả LLM")
@@ -52,8 +59,8 @@ async def retrieve_context_node(state: GapAnalysisState) -> dict[str, Any]:
             llm_calls += 1
             try:
                 requirements = await extract_requirements_with_llm(jd_raw)
-            except Exception as e:
-                logger.warning("Trích yêu cầu JD bằng LLM thất bại: %s. Dùng từ điển kỹ năng.", e)
+            except Exception:
+                logger.warning("Trích yêu cầu JD bằng LLM thất bại. Dùng từ điển kỹ năng.")
         if not requirements:
             dictionary_skills = state.get("parsed_jd", {}).get("required_skills", [])
             requirements = [{"name": skill, "importance": "required"} for skill in dictionary_skills]

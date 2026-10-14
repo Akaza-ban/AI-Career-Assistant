@@ -48,7 +48,10 @@ AgentDependency = Annotated[AssistantAgent, Depends(get_assistant_agent)]
 @router.get("/status", response_model=AssistantStatusResponse)
 async def get_assistant_status(user: CurrentUser) -> AssistantStatusResponse:
     """Report live LLM connectivity independently of retrieval fallback readiness."""
-    return AssistantStatusResponse.model_validate(await check_llm_health())
+    from src.services.providers.gateway import provider_scope
+
+    with provider_scope(user_id=user.id):
+        return AssistantStatusResponse.model_validate(await check_llm_health())
 
 
 def _owned_conversation(db: DbSession, conversation_id: str, user: User) -> AssistantConversation:
@@ -139,7 +142,11 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
         if user.role == "advisor"
         else []
     )
-    result = await agent.respond(body.message, context, history=history, allowed_student_ids=students)
+    from src.services.privacy.types import Identity
+    from src.services.providers.gateway import provider_scope
+
+    with provider_scope(user_id=user.id, identities=(Identity(name=user.full_name, email=user.email),)):
+        result = await agent.respond(body.message, context, history=history, allowed_student_ids=students)
     actions = _resource_actions(db, user, result.actions, students)
     message = result.message
     if any(action.action_type == "START_ANALYSIS" for action in result.actions) and not any(
@@ -217,11 +224,13 @@ def submit_feedback(body: AssistantFeedbackRequest, user: CurrentUser, db: DbSes
 def reindex(user: CurrentAdvisor) -> ReindexResponse:
     """Rebuild only the configured corpus; no arbitrary filesystem path from clients."""
     try:
-        with ASSISTANT_INDEX_LOCK:
+        from src.services.providers.gateway import provider_scope
+
+        with ASSISTANT_INDEX_LOCK, provider_scope(user_id=user.id):
             count = build_assistant_index()
-    except Exception as exc:
-        logger.warning("Assistant reindex failed (%s)", type(exc).__name__)
+    except Exception:
+        logger.warning("Assistant reindex failed")
         raise AppError(
             503, "Không thể lập lại chỉ mục tài liệu. Vui lòng thử lại.", "assistant_index_unavailable"
-        ) from exc
+        ) from None
     return ReindexResponse(chunks_indexed=count)
