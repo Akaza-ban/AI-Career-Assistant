@@ -12,16 +12,13 @@ import { formatBytes } from "@/lib/format"
 import type { AdvisorCv } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-type Preview = { kind: "pdf"; url: string } | { kind: "image"; url: string } | { kind: "text"; text: string }
+type Preview = { kind: "pdf"; url: string } | { kind: "text"; text: string }
 
-// PDF và ảnh xem trực tiếp trong trình duyệt; DOCX (hoặc bản demo không có file) xem bằng văn bản đã trích.
+// PDF xem trực tiếp trong trình duyệt; DOCX (hoặc bản demo không có file) xem bằng văn bản đã trích.
 async function loadPreview(studentId: string, cv: AdvisorCv): Promise<Preview> {
   if (cv.file_type === "pdf") {
     const blob = await api.getAdvisorCvFile(studentId, cv.id)
     if (blob) return { kind: "pdf", url: URL.createObjectURL(blob) }
-  } else if (["png", "jpg", "jpeg"].includes(cv.file_type)) {
-    const blob = await api.getAdvisorCvFile(studentId, cv.id)
-    if (blob) return { kind: "image", url: URL.createObjectURL(blob) }
   }
   return { kind: "text", text: await api.getAdvisorCvText(studentId, cv.id) }
 }
@@ -43,7 +40,7 @@ function PreviewBody({ studentId, cv }: { studentId: string; cv: AdvisorCv }) {
 
   useEffect(() => {
     return () => {
-      if (data?.kind === "pdf" || data?.kind === "image") URL.revokeObjectURL(data.url)
+      if (data?.kind === "pdf") URL.revokeObjectURL(data.url)
     }
   }, [data])
 
@@ -68,14 +65,6 @@ function PreviewBody({ studentId, cv }: { studentId: string; cv: AdvisorCv }) {
   }
   if (data.kind === "pdf") {
     return <iframe src={`${data.url}#view=FitH`} title={`Xem ${cv.file_name}`} className="size-full rounded-lg bg-surface" />
-  }
-  if (data.kind === "image") {
-    return (
-      <div className="flex h-full items-center justify-center overflow-auto rounded-lg bg-surface p-4">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={data.url} alt={`Xem ${cv.file_name}`} className="max-h-full max-w-full rounded object-contain shadow" />
-      </div>
-    )
   }
   return (
     <div className="h-full overflow-y-auto rounded-lg bg-surface p-5">

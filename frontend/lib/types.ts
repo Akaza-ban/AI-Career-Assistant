@@ -21,8 +21,7 @@ export interface UserProfile {
 
 // ---------- CV (US-SV-01) ----------
 
-/** PNG / JPG: CV dạng ảnh, nội dung đọc bằng OCR. */
-export type CvFileType = "pdf" | "docx" | "png" | "jpg" | "jpeg"
+export type CvFileType = "pdf" | "docx"
 export type CvStatus = "processing" | "ready" | "failed"
 
 /**
@@ -44,6 +43,8 @@ export interface CvVersion {
   file_type: CvFileType
   size_bytes: number
   page_count: number | null
+  /** Chỉ có ở phản hồi tải lên: file là PDF scan, chữ được đọc bằng OCR nên có thể sai sót. */
+  read_by_ocr?: boolean
   uploaded_at: ISODateString
   status: CvStatus
   /** Lý do khi status = "failed", ví dụ file scan không có lớp văn bản (US-SV-01 AC2). */
@@ -79,6 +80,11 @@ export interface JdSkill {
   importance: RequirementImportance
   /** Tên gọi khác (để nhận ra kỹ năng khi CV / JD viết khác chữ). */
   aliases?: string[]
+}
+
+/** Kỹ năng nên học thêm ở Tổng quan; roadmap_url chỉ có với kỹ năng roadmap.sh có lộ trình riêng. */
+export interface SkillToLearn extends JdSkill {
+  roadmap_url?: string | null
 }
 
 export type EmploymentType = "full_time" | "part_time" | "internship"
@@ -252,6 +258,8 @@ export interface JdComparisonItem {
 }
 
 export interface CompareJdsResponse {
+  /** Mã lượt so sánh trong lịch sử (backend lưu mỗi lượt kèm kết quả). */
+  id?: string | null
   cv_version_id: string | null
   /** Ví dụ "v2.1". */
   cv_label: string | null
@@ -261,6 +269,9 @@ export interface CompareJdsResponse {
   comparisons: JdComparisonItem[]
   /** Kỹ năng còn thiếu ở tất cả các JD đã chọn. */
   common_missing_skills: string[]
+  /** Kỹ năng thiếu chung → link lộ trình roadmap.sh (chỉ kỹ năng có lộ trình riêng). */
+  common_missing_roadmaps?: Record<string, string>
+  created_at?: ISODateString | null
 }
 
 // ---------- Phân tích khoảng cách (US-SV-02, US-SV-05, PRD mục 5.2) ----------
@@ -567,6 +578,8 @@ export interface InterviewSession {
   /** Các câu đã trả lời, theo thứ tự. */
   turns: InterviewTurn[]
   created_at: ISODateString
+  /** Server đã bật nhận diện giọng nói (có SONIOX_API_KEY); false thì ẩn nút "Nói câu trả lời". */
+  voice_input?: boolean
 }
 
 export interface CreateInterviewRequest {
@@ -812,7 +825,7 @@ export interface StudentOverview {
   }
   next_step: NextStep
   /** Kỹ năng "Thiếu" trong lần phân tích gần nhất, nhóm Bắt buộc trước (tối đa 6). */
-  skills_to_learn: { analysis_id: string; jd: InterviewJdRef; skills: JdSkill[]; total_missing: number } | null
+  skills_to_learn: { analysis_id: string; jd: InterviewJdRef; skills: SkillToLearn[]; total_missing: number } | null
   /** Tối đa 5, mới nhất trước. */
   recent_analyses: AnalysisRow[]
   /** Tối đa 5, mới nhất trước. */

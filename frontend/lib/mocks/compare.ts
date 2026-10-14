@@ -4,6 +4,7 @@
 
 import { recommendFromProfile, skillProfileOf } from "@/lib/mocks/library"
 import type { CompareJdsResponse, JdComparisonItem, JobDescription, MatchLabel } from "@/lib/types"
+import { roadmapsOf } from "@/lib/mocks/roadmap"
 
 const joinVi = (items: string[]) =>
   items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} và ${items[items.length - 1]}`
@@ -55,5 +56,6 @@ export function compareFromProfile(
     total_compared: comparisons.length,
     comparisons,
     common_missing_skills: common ?? [],
+    common_missing_roadmaps: roadmapsOf(common ?? []),
   }
 }

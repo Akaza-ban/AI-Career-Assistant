@@ -121,6 +121,7 @@ import type {
 import { COMPARE_MAX_JDS, COMPARE_MIN_JDS, JD_MIN_WORDS } from "@/lib/types"
 import { ApiError } from "@/lib/api-error"
 import { MOCK_SCENARIO } from "@/lib/config"
+import { withRoadmap } from "@/lib/mocks/roadmap"
 
 const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms))
 const clone = <T>(value: T): T => structuredClone(value)
@@ -275,6 +276,29 @@ function resumeMock(iv: MockInterview, now: number) {
   iv.pausedAt = null
 }
 
+// ---- Lịch sử so sánh vị trí: kịch bản mẫu có sẵn 3 lượt, tính lúc cần (JD và CV mẫu đã sẵn sàng) ----
+
+let compareHistory: CompareJdsResponse[] | null = null
+
+function compareHistoryRows(): CompareJdsResponse[] {
+  if (compareHistory) return compareHistory
+  const cv = cvVersions.find((c) => c.id === "cv-v3")
+  const seeds: [string[], number][] = [
+    [["jd-da-intern", "jd-ba-intern", "jd-po-assistant"], 2],
+    [["jd-ba-intern", "jd-po-assistant"], 8],
+    [["jd-fe-junior", "jd-be-intern"], 23],
+  ]
+  compareHistory =
+    isNewStudent || !cv
+      ? []
+      : seeds.map(([ids, daysAgo], i) => ({
+          ...compareFromProfile(ids.map((id) => findJd(id)!), cv.family_id, cv),
+          id: `cmp-mau-${i + 1}`,
+          created_at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(),
+        }))
+  return compareHistory
+}
+
 /** Trạng thái trả về: tính giây còn lại, tự chạy lại khi đã tạm dừng đủ 1 phút. */
 function interviewView(iv: MockInterview): InterviewSession {
   const now = Date.now()
@@ -286,6 +310,8 @@ function interviewView(iv: MockInterview): InterviewSession {
     seconds_left: active ? Math.max(0, Math.round((iv.deadline - reference) / 1000)) : null,
     paused: iv.pausedAt !== null,
     pause_seconds_left: iv.pausedAt !== null ? Math.max(0, PAUSE_MAX_SECONDS - Math.round((now - iv.pausedAt) / 1000)) : null,
+    // Bản demo luôn có nút giọng nói (lib/use-soniox-stt.ts giả lập lời nói)
+    voice_input: true,
   })
 }
 
@@ -385,8 +411,10 @@ const MOCK_STEP_MS = 1200
 function withProgress(analysis: GapAnalysis): GapAnalysis {
   const started = analysisStartedAt[analysis.id]
   const index = started === undefined ? ANALYSIS_STEPS.length : Math.floor((Date.now() - started) / MOCK_STEP_MS)
-  if (index >= ANALYSIS_STEPS.length) return clone(analysis)
-  return { ...clone(analysis), status: "processing", current_step: ANALYSIS_STEPS[index], completed_at: null }
+  // Như backend: mỗi yêu cầu kèm lộ trình roadmap.sh (lib/mocks/roadmap.ts)
+  const view = { ...clone(analysis), requirements: analysis.requirements.map(withRoadmap) }
+  if (index >= ANALYSIS_STEPS.length) return view
+  return { ...view, status: "processing", current_step: ANALYSIS_STEPS[index], completed_at: null }
 }
 
 
@@ -993,19 +1021,22 @@ export const mockApi = {
 
   // US-SV-01 AC3: sai định dạng hoặc > 5MB thì từ chối, không tạo bản ghi.
   async uploadCv(file: File): Promise<CvVersion> {
-    await delay(900)
     const ext = file.name.split(".").pop()?.toLowerCase()
-    if (!ext || !["pdf", "docx", "png", "jpg", "jpeg"].includes(ext)) {
-      throw new ApiError(415, "Chỉ hỗ trợ file PDF, DOCX hoặc ảnh (PNG, JPG).", "unsupported_file_type")
+    if (ext !== "pdf" && ext !== "docx") {
+      await delay(900)
+      throw new ApiError(415, "Chỉ hỗ trợ file PDF hoặc DOCX.", "unsupported_file_type")
     }
+    // Mô phỏng PDF scan (tên file chứa "scan"): đọc bằng OCR lâu hơn, file trống ("scan-trang") thì không đọc được.
+    const scanned = ext === "pdf" && /scan/i.test(file.name)
+    await delay(scanned ? 4500 : 900)
     if (file.size > MAX_UPLOAD_BYTES) {
       throw new ApiError(413, "File vượt quá dung lượng cho phép (tối đa 5MB).", "file_too_large")
     }
-    // US-SV-01 AC2: mô phỏng file scan không có lớp văn bản (tên file chứa "scan").
-    if (/scan/i.test(file.name)) {
+    // US-SV-01 AC2: bản scan OCR vẫn không đọc được chữ.
+    if (scanned && /trang|blank/i.test(file.name)) {
       throw new ApiError(
         422,
-        "Không trích xuất được nội dung CV. Có vẻ đây là bản scan ảnh; hãy tải lại bản có lớp văn bản.",
+        "Không trích xuất được nội dung CV. Hãy đảm bảo file có chữ rõ ràng hoặc tải lại bản có lớp văn bản.",
         "cv_not_extractable",
       )
     }
@@ -1018,7 +1049,7 @@ export const mockApi = {
       family_id: `cv-v${version}`,
       version_count: 1,
       file_name: file.name,
-      file_type: ext as CvVersion["file_type"],
+      file_type: ext,
       size_bytes: file.size,
       page_count: null,
       uploaded_at: new Date().toISOString(),
@@ -1036,7 +1067,7 @@ export const mockApi = {
       is_draft: false,
     }
     cvVersions.unshift(created)
-    return clone(created)
+    return { ...clone(created), read_by_ocr: scanned }
   },
 
   /** Đặt một CV làm CV đang dùng; bản đang dùng là phiên bản mới nhất của CV đó. */
@@ -1141,11 +1172,28 @@ export const mockApi = {
     if (missing.length) {
       throw new ApiError(404, `Không tìm thấy thông tin JD: ${missing.join(", ")}.`, "jd_not_found")
     }
-    return compareFromProfile(
-      ids.map((id) => findJd(id)!),
-      cv.family_id,
-      cv,
-    )
+    // Như backend: mỗi lượt so sánh được lưu vào lịch sử kèm kết quả
+    const result: CompareJdsResponse = {
+      ...compareFromProfile(
+        ids.map((id) => findJd(id)!),
+        cv.family_id,
+        cv,
+      ),
+      id: `cmp-${Date.now().toString(36)}`,
+      created_at: new Date().toISOString(),
+    }
+    compareHistory = [result, ...compareHistoryRows()]
+    return clone(result)
+  },
+
+  async listComparisonHistory(limit: number): Promise<CompareJdsResponse[]> {
+    await delay(300)
+    return clone(compareHistoryRows().slice(0, limit))
+  },
+
+  async deleteComparisonHistory(id: string): Promise<void> {
+    await delay(300)
+    compareHistory = compareHistoryRows().filter((r) => r.id !== id)
   },
 
   async listSavedJds(): Promise<SavedJd[]> {

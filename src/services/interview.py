@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 from src.agents.interview.graph import interview_agent
 from src.agents.interview.question_generator import generate_interview_questions
 from src.api.errors import AppError
+from src.config import get_settings
 from src.db.models import CvVersion, InterviewSession, InterviewTurn, JobDescription, User
 from src.services import notifications
 from src.services.guardrails import check_input_safety
@@ -549,4 +550,5 @@ def session_out(db: Session, session: InterviewSession, now: datetime) -> dict[s
         "pause_seconds_left": _pause_seconds_left(session, now),
         "turns": [turn_out(t) for t in turns if t.answered_at is not None],
         "created_at": session.created_at,
+        "voice_input": bool(get_settings().soniox_api_key.strip()),
     }

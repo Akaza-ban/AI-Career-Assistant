@@ -56,6 +56,7 @@ async def test_upload_creates_incrementing_versions_first_is_active(client):
     assert data["label"] == "v1.0"
     assert data["file_type"] == "pdf"
     assert data["page_count"] == 1
+    assert data["read_by_ocr"] is False
     assert data["is_active"] is True
     assert data["status"] == "ready"
     assert data["uploaded_at"].endswith("+00:00")
@@ -293,6 +294,7 @@ async def test_upload_scanned_pdf_triggers_ocr(client):
     assert data["file_type"] == "pdf"
     assert data["page_count"] == 1
     assert data["status"] == "ready"
+    assert data["read_by_ocr"] is True
 
     # Kiểm tra nội dung trích xuất qua text endpoint
     text_res = await client.get(f"/api/v1/cv/{data['id']}/text", headers=STUDENT)
@@ -301,29 +303,17 @@ async def test_upload_scanned_pdf_triggers_ocr(client):
 
 
 @pytest.mark.asyncio
-async def test_upload_image_cv_png_and_jpg_triggers_ocr(client):
-    """File ảnh PNG và JPG được OCR nhận diện và tạo phiên bản CV thành công."""
-    png_data = make_image(CV_TEXT, fmt="PNG")
-    res_png = await upload(client, "my_cv.png", png_data)
-    assert res_png.status_code == 201
-    png_json = res_png.json()
-    assert png_json["file_type"] == "png"
-    assert png_json["page_count"] == 1
-
-    file_res = await client.get(f"/api/v1/cv/{png_json['id']}/file", headers=STUDENT)
-    assert file_res.status_code == 200
-    assert file_res.headers["content-type"] == "image/png"
-
-    jpg_data = make_image(CV_TEXT, fmt="JPEG")
-    res_jpg = await upload(client, "my_cv.jpg", jpg_data)
-    assert res_jpg.status_code == 201
-    assert res_jpg.json()["file_type"] == "jpg"
+@pytest.mark.parametrize("name, fmt", [("my_cv.png", "PNG"), ("my_cv.jpg", "JPEG")])
+async def test_upload_image_cv_is_rejected(client, name, fmt):
+    """Chỉ nhận PDF / DOCX; ảnh chụp CV hãy lưu thành PDF (PDF scan vẫn được OCR)."""
+    res = await upload(client, name, make_image(CV_TEXT, fmt=fmt))
+    assert res.status_code == 415
+    assert res.json()["code"] == "unsupported_file_type"
 
 
 @pytest.mark.asyncio
-async def test_upload_blank_image_fails_extractable(client):
-    """Ảnh trắng không có chữ bị từ chối với lỗi cv_not_extractable."""
-    blank_png = make_image(None, fmt="PNG")
-    res = await upload(client, "blank.png", blank_png)
+async def test_upload_blank_scanned_pdf_fails_extractable(client):
+    """PDF scan trắng, OCR không đọc được chữ, bị từ chối với lỗi cv_not_extractable."""
+    res = await upload(client, "blank_scan.pdf", make_scanned_pdf(None))
     assert res.status_code == 422
     assert res.json()["code"] == "cv_not_extractable"

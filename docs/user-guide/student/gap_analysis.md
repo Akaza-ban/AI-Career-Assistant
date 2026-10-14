@@ -21,12 +21,12 @@ Route `/student/analysis` trong frontmatter theo hợp đồng Assistant. Giao d
 4. Ở mục **Chọn vị trí**, giữ tab **Gợi ý & đã lưu** để chọn một vị trí trong danh sách (vị trí gợi ý theo CV có nhãn Cao, Khá hoặc Trung bình; vị trí bạn lưu có nhãn Đã lưu). Bấm **Tìm thêm trong Thư viện JD** nếu chưa thấy vị trí cần tìm.
 5. Hoặc chuyển sang tab **Dán JD**: nhập **Tên vị trí**, dán **Mô tả công việc** và **Yêu cầu ứng viên** (bắt buộc, tổng cộng tối thiểu **50 từ**). Công ty, Cấp bậc, Ngành và **Quyền lợi và thông tin khác** là tùy chọn. Đánh dấu **Lưu JD này vào mục Đã lưu để dùng lại** nếu muốn.
 6. Kiểm tra dòng **Đã chọn** ở thanh cuối trang, rồi bấm **Bắt đầu phân tích**.
-7. Chờ các bước xử lý trên trang kết quả. Đọc **Mức phù hợp**, **Kỹ năng và bằng chứng**, **Gợi ý cải thiện** và **Nhận xét của AI**. Mục **Việc nên làm với CV** dẫn sang trình tối ưu CV và luyện phỏng vấn cho vị trí này.
+7. Chờ các bước xử lý trên trang kết quả. Đọc **Mức phù hợp**, **Kỹ năng và bằng chứng**, **Gợi ý cải thiện** và **Nhận xét của AI**. Ở **Kỹ năng và bằng chứng**, kỹ năng CNTT còn thiếu hoặc mới liệt kê có link **Lộ trình học trên roadmap.sh**; kỹ năng ngoài CNTT ghi "roadmap.sh chưa có lộ trình cho kỹ năng này". Mục **Việc nên làm với CV** dẫn sang trình tối ưu CV và luyện phỏng vấn cho vị trí này.
 8. Cập nhật CV dựa trên kinh nghiệm thật và phân tích lại với cùng JD để theo dõi thay đổi. Xem lại phiên cũ tại `/student/history`.
 
 ## So sánh nhiều vị trí
 
-Chọn **So với nhiều vị trí**, thêm từ 2 đến 3 vị trí vào mục **Vị trí so sánh** bằng nút **Chọn** trên từng dòng, rồi bấm **So sánh 2 vị trí** hoặc **So sánh 3 vị trí**. Trang **So sánh vị trí** cho biết kỹ năng chung, kỹ năng riêng của từng vị trí và vị trí nào gần CV nhất.
+Chọn **So với nhiều vị trí**, thêm từ 2 đến 3 vị trí vào mục **Vị trí so sánh** bằng nút **Chọn** trên từng dòng, rồi bấm **So sánh 2 vị trí** hoặc **So sánh 3 vị trí**. Trang **So sánh vị trí** cho biết kỹ năng chung, kỹ năng riêng của từng vị trí và vị trí nào gần CV nhất. Trong ô **Thiếu ở cả … vị trí**, bấm vào kỹ năng có mũi tên để mở lộ trình học trên roadmap.sh.
 
 ## Các nút và thành phần giao diện
 

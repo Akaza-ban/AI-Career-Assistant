@@ -86,3 +86,13 @@ def test_api_skill_roadmap_endpoint():
 def test_api_skill_roadmap_requires_sign_in():
     response = TestClient(app).get("/api/v1/skills/roadmap", params={"skill": "Python"})
     assert response.status_code == 401
+
+
+def test_common_missing_roadmaps_only_keeps_it_skills():
+    """Kỹ năng thiếu chung ở trang So sánh: chỉ kỹ năng roadmap.sh có lộ trình riêng mới có link."""
+    from src.api.analysis import _roadmaps
+
+    assert _roadmaps(["Docker", "Kế toán", "Git"]) == {
+        "Docker": "https://roadmap.sh/docker",
+        "Git": "https://roadmap.sh/git-github",
+    }

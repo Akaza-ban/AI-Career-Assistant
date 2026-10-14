@@ -293,6 +293,7 @@ function Room({ initial }: { initial: InterviewSession }) {
         <div className="min-w-0">
           <InterviewChat
             sessionId={initial.id}
+            voiceInput={initial.voice_input === true}
             total={total}
             turns={turns}
             current={finished ? null : current}

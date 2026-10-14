@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useState, type ReactNode } from "react"
-import { FileSearch, Loader2, MessagesSquare, ScanText, type LucideIcon } from "lucide-react"
+import { Clock, FileSearch, GitCompareArrows, Loader2, MessagesSquare, ScanText, type LucideIcon } from "lucide-react"
 
 import { EmptyState } from "@/components/common/empty-state"
 import { MatchBadge } from "@/components/common/match-badge"
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatPercent } from "@/lib/analysis"
 import { formatDate } from "@/lib/format"
 import { STAR_META, STAR_ORDER, formatScore, trendOf } from "@/lib/interview"
-import type { AnalysisRow, CvProgress, InterviewProgress, InterviewRow } from "@/lib/types"
+import type { AnalysisRow, CompareJdsResponse, CvProgress, InterviewProgress, InterviewRow } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -296,16 +296,16 @@ export function CvProgressBlock({ groups }: { groups: CvProgress[] }) {
   )
 }
 
-// ---------- Vùng "Dòng thời gian": gộp phỏng vấn và phân tích, chia theo tháng ----------
+// ---------- Vùng "Dòng thời gian": gộp phỏng vấn, phân tích và so sánh vị trí, chia theo tháng ----------
 
-export type TimelineFilter = "all" | "interview" | "analysis"
+export type TimelineFilter = "all" | "interview" | "analysis" | "compare"
 
 interface TimelineEntry {
   key: string
   at: string
   icon: LucideIcon
   kind: string
-  title: string
+  title: ReactNode
   score: ReactNode
   href: string
   linkLabel: string
@@ -359,6 +359,36 @@ function analysisEntry(row: AnalysisRow): TimelineEntry {
   }
 }
 
+/** Lượt so sánh đã lưu (bản vẽ LichSuSoSanhA): mở lại đúng kết quả lúc so sánh, không chạy lại AI. */
+function compareEntry(row: CompareJdsResponse & { id: string; created_at: string }): TimelineEntry {
+  const top = row.comparisons[0]
+  return {
+    key: `cmp-${row.id}`,
+    at: row.created_at,
+    icon: GitCompareArrows,
+    kind: "So sánh",
+    title: (
+      <>
+        {row.comparisons.length} vị trí{" "}
+        <span className="font-normal text-ink-3">· {row.comparisons.map((c) => c.title).join(", ")}</span>
+      </>
+    ),
+    score: top && (
+      <>
+        <span className="text-[13px] font-medium whitespace-nowrap text-ink-3">cao nhất</span>
+        {formatPercent(top.match_score)}%
+        <MatchBadge label={top.match_label} />
+      </>
+    ),
+    href: `/student/analysis/compare/${encodeURIComponent(row.id)}`,
+    linkLabel: "Xem",
+    reviewed: false,
+  }
+}
+
+const isSaved = (row: CompareJdsResponse): row is CompareJdsResponse & { id: string; created_at: string } =>
+  Boolean(row.id && row.created_at)
+
 function monthLabel(iso: string, now: Date): string {
   const d = new Date(iso)
   return d.getFullYear() === now.getFullYear() ? `Tháng ${d.getMonth() + 1}` : `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`
@@ -374,7 +404,7 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
     <li className="border-b border-line">
       <Link
         href={entry.href}
-        className="-mx-2.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[10px] px-2.5 py-3 text-ink transition-colors hover:bg-panel sm:grid-cols-[64px_120px_minmax(0,1fr)_150px_72px] sm:py-3.5"
+        className="-mx-2.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[10px] px-2.5 py-3 text-ink transition-colors hover:bg-panel sm:grid-cols-[64px_120px_minmax(0,1fr)_170px_72px] sm:py-3.5"
       >
         <span className="order-3 flex min-w-0 items-center gap-2 text-[13px] text-ink-3 sm:contents">
           <span className="text-ink-3 tabular-nums sm:order-1 sm:text-sm">{shortDate(entry.at)}</span>
@@ -410,17 +440,21 @@ export function Timeline({
   filter,
   interviews,
   analyses,
+  comparisons,
   reviewedIds,
 }: {
   filter: TimelineFilter
   interviews: InterviewRow[]
   analyses: AnalysisRow[]
+  comparisons: CompareJdsResponse[]
   reviewedIds: Set<string>
 }) {
   const [limit, setLimit] = useState(PAGE_SIZE)
+  const show = (kind: TimelineFilter) => filter === "all" || filter === kind
   const entries = [
-    ...(filter === "analysis" ? [] : interviews.map((r) => interviewEntry(r, reviewedIds.has(r.id)))),
-    ...(filter === "interview" ? [] : analyses.map(analysisEntry)),
+    ...(show("interview") ? interviews.map((r) => interviewEntry(r, reviewedIds.has(r.id))) : []),
+    ...(show("analysis") ? analyses.map(analysisEntry) : []),
+    ...(show("compare") ? comparisons.filter(isSaved).map(compareEntry) : []),
   ].sort((a, b) => b.at.localeCompare(a.at))
 
   if (entries.length === 0) {
@@ -428,6 +462,7 @@ export function Timeline({
       all: { icon: ScanText, title: "Chưa có hoạt động nào" },
       interview: { icon: MessagesSquare, title: "Chưa có buổi phỏng vấn nào" },
       analysis: { icon: FileSearch, title: "Chưa có lượt phân tích nào" },
+      compare: { icon: GitCompareArrows, title: "Chưa có lượt so sánh vị trí nào" },
     }[filter]
     return <EmptyState icon={empty.icon} title={empty.title} className="border-b border-line" />
   }
@@ -454,6 +489,12 @@ export function Timeline({
           </ul>
         </section>
       ))}
+      {visible.some((e) => e.key.startsWith("cmp-")) && (
+        <p className="mt-3.5 flex items-start gap-2 text-[13px] text-ink-3">
+          <Clock className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          Lượt so sánh mở lại đúng kết quả đã lưu, không phải chờ AI chạy lại. Xoá lượt so sánh ở trang kết quả.
+        </p>
+      )}
       {entries.length > limit && (
         <div className="mt-5 flex justify-center">
           <Button

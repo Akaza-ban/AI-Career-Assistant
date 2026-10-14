@@ -2,18 +2,22 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import { AlertCircle, ChevronRight, Columns3, Loader2 } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
+import { AlertCircle, ChevronRight, Clock, Columns3, Loader2, RotateCcw, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { AiProgress } from "@/components/common/ai-progress"
+import { ConfirmDialog } from "@/components/common/confirm-dialog"
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
 import { CompareComments, CompareScores, CompareSkills } from "@/components/student/analysis/compare-sections"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
+import { formatDate, formatTime } from "@/lib/format"
 import { COMPARE_MAX_JDS, COMPARE_MIN_JDS, type CompareJdsResponse } from "@/lib/types"
+import { useApi } from "@/lib/use-api"
 
 const STEPS = ["Đọc CV", "Đối chiếu từng vị trí", "Tìm kỹ năng thiếu chung", "Viết nhận xét"]
 const STEP_MS = 1400
@@ -29,6 +33,14 @@ function readCache(key: string): CompareJdsResponse | null {
     return raw ? (JSON.parse(raw) as CompareJdsResponse) : null
   } catch {
     return null
+  }
+}
+
+function clearCache(key: string) {
+  try {
+    sessionStorage.removeItem(key)
+  } catch {
+    // Không xoá được thì trang So sánh dùng lại kết quả cũ trong phiên.
   }
 }
 
@@ -137,12 +149,101 @@ function Running({ count }: { count: number }) {
   )
 }
 
-function CompareView({ data, cvId, changeHref }: { data: CompareJdsResponse; cvId: string; changeHref: string }) {
+/** Lượt so sánh đã lưu (bản vẽ SoSanhTuLichSu), mở từ Dòng thời gian ở Lịch sử & tiến bộ. Không chạy lại AI. */
+export function SavedCompare({ id }: { id: string }) {
+  const fetchSaved = useCallback(
+    () => api.listComparisonHistory(50).then((rows) => rows.find((r) => r.id === id) ?? null),
+    [id],
+  )
+  const { data, error, reload } = useApi(fetchSaved)
+
+  if (error) {
+    return (
+      <div className="grid gap-14">
+        <PageHeader title="So sánh vị trí" />
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được lượt so sánh"
+          description={error.message}
+          action={
+            <Button size="brand" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+  if (data === undefined) {
+    return (
+      <div className="grid gap-14" aria-busy="true" aria-label="Đang tải lượt so sánh">
+        <Skeleton className="mt-12 h-[46px] w-72" />
+        <Skeleton className="h-[160px] rounded-card" />
+        <Skeleton className="h-[320px] rounded-card" />
+      </div>
+    )
+  }
+  if (data === null || !data.cv_version_id) {
+    return (
+      <div className="grid gap-14">
+        <PageHeader title="So sánh vị trí" />
+        <EmptyState
+          icon={Columns3}
+          title="Không tìm thấy lượt so sánh này"
+          description="Lượt so sánh có thể đã bị xoá khỏi lịch sử."
+          action={
+            <Button size="brand" nativeButton={false} render={<Link href="/student/history" />}>
+              Về Lịch sử & tiến bộ
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+  const jdIds = data.comparisons.map((c) => c.jd_id)
+  const changeHref = `/student/analysis/new?mode=multi&cv=${encodeURIComponent(data.cv_version_id)}&jd=${jdIds.map(encodeURIComponent).join(",")}`
+  return <CompareView data={data} cvId={data.cv_version_id} changeHref={changeHref} saved={{ id, jdIds }} />
+}
+
+function CompareView({
+  data,
+  cvId,
+  changeHref,
+  saved,
+}: {
+  data: CompareJdsResponse
+  cvId: string
+  changeHref: string
+  /** Mở lại từ lịch sử: thay "Đổi CV" bằng "So sánh lại" và nút xoá. */
+  saved?: { id: string; jdIds: string[] }
+}) {
   const router = useRouter()
   const [starting, setStarting] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const top = data.comparisons[0]
   const n = data.comparisons.length
   const cvLine = [data.cv_name, data.cv_label].filter(Boolean).join(" · ")
+  const savedAt = saved && data.created_at ? `${formatTime(data.created_at)}, ${formatDate(data.created_at)}` : null
+
+  // So sánh lại với CV và JD hiện tại: bỏ kết quả cũ trong phiên để trang So sánh gọi AI chạy lại.
+  function compareAgain() {
+    if (!saved) return
+    const ids = [...new Set(saved.jdIds)]
+    clearCache(cacheKey(cvId, ids))
+    router.push(`/student/analysis/compare?cv=${encodeURIComponent(cvId)}&jd=${ids.map(encodeURIComponent).join(",")}`)
+  }
+
+  async function remove() {
+    if (!saved) return
+    try {
+      await api.deleteComparisonHistory(saved.id)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không xoá được. Hãy thử lại.")
+      throw err
+    }
+    toast.success("Đã xoá lượt so sánh khỏi lịch sử.")
+    router.push("/student/history")
+  }
 
   // Phân tích chi tiết vị trí #1 với đúng CV đã so sánh.
   async function analyzeTop() {
@@ -183,18 +284,49 @@ function CompareView({ data, cvId, changeHref }: { data: CompareJdsResponse; cvI
     <div className="grid grid-cols-[minmax(0,1fr)] gap-14 md:gap-16">
       <PageHeader
         title={`So sánh ${n} vị trí`}
-        description={cvLine || undefined}
+        description={
+          savedAt ? (
+            <>
+              {cvLine}
+              <span className="mt-2 flex items-center gap-2 text-sm text-ink-3">
+                <Clock className="size-[15px]" strokeWidth={1.75} aria-hidden />
+                Kết quả đã lưu lúc {savedAt}
+              </span>
+            </>
+          ) : (
+            cvLine || undefined
+          )
+        }
         actions={
           <>
-            <Button
-              variant="outline"
-              size="brand"
-              className="border-line-strong bg-card shadow-xs"
-              nativeButton={false}
-              render={<Link href={changeHref} />}
-            >
-              Đổi CV
-            </Button>
+            {saved ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="brand"
+                  className="w-11 border-line-strong bg-card px-0 text-ink-2 shadow-xs hover:text-bad"
+                  aria-label="Xoá khỏi lịch sử"
+                  title="Xoá khỏi lịch sử"
+                  onClick={() => setDeleting(true)}
+                >
+                  <Trash2 aria-hidden />
+                </Button>
+                <Button variant="outline" size="brand" className="border-line-strong bg-card shadow-xs" onClick={compareAgain}>
+                  <RotateCcw aria-hidden />
+                  So sánh lại
+                </Button>
+              </>
+            ) : (
+              <Button
+                variant="outline"
+                size="brand"
+                className="border-line-strong bg-card shadow-xs"
+                nativeButton={false}
+                render={<Link href={changeHref} />}
+              >
+                Đổi CV
+              </Button>
+            )}
             <Button size="brand" onClick={analyzeTop} disabled={starting}>
               {starting && <Loader2 className="animate-spin" aria-hidden />}
               Phân tích chi tiết vị trí #1
@@ -226,6 +358,18 @@ function CompareView({ data, cvId, changeHref }: { data: CompareJdsResponse; cvI
           className="border-t border-line pt-6"
         />
       </div>
+      {saved && (
+        <ConfirmDialog
+          open={deleting}
+          onOpenChange={setDeleting}
+          icon={Trash2}
+          destructive
+          title="Xoá lượt so sánh này?"
+          description={`Lượt so sánh ${n} vị trí${data.created_at ? ` ngày ${formatDate(data.created_at)}` : ""} sẽ biến mất khỏi lịch sử. Các lượt phân tích và JD đã lưu không bị ảnh hưởng.`}
+          confirmLabel="Xoá"
+          onConfirm={remove}
+        />
+      )}
     </div>
   )
 }

@@ -286,6 +286,15 @@ export const api = {
   /** So sánh CV với 2–3 JD qua LLM; kết quả sắp theo match_score giảm dần. */
   compareJds: (body: CompareJdsRequest): Promise<CompareJdsResponse> =>
     via("gap", () => mockApi.compareJds(body), () => request("/jd/compare", json(body))),
+  /** Các lượt so sánh đã lưu, mới nhất trước; mỗi lượt giữ nguyên kết quả lúc so sánh. */
+  listComparisonHistory: (limit = 50): Promise<CompareJdsResponse[]> =>
+    via("gap", () => mockApi.listComparisonHistory(limit), () => request(`/jd/compare/history?limit=${limit}`)),
+  deleteComparisonHistory: (id: string): Promise<void> =>
+    via(
+      "gap",
+      () => mockApi.deleteComparisonHistory(id),
+      () => request(`/jd/compare/history/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    ),
   createGapAnalysis: (body: CreateGapAnalysisRequest): Promise<GapAnalysis> =>
     via("gap", () => mockApi.createGapAnalysis(body), () => request("/gap-analysis", json(body))),
   getGapAnalysis: (id: string): Promise<GapAnalysis> =>

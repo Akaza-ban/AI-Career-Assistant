@@ -18,10 +18,12 @@ CV_MAX_BYTES = 5 * 1024 * 1024
 CV_MEDIA_TYPES = {
     "pdf": "application/pdf",
     "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    # Chỉ để mở lại file ảnh đã tải lên trước đây; tải mới chỉ nhận UPLOAD_TYPES (PDF scan vẫn được OCR).
     "png": "image/png",
     "jpg": "image/jpeg",
     "jpeg": "image/jpeg",
 }
+UPLOAD_TYPES = ("pdf", "docx")
 # Ít hơn ngưỡng này coi như không có lớp văn bản (ví dụ PDF scan ảnh) — US-SV-01 AC2
 MIN_TEXT_CHARS = 50
 
@@ -31,13 +33,15 @@ class ExtractedCv:
     file_type: str
     text: str
     page_count: int | None
+    # True khi chữ được đọc bằng OCR (PDF scan): kết quả phân tích có thể kém chính xác hơn
+    read_by_ocr: bool = False
 
 
 def file_type_of(file_name: str) -> str:
-    """Trả về "pdf" | "docx" | "png" | "jpg" | "jpeg" hoặc báo lỗi 415 nếu sai định dạng (US-SV-01 AC3)."""
+    """Trả về "pdf" | "docx" hoặc báo lỗi 415 nếu sai định dạng (US-SV-01 AC3)."""
     ext = Path(file_name).suffix.lower().lstrip(".")
-    if ext not in CV_MEDIA_TYPES:
-        raise AppError(415, "Chỉ hỗ trợ file PDF, DOCX hoặc ảnh (PNG, JPG, JPEG).", "unsupported_file_type")
+    if ext not in UPLOAD_TYPES:
+        raise AppError(415, "Chỉ hỗ trợ file PDF hoặc DOCX.", "unsupported_file_type")
     return ext
 
 
@@ -220,7 +224,8 @@ def _extract_docx(data: bytes) -> str:
 
 
 def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
-    """Trích văn bản từ CV; tự động kích hoạt OCR khi là file ảnh hoặc PDF scan không có lớp text."""
+    """Trích văn bản từ CV; tự động kích hoạt OCR khi là PDF scan không có lớp text."""
+    read_by_ocr = False
     try:
         if file_type == "pdf":
             text, page_count = _extract_pdf(data)
@@ -231,10 +236,7 @@ def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
                 if len("".join(ocr_text.split())) >= MIN_TEXT_CHARS:
                     text = ocr_text
                     page_count = ocr_pages or page_count
-        elif file_type in ("png", "jpg", "jpeg"):
-            logger.info("Tải lên CV định dạng ảnh (%s). Tiến hành quét OCR...", file_type)
-            text = ocr.ocr_image_bytes(data)
-            page_count = 1
+                    read_by_ocr = True
         else:
             text, page_count = _extract_docx(data), None
     except AppError:
@@ -252,7 +254,7 @@ def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
             "Không trích xuất được nội dung CV. Hãy đảm bảo file có chữ rõ ràng hoặc tải lại bản có lớp văn bản.",
             "cv_not_extractable",
         )
-    return ExtractedCv(file_type=file_type, text=text, page_count=page_count)
+    return ExtractedCv(file_type=file_type, text=text, page_count=page_count, read_by_ocr=read_by_ocr)
 
 
 def build_docx(document: dict, developing_title: str) -> bytes:

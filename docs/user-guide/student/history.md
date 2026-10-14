@@ -15,8 +15,8 @@ Trang **Lịch sử & tiến bộ** tổng hợp các buổi phỏng vấn thử
 
 1. Mở `/student/history` bằng tài khoản sinh viên. Trên thanh bên, mục này tên là **Tiến bộ**.
 2. Xem mục **Tiến bộ**: **Điểm phỏng vấn** (thang 0–5) và **Độ khớp CV** (0–100%) của từng vị trí, kèm mức tăng hoặc giảm so với lần đầu. Điểm chỉ so sánh trong cùng một vị trí.
-3. Ở đầu trang, chọn bộ lọc **Tất cả**, **Phỏng vấn** hoặc **Phân tích CV** để lọc mục **Dòng thời gian**.
-4. Trong **Dòng thời gian**, các hoạt động được nhóm theo tháng. Với buổi phỏng vấn, bấm **Báo cáo** để mở `/student/interview/{id}/report`. Với lượt phân tích, bấm **Xem** để mở kết quả tại `/student/analysis/{id}`.
+3. Ở đầu trang, chọn bộ lọc **Tất cả**, **Phỏng vấn**, **Phân tích CV** hoặc **So sánh vị trí** để lọc mục **Dòng thời gian**.
+4. Trong **Dòng thời gian**, các hoạt động được nhóm theo tháng. Với buổi phỏng vấn, bấm **Báo cáo** để mở `/student/interview/{id}/report`. Với lượt phân tích, bấm **Xem** để mở kết quả tại `/student/analysis/{id}`. Với lượt so sánh vị trí, bấm **Xem** để mở lại đúng kết quả đã lưu tại `/student/analysis/compare/{id}` mà không phải chờ AI chạy lại; ở trang đó có nút **So sánh lại** (chạy lại với CV và JD hiện tại) và nút thùng rác để **Xoá khỏi lịch sử**.
 5. Nhãn **Cố vấn đã nhận xét** cho biết buổi phỏng vấn đó đã có góp ý của cố vấn.
 6. Nếu chưa có hoạt động nào, trang gợi ý **Phân tích CV với JD** hoặc **Luyện phỏng vấn** để bắt đầu.
 
@@ -24,7 +24,7 @@ Trang **Lịch sử & tiến bộ** tổng hợp các buổi phỏng vấn thử
 
 Các selector dưới đây đã được gắn vào giao diện. Trang không có ô tìm kiếm, bộ lọc vị trí hay bộ lọc khoảng thời gian; chỉ lọc theo loại hoạt động.
 
-- **Bộ lọc loại hoạt động**: Selector `[data-agent-target="history-type-filter"]`. Chọn **Tất cả**, **Phỏng vấn** hoặc **Phân tích CV**.
+- **Bộ lọc loại hoạt động**: Selector `[data-agent-target="history-type-filter"]`. Chọn **Tất cả**, **Phỏng vấn**, **Phân tích CV** hoặc **So sánh vị trí**.
 - **Dòng thời gian**: Selector `[data-agent-target="history-session-list"]`. Danh sách buổi phỏng vấn và lượt phân tích theo tháng, có nút **Báo cáo** hoặc **Xem** để mở chi tiết.
 
 ## Câu hỏi thường gặp (FAQ)

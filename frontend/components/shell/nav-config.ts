@@ -83,6 +83,12 @@ export const studentShell: ShellConfig = {
       parents: () => [analysisRoot],
     },
     {
+      // Lượt so sánh đã lưu, mở từ Dòng thời gian
+      pattern: /^\/student\/analysis\/compare\/[^/]+$/,
+      title: "So sánh",
+      parents: () => [{ label: "Lịch sử & tiến bộ", href: "/student/history" }],
+    },
+    {
       pattern: /^\/student\/analysis\/(?!new$|compare$)[^/]+$/,
       title: "Kết quả phân tích",
       parents: () => [analysisRoot],

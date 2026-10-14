@@ -296,3 +296,13 @@ async def test_start_interview_jd_only_without_cv(client, clock):
     assert data["cv_file_name"] is None
     assert data["current_question"]["index"] == 1
     assert "Data Analyst Intern" in data["current_question"]["text"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("key", "expected"), [("", False), ("  ", False), ("sk-test", True)])
+async def test_session_reports_voice_input_from_soniox_key(client, cv, clock, monkeypatch, key, expected):
+    """Frontend ẩn nút "Nói câu trả lời" khi server chưa cấu hình SONIOX_API_KEY."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "soniox_api_key", key)
+    assert (await start(client, cv)).json()["voice_input"] is expected

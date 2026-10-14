@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { API_BASE_URL } from "./config"
+import { API_BASE_URL, isLive } from "./config"
+
+/** Chế độ mock: không có micro / Soniox, "nói" bằng cách gõ dần câu trả lời mẫu này. */
+const MOCK_SPEECH =
+  "Ở kỳ thực tập vừa rồi, nhóm em cần làm lại trang quản trị đơn hàng vì trang cũ tải rất chậm. Em phụ trách phần " +
+  "giao diện, nên đã tách các bảng lớn thành component nhỏ, thêm phân trang và lưu bộ lọc trên URL. Sau hai tuần, " +
+  "thời gian tải trang giảm khoảng 40% và đội vận hành báo lỗi ít hẳn. Em rút ra là nên đo hiệu năng trước khi sửa."
+const MOCK_WORD_MS = 140
 
 interface UseSonioxSttOptions {
   sessionId?: string
@@ -38,12 +45,18 @@ export function useSonioxStt(options: UseSonioxSttOptions = {}) {
   const isReadyRef = useRef(false)
   const confirmedTextRef = useRef("")
   const provisionalTextRef = useRef("")
+  const mockTimerRef = useRef<number | null>(null)
 
   const stop = useCallback(() => {
     setIsRecording(false)
     setIsConnecting(false)
     setVolume(0)
     isReadyRef.current = false
+    if (mockTimerRef.current !== null) {
+      window.clearInterval(mockTimerRef.current)
+      window.clearTimeout(mockTimerRef.current)
+      mockTimerRef.current = null
+    }
 
     if (wsRef.current) {
       if (wsRef.current.readyState === WebSocket.OPEN) {
@@ -83,6 +96,24 @@ export function useSonioxStt(options: UseSonioxSttOptions = {}) {
     confirmedTextRef.current = ""
     provisionalTextRef.current = ""
     setSpeechText("")
+
+    if (!isLive("interview")) {
+      toast.info("Bản demo: giọng nói được mô phỏng bằng một câu trả lời mẫu.")
+      const words = MOCK_SPEECH.split(" ")
+      mockTimerRef.current = window.setTimeout(() => {
+        setIsConnecting(false)
+        setIsRecording(true)
+        let shown = 0
+        mockTimerRef.current = window.setInterval(() => {
+          shown += 1
+          const text = words.slice(0, shown).join(" ")
+          setSpeechText(text)
+          onTranscriptUpdate?.(text)
+          if (shown >= words.length) stop()
+        }, MOCK_WORD_MS)
+      }, 700)
+      return
+    }
 
     // 1. Xin quyền micro từ trình duyệt
     let stream: MediaStream

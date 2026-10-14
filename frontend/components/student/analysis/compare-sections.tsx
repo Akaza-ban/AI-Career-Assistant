@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type CSSProperties } from "react"
-import { ChevronDown, TriangleAlert } from "lucide-react"
+import { ArrowUpRight, ChevronDown, TriangleAlert } from "lucide-react"
 
 import { MatchBadge } from "@/components/common/match-badge"
 import { ScoreRing } from "@/components/common/score-ring"
@@ -163,6 +163,8 @@ export function CompareSkills({ data }: { data: CompareJdsResponse }) {
     .sort((a, b) => b.weight - a.weight || a.order - b.order)
   const showNone = rows.some((r) => r.states.includes("none"))
   const common = data.common_missing_skills
+  const roadmaps = data.common_missing_roadmaps ?? {}
+  const hasRoadmap = common.some((s) => roadmaps[s])
 
   return (
     <Zone id="skills-compare-title" title="Kỹ năng" aside={<Legend showNone={showNone} />}>
@@ -235,13 +237,30 @@ export function CompareSkills({ data }: { data: CompareJdsResponse }) {
           <ul className="flex flex-wrap gap-2">
             {common.map((s) => (
               <li key={s}>
-                <Badge variant="warn" className="h-[22px] px-2">
-                  {s}
-                </Badge>
+                {roadmaps[s] ? (
+                  <a
+                    href={roadmaps[s]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`Lộ trình học ${s} trên roadmap.sh`}
+                    className="group/rm rounded-md"
+                  >
+                    <Badge variant="warn" className="h-[22px] gap-1 px-2 group-hover/rm:underline">
+                      {s}
+                      <ArrowUpRight className="size-3" strokeWidth={2} aria-hidden />
+                    </Badge>
+                  </a>
+                ) : (
+                  <Badge variant="warn" className="h-[22px] px-2">
+                    {s}
+                  </Badge>
+                )}
               </li>
             ))}
           </ul>
-          <span className="text-sm text-ink-2 sm:ml-auto">Nên ưu tiên học trước</span>
+          <span className="text-sm text-ink-2 sm:ml-auto">
+            {hasRoadmap ? "Nên ưu tiên học trước, bấm kỹ năng để xem lộ trình" : "Nên ưu tiên học trước"}
+          </span>
         </div>
       ) : (
         <p className="mt-[22px] rounded-[14px] bg-panel px-[18px] py-4 text-sm text-ink-2">

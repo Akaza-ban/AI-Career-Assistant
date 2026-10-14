@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react"
 import {
+  ArrowUpRight,
   ChevronRight,
   FileSearch,
   FileUp,
@@ -215,7 +216,7 @@ function nextStepTask(step: NextStep): TaskCardProps {
         icon: Upload,
         kind: kindOf("Tải CV"),
         title: "Tải CV đầu tiên của bạn",
-        meta: "PDF, DOCX hoặc ảnh, tối đa 5MB",
+        meta: "PDF hoặc DOCX, tối đa 5MB",
         progress,
         footnote: "Cần CV để đối chiếu với JD",
         action: { label: "Tải CV lên", href: "/student/cv" },
@@ -530,7 +531,22 @@ export function SkillsToLearn({ skills }: { skills: StudentOverview["skills_to_l
             const meta = IMPORTANCE_META[skill.importance]
             return (
               <li key={skill.name} className="flex items-center gap-3 border-b border-line py-3 sm:gap-3.5">
-                <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink">{skill.name}</span>
+                {skill.roadmap_url ? (
+                  // Như ô "Thiếu ở cả … vị trí" ở trang So sánh: kỹ năng có ↗ mở lộ trình học trên roadmap.sh
+                  <a
+                    href={skill.roadmap_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Xem lộ trình học trên roadmap.sh"
+                    aria-label={`${skill.name}: lộ trình học trên roadmap.sh`}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-[15px] font-medium text-ink transition-colors hover:text-blue"
+                  >
+                    <span className="truncate">{skill.name}</span>
+                    <ArrowUpRight className="size-3.5 shrink-0 text-ink-3" strokeWidth={2} aria-hidden />
+                  </a>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-[15px] font-medium text-ink">{skill.name}</span>
+                )}
                 <Bar value={meta.weight / 3} />
                 <span className="w-[64px] shrink-0 text-right text-[13px] text-ink-3">{meta.label}</span>
               </li>

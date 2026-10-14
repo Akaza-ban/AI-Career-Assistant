@@ -11,19 +11,13 @@ import { formatBytes } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-export type CvPreview =
-  | { kind: "pdf"; url: string }
-  | { kind: "image"; url: string }
-  | { kind: "text"; text: string }
-  | { kind: "unavailable" }
+export type CvPreview = { kind: "pdf"; url: string } | { kind: "text"; text: string } | { kind: "unavailable" }
 
-const IMAGE_TYPES = ["png", "jpg", "jpeg"]
-
-// Trình duyệt hiển thị được PDF và ảnh; DOCX (hoặc file không có, ví dụ ở chế độ mock) thì xem bằng văn bản đã trích.
+// Trình duyệt hiển thị được PDF; DOCX (hoặc PDF không có file, ví dụ ở chế độ mock) thì xem bằng văn bản đã trích.
 export async function loadPreview(cv: CvVersion): Promise<CvPreview> {
-  if (cv.file_type === "pdf" || IMAGE_TYPES.includes(cv.file_type)) {
+  if (cv.file_type === "pdf") {
     const blob = await api.getCvFile(cv.id)
-    if (blob) return { kind: cv.file_type === "pdf" ? "pdf" : "image", url: URL.createObjectURL(blob) }
+    if (blob) return { kind: "pdf", url: URL.createObjectURL(blob) }
   }
   const text = await api.getCvText(cv.id)
   return text !== null ? { kind: "text", text } : { kind: "unavailable" }
@@ -36,7 +30,7 @@ export function CvPreviewBody({ cv }: { cv: CvVersion }) {
 
   useEffect(() => {
     return () => {
-      if (data?.kind === "pdf" || data?.kind === "image") URL.revokeObjectURL(data.url)
+      if (data?.kind === "pdf") URL.revokeObjectURL(data.url)
     }
   }, [data])
 
@@ -61,14 +55,6 @@ export function CvPreviewBody({ cv }: { cv: CvVersion }) {
   }
   if (data.kind === "pdf") {
     return <iframe src={`${data.url}#view=FitH`} title={`Xem nhanh ${cv.file_name}`} className="size-full rounded-lg bg-surface" />
-  }
-  if (data.kind === "image") {
-    return (
-      <div className="grid h-full place-items-center overflow-auto rounded-lg bg-surface p-4">
-        {/* eslint-disable-next-line @next/next/no-img-element -- ảnh từ blob URL cục bộ */}
-        <img src={data.url} alt={`Xem nhanh ${cv.file_name}`} className="max-h-full max-w-full rounded object-contain shadow-sm" />
-      </div>
-    )
   }
   if (data.kind === "text") {
     return (

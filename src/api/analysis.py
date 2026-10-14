@@ -35,6 +35,12 @@ from src.services.roadmap import get_roadmap_info
 router = APIRouter()
 
 
+def _roadmaps(skills: list[str]) -> dict[str, str]:
+    """Link roadmap.sh cho các kỹ năng có lộ trình riêng (bỏ qua kỹ năng ngoài CNTT)."""
+    infos = {skill: get_roadmap_info(skill) for skill in skills}
+    return {skill: info["roadmap_url"] for skill, info in infos.items() if info["is_it_supported"]}
+
+
 @router.post(
     "/jd/compare",
     response_model=CompareJDsResponse,
@@ -125,6 +131,7 @@ async def compare_jds(
         total_compared=len(result["comparisons"]),
         comparisons=result["comparisons"],
         common_missing_skills=result["common_missing_skills"],
+        common_missing_roadmaps=_roadmaps(result["common_missing_skills"]),
         created_at=history_record.created_at,
     )
 
@@ -156,6 +163,7 @@ def list_comparison_history(
             total_compared=r.total_compared,
             comparisons=r.comparisons,
             common_missing_skills=r.common_missing_skills,
+            common_missing_roadmaps=_roadmaps(r.common_missing_skills),
             created_at=r.created_at,
         )
         for r in records

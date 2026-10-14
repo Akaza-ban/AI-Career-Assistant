@@ -25,6 +25,7 @@ const FILTERS: { value: TimelineFilter; label: string }[] = [
   { value: "all", label: "Tất cả" },
   { value: "interview", label: "Phỏng vấn" },
   { value: "analysis", label: "Phân tích CV" },
+  { value: "compare", label: "So sánh vị trí" },
 ]
 
 // Tên loại phiên trợ lý AI có thể gửi tới, quy về bộ lọc dòng thời gian.
@@ -37,6 +38,10 @@ const FILTER_ALIASES: Record<string, TimelineFilter> = {
   analysis: "analysis",
   analyses: "analysis",
   gap_analysis: "analysis",
+  compare: "compare",
+  comparison: "compare",
+  comparisons: "compare",
+  jd_compare: "compare",
 }
 
 // Bản vẽ TienBo. Điểm phỏng vấn thang 0–5, chỉ so sánh trong cùng vị trí (PRD mục 5.1).
@@ -45,6 +50,9 @@ export function StudentHistory() {
   const { data: progress, error, reload } = useApi(fetchProgress)
   // Chỉ để gắn badge "Cố vấn đã nhận xét"; lỗi thì bỏ qua badge.
   const { data: sharing } = useApi(api.getSharing)
+  // Lượt so sánh vị trí đã lưu; lỗi thì dòng thời gian chỉ thiếu các lượt này.
+  const fetchComparisons = useCallback(() => api.listComparisonHistory(50), [])
+  const { data: comparisons } = useApi(fetchComparisons)
   const [filter, setFilter] = useState<TimelineFilter>("all")
 
   // Trợ lý AI chỉ lọc được theo loại phiên, vì trang không có ô tìm kiếm hay lọc vị trí, thời gian.
@@ -87,7 +95,7 @@ export function StudentHistory() {
     )
   }
 
-  const noActivity = progress !== undefined && progress.positions.length === 0
+  const noActivity = progress !== undefined && progress.positions.length === 0 && !comparisons?.length
 
   return (
     <div className="grid gap-9 md:gap-11">
@@ -128,6 +136,7 @@ export function StudentHistory() {
                 filter={filter}
                 interviews={progress.interviews}
                 analyses={progress.analyses}
+                comparisons={comparisons ?? []}
                 reviewedIds={reviewedIds}
               />
             </div>

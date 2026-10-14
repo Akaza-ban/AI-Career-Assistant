@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from src.api.errors import AppError
 from src.db.models import CvVersion, GapAnalysis, InterviewSession, InterviewTurn, JobDescription, User
 from src.services import cv_versions, interview
+from src.services.roadmap import get_roadmap_info
 from src.services.skill_matching import match_label
 
 RECENT_LIMIT = 5
@@ -193,6 +194,12 @@ def _next_step(
     }
 
 
+def _roadmap_url(skill: str) -> str | None:
+    """Link roadmap.sh khi kỹ năng có lộ trình riêng (kỹ năng CNTT); kỹ năng khác không có link."""
+    info = get_roadmap_info(skill)
+    return info["roadmap_url"] if info["is_it_supported"] else None
+
+
 def _skills_to_learn(analysis: GapAnalysis | None, jds: dict[str, JobDescription]) -> dict[str, Any] | None:
     """Kỹ năng "Thiếu" trong lần phân tích gần nhất, ưu tiên nhóm Bắt buộc."""
     if analysis is None:
@@ -202,7 +209,10 @@ def _skills_to_learn(analysis: GapAnalysis | None, jds: dict[str, JobDescription
     return {
         "analysis_id": analysis.id,
         "jd": interview.jd_out(jds[analysis.jd_id]),
-        "skills": [{"name": r["skill"], "importance": r["importance"]} for r in missing[:SKILLS_LIMIT]],
+        "skills": [
+            {"name": r["skill"], "importance": r["importance"], "roadmap_url": _roadmap_url(r["skill"])}
+            for r in missing[:SKILLS_LIMIT]
+        ],
         "total_missing": len(missing),
     }
 

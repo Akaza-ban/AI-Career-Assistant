@@ -94,8 +94,11 @@ export function ResultSkills({ analysis }: { analysis: GapAnalysis }) {
 function SkillRow({ row }: { row: RequirementAssessment }) {
   const status = STATUS_META[row.status]
   const meta = [row.evidence ? `Mục ${row.evidence.section_label}` : null, row.note].filter(Boolean).join(" · ")
-  // Chỉ gợi ý lộ trình cho kỹ năng còn thiếu hoặc mới liệt kê, và chỉ khi roadmap.sh có lộ trình riêng cho kỹ năng đó.
-  const roadmap = row.status !== "matched" && row.is_it_supported !== false ? row.roadmap_url : null
+  // Chỉ gợi ý lộ trình cho kỹ năng còn thiếu hoặc mới liệt kê. roadmap.sh chỉ có lộ trình cho kỹ năng CNTT; kỹ năng
+  // khác backend trả về trang danh sách chung, khi đó chỉ ghi một dòng ngắn.
+  const gap = row.status !== "matched" && Boolean(row.roadmap_url)
+  const supported = row.is_it_supported ?? !row.roadmap_url?.endsWith("/roadmaps")
+  const roadmap = gap && supported ? row.roadmap_url : null
 
   return (
     <li className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 border-b border-line py-3.5 sm:grid-cols-[200px_minmax(0,1fr)_auto] sm:gap-x-6">
@@ -117,6 +120,9 @@ function SkillRow({ row }: { row: RequirementAssessment }) {
             Lộ trình học trên roadmap.sh
             <ArrowUpRight className="size-3.5" strokeWidth={2} aria-hidden />
           </a>
+        )}
+        {gap && !supported && (
+          <span className="mt-1 block text-[13px] leading-5 text-ink-3">roadmap.sh chưa có lộ trình cho kỹ năng này.</span>
         )}
       </span>
       <Badge variant={status.badge} className="mt-0.5 h-[22px] px-2 sm:col-start-3 sm:row-start-1">

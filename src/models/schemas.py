@@ -106,6 +106,9 @@ class CvVersionResponse(BaseModel):
     file_type: Literal["pdf", "docx", "png", "jpg", "jpeg"] = Field(..., description="Định dạng file")
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
+    read_by_ocr: bool = Field(
+        default=False, description="Chỉ có ở phản hồi tải lên: chữ được đọc bằng OCR vì file là PDF scan"
+    )
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
     status: Literal["processing", "ready", "failed"] = Field(default="ready", description="Trạng thái xử lý")
     error_message: str | None = Field(default=None, description="Lý do khi status = failed")
@@ -299,7 +302,10 @@ class CompareJDsResponse(BaseModel):
     common_missing_skills: list[str] = Field(
         default_factory=list, description="Các kỹ năng còn thiếu chung ở tất cả các JD được chọn"
     )
-    created_at: datetime | None = Field(default=None, description="Thời gian thực hiện so sánh")
+    common_missing_roadmaps: dict[str, str] = Field(
+        default_factory=dict, description="Kỹ năng thiếu chung → link roadmap.sh (chỉ kỹ năng có lộ trình riêng)"
+    )
+    created_at: UtcDatetime | None = Field(default=None, description="Thời gian thực hiện so sánh")
 
 
 class CreateGapAnalysisRequest(BaseModel):
@@ -618,6 +624,9 @@ class InterviewSessionResponse(BaseModel):
     pause_seconds_left: int | None = Field(default=None, description="Thời gian tạm dừng còn lại (giây)")
     turns: list[InterviewTurnOut] = Field(default_factory=list, description="Các câu đã trả lời, theo thứ tự")
     created_at: UtcDatetime
+    voice_input: bool = Field(
+        default=False, description="Server đã cấu hình SONIOX_API_KEY: cho trả lời bằng giọng nói"
+    )
 
 
 class CreateInterviewRequest(BaseModel):
@@ -859,6 +868,7 @@ class NextStep(BaseModel):
 class SkillToLearn(BaseModel):
     name: str
     importance: Importance
+    roadmap_url: str | None = Field(default=None, description="Lộ trình học trên roadmap.sh (chỉ kỹ năng CNTT)")
 
 
 class SkillsToLearn(BaseModel):

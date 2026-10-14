@@ -17,10 +17,10 @@ Route `/student/interview` trong frontmatter theo hợp đồng Assistant. Giao 
 
 1. Chuẩn bị CV và mở `/student/interview/new` (mục **Luyện phỏng vấn** trên thanh bên). Bấm **Hướng dẫn** nếu muốn xem lại cách luyện.
 2. Kiểm tra số lượt còn lại, ví dụ **Còn 2 / 3 buổi tuần này**. Mỗi vị trí có giới hạn số buổi mỗi tuần.
-3. Ở **Chọn CV**, chọn CV dùng làm bối cảnh. Ở **Chọn vị trí**, chọn một vị trí trong **Gợi ý & đã lưu** hoặc **Đã phân tích**; bấm **Tìm trong Thư viện JD** nếu chưa thấy.
+3. Ở **Chọn CV**, chọn CV dùng làm bối cảnh, hoặc chọn **Không dùng CV** để AI chỉ hỏi theo yêu cầu của vị trí (dùng được cả khi chưa tải CV). Ở **Chọn vị trí**, chọn một vị trí trong **Gợi ý & đã lưu** hoặc **Đã phân tích**; bấm **Tìm trong Thư viện JD** nếu chưa thấy.
 4. Kiểm tra khung **Buổi phỏng vấn của bạn** (vị trí, CV, 4 câu · khoảng 20 phút, chấm theo STAR thang 5), rồi bấm **Vào phòng chờ**.
 5. Trong phòng chờ, đọc luật rồi bấm **Sẵn sàng**. Buổi phỏng vấn chỉ được tạo và tính giờ khi bạn bấm Sẵn sàng.
-6. Với mỗi câu, xác định tình huống và nhiệm vụ cần kể, nêu hành động của chính bạn và kết quả cụ thể. Bấm **Gửi câu trả lời**; ở câu cuối, nút là **Gửi và kết thúc**. Có thể bấm **Kết thúc sớm**, nhưng buổi kết thúc sớm không được lưu.
+6. Với mỗi câu, xác định tình huống và nhiệm vụ cần kể, nêu hành động của chính bạn và kết quả cụ thể. Có thể gõ câu trả lời hoặc bấm **Nói câu trả lời** để nói bằng tiếng Việt (có thể xen thuật ngữ tiếng Anh), chữ nhận diện được sẽ hiện trong ô trả lời; bấm **Dừng nói** khi xong rồi sửa lại nếu cần. Nút này chỉ hiện khi hệ thống đã bật nhận diện giọng nói. Bấm **Gửi câu trả lời**; ở câu cuối, nút là **Gửi và kết thúc**. Có thể bấm **Kết thúc sớm**, nhưng buổi kết thúc sớm không được lưu.
 7. Mở báo cáo để xem **Điểm buổi phỏng vấn** (thang **0–5**), điểm từng phần S, T, A, R, **Hướng dẫn cải thiện** và **Chi tiết từng câu**. Từ báo cáo có thể bấm **Chia sẻ với cố vấn** hoặc **Luyện lại vị trí này**.
 8. Xem lại các buổi tại `/student/history` hoặc mục **Buổi gần đây** trên trang Luyện phỏng vấn.
 

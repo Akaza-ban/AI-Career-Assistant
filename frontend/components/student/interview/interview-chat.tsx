@@ -25,6 +25,8 @@ export interface Rejection {
 interface InterviewChatProps {
   /** Buổi phỏng vấn đang diễn ra: gửi kèm khi ghi âm để nhận diện giọng nói theo từ vựng của vị trí. */
   sessionId?: string
+  /** Server có bật nhận diện giọng nói; không bật thì chỉ có ô gõ. */
+  voiceInput: boolean
   total: number
   turns: InterviewTurn[]
   current: InterviewQuestion | null
@@ -42,7 +44,8 @@ interface InterviewChatProps {
 }
 
 export function InterviewChat(props: InterviewChatProps) {
-  const { sessionId, total, turns, current, rejections, candidateName, candidateAvatar, draft, sending, paused, finished } = props
+  const { sessionId, voiceInput, total, turns, current, rejections, candidateName, candidateAvatar, draft, sending, paused, finished } =
+    props
   const { onDraftChange } = props
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -157,7 +160,9 @@ export function InterviewChat(props: InterviewChatProps) {
                   ? "Đang tạm dừng…"
                   : stt.isRecording
                     ? "Đang nghe…"
-                    : "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả, gõ hoặc bấm Nói câu trả lời…"
+                    : voiceInput
+                      ? "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả, gõ hoặc bấm Nói câu trả lời…"
+                      : "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả…"
               }
               className="block min-h-32 w-full resize-y rounded-xl border border-line-strong bg-card px-4 py-3.5 text-base leading-[26px] text-ink transition-[border-color,box-shadow] outline-none placeholder:text-ink-3 focus:border-ink focus:shadow-[0_0_0_4px_var(--surface)] disabled:bg-panel disabled:opacity-70"
             />
@@ -178,6 +183,7 @@ export function InterviewChat(props: InterviewChatProps) {
                 {length < MIN_ANSWER_CHARS ? `Cần thêm ${MIN_ANSWER_CHARS - length} ký tự để gửi` : "Ctrl + Enter để gửi"}
               </span>
               <span className="flex-1" />
+              {voiceInput && (
               <Button
                 variant="outline"
                 size="brand"
@@ -195,6 +201,7 @@ export function InterviewChat(props: InterviewChatProps) {
                 )}
                 {stt.isConnecting ? "Đang bật micro…" : stt.isRecording ? "Dừng nói" : "Nói câu trả lời"}
               </Button>
+              )}
               <Button size="brand" onClick={props.onSend} disabled={!canSend}>
                 {last ? "Gửi và kết thúc" : "Gửi câu trả lời"}
                 <ChevronRight aria-hidden />

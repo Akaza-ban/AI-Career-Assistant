@@ -9,7 +9,7 @@ tags: [cv, upload, pdf, docx, versions]
 
 ## Tổng quan
 
-Trang **CV của tôi** giúp sinh viên tải CV lên, xem các phiên bản và chọn CV đang dùng để phân tích với mô tả công việc (JD) hoặc luyện phỏng vấn. Hệ thống nhận tệp **PDF hoặc DOCX**, dung lượng tối đa **5 MB**. Nên dùng tệp có văn bản đọc được để hệ thống trích xuất nội dung chính xác.
+Trang **CV của tôi** giúp sinh viên tải CV lên, xem các phiên bản và chọn CV đang dùng để phân tích với mô tả công việc (JD) hoặc luyện phỏng vấn. Hệ thống nhận tệp **PDF hoặc DOCX**, dung lượng tối đa **5 MB**. Nên dùng tệp có văn bản đọc được để hệ thống trích xuất nội dung chính xác. PDF scan (ảnh chụp lưu thành PDF) vẫn tải được: hệ thống đọc chữ bằng OCR và hiện thông báo **CV là bản scan** vì chữ đọc từ ảnh có thể sai dấu hoặc thiếu chữ. Hệ thống không nhận tệp ảnh PNG hoặc JPG; hãy lưu ảnh thành PDF trước khi tải.
 
 ## Các bước thực hiện
 
@@ -41,7 +41,7 @@ A: Kiểm tra tệp có đuôi `.pdf` hoặc `.docx` và không vượt quá 5 M
 
 **Q: CV tải lên thành công nhưng nội dung trích xuất thiếu thì làm gì?**
 
-A: Mở chi tiết CV để kiểm tra. Nếu PDF chỉ chứa ảnh quét, hãy xuất lại bản có văn bản từ tài liệu gốc và tải phiên bản mới.
+A: Mở chi tiết CV để kiểm tra. Nếu PDF chỉ chứa ảnh quét, hệ thống đã đọc chữ bằng OCR nên có thể sai dấu hoặc thiếu chữ; hãy xuất lại bản có văn bản từ tài liệu gốc (Word, Canva) và tải phiên bản mới.
 
 **Q: Vì sao tôi không xoá được CV đang dùng?**
 
