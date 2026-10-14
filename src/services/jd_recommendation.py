@@ -135,9 +135,8 @@ def recommend_top_jds_from_cv(
 
         # Lấy thông tin chi tiết của JD
         jd_obj = db_jds.get(jd_id)
-        # Vector metadata is not an authorization source. Recommendations are from
-        # the public library; missing/private database records never fall back to it.
-        if db is not None and jd_obj is None:
+        # JD đã ẩn khỏi thư viện (kho vector có thể chưa kịp cập nhật) không được gợi ý
+        if jd_obj is not None and (jd_obj.source != "library" or jd_obj.status == "hidden"):
             continue
         if jd_obj:
             title = jd_obj.title
@@ -360,6 +359,9 @@ async def compare_selected_jds_with_llm(
 
     for jd_id in jd_ids:
         jd_obj = db_jds.get(jd_id)
+        # JD đã ẩn khỏi thư viện (kho vector có thể chưa kịp cập nhật) không được gợi ý
+        if jd_obj is not None and (jd_obj.source != "library" or jd_obj.status == "hidden"):
+            continue
         if jd_obj:
             jd_items.append(
                 {

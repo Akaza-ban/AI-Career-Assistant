@@ -156,7 +156,7 @@ async def test_compare_jds_api_by_cv_version_id(client):
 
 @pytest.mark.asyncio
 async def test_compare_jds_api_validation_count(client):
-    """Kiểm tra validation số lượng JD (chỉ chấp nhận từ 2 đến 3 JD)."""
+    """Kiểm tra validation số lượng JD (chấp nhận từ 2 đến 5 JD)."""
     # Test 1: Chỉ chọn 1 JD -> lỗi 422 từ Pydantic min_length
     res_1 = await client.post(
         "/api/v1/jd/compare",
@@ -165,16 +165,23 @@ async def test_compare_jds_api_validation_count(client):
     )
     assert res_1.status_code == 422
 
-    # Test 2: Chọn 4 JD -> lỗi 422 từ Pydantic max_length
-    res_4 = await client.post(
+    # Test 2: Chọn 6 JD -> lỗi 422 từ Pydantic max_length (tối đa 5 JD)
+    res_6 = await client.post(
         "/api/v1/jd/compare",
         json={
             "cv_text": "Python Developer",
-            "jd_ids": ["jd-da-intern", "jd-ba-intern", "jd-be-intern", "jd-fe-junior"],
+            "jd_ids": [
+                "jd-da-intern",
+                "jd-ba-intern",
+                "jd-be-intern",
+                "jd-fe-junior",
+                "jd-devops-intern",
+                "jd-qa-intern",
+            ],
         },
         headers=STUDENT,
     )
-    assert res_4.status_code == 422
+    assert res_6.status_code == 422
 
     # Test 3: Chọn trùng JD (duplicate) -> lỗi 400
     res_dup = await client.post(
@@ -184,6 +191,18 @@ async def test_compare_jds_api_validation_count(client):
     )
     assert res_dup.status_code == 400
     assert res_dup.json()["code"] == "invalid_jd_selection"
+
+    # Test 4: Chọn 4 JD -> thành công 200
+    res_4 = await client.post(
+        "/api/v1/jd/compare",
+        json={
+            "cv_text": "Python Developer",
+            "jd_ids": ["jd-da-intern", "jd-ba-intern", "jd-be-intern", "jd-fe-junior"],
+        },
+        headers=STUDENT,
+    )
+    assert res_4.status_code == 200
+    assert len(res_4.json()["comparisons"]) == 4
 
 
 @pytest.mark.asyncio
@@ -219,3 +238,37 @@ async def test_compare_jds_api_forbidden_for_advisor(client):
     }
     response = await client.post("/api/v1/jd/compare", json=payload, headers=ADVISOR)
     assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_comparison_history_api(client):
+    """Kiểm tra lưu lịch sử so sánh và truy vấn GET /api/v1/jd/compare/history."""
+    payload = {
+        "cv_text": "Kỹ năng: Python, SQL. Kinh nghiệm: 1 năm làm REST API.",
+        "jd_ids": ["jd-be-intern", "jd-da-intern"],
+    }
+    # 1. Gọi compare
+    compare_res = await client.post("/api/v1/jd/compare", json=payload, headers=STUDENT)
+    assert compare_res.status_code == 200
+    comp_data = compare_res.json()
+    assert "id" in comp_data
+    history_id = comp_data["id"]
+
+    # 2. Lấy danh sách lịch sử
+    history_res = await client.get("/api/v1/jd/compare/history", headers=STUDENT)
+    assert history_res.status_code == 200
+    history_items = history_res.json()
+    assert len(history_items) >= 1
+    found = next((item for item in history_items if item["id"] == history_id), None)
+    assert found is not None
+    assert found["total_compared"] == 2
+    assert len(found["comparisons"]) == 2
+
+    # 3. Xóa lịch sử
+    del_res = await client.delete(f"/api/v1/jd/compare/history/{history_id}", headers=STUDENT)
+    assert del_res.status_code == 204
+
+    # 4. Kiểm tra lại danh sách lịch sử sau khi xóa
+    after_res = await client.get("/api/v1/jd/compare/history", headers=STUDENT)
+    assert after_res.status_code == 200
+    assert not any(item["id"] == history_id for item in after_res.json())

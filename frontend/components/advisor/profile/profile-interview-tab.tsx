@@ -1,39 +1,25 @@
 "use client"
 
 import { useState } from "react"
-import {
-  CalendarDays,
-  CheckCheck,
-  Clock,
-  Eye,
-  Lock,
-  MessageSquareText,
-  Pencil,
-  Timer,
-  TimerOff,
-} from "lucide-react"
+import { Lock, MessagesSquare } from "lucide-react"
 
-import { ReportDialog } from "@/components/advisor/profile/report-dialog"
+import { OutOfFive, dayMonth, score1, signed } from "@/components/advisor/profile/profile-bits"
 import { ReviewDialog } from "@/components/advisor/profile/review-dialog"
-import { InterviewProgressBlock, StarAverageBars } from "@/components/advisor/progress-blocks"
-import { Panel, SectionHeader } from "@/components/common/panel"
+import { StarAverageBars } from "@/components/advisor/progress-blocks"
+import { EmptyState } from "@/components/common/empty-state"
+import { ScoreLineChart, type ScorePoint } from "@/components/common/score-line-chart"
+import { SegmentedControl } from "@/components/common/segmented-control"
+import { Zone } from "@/components/common/zone"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { formatRelativeTime, formatWhen } from "@/lib/format"
-import { LABEL_META, formatScore } from "@/lib/interview"
-import type { AdvisorInterviewRow, AdvisorReviewInfo, AdvisorStudentDetail } from "@/lib/types"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { AdvisorInterviewRow, AdvisorReviewInfo, AdvisorStudentDetail, InterviewProgress } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
-type SessionFilter = "all" | "pending" | "reviewed" | "private"
+type SessionFilter = "all" | "pending"
+type SessionState = "pending" | "reviewed" | "private"
 
-const FILTERS: { value: SessionFilter; label: string }[] = [
-  { value: "all", label: "Tất cả" },
-  { value: "pending", label: "Chờ nhận xét" },
-  { value: "reviewed", label: "Đã nhận xét" },
-  { value: "private", label: "Chưa chia sẻ" },
-]
-
-function sessionState(item: AdvisorInterviewRow): Exclude<SessionFilter, "all"> {
+function sessionState(item: AdvisorInterviewRow): SessionState {
   if (!item.shared) return "private"
   return item.review ? "reviewed" : "pending"
 }
@@ -41,239 +27,215 @@ function sessionState(item: AdvisorInterviewRow): Exclude<SessionFilter, "all"> 
 interface ProfileInterviewTabProps {
   detail: AdvisorStudentDetail
   interviews: AdvisorInterviewRow[]
+  /** Buổi mở sẵn dialog nhận xét (từ `?review=`); bỏ qua nếu không có hoặc SV chưa chia sẻ. */
+  initialReviewId?: string | null
   onReviewed: (sessionId: string, review: AdvisorReviewInfo) => void
 }
 
-// Figma: frame "Hồ sơ sinh viên - Phỏng vấn & STAR" (18:6025). Điểm và tóm tắt luôn xem được;
-// câu trả lời chi tiết và nhận xét chỉ khi SV chia sẻ báo cáo đó.
-export function ProfileInterviewTab({ detail, interviews, onReviewed }: ProfileInterviewTabProps) {
+// Bản vẽ HoSoSinhVien, tab Phỏng vấn. Điểm luôn xem được; câu trả lời chi tiết và nhận xét chỉ khi SV chia sẻ báo cáo đó.
+export function ProfileInterviewTab({ detail, interviews, initialReviewId = null, onReviewed }: ProfileInterviewTabProps) {
   const { student } = detail
   const [filter, setFilter] = useState<SessionFilter>("all")
   const [position, setPosition] = useState(0)
-  const [reviewing, setReviewing] = useState<AdvisorInterviewRow | null>(null)
-  const [viewing, setViewing] = useState<AdvisorInterviewRow | null>(null)
+  const [reviewingId, setReviewingId] = useState<string | null>(
+    () => interviews.find((i) => i.id === initialReviewId && i.shared)?.id ?? null,
+  )
+  const reviewing = interviews.find((i) => i.id === reviewingId) ?? null
+
+  function closeReview() {
+    setReviewingId(null)
+    // Bỏ ?review= khỏi URL để tải lại trang không mở lại dialog.
+    const url = new URL(window.location.href)
+    if (url.searchParams.has("review")) {
+      url.searchParams.delete("review")
+      url.searchParams.set("tab", "interviews")
+      history.replaceState(null, "", url.pathname + url.search)
+    }
+  }
 
   const groups = detail.interview_progress
   const group = groups[Math.min(position, groups.length - 1)]
-  const counts = Object.fromEntries(
-    FILTERS.map((f) => [f.value, f.value === "all" ? interviews.length : interviews.filter((i) => sessionState(i) === f.value).length]),
-  ) as Record<SessionFilter, number>
-  const visible = filter === "all" ? interviews : interviews.filter((i) => sessionState(i) === filter)
+  const pending = interviews.filter((i) => sessionState(i) === "pending").length
+  const visible = filter === "all" ? interviews : interviews.filter((i) => sessionState(i) === "pending")
   // Số thứ tự buổi trong từng vị trí (cũ nhất = 1), khớp cách đánh số ở cờ "Cần chú ý".
   const roundOf = new Map<string, number>()
   for (const g of groups) g.points.forEach((p, i) => roundOf.set(p.id, i + 1))
 
   return (
-    <div className="grid gap-10">
-      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
-        <section className="flex min-w-0 flex-col gap-3">
-          <SectionHeader
-            title="Tiến bộ theo vị trí"
-            aside={<span className="text-xs text-ink-2">Điểm chỉ so sánh trong cùng vị trí</span>}
-          />
-          <Panel className="grid flex-1 content-start gap-4">
-            {groups.length > 1 && (
-              <div role="group" aria-label="Chọn vị trí" className="flex flex-wrap gap-1.5">
-                {groups.map((g, i) => (
-                  <button
-                    key={g.jd.id}
-                    type="button"
-                    aria-pressed={g === group}
-                    onClick={() => setPosition(i)}
-                    className={cn(
-                      "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                      g === group ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
-                    )}
-                  >
-                    {g.jd.title} ({g.session_count})
-                  </button>
-                ))}
-              </div>
-            )}
-            {group ? (
-              <InterviewProgressBlock group={group} />
+    <div className="grid gap-14">
+      <div className="grid gap-x-14 gap-y-14 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <Zone
+          id="position-progress"
+          title="Tiến bộ theo vị trí"
+          aside={
+            groups.length > 1 ? (
+              <PositionSelect groups={groups} value={position} onChange={setPosition} />
             ) : (
-              <p className="py-10 text-center text-sm text-ink-2">Sinh viên chưa luyện phỏng vấn buổi nào.</p>
-            )}
-          </Panel>
-        </section>
-        <section className="flex min-w-0 flex-col gap-3">
-          <SectionHeader title="Tiêu chí STAR" />
-          <Panel className="flex-1">
-            <StarAverageBars star={detail.star} insight={detail.insight} />
-          </Panel>
-        </section>
+              group && <span className="text-sm text-ink-2">{group.jd.title}</span>
+            )
+          }
+        >
+          {group ? (
+            <PositionChart group={group} />
+          ) : (
+            <EmptyState
+              icon={MessagesSquare}
+              title="Chưa có buổi phỏng vấn"
+              description="Sinh viên chưa luyện phỏng vấn buổi nào."
+              className="py-8"
+            />
+          )}
+        </Zone>
+        <Zone id="star-criteria" title="Tiêu chí STAR">
+          <StarAverageBars star={detail.star} insight={detail.insight} />
+        </Zone>
       </div>
 
-      <section className="grid gap-3" aria-labelledby="sessions-heading">
-        <SectionHeader
-          title={<span id="sessions-heading">Các buổi phỏng vấn thử</span>}
-          aside={
-            <div role="group" aria-label="Lọc buổi phỏng vấn" className="flex flex-wrap gap-1">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.value}
-                  type="button"
-                  aria-pressed={filter === f.value}
-                  onClick={() => setFilter(f.value)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
-                    filter === f.value ? "bg-blue text-on-blue" : "bg-card text-ink-2 ring-1 ring-line hover:bg-blue-soft",
-                  )}
-                >
-                  {f.label}
-                  <span className={cn("rounded-full px-1.5 text-[11px]", filter === f.value ? "bg-card/25" : "bg-surface")}>
-                    {counts[f.value]}
-                  </span>
-                </button>
-              ))}
-            </div>
-          }
-        />
-        <Panel className="overflow-hidden p-0">
-          {visible.length === 0 ? (
-            <p className="py-10 text-center text-sm text-ink-2">Không có buổi phỏng vấn nào trong mục này.</p>
-          ) : (
-            <ol className="divide-y divide-line">
-              {visible.map((item) => (
-                <SessionRow
-                  key={item.id}
-                  item={item}
-                  round={roundOf.get(item.id) ?? 1}
-                  onView={() => setViewing(item)}
-                  onReview={() => setReviewing(item)}
-                />
-              ))}
-            </ol>
-          )}
-        </Panel>
-      </section>
+      <Zone
+        id="sessions-heading"
+        title="Các buổi phỏng vấn thử"
+        aside={
+          <SegmentedControl
+            aria-label="Lọc buổi phỏng vấn"
+            size="sm"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: "all", label: "Tất cả" },
+              { value: "pending", label: "Chờ nhận xét", count: pending },
+            ]}
+            className="w-full sm:w-auto"
+          />
+        }
+      >
+        {visible.length === 0 ? (
+          <p className="-mt-1 border-b border-line py-6 text-sm text-ink-3">
+            {interviews.length === 0
+              ? "Sinh viên chưa có buổi phỏng vấn thử nào."
+              : "Không còn báo cáo nào chờ bạn nhận xét."}
+          </p>
+        ) : (
+          <ol className="-mt-3">
+            {visible.map((item) => (
+              <SessionRow key={item.id} item={item} round={roundOf.get(item.id) ?? 1} onOpen={() => setReviewingId(item.id)} />
+            ))}
+          </ol>
+        )}
+      </Zone>
 
-      <ReportDialog studentId={student.id} studentName={student.full_name} item={viewing} onClose={() => setViewing(null)} />
       <ReviewDialog
         studentId={student.id}
         studentName={student.full_name}
+        avatarUrl={student.avatar_url}
         item={reviewing}
-        onClose={() => setReviewing(null)}
+        onClose={closeReview}
         onReviewed={onReviewed}
       />
     </div>
   )
 }
 
-function SessionRow({
-  item,
-  round,
-  onView,
-  onReview,
-}: {
-  item: AdvisorInterviewRow
-  round: number
-  onView: () => void
-  onReview: () => void
-}) {
-  const state = sessionState(item)
-  const label = LABEL_META[item.label]
-  const minutes = Math.max(1, Math.round(item.duration_seconds / 60))
-
+function PositionSelect({ groups, value, onChange }: { groups: InterviewProgress[]; value: number; onChange: (i: number) => void }) {
+  const items = groups.map((g, i) => ({ value: String(i), label: g.jd.title }))
   return (
-    <li className={cn("grid gap-4 px-6 py-5", state === "private" && "bg-surface/50")}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-blue-soft font-heading text-sm font-bold text-blue">
-            {String(round).padStart(2, "0")}
-          </span>
-          <div className="grid min-w-0 gap-1">
-            <p className="flex flex-wrap items-center gap-x-2 gap-y-1 font-heading font-bold text-ink">
-              <span>
-                Buổi {round} · {item.jd.title}
-                {item.jd.company && <span className="font-normal text-ink-2"> · {item.jd.company}</span>}
-              </span>
-              {state === "pending" && <Badge variant="blue">Chờ nhận xét</Badge>}
-            </p>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-2">
-              <span className="flex items-center gap-1">
-                <CalendarDays className="size-3.5" aria-hidden />
-                {formatWhen(item.completed_at)}
-              </span>
-              <span className="flex items-center gap-1">
-                <Timer className="size-3.5" aria-hidden />
-                {minutes} phút
-              </span>
-              {item.timed_out_count > 0 && (
-                <span className="flex items-center gap-1 text-warn">
-                  <TimerOff className="size-3.5" aria-hidden />
-                  {item.timed_out_count} câu hết giờ
-                </span>
-              )}
-            </p>
-          </div>
-        </div>
-        <span className="flex items-center gap-2">
-          <span className="text-xs text-ink-2">Điểm AI</span>
-          <strong className={cn("font-heading text-lg", label.className)}>{formatScore(item.overall_score)}/5</strong>
-          <Badge variant="neutral" className={label.badge}>
-            {label.text}
-          </Badge>
-        </span>
-      </div>
-
-      <p className="text-sm leading-6 text-ink sm:pl-12">
-        <span className="font-semibold text-ink-2">Tóm tắt: </span>
-        {item.summary}
-      </p>
-
-      {item.review && <ReviewBlock review={item.review} />}
-
-      {state === "private" ? (
-        <p className="flex items-center gap-2 text-sm text-ink-2 sm:pl-12">
-          <Lock className="size-4 shrink-0" aria-hidden />
-          Sinh viên chưa chia sẻ báo cáo này: bạn chỉ xem được điểm và tóm tắt ở trên.
-        </p>
-      ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3 sm:pl-12">
-          <p className="text-xs text-ink-2">
-            {item.review ? "Điểm AI giữ nguyên, nhận xét của bạn hiện trong báo cáo của sinh viên." : "Sinh viên đã chia sẻ báo cáo này và đang chờ nhận xét của bạn."}
-          </p>
-          <span className="flex flex-wrap gap-2">
-            <Button variant="soft" onClick={onView} className="h-10 px-4">
-              <Eye aria-hidden />
-              Xem báo cáo
-            </Button>
-            <Button variant={item.review ? "soft" : "default"} onClick={onReview} className="h-10 px-4">
-              {item.review ? <Pencil aria-hidden /> : <MessageSquareText aria-hidden />}
-              {item.review ? "Sửa nhận xét" : "Nhận xét buổi này"}
-            </Button>
-          </span>
-        </div>
-      )}
-    </li>
+    <Select items={items} value={String(value)} onValueChange={(v) => onChange(Number(v))}>
+      <SelectTrigger
+        className="h-9 w-full min-w-0 rounded-[10px] border-line-strong bg-card px-3.5 text-sm sm:w-[230px]"
+        aria-label="Chọn vị trí"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
-function ReviewBlock({ review }: { review: AdvisorReviewInfo }) {
-  const edited = review.updated_at !== review.created_at
+function PositionChart({ group }: { group: InterviewProgress }) {
+  const points: ScorePoint[] = group.points.map((p, i) => ({
+    label: dayMonth(p.completed_at),
+    value: p.score,
+    detail: `Buổi ${i + 1}`,
+  }))
   return (
-    <div className="grid gap-2 rounded-xl bg-violet-soft/40 p-4 sm:ml-12">
-      <p className="flex flex-wrap items-center justify-between gap-2 text-xs">
-        <span className="flex items-center gap-1.5 font-semibold text-violet">
-          <MessageSquareText className="size-4" aria-hidden />
-          Nhận xét của bạn · {edited ? "sửa " : ""}
-          {formatRelativeTime(review.updated_at).toLowerCase()}
+    <div className="-mt-3">
+      {points.length > 1 ? (
+        <ScoreLineChart points={points} max={5} unit="điểm STAR" sparseTicksOnMobile className="h-[190px]" />
+      ) : (
+        <p className="border-b border-line py-6 text-sm text-ink-2">
+          Mới có 1 buổi ở vị trí này: <OutOfFive score={group.latest_score} className="font-semibold text-ink" />
+        </p>
+      )}
+      <p className="mt-2 text-[13px] leading-5 text-ink-3">
+        {group.session_count} buổi · gần nhất {score1(group.latest_score)} / 5
+        {group.delta_from_previous !== null && ` (${signed(group.delta_from_previous, score1)} so với buổi trước)`}. Điểm
+        chỉ so sánh trong cùng vị trí.
+      </p>
+    </div>
+  )
+}
+
+const STATE_BADGE: Record<SessionState, { label: string; variant: "blue" | "good" } | null> = {
+  pending: { label: "Chờ nhận xét", variant: "blue" },
+  reviewed: { label: "Đã nhận xét", variant: "good" },
+  private: null,
+}
+
+function SessionRow({ item, round, onOpen }: { item: AdvisorInterviewRow; round: number; onOpen: () => void }) {
+  const state = sessionState(item)
+  const badge = STATE_BADGE[state]
+  const minutes = Math.max(1, Math.round(item.duration_seconds / 60))
+  const meta = [`Buổi ${round}`, `${minutes} phút`, item.timed_out_count > 0 && `${item.timed_out_count} câu hết giờ`]
+    .filter(Boolean)
+    .join(" · ")
+
+  return (
+    <li
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 border-b border-line py-3.5",
+        "md:grid-cols-[64px_minmax(0,1fr)_84px_150px_120px] md:gap-x-4",
+      )}
+    >
+      <span className="hidden text-sm text-ink-3 tabular-nums md:block">{dayMonth(item.completed_at)}</span>
+      <span className="min-w-0">
+        <span className="block truncate font-medium text-ink">{item.jd.title}</span>
+        <span className="block truncate text-[13px] text-ink-3">
+          <span className="md:hidden">{dayMonth(item.completed_at)} · </span>
+          {meta}
         </span>
-        {review.seen_at ? (
-          <span className="flex items-center gap-1 text-good">
-            <CheckCheck className="size-3.5" aria-hidden />
-            Sinh viên đã xem {formatRelativeTime(review.seen_at).toLowerCase()}
-          </span>
+      </span>
+      <span className="text-right font-semibold text-ink tabular-nums md:text-left">
+        {score1(item.overall_score)} <span className="font-normal text-ink-3">/ 5</span>
+      </span>
+      <span className="flex items-center md:block">
+        {badge ? (
+          <Badge variant={badge.variant} className="h-[22px] px-2">
+            <span className="size-1.5 rounded-full bg-current" aria-hidden />
+            {badge.label}
+          </Badge>
         ) : (
-          <span className="flex items-center gap-1 text-ink-2">
-            <Clock className="size-3.5" aria-hidden />
-            Sinh viên chưa xem
+          <span className="flex items-center gap-1.5 text-[13px] text-ink-3">
+            <Lock className="size-3.5" strokeWidth={1.75} aria-hidden />
+            Chưa chia sẻ
           </span>
         )}
-      </p>
-      <blockquote className="text-sm leading-6 whitespace-pre-line text-ink">{review.comment}</blockquote>
-    </div>
+      </span>
+      <span className="text-right">
+        {state === "pending" ? (
+          <Button size="sm" className="h-8 rounded-full px-3.5 text-[13px] font-semibold" onClick={onOpen}>
+            Nhận xét
+          </Button>
+        ) : state === "reviewed" ? (
+          <button type="button" onClick={onOpen} className="inline-flex h-8 items-center text-sm font-semibold text-blue hover:text-accent-strong">
+            Xem
+          </button>
+        ) : null}
+      </span>
+    </li>
   )
 }

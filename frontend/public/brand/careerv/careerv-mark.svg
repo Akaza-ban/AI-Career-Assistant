@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-6 -6 120 92" width="480" height="368" fill="none">
+    <defs>
+      <mask id="faceSilhouette" maskUnits="userSpaceOnUse" x="-10" y="-10" width="130" height="100">
+        <polygon points="28,27 54,27 68.5,41.5 83,27 96,27 108,39 108,54 82,80 54,80 28,54" fill="#fff" stroke="#fff" stroke-width="3" stroke-linejoin="miter"/>
+      </mask>
+    </defs>
+    <polygon points="26,0 54,0 54,27 28,27 28,54 54,80 26,80 0,54 0,26" fill="#18181b"/>
+    <polygon points="52.5,25.5 84.5,25.5 68.5,41.5" fill="#18181b"/>
+    <polygon points="28,27 54,27 68.5,41.5 83,27 96,27 108,39 108,54 82,80 54,80 28,54" fill="#ffffff" stroke="#18181b" stroke-width="3" stroke-linejoin="miter"/>
+    <polygon points="96,27 96,39 108,39" fill="#e0b852" stroke="#e0b852" stroke-width="3" stroke-linejoin="miter" mask="url(#faceSilhouette)"/>
+    <rect x="60.5" y="52.5" width="4" height="9" rx="2" fill="#18181b"/>
+    <rect x="72.5" y="52.5" width="4" height="9" rx="2" fill="#18181b"/>
+</svg>

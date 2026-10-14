@@ -167,6 +167,7 @@ class AssistantAgent:
             choices = [
                 (("lich su", "history", "tien bo"), "/student/history"),
                 (("chia se", "sharing", "share"), "/student/share"),
+                (("thu vien", "library", "them jd", "jd cua ban"), "/student/library"),
                 (("phan tich", "analysis", "match score", "match-score", "khoang cach", "jd"), "/student/analysis"),
                 (("phong van", "interview", "star"), "/student/interview"),
                 (("cv", "ho so"), "/student/cv"),
@@ -190,7 +191,7 @@ class AssistantAgent:
             return AssistantResponse(message=reply, intent="qa", actions=[], sources=[])
         if state["confidence"] != "high" or not sources or not has_careerx_topic(state["message"]):
             return AssistantResponse(
-                message="Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerX.",
+                message="Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerV.",
                 intent=state["intent"],
                 actions=[],
                 sources=[],
@@ -219,9 +220,8 @@ class AssistantAgent:
             actions.append(
                 HighlightAction(params={"selector": source.selector}, description_vi="Chỉ vị trí nút trong hướng dẫn")
             )
-        message = "Theo tài liệu hướng dẫn:\n\n" + "\n\n".join(
-            f"{source.snippet}\n\nNguồn: [{source.title}]({source.route}) — {source.section}" for source in sources[:3]
-        )
+        # Nguồn đã hiện riêng dưới câu trả lời ("Theo hướng dẫn: …"), nên chỉ trích hai đoạn sát nhất.
+        message = "Theo tài liệu hướng dẫn:\n\n" + "\n\n".join(source.snippet for source in sources[:2])
         if any(action.action_type == "START_ANALYSIS" for action in actions):
             message += "\n\nVui lòng xác nhận trước khi bắt đầu phân tích."
         return AssistantResponse(message=message, intent=state["intent"], actions=actions, sources=sources)

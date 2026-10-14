@@ -1,9 +1,12 @@
 """Phỏng vấn thử có chấm điểm STAR (US-SV-04): S5 thiết lập → S6 phòng phỏng vấn → S7 kết quả."""
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Response, WebSocket, status
 
-from src.api.deps import CurrentStudent, DbSession
-from src.db.models import utcnow
+from src.api.deps import CurrentStudent, DbSession, _session_user
+from src.api.errors import AppError
+from src.config import get_settings
+from src.db.database import SessionLocal
+from src.db.models import InterviewSession, utcnow
 from src.models.schemas import (
     CreateInterviewRequest,
     InterviewQuota,
@@ -13,9 +16,42 @@ from src.models.schemas import (
     SubmitAnswerRequest,
     SubmitAnswerResponse,
 )
-from src.services import interview, sharing
+from src.services import interview, sharing, soniox_stt
 
 router = APIRouter(prefix="/interviews", tags=["Mock Interview"])
+
+
+@router.websocket("/ws/transcribe")
+async def websocket_transcribe(
+    websocket: WebSocket,
+    session_id: str | None = None,
+) -> None:
+    """WebSocket Real-time Speech-to-Text proxy kết nối với Soniox STT:
+
+    Nhận audio PCM 16kHz từ microphone sinh viên -> gửi lên Soniox -> trả về tokens thời gian thực.
+    """
+    db = SessionLocal()
+    try:
+        # Trình duyệt gửi kèm cookie phiên khi mở WebSocket cùng tên miền: chỉ sinh viên đã đăng nhập mới dùng được
+        # key Soniox của máy chủ, và chỉ với buổi phỏng vấn của chính mình.
+        try:
+            user = _session_user(
+                db, websocket.cookies.get(get_settings().session_cookie_name), websocket.headers.get("x-demo-role")
+            )
+        except AppError:
+            user = None
+        owns_session = session_id is None or (
+            (session := db.get(InterviewSession, session_id)) is not None
+            and user is not None
+            and session.owner_id == user.id
+        )
+        if user is None or user.role != "student" or not owns_session:
+            await websocket.close(code=4401, reason="unauthorized")
+            return
+        await websocket.accept()
+        await soniox_stt.proxy_soniox_stream(websocket, session_id=session_id, db=db)
+    finally:
+        db.close()
 
 
 @router.get("/quota", response_model=InterviewQuota)
@@ -31,10 +67,10 @@ def list_recent(user: CurrentStudent, db: DbSession, limit: int = Query(5, ge=1,
 
 
 @router.post("", response_model=InterviewSessionResponse, status_code=status.HTTP_201_CREATED)
-def create_interview(body: CreateInterviewRequest, user: CurrentStudent, db: DbSession) -> dict:
+async def create_interview(body: CreateInterviewRequest, user: CurrentStudent, db: DbSession) -> dict:
     """Bắt đầu buổi mới (huỷ buổi đang dở nếu có). Lỗi 429 "quota_exceeded" khi đã hết 3 buổi của vị trí trong tuần."""
     now = utcnow()
-    session = interview.create_session(db, user, body.jd_id, body.cv_version_id, now)
+    session = await interview.create_session(db, user, body.jd_id, body.cv_version_id, now, mode=body.interview_mode)
     return interview.session_out(db, session, now)
 
 

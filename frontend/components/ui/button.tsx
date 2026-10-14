@@ -17,15 +17,14 @@ const buttonVariants = cva(
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
-        // Biến thể CareerX (DESIGN.md mục 3)
-        soft: "border-line bg-card text-ink shadow-card hover:-translate-y-0.5 hover:bg-card",
-        violet: "bg-violet text-white hover:bg-violet/85",
-        dark: "bg-navy text-white hover:bg-navy/90",
+        // Biến thể CareerV (DESIGN.md mục 6)
+        soft: "bg-surface text-ink hover:bg-[color-mix(in_oklch,var(--surface),var(--ink)_6%)]",
+        violet: "bg-violet text-on-ink hover:bg-violet/85",
+        dark: "bg-ink text-on-ink hover:bg-ink/85",
       },
       size: {
-        /** Nút chính theo DESIGN.md: cao 46px, bo 12px, font heading */
-        brand:
-          "min-h-[46px] gap-2 rounded-xl px-[22px] py-[11px] font-heading text-[15px] font-semibold",
+        /** Nút chính theo DESIGN.md: cao 46px, dạng pill */
+        brand: "min-h-[46px] gap-2 rounded-full px-[22px] py-[11px] text-[15px] font-semibold",
         default:
           "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
         xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",

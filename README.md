@@ -61,10 +61,10 @@ Chi tiết phạm vi và guardrail được mô tả trong [Product Requirements
 
 | Tính năng | Mô tả |
 |---|---|
-| **Gap Analysis** (US-SV-02) | Upload CV (PDF/DOCX) + chọn JD → AI phân tích khoảng cách, chấm Match Score 0–100, trả về danh sách kỹ năng thiếu + bằng chứng từ CV gốc |
+| **Gap Analysis** (US-SV-02) | Upload CV (PDF/DOCX, PDF scan được đọc bằng OCR) + chọn JD → AI phân tích khoảng cách, chấm Match Score 0–100, trả về danh sách kỹ năng thiếu + bằng chứng từ CV gốc, kèm link lộ trình học trên roadmap.sh cho kỹ năng CNTT |
 | **CV Optimizer** (US-SV-03) | Gợi ý viết lại từng đoạn CV (accept / edit / reject), xuất file DOCX, audit trail đầy đủ |
 | **Kỹ năng đang học** (US-SV-05) | Đánh dấu kỹ năng đang phát triển, hiển thị riêng trong CV xuất |
-| **Mock Interview** (US-SV-04) | Phỏng vấn 3–4 vòng STAR, bộ đếm giờ, chấm điểm S/T/A/R 0–5, báo cáo chi tiết |
+| **Mock Interview** (US-SV-04) | 4 câu hỏi do AI sinh theo vị trí (theo CV hoặc không dùng CV), trả lời bằng cách gõ hoặc nói (Soniox), bộ đếm giờ, chấm điểm S/T/A/R 0–5, báo cáo chi tiết |
 | **Lịch sử & Tiến bộ** | Xem lại tất cả lượt phân tích, phỏng vấn, biểu đồ tiến bộ theo thời gian |
 | **Chia sẻ với Cố vấn** | Bật/tắt chia sẻ CV và báo cáo phỏng vấn per-item |
 | **Phản hồi AI** (US-SV-06) | Thumb up/down + CSAT 1–5 sao cho từng gợi ý |
@@ -166,10 +166,11 @@ Giao diện sẽ mở tại: **http://localhost:3000**
 
 | Biến | Ví dụ | Mô tả |
 |---|---|---|
-| `LLM_PROVIDER` | `groq` | Provider đang dùng: `groq` / `openrouter` / `openai` |
+| `LLM_PROVIDER` | `groq` | Provider đang dùng: `groq` / `openrouter` / `openai` / `deepseek` |
 | `GROQ_API_KEY` | `gsk_xxx` | API key từ [console.groq.com](https://console.groq.com/) |
 | `OPENROUTER_API_KEY` | `sk-or-v1-xxx` | API key từ [openrouter.ai](https://openrouter.ai/) |
 | `OPENAI_API_KEY` | `sk-xxx` | API key từ [platform.openai.com](https://platform.openai.com/) |
+| `DEEPSEEK_API_KEY` | `sk-xxx` | API key từ [platform.deepseek.com](https://platform.deepseek.com/) |
 | `MODEL_NAME` | `llama-3.3-70b-versatile` | Tên model (xem gợi ý bên dưới) |
 | `LLM_TEMPERATURE` | `0.7` | Độ ngẫu nhiên (0.0 – 2.0) |
 | `LLM_BASE_URL` | *(để trống)* | Custom endpoint nếu dùng proxy |
@@ -179,6 +180,15 @@ Giao diện sẽ mở tại: **http://localhost:3000**
 - **OpenRouter:** `meta-llama/llama-3.3-70b-instruct`, `qwen/qwen-2.5-72b-instruct`
 - **OpenAI:** `gpt-4o-mini`, `gpt-4o`
 - **Gemini** (qua OpenAI-compat): đặt `LLM_PROVIDER=openai`, `OPENAI_API_KEY=<gemini_key>`, `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `MODEL_NAME=gemini-2.5-flash`
+
+#### Soniox — Trả lời phỏng vấn bằng giọng nói (tùy chọn)
+
+| Biến | Mặc định | Mô tả |
+|---|---|---|
+| `SONIOX_API_KEY` | *(để trống)* | Key từ [console.soniox.com](https://console.soniox.com). Để trống thì phòng phỏng vấn ẩn nút "Nói câu trả lời" |
+| `SONIOX_MODEL` | `stt-rt-v5` | Model nhận diện giọng nói thời gian thực |
+
+**Đọc CV dạng scan (OCR):** chỉ nhận file PDF hoặc DOCX. PDF không có lớp chữ (bản scan, ảnh chụp lưu thành PDF) được đọc tự động bằng RapidOCR, đã có trong `requirements.txt`, không cần cài thêm phần mềm. Mô hình mặc định có thể làm mất dấu tiếng Việt, nên khi tải bản scan giao diện sẽ nhắc sinh viên kiểm tra lại hoặc dùng PDF xuất từ Word / Canva.
 
 #### LangSmith — Observability (tùy chọn)
 
@@ -219,7 +229,7 @@ Giao diện sẽ mở tại: **http://localhost:3000**
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | URL backend |
 | `NEXT_PUBLIC_LIVE_APIS` | *(để trống)* | Nhóm API gọi backend thật; để trống = toàn bộ mock. Dùng `all` để bật hết |
 | `NEXT_PUBLIC_MOCK_SCENARIO` | `default` | Kịch bản mock: `default` / `new_student` |
-| `NEXT_PUBLIC_FEATURE_MULTI_JD` | `false` | Tính năng ngoài Gate 1 (không bật trong demo) |
+| `NEXT_PUBLIC_FEATURE_DRIVE_IMPORT` | `false` | Dòng "nhập từ Google Drive" khi tải CV (chưa có chức năng thật) |
 
 ---
 

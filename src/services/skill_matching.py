@@ -12,6 +12,7 @@ import re
 from functools import lru_cache
 from typing import Any, Literal
 
+from src.services.roadmap import get_roadmap_info
 from src.services.taxonomy import get_child_skills, get_parent_skill
 
 Importance = Literal["required", "preferred", "additional"]
@@ -26,12 +27,25 @@ EVIDENCE_SECTIONS = {"experience", "projects", "education", "activities"}
 # Thứ tự quan trọng: từ khoá dài/cụ thể đặt trước để không bị từ khoá ngắn bắt nhầm.
 _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ("experience", ("kinh nghiệm", "quá trình làm việc", "experience", "work history", "employment")),
-    ("projects", ("dự án", "project")),
+    ("projects", ("dự án", "academic projects", "project")),
     ("education", ("học vấn", "trình độ học vấn", "education", "đào tạo")),
     ("activities", ("hoạt động", "ngoại khóa", "ngoại khoá", "tình nguyện", "volunteer", "activities", "câu lạc bộ")),
     ("skills", ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies")),
-    ("certifications", ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "award")),
-    ("summary", ("mục tiêu", "giới thiệu", "tóm tắt", "objective", "summary", "profile", "about")),
+    ("certifications", ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award")),
+    (
+        "summary",
+        (
+            "mục tiêu",
+            "giới thiệu",
+            "tóm tắt",
+            "career objective",
+            "career",
+            "objective",
+            "summary",
+            "profile",
+            "about",
+        ),
+    ),
 ]
 
 SECTION_LABELS: dict[str, str] = {
@@ -159,6 +173,7 @@ def evidence_of(line: dict[str, Any]) -> dict[str, Any]:
 def assessment(
     requirement: dict[str, Any], match: float, evidence_line: dict[str, Any] | None, note: str | None, source: str
 ):
+    roadmap_info = get_roadmap_info(requirement.get("name"))
     return {
         "id": requirement["id"],
         "skill": requirement["name"],
@@ -168,6 +183,9 @@ def assessment(
         "status": "matched" if match == 1 else "partial" if match == 0.5 else "missing",
         "evidence": evidence_of(evidence_line) if evidence_line and match > 0 else None,
         "note": note,
+        "roadmap_url": roadmap_info["roadmap_url"],
+        "is_it_supported": roadmap_info["is_it_supported"],
+        "roadmap_message": roadmap_info["message"],
         "source": source,
     }
 

@@ -21,14 +21,13 @@ from src.db.models import (
     AdvisorNote,
     AdvisorReview,
     CvVersion,
-    Feedback,
     GapAnalysis,
     InterviewSession,
     JobDescription,
     ShareGrant,
     User,
 )
-from src.services import cv_versions, interview, progress, sharing
+from src.services import cv_versions, interview, notifications, progress, sharing
 from src.services.skill_matching import match_label
 
 # Chênh lệch ≥ +0,3 là tiến bộ rõ, ≤ −0,3 là giảm (PRD mục 5.1)
@@ -38,10 +37,9 @@ MAX_SUGGESTIONS = 4
 MAX_COMMENT_CHARS = 2000
 MAX_NOTE_CHARS = 2000
 # Tổng quan cả nhóm: "hoạt động" = có lượt phân tích hoặc buổi phỏng vấn hoàn thành trong 30 ngày;
-# mục tiêu ≥ 60% SV hoạt động và CSAT ≥ 4/5 (PRD mục 9)
+# mục tiêu ≥ 60% SV hoạt động (PRD mục 9). CSAT toàn hệ thống nằm ở trang Quản trị (src/services/admin.py).
 ACTIVE_DAYS = 30
 ACTIVE_TARGET = 60
-CSAT_TARGET = 4.0
 WEEKS = 8
 TOP_IMPROVERS = 5
 RECENT_REVIEWS = 5
@@ -199,10 +197,8 @@ def summary(data: StudentData) -> dict[str, Any]:
         "id": s.id,
         "full_name": s.full_name,
         "subtitle": s.subtitle,
-        "student_code": s.student_code,
         "email": s.email,
-        "major": s.major,
-        "cohort": s.cohort,
+        "phone": s.phone,
         "avatar_url": s.avatar_url,
         "target": interview.jd_out(target) if target else None,
         "interview_count": len(data.sessions),
@@ -469,6 +465,29 @@ def _recent_reviews(db: Session, advisor: User, data: list[StudentData]) -> list
     return result
 
 
+PENDING_SESSIONS = 10
+
+
+def _pending_sessions(data: list["StudentData"]) -> list[dict[str, Any]]:
+    """Buổi SV đã chia sẻ mà bạn chưa nhận xét, chờ lâu nhất trước (nút "Nhận xét" mở thẳng đúng buổi)."""
+    rows = [
+        {
+            "session_id": s.id,
+            "student_id": d.student.id,
+            "student_name": d.student.full_name,
+            "avatar_url": d.student.avatar_url,
+            "jd": interview.jd_out(d.jds[s.jd_id]),
+            "completed_at": s.completed_at,
+            "overall_score": s.overall_score,
+        }
+        for d in data
+        for s in d.sessions
+        if d.shared(s.id) and s.id not in d.reviews
+    ]
+    rows.sort(key=lambda r: r["completed_at"])
+    return rows[:PENDING_SESSIONS]
+
+
 def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
     """
     Tổng quan cả nhóm SV phụ trách: số liệu chính (PRD mục 9), điểm TB theo tuần, phân bố trạng thái,
@@ -479,8 +498,6 @@ def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
     since = now - timedelta(days=ACTIVE_DAYS)
     latest = [r["latest_score"] for r in rows if r["latest_score"] is not None]
     deltas = [r["score_delta"] for r in rows if r["score_delta"] is not None]
-    ids = [d.student.id for d in data]
-    csat = list(db.scalars(select(Feedback.value).where(Feedback.user_id.in_(ids), Feedback.kind == "csat")))
     star = _cohort_star(data)
     flagged = sorted((r for r in rows if r["flag"]), key=lambda r: r["flag"]["flagged_at"], reverse=True)
     improvers = sorted((r for r in rows if (r["score_delta"] or 0) > 0), key=lambda r: r["score_delta"], reverse=True)
@@ -496,9 +513,6 @@ def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
         "scored_count": len(latest),
         "average_delta": _mean(deltas),
         "delta_count": len(deltas),
-        "csat": _mean(csat),
-        "csat_count": len(csat),
-        "csat_target": CSAT_TARGET,
         "weekly_scores": _weekly_scores(data, now),
         "status_counts": {
             status: sum(1 for r in rows if _status(r) == status)
@@ -509,6 +523,7 @@ def overview(db: Session, advisor: User, now: datetime) -> dict[str, Any]:
         "flagged_students": flagged,
         "top_improvers": improvers[:TOP_IMPROVERS],
         "recent_reviews": _recent_reviews(db, advisor, data),
+        "pending_sessions": _pending_sessions(data),
     }
 
 
@@ -562,6 +577,17 @@ def save_review(
             updated_at=now,
         )
         db.add(review)
+        session = db.get(InterviewSession, session_id)
+        jd = db.get(JobDescription, session.jd_id) if session else None
+        notifications.notify(
+            db,
+            student,
+            "advisor_comment",
+            f"{advisor.full_name} đã nhận xét buổi phỏng vấn {jd.title if jd else ''}".strip(),
+            f"“{text[:140]}{'…' if len(text) > 140 else ''}”",
+            action_label="Xem nhận xét",
+            action_href=f"/student/interview/{session_id}/report",
+        )
     else:
         review.comment = text
         review.updated_at = now

@@ -279,3 +279,30 @@ async def test_next_question_timer_starts_after_scoring(client, cv, clock, monke
     assert response["seconds_left"] == QUESTION_SECONDS
     state = (await client.get(f"/api/v1/interviews/{session['id']}", headers=STUDENT)).json()
     assert state["seconds_left"] == QUESTION_SECONDS
+
+
+@pytest.mark.asyncio
+async def test_start_interview_jd_only_without_cv(client, clock):
+    response = await client.post(
+        "/api/v1/interviews",
+        json={"jd_id": "jd-da-intern", "interview_mode": "jd_only"},
+        headers=STUDENT,
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["status"] == "in_progress"
+    assert data["interview_mode"] == "jd_only"
+    assert data["cv_version_id"] is None
+    assert data["cv_file_name"] is None
+    assert data["current_question"]["index"] == 1
+    assert "Data Analyst Intern" in data["current_question"]["text"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("key", "expected"), [("", False), ("  ", False), ("sk-test", True)])
+async def test_session_reports_voice_input_from_soniox_key(client, cv, clock, monkeypatch, key, expected):
+    """Frontend ẩn nút "Nói câu trả lời" khi server chưa cấu hình SONIOX_API_KEY."""
+    from src.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "soniox_api_key", key)
+    assert (await start(client, cv)).json()["voice_input"] is expected

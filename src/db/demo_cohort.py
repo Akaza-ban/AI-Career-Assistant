@@ -2,8 +2,8 @@
 Nhóm SV giả định do cố vấn demo phụ trách, để các trang Cố vấn có dữ liệu minh hoạ (tên người, trường đều là giả định).
 Mỗi SV có CV, lượt phân tích và buổi phỏng vấn đã chấm theo nhiều tình huống: tiến bộ, bị gắn cờ "Cần chú ý",
 lâu không hoạt động, chưa chia sẻ, mới 1 buổi, chưa phỏng vấn, đang giảm, ổn định; kèm đánh giá CSAT sau các lượt dùng
-và vài tin nhắn với cố vấn. Chỉ tạo SV chưa có trong DB (CSAT, tin nhắn thì bổ sung nếu còn thiếu);
-tắt bằng SEED_DEMO_COHORT=false.
+và vài tin nhắn với cố vấn. Trang Quản trị có thêm 2 cố vấn khác và 3 SV mới đăng ký chưa được phân công.
+Chỉ tạo bản ghi chưa có trong DB (CSAT, nhận xét, tin nhắn thì bổ sung nếu còn thiếu); tắt bằng SEED_DEMO_COHORT=false.
 """
 
 from datetime import timedelta
@@ -26,11 +26,11 @@ from src.db.models import (
     User,
     utcnow,
 )
-from src.db.seed import DEMO_ADVISOR_ID, assign
+from src.db.seed import DEMO_ADVISOR_ID, assign, migrate_school_profile
 from src.services import cv_files
 from src.services.cv_optimizer import DEVELOPING_TITLE, cv_document
 from src.services.cv_versions import label
-from src.services.interview import CRITERIA, GUIDANCE, QUESTION_BANK
+from src.services.interview import CRITERIA, GUIDANCE
 from src.services.skill_matching import IMPORTANCE_WEIGHTS, compute_score
 
 # Nội dung CV theo vị trí (phần kinh nghiệm / dự án)
@@ -77,7 +77,7 @@ CV_EXPERIENCE = {
     ],
 }
 
-# Câu trả lời mẫu theo chủ đề câu hỏi (QUESTION_BANK), {role} là tên vị trí
+# Câu trả lời mẫu theo chủ đề câu hỏi STAR, {role} là tên vị trí
 ANSWERS = [
     "Trong đồ án môn học gần nhất, nhóm em làm sản phẩm sát với công việc {role}. Em phụ trách phần chính của nhóm, "
     "tự lên kế hoạch, chia việc và báo cáo tiến độ hằng tuần. Cuối kỳ nhóm bàn giao đúng hạn.",
@@ -100,10 +100,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0151",
         "full_name": "Lê Quang Huy",
-        "email": "huy.lq21@student.university.edu.vn",
-        "student_code": "21125501",
+        "email": "huy.lq@gmail.com",
+        "phone": "0903 214 587",
         "major": "Công nghệ thông tin",
-        "short": "CNTT",
         "cohort": "K2021",
         "jd": "jd-be-intern",
         "weak": "result",
@@ -121,10 +120,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0152",
         "full_name": "Phạm Thu Trang",
-        "email": "trang.pt22@student.university.edu.vn",
-        "student_code": "22124018",
+        "email": "trang.pt@gmail.com",
+        "phone": "0987 552 130",
         "major": "Hệ thống thông tin quản lý",
-        "short": "HTTTQL",
         "cohort": "K2022",
         "jd": "jd-ba-intern",
         "weak": "action",
@@ -138,10 +136,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0153",
         "full_name": "Lê Thu Hà",
-        "email": "ha.lt21@student.university.edu.vn",
-        "student_code": "21123377",
+        "email": "ha.lt@gmail.com",
+        "phone": "0916 408 772",
         "major": "Kinh doanh quốc tế",
-        "short": "KDQT",
         "cohort": "K2021",
         "jd": "jd-xnk-fresher",
         "weak": "task",
@@ -155,10 +152,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0154",
         "full_name": "Phạm Quang Huy",
-        "email": "huy.pq22@student.university.edu.vn",
-        "student_code": "22125210",
+        "email": "huy.pq@gmail.com",
+        "phone": "0935 117 264",
         "major": "Công nghệ thông tin",
-        "short": "CNTT",
         "cohort": "K2022",
         "jd": "jd-fe-junior",
         "weak": "result",
@@ -172,10 +168,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0155",
         "full_name": "Võ Ngọc Lan",
-        "email": "lan.vn22@student.university.edu.vn",
-        "student_code": "22126044",
+        "email": "lan.vn@gmail.com",
+        "phone": "0978 630 415",
         "major": "Marketing",
-        "short": "MKT",
         "cohort": "K2022",
         "jd": "jd-mkt-analyst",
         "weak": "action",
@@ -189,10 +184,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0156",
         "full_name": "Đặng Minh Khoa",
-        "email": "khoa.dm21@student.university.edu.vn",
-        "student_code": "21127102",
+        "email": "khoa.dm@gmail.com",
+        "phone": "0908 742 091",
         "major": "Tài chính – Ngân hàng",
-        "short": "TCNH",
         "cohort": "K2021",
         "jd": "jd-fa-fresher",
         "weak": "result",
@@ -206,10 +200,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0157",
         "full_name": "Trần Bảo Châu",
-        "email": "chau.tb21@student.university.edu.vn",
-        "student_code": "21124590",
+        "email": "chau.tb@gmail.com",
+        "phone": "0941 285 336",
         "major": "Hệ thống thông tin quản lý",
-        "short": "HTTTQL",
         "cohort": "K2021",
         "jd": "jd-da-intern",
         "weak": "situation",
@@ -223,10 +216,9 @@ COHORT: list[dict[str, Any]] = [
     {
         "id": "sv-0158",
         "full_name": "Trần Văn Hưng",
-        "email": "hung.tv22@student.university.edu.vn",
-        "student_code": "22123881",
+        "email": "hung.tv@gmail.com",
+        "phone": "0962 019 548",
         "major": "Kinh doanh quốc tế",
-        "short": "KDQT",
         "cohort": "K2022",
         "jd": "jd-po-assistant",
         "weak": "task",
@@ -292,7 +284,7 @@ def _cv_text(spec: dict[str, Any], jd: JobDescription, version_index: int) -> st
     return "\n".join(
         [
             spec["full_name"],
-            f"{spec['email']} | 0900 000 {spec['student_code'][-3:]} | Hà Nội",
+            f"{spec['email']} | {spec['phone']} | Hà Nội",
             "MỤC TIÊU NGHỀ NGHIỆP",
             f"Sinh viên năm cuối ngành {spec['major']}, mong muốn ứng tuyển vị trí {jd.title}.",
             "HỌC VẤN",
@@ -337,6 +329,25 @@ def _add_session(
 ):
     completed = utcnow() - timedelta(days=days, hours=2)
     started = completed - timedelta(minutes=18)
+    exp_summary = (CV_EXPERIENCE.get(spec["jd"]) or ["dự án chuyên ngành"])[0]
+    questions = [
+        (
+            "Nhiệm vụ & Kinh nghiệm tiêu biểu",
+            f"Phân tích vai trò và giải pháp kỹ thuật của bạn khi thực hiện: {exp_summary}.",
+        ),
+        (
+            "Xử lý khó khăn & Thử thách kỹ thuật",
+            f"Sự cố kỹ thuật hoặc lỗi phức tạp nhất bạn từng khắc phục khi làm việc với các công nghệ liên quan đến {jd.title} là gì?",
+        ),
+        (
+            "Làm việc nhóm & Phối hợp",
+            f"Cách bạn phối hợp và giải quyết xung đột ý kiến kỹ thuật khi làm việc nhóm trong các đồ án/dự án {jd.title}?",
+        ),
+        (
+            "Học hỏi & Định hướng phát triển",
+            f"Bài toán kỹ thuật nào trong JD {jd.title} bạn thấy thách thức nhất và giải pháp tiếp cận của bạn ra sao?",
+        ),
+    ]
     session = InterviewSession(
         id=f"iv_{spec['id'][3:]}_{days}",
         owner_id=spec["id"],
@@ -344,16 +355,16 @@ def _add_session(
         cv_version_id=cv.id,
         cv_file_name=cv.file_name,
         status="completed",
-        current_index=len(QUESTION_BANK) + 1,
+        current_index=len(questions) + 1,
         created_at=started,
         completed_at=completed,
     )
     offsets = _star_offsets(spec["weak"])
     turns = []
-    for index, (theme, template) in enumerate(QUESTION_BANK, start=1):
+    for index, (theme, q_text) in enumerate(questions, start=1):
         stars = {c: _clip(target + TURN_OFFSETS[index - 1] + offsets[c]) for c in CRITERIA}
         score = round(sum(stars.values()) / len(CRITERIA), 2)
-        is_timed_out = index > len(QUESTION_BANK) - timed_out
+        is_timed_out = index > len(questions) - timed_out
         weakest = min(CRITERIA, key=lambda c: stars[c])
         turns.append(
             InterviewTurn(
@@ -361,7 +372,7 @@ def _add_session(
                 session_id=session.id,
                 index=index,
                 theme=theme,
-                question=template.format(role=jd.title),
+                question=q_text,
                 answer=ANSWERS[index - 1].format(role=jd.title),
                 timed_out=is_timed_out,
                 score=score,
@@ -385,11 +396,9 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
             id=spec["id"],
             role="student",
             full_name=spec["full_name"],
-            subtitle=f"{spec['short']} - {spec['cohort']}",
+            subtitle=spec["email"],
             email=spec["email"],
-            student_code=spec["student_code"],
-            major=spec["major"],
-            cohort=spec["cohort"],
+            phone=spec["phone"],
         )
     )
     db.flush()
@@ -398,7 +407,7 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
 
     cvs: list[CvVersion] = []
     for index, (days, missing, partial) in enumerate(spec["versions"]):
-        stem = f"CV_{spec['full_name'].split()[-1]}_{spec['short']}"
+        stem = f"CV_{spec['full_name'].split()[-1]}"
         # Mọi phiên bản của SV demo thuộc cùng một CV: bản tải lên v1.0, các lần tối ưu v1.1, v1.2...
         cv = CvVersion(
             id=f"cv_{spec['id'][3:]}_{index + 1}",
@@ -494,6 +503,55 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
         )
 
 
+# Nhận xét kèm CSAT (hiện ở "Nhận xét gần đây" của trang Quản trị, không kèm tên SV), theo mã phản hồi
+CSAT_COMMENTS = {
+    "fb_iv_0151_27": "Câu hỏi sát với vị trí, phần gợi ý cải thiện Kết quả rất dễ làm theo.",
+    "fb_iv_0152_20": "Câu hỏi hơi lặp lại giữa các buổi, mong có thêm câu hỏi tình huống.",
+    "fb_ga_0157_1": "Chỉ ra đúng kỹ năng còn thiếu, có ví dụ câu viết lại nên sửa CV nhanh.",
+    "fb_ga_0156_1": "Danh sách kỹ năng rõ ràng, mong có thêm gợi ý khoá học cho phần còn thiếu.",
+}
+
+# Lý do chọn nhanh của các lượt 1–3 sao (src/services/feedback.py REASONS)
+CSAT_TAGS = {
+    "fb_iv_0152_20": ["off_target_questions"],
+    "fb_iv_0152_30": ["too_short"],
+}
+
+# Cố vấn khác (chưa đặt mật khẩu nên không đăng nhập được) và SV mới đăng ký đang chờ phân công
+EXTRA_ADVISORS = [
+    {"id": "cv-008", "full_name": "Lê Thu Hà", "email": "ha.le@careerx.vn", "title": "Cố vấn hướng nghiệp"},
+    {"id": "cv-009", "full_name": "Võ Minh Đức", "email": "duc.vo@careerx.vn", "title": "Cố vấn ngành CNTT"},
+]
+UNASSIGNED_STUDENTS = [
+    {
+        "id": "sv-0171",
+        "full_name": "Hoàng Minh Thu",
+        "email": "hoangthu.ng@gmail.com",
+        "phone": "0901 223 445",
+        "days": 0,
+    },
+    {
+        "id": "sv-0172",
+        "full_name": "Phan Văn Long",
+        "email": "longphan.dev@gmail.com",
+        "phone": "0938 112 907",
+        "days": 1,
+    },
+    {"id": "sv-0173", "full_name": "Ngô Tường Vy", "email": "vy.ngo@outlook.com", "phone": "0977 450 128", "days": 2},
+]
+
+
+def _seed_admin_examples(db: Session) -> None:
+    now = utcnow()
+    for spec in EXTRA_ADVISORS:
+        if db.get(User, spec["id"]) is None:
+            db.add(User(role="advisor", subtitle=spec["title"], **spec))
+    for spec in UNASSIGNED_STUDENTS:
+        if db.get(User, spec["id"]) is None:
+            data = {k: v for k, v in spec.items() if k != "days"}
+            db.add(User(role="student", subtitle=spec["email"], created_at=now - timedelta(days=spec["days"]), **data))
+
+
 def _activity_ids(spec: dict[str, Any]) -> list[tuple[str, str]]:
     """Các lượt dùng của SV (mã lượt, loại hoạt động): lượt phân tích rồi buổi phỏng vấn, cũ → mới."""
     key = spec["id"][3:]
@@ -505,7 +563,13 @@ def _seed_csat(db: Session, spec: dict[str, Any]) -> None:
     """CSAT của SV giả định; bổ sung nếu còn thiếu (DB tạo trước khi có phần này)."""
     for (response_id, activity), value in zip(_activity_ids(spec), spec["csat"], strict=False):
         feedback_id = f"fb_{response_id}"
-        if db.get(Feedback, feedback_id) is None:
+        existing = db.get(Feedback, feedback_id)
+        if existing is not None:
+            if existing.comment is None and feedback_id in CSAT_COMMENTS:
+                existing.comment = CSAT_COMMENTS[feedback_id]
+            if existing.tags is None and feedback_id in CSAT_TAGS:
+                existing.tags = CSAT_TAGS[feedback_id]
+        else:
             db.add(
                 Feedback(
                     id=feedback_id,
@@ -514,6 +578,8 @@ def _seed_csat(db: Session, spec: dict[str, Any]) -> None:
                     kind="csat",
                     value=value,
                     activity=activity,
+                    comment=CSAT_COMMENTS.get(feedback_id),
+                    tags=CSAT_TAGS.get(feedback_id),
                 )
             )
 
@@ -542,9 +608,15 @@ def _seed_messages(db: Session, spec: dict[str, Any]) -> None:
 def seed_demo_cohort(db: Session) -> None:
     """Tạo các SV giả định chưa có trong DB (không đụng tới dữ liệu SV đã có, chỉ bổ sung CSAT / tin nhắn còn thiếu)."""
     for spec in COHORT:
-        if db.get(User, spec["id"]) is None:
+        user = db.get(User, spec["id"])
+        if user is None:
             _seed_student(db, spec)
             db.flush()
+        else:
+            migrate_school_profile(user, {"subtitle": spec["email"], "email": spec["email"]})
+            if user.phone is None:
+                user.phone = spec["phone"]
         _seed_csat(db, spec)
         _seed_messages(db, spec)
+    _seed_admin_examples(db)
     db.commit()

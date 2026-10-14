@@ -70,11 +70,12 @@ app = FastAPI(
 
 settings = get_settings()
 
-# Cấu hình CORS
+# Cấu hình CORS: hỗ trợ danh sách chỉ định và tự động cho phép mọi domain vercel.app
 cors_list = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_list or ["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

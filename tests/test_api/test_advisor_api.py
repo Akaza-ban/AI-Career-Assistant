@@ -4,7 +4,7 @@ import uuid
 from datetime import timedelta
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from src.db.database import SessionLocal, init_db
 from src.db.demo_cohort import seed_demo_cohort
@@ -22,7 +22,7 @@ from src.db.models import (
     User,
     utcnow,
 )
-from src.db.seed import DEMO_ADVISOR_ID, DEMO_STUDENT_ID
+from src.db.seed import DEMO_ADMIN_ID, DEMO_ADVISOR_ID, DEMO_STUDENT_ID
 from src.services import cv_versions
 from tests.helpers import ADVISOR, STUDENT
 
@@ -47,7 +47,7 @@ def clean_data():
         ):
             db.execute(delete(model))
         db.execute(delete(AdvisorAssignment).where(AdvisorAssignment.student_id != DEMO_STUDENT_ID))
-        db.execute(delete(User).where(User.id.notin_([DEMO_STUDENT_ID, DEMO_ADVISOR_ID])))
+        db.execute(delete(User).where(User.id.notin_([DEMO_STUDENT_ID, DEMO_ADVISOR_ID, DEMO_ADMIN_ID])))
         db.commit()
 
 
@@ -61,11 +61,9 @@ def add_student(student_id: str, name: str, assigned: bool = True) -> str:
                 id=student_id,
                 role="student",
                 full_name=name,
-                subtitle="HTTT - K2022",
-                email=f"{student_id}@example.edu.vn",
-                student_code="22120000",
-                major="Hệ thống thông tin",
-                cohort="K2022",
+                subtitle=f"{student_id}@example.com",
+                email=f"{student_id}@example.com",
+                phone="0900 000 000",
             )
         )
         if assigned:
@@ -497,11 +495,11 @@ async def test_overview_without_scores(client):
     assert res.status_code == 200
     body = res.json()
     assert (body["student_count"], body["active_count"], body["pending_reviews"]) == (1, 0, 0)
-    assert body["average_score"] is None and body["average_delta"] is None and body["csat"] is None
+    assert body["average_score"] is None and body["average_delta"] is None and "csat" not in body
     assert body["weekly_scores"] == [] and body["star"] is None and body["insight"] is None
     assert body["status_counts"]["insufficient"] == 1
     assert body["flagged_students"] == [] and body["top_improvers"] == [] and body["recent_reviews"] == []
-    assert (body["active_target"], body["csat_target"], body["active_days"]) == (60, 4.0, 30)
+    assert (body["active_target"], body["active_days"]) == (60, 30)
 
 
 @pytest.mark.asyncio
@@ -509,18 +507,14 @@ async def test_overview_aggregates_assigned_students(client):
     flagged = add_student("sv-9001", "Phạm Thu Trang")
     flagged_sessions = [add_session(flagged, score, days) for score, days in ((3.2, 30), (3.1, 20), (2.9, 9), (2.9, 2))]
     improving = add_student("sv-9002", "Lê Quang Huy")
-    improving_sessions = [
-        add_session(improving, score, days, weak="action") for score, days in ((2.6, 20), (3.0, 10), (3.5, 1))
-    ]
+    for score, days in ((2.6, 20), (3.0, 10), (3.5, 1)):
+        add_session(improving, score, days, weak="action")
     single = add_student("sv-9003", "Võ Ngọc Lan")
     add_session(single, 2.7, 3)
     idle = add_student("sv-9005", "Đặng Minh Khoa")
     add_analysis(idle, add_cv(idle, days=41), days=40)
     other = add_student("sv-9004", "Không phụ trách", assigned=False)
     add_session(other, 1.0, 1)
-    add_csat(improving, improving_sessions[-1], 5)
-    add_csat(single, "iv_x", 4)
-    add_csat(other, "iv_y", 1)
     with SessionLocal() as db:
         for item_id in flagged_sessions[-2:]:
             db.add(ShareGrant(id=f"sh_{item_id}", owner_id=flagged, kind="interview", item_id=item_id))
@@ -534,8 +528,6 @@ async def test_overview_aggregates_assigned_students(client):
     assert body["active_count"] == 3
     assert (body["average_score"], body["scored_count"]) == (3.03, 3)
     assert (body["average_delta"], body["delta_count"]) == (0.3, 2)
-    # CSAT chỉ tính SV thuộc danh sách phụ trách
-    assert (body["csat"], body["csat_count"]) == (4.5, 2)
     assert body["status_counts"] == {"flagged": 1, "declining": 0, "insufficient": 3, "stable": 0, "improving": 1}
     assert [s["id"] for s in body["flagged_students"]] == [flagged]
     assert [s["id"] for s in body["top_improvers"]] == [improving]
@@ -552,6 +544,9 @@ async def test_overview_aggregates_assigned_students(client):
     [review] = body["recent_reviews"]
     assert (review["student_id"], review["session_id"], review["seen_at"]) == (flagged, flagged_sessions[-1], None)
     assert review["comment"] == "Nhận xét buổi gần nhất." and review["jd"]["id"] == BA
+    # Buổi đã chia sẻ còn chờ nhận xét: nút "Nhận xét" ở Tổng quan mở thẳng đúng buổi
+    [pending] = body["pending_sessions"]
+    assert (pending["student_id"], pending["session_id"], pending["jd"]["id"]) == (flagged, flagged_sessions[-2], BA)
 
 
 @pytest.mark.asyncio
@@ -582,11 +577,11 @@ async def test_demo_cohort_covers_advisor_scenarios(client):
     assert (await client.get(f"{API}/advisor/students/sv-0151/cvs/{cv['id']}/file", headers=ADVISOR)).status_code == 200
 
     overview = (await client.get(f"{API}/advisor/overview", headers=ADVISOR)).json()
-    assert (overview["csat"], overview["csat_count"]) == (4.33, 18)
     assert overview["status_counts"]["flagged"] == 1 and overview["flagged_students"][0]["id"] == "sv-0152"
-    # DB tạo trước khi có CSAT demo: khởi động lại thì được bổ sung, không trùng
+    # CSAT demo (thống kê ở trang Quản trị): DB tạo trước khi có phần này thì khởi động lại được bổ sung, không trùng
     with SessionLocal() as db:
         db.execute(delete(Feedback))
         db.commit()
         seed_demo_cohort(db)
-    assert (await client.get(f"{API}/advisor/overview", headers=ADVISOR)).json()["csat_count"] == 18
+        seed_demo_cohort(db)
+        assert db.scalar(select(func.count()).select_from(Feedback).where(Feedback.kind == "csat")) == 18

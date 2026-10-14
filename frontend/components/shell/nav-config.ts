@@ -1,9 +1,12 @@
 import {
   FileText,
   LayoutGrid,
+  Library,
   MessagesSquare,
   ScanText,
+  SlidersHorizontal,
   TrendingUp,
+  UserRoundCheck,
   Users,
   type LucideIcon,
 } from "lucide-react"
@@ -16,6 +19,10 @@ export interface NavItem {
   icon: LucideIcon
   /** Tiền tố URL để đánh dấu mục đang chọn; mặc định = href (khớp chính xác). */
   match?: string
+  /** Tiêu đề nhóm trên sidebar; mục liền sau cùng nhóm thì không lặp lại tiêu đề. */
+  group?: string
+  /** Nhãn ngắn trên thanh tab điện thoại; không có thì mục nằm trong sheet "Tôi". */
+  tab?: string
 }
 
 export interface Crumb {
@@ -35,26 +42,26 @@ interface ExtraPage {
 export interface ShellConfig {
   role: Role
   nav: NavItem[]
-  settingsHref: string | null
   extraPages: ExtraPage[]
 }
 
 const analysisRoot: Crumb = { label: "Phân tích CV & JD", href: "/student/analysis/new" }
 const analysisResult = (id: string): Crumb => ({ label: "Kết quả phân tích", href: `/student/analysis/${id}` })
 
-// Menu sinh viên 6 mục. "Trình tối ưu CV" và "Xuất CV" không có tab riêng mà đi theo luồng
+// Menu sinh viên chia nhóm (DESIGN.md 5.2). "Trình tối ưu CV" và "Xuất CV" không có mục riêng mà đi theo luồng
 // Phân tích CV & JD → Trình tối ưu CV → Xuất CV (/student/analysis/[id]/optimize, /export).
 export const studentShell: ShellConfig = {
   role: "student",
   nav: [
-    { href: "/student", label: "Tổng quan", icon: LayoutGrid },
-    { href: "/student/cv", label: "CV của tôi", icon: FileText, match: "/student/cv" },
-    { href: "/student/analysis/new", label: "Phân tích CV & JD", icon: ScanText, match: "/student/analysis" },
-    { href: "/student/interview/new", label: "Luyện phỏng vấn", icon: MessagesSquare, match: "/student/interview" },
-    { href: "/student/history", label: "Lịch sử & Tiến bộ", icon: TrendingUp },
-    { href: "/student/share", label: "Chia sẻ với Cố vấn", icon: Users },
+    { href: "/student", label: "Tổng quan", icon: LayoutGrid, tab: "Tổng quan" },
+    { href: "/student/cv", label: "CV của tôi", icon: FileText, match: "/student/cv", group: "Hồ sơ" },
+    { href: "/student/library", label: "Thư viện JD", icon: Library, match: "/student/library", group: "Hồ sơ", tab: "Thư viện" },
+    { href: "/student/analysis/new", label: "Phân tích CV & JD", icon: ScanText, match: "/student/analysis", group: "Luyện tập", tab: "Phân tích" },
+    { href: "/student/interview/new", label: "Luyện phỏng vấn", icon: MessagesSquare, match: "/student/interview", group: "Luyện tập", tab: "Phỏng vấn" },
+    { href: "/student/history", label: "Tiến bộ", icon: TrendingUp, group: "Luyện tập" },
+    { href: "/student/share", label: "Chia sẻ với cố vấn", icon: Users, group: "Tài khoản" },
+    { href: "/student/settings", label: "Cài đặt", icon: SlidersHorizontal, group: "Tài khoản" },
   ],
-  settingsHref: "/student/settings",
   extraPages: [
     {
       pattern: /^\/student\/analysis\/([^/]+)\/optimize$/,
@@ -71,7 +78,18 @@ export const studentShell: ShellConfig = {
       ],
     },
     {
-      pattern: /^\/student\/analysis\/(?!new$)[^/]+$/,
+      pattern: /^\/student\/analysis\/compare$/,
+      title: "So sánh",
+      parents: () => [analysisRoot],
+    },
+    {
+      // Lượt so sánh đã lưu, mở từ Dòng thời gian
+      pattern: /^\/student\/analysis\/compare\/[^/]+$/,
+      title: "So sánh",
+      parents: () => [{ label: "Lịch sử & tiến bộ", href: "/student/history" }],
+    },
+    {
+      pattern: /^\/student\/analysis\/(?!new$|compare$)[^/]+$/,
       title: "Kết quả phân tích",
       parents: () => [analysisRoot],
     },
@@ -81,21 +99,25 @@ export const studentShell: ShellConfig = {
       parents: () => [{ label: "Luyện phỏng vấn", href: "/student/interview/new" }],
     },
     {
+      pattern: /^\/student\/library\/[^/]+$/,
+      title: "Chi tiết vị trí",
+      parents: () => [{ label: "Thư viện JD", href: "/student/library" }],
+    },
+    {
       pattern: /^\/student\/cv\/[^/]+$/,
       title: "Chi tiết CV",
       parents: () => [{ label: "CV của tôi", href: "/student/cv" }],
     },
-    { pattern: /^\/student\/settings$/, title: "Cài đặt & Quyền riêng tư" },
+    { pattern: /^\/student\/settings$/, title: "Cài đặt" },
   ],
 }
 
 export const advisorShell: ShellConfig = {
   role: "advisor",
   nav: [
-    { href: "/advisor", label: "Tổng quan", icon: LayoutGrid },
-    { href: "/advisor/students", label: "Sinh viên phụ trách", icon: Users, match: "/advisor/students" },
+    { href: "/advisor", label: "Tổng quan", icon: LayoutGrid, tab: "Tổng quan" },
+    { href: "/advisor/students", label: "Sinh viên phụ trách", icon: Users, match: "/advisor/students", group: "Sinh viên", tab: "Sinh viên" },
   ],
-  settingsHref: null,
   extraPages: [
     {
       pattern: /^\/advisor\/students\/[^/]+$/,
@@ -103,6 +125,26 @@ export const advisorShell: ShellConfig = {
       parents: () => [{ label: "Sinh viên phụ trách", href: "/advisor/students" }],
     },
   ],
+}
+
+// Quản trị (bản vẽ QuanTriTongQuan, QuanTriCoVan, QuanTriSinhVien): ba trang riêng, không gộp
+export const adminShell: ShellConfig = {
+  role: "admin",
+  nav: [
+    { href: "/admin", label: "Tổng quan", icon: LayoutGrid, tab: "Tổng quan" },
+    { href: "/admin/advisors", label: "Cố vấn", icon: UserRoundCheck, match: "/admin/advisors", group: "Quản lý", tab: "Cố vấn" },
+    { href: "/admin/students", label: "Sinh viên", icon: Users, match: "/admin/students", group: "Quản lý", tab: "Sinh viên" },
+    { href: "/admin/jds", label: "Thư viện JD", icon: Library, match: "/admin/jds", group: "Quản lý", tab: "JD" },
+  ],
+  extraPages: [
+    { pattern: /^\/admin\/feedback$/, title: "Nhận xét", parents: () => [{ label: "Tổng quan", href: "/admin" }] },
+    { pattern: /^\/admin\/jds\/new$/, title: "Thêm JD", parents: () => [{ label: "Thư viện JD", href: "/admin/jds" }] },
+    { pattern: /^\/admin\/jds\/[^/]+$/, title: "Sửa JD", parents: () => [{ label: "Thư viện JD", href: "/admin/jds" }] },
+  ],
+}
+
+export function shellOf(role: Role): ShellConfig {
+  return role === "admin" ? adminShell : role === "advisor" ? advisorShell : studentShell
 }
 
 export function isNavActive(item: NavItem, pathname: string): boolean {

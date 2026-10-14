@@ -1,11 +1,12 @@
 import json
+from datetime import date
 from pathlib import Path
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from src.config import get_settings
-from src.db.models import AdvisorAssignment, GapAnalysis, JobDescription, User
+from src.db.models import AdvisorAssignment, GapAnalysis, JobDescription, User, utcnow
 from src.services.auth import hash_password
 
 # Individual development accounts. IDs are retained for existing records; these
@@ -46,11 +47,18 @@ DEMO_USERS = [
         "id": DEMO_ADVISOR_ID,
         "role": "advisor",
         "full_name": "ThS. Trần Hoàng Nam",
-        "subtitle": "Khoa HTTT",
-        "email": "nam.th@university.edu.vn",
-        "title": "Cố vấn nghề nghiệp Khoa Hệ thống thông tin",
-        "office": "Phòng A2.305",
+        "subtitle": "Cố vấn hướng nghiệp",
+        "email": "nam.tran@careerx.vn",
+        "title": "Cố vấn hướng nghiệp",
+        "office": "Trực tuyến qua Google Meet",
         "office_hours": "Thứ 3 & Thứ 5 (14:00 – 16:30)",
+    },
+    {
+        "id": DEMO_ADMIN_ID,
+        "role": "admin",
+        "full_name": "Quản trị CareerV",
+        "subtitle": "Quản trị hệ thống",
+        "email": "admin@careerx.vn",
     },
 ]
 
@@ -77,9 +85,41 @@ def seed_demo_users(db: Session) -> None:
         if not user.password_hash:
             user.password_hash = hash_password(passwords[data["id"]])
     db.flush()
+    _set_demo_passwords(db)
     assign(db, DEMO_ADVISOR_ID, DEMO_STUDENT_ID)
     assign(db, DEMO_ADVISOR_ID, SECOND_STUDENT_ID)
     db.commit()
+
+
+def _set_demo_passwords(db: Session) -> None:
+    """Đặt mật khẩu DEMO_ACCOUNT_PASSWORD cho tài khoản demo chưa có mật khẩu (để thử trang Đăng nhập)."""
+    from src.config import get_settings
+    from src.services.auth import hash_password
+
+    password = get_settings().demo_account_password
+    if not password:
+        return
+    for user_id in (DEMO_STUDENT_ID, DEMO_ADVISOR_ID, DEMO_ADMIN_ID):
+        user = db.get(User, user_id)
+        if user is not None and user.password_hash is None:
+            user.password_hash = hash_password(password)
+            if user.role == "student" and user.consent_accepted_at is None:
+                user.consent_accepted_at = utcnow()
+
+
+LEGACY_FIELDS = ("subtitle", "email", "title", "office")
+
+
+def migrate_school_profile(user: User, data: dict) -> None:
+    """
+    Hồ sơ demo tạo trước khi bỏ email trường / mã SV: đổi sang thông tin cá nhân trong `data`.
+    Chỉ áp dụng cho bản ghi còn email đuôi "university.edu.vn" nên chạy lại không ghi đè thay đổi của người dùng.
+    """
+    if not user.email.endswith("university.edu.vn"):
+        return
+    for key in LEGACY_FIELDS:
+        if key in data:
+            setattr(user, key, data[key])
 
 
 def assign(db: Session, advisor_id: str, student_id: str) -> None:
@@ -92,18 +132,31 @@ JD_LIBRARY_FILE = Path(__file__).parent / "fixtures" / "jd_library.json"
 
 
 def seed_jd_library(db: Session) -> None:
-    """Đồng bộ thư viện JD từ fixtures/jd_library.json (thêm mới hoặc cập nhật theo id)."""
+    """
+    Nạp thư viện JD từ fixtures/jd_library.json: thêm JD còn thiếu; JD quản trị viên chưa sửa (updated_at = None)
+    thì vẫn đồng bộ theo file. Các trường cấu trúc chung được tách lại từ toàn văn khi nội dung đổi.
+    """
+    from src.services.jds import backfill_structure
+
     items = json.loads(JD_LIBRARY_FILE.read_text(encoding="utf-8"))
     for item in items:
-        jd = db.get(JobDescription, item["id"]) or JobDescription(id=item["id"], source="library")
+        jd = db.get(JobDescription, item["id"])
+        if jd is not None and jd.updated_at is not None:
+            continue
+        if jd is None:
+            jd = JobDescription(id=item["id"], source="library")
+            db.add(jd)
+        if jd.content != item["content"]:
+            jd.description = None  # tách lại các mục ở backfill_structure
         jd.title = item["title"]
         jd.company = item.get("company")
         jd.industry = item.get("industry")
         jd.level = item.get("level")
         jd.content = item["content"]
         jd.skills = item["skills"]
-        db.add(jd)
+        jd.skills_source = "admin"
     db.commit()
+    backfill_structure(db)
 
 
 def fail_interrupted_analyses(db: Session) -> None:
@@ -121,13 +174,20 @@ def fail_interrupted_analyses(db: Session) -> None:
 
 
 def seed_vector_store() -> int:
-    """Nạp và index toàn bộ JD từ fixtures vào Vector Store (ChromaDB)."""
+    """Nạp JD thư viện đang hiển thị (từ DB) vào Vector Store (ChromaDB); JD đã ẩn bị bỏ khỏi kho."""
     try:
+        from src.db.database import SessionLocal
+        from src.services.jd_library import jd_item
         from src.services.jd_store import get_jd_store
 
         store = get_jd_store()
-        count = store.index_from_fixtures(str(JD_LIBRARY_FILE))
-        return count
+        with SessionLocal() as db:
+            library = list(db.scalars(select(JobDescription).where(JobDescription.source == "library")))
+        if not library:
+            return store.index_from_fixtures(str(JD_LIBRARY_FILE))
+        hidden = [jd.id for jd in library if jd.status == "hidden"]
+        store.remove(hidden)
+        return store.index_items([jd_item(jd) for jd in library if jd.status != "hidden"])
     except Exception as e:
         import logging
 

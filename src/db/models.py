@@ -1,8 +1,8 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.database import Base
@@ -35,28 +35,97 @@ class ProviderUsage(Base):
 
 
 class User(Base):
-    """Người dùng hệ thống (sinh viên hoặc cố vấn)."""
+    """Người dùng hệ thống (sinh viên, cố vấn hoặc quản trị viên)."""
 
     __tablename__ = "users"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    # "student" | "advisor"
+    # "student" | "advisor" | "admin"
     role: Mapped[str] = mapped_column(String(16), index=True)
     full_name: Mapped[str] = mapped_column(String(255))
-    # Ví dụ "KDQT - K2021" (sinh viên) hoặc "Khoa HTTT" (cố vấn)
+    # Dòng phụ dưới tên: email (sinh viên) hoặc chức danh (cố vấn)
     subtitle: Mapped[str] = mapped_column(String(255), default="")
     email: Mapped[str] = mapped_column(String(255), unique=True)
     password_hash: Mapped[str | None] = mapped_column(String(255), default=None)
     avatar_url: Mapped[str | None] = mapped_column(String(1024), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    # Sinh viên: mã SV, ngành, khoá (lọc danh sách ở trang Cố vấn)
-    student_code: Mapped[str | None] = mapped_column(String(32), default=None)
-    major: Mapped[str | None] = mapped_column(String(255), default=None)
-    cohort: Mapped[str | None] = mapped_column(String(32), default=None)
+    # Sinh viên: hồ sơ cá nhân, không gắn với trường (người dùng đến từ nhiều trường khác nhau).
+    # DB cũ còn cột student_code / major / cohort: không dùng nữa, để nguyên (cho phép NULL).
+    phone: Mapped[str | None] = mapped_column(String(32), default=None)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, default=None)
     # Cố vấn: chức danh, văn phòng, giờ tư vấn (hiện ở trang Chia sẻ với cố vấn của SV)
     title: Mapped[str | None] = mapped_column(String(255), default=None)
     office: Mapped[str | None] = mapped_column(String(255), default=None)
     office_hours: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Tài khoản: mật khẩu băm PBKDF2 (src/services/auth.py); None = chưa đặt mật khẩu (chỉ vào được bằng demo)
+    password_hash: Mapped[str | None] = mapped_column(String(255), default=None)
+    password_updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    # Đồng ý xử lý dữ liệu & cam kết liêm chính khi đăng ký; None = chưa đồng ý hoặc đã rút lại
+    consent_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    integrity_pledge_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    # Cài đặt quyền riêng tư và thông báo: {"privacy": {...}, "notifications": {...}}; None = mặc định
+    preferences: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    # Chống dò mật khẩu: số lần nhập sai liên tiếp và thời điểm hết khoá
+    failed_logins: Mapped[int | None] = mapped_column(Integer, default=None)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    # Tài khoản cố vấn do quản trị viên tạo / đặt lại bằng mật khẩu tạm: phải đổi mật khẩu trước khi dùng
+    must_change_password: Mapped[bool | None] = mapped_column(Boolean, default=None)
+    # Quản trị viên tạm khoá tài khoản: không đăng nhập được, mọi phiên bị kết thúc
+    disabled_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+    # Lần gần nhất gọi API (cập nhật thưa, xem src/api/deps.py), hiện ở cột "Hoạt động" của trang Quản trị
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+
+class AuthSession(Base):
+    """Phiên đăng nhập. Cookie giữ token ngẫu nhiên; DB chỉ lưu SHA-256 của token."""
+
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+
+
+class PasswordResetToken(Base):
+    """Link đặt lại mật khẩu gửi qua email; dùng một lần, hết hạn sau password_reset_minutes."""
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+
+class Notification(Base):
+    """Thông báo trong chuông (gửi khi có nhận xét mới, báo cáo / phân tích xong, SV chia sẻ buổi mới…)."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    # advisor_comment | interview_report | gap_analysis | integrity_alert | student_activity | student_inactive
+    kind: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text, default="")
+    action_label: Mapped[str | None] = mapped_column(String(64), default=None)
+    action_href: Mapped[str | None] = mapped_column(String(512), default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
+
+class SavedJd(Base):
+    """Vị trí sinh viên đã lưu (♥) trong Thư viện JD."""
+
+    __tablename__ = "saved_jds"
+    __table_args__ = (UniqueConstraint("user_id", "jd_id"),)
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    jd_id: Mapped[str] = mapped_column(ForeignKey("job_descriptions.id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class AuthSession(Base):
@@ -212,6 +281,32 @@ class JobDescription(Base):
     skills: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
+    # Cấu trúc chung (src/services/jd_parser.py). content giữ toàn văn gốc để đối chiếu khi tách sai.
+    # "full_time" | "part_time" | "internship"
+    employment_type: Mapped[str | None] = mapped_column(String(16), default=None)
+    # "onsite" | "remote" | "hybrid"
+    work_mode: Mapped[str | None] = mapped_column(String(16), default=None)
+    location: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Chữ tự do: "12 – 15 triệu", "Thoả thuận"
+    salary: Mapped[str | None] = mapped_column(String(120), default=None)
+    deadline: Mapped[date | None] = mapped_column(Date, default=None)
+    # "none" | "under_1" | "1_2" | "2_plus"
+    experience: Mapped[str | None] = mapped_column(String(16), default=None)
+    majors: Mapped[list[str] | None] = mapped_column(JSON(none_as_null=True), default=None)
+    description: Mapped[str | None] = mapped_column(Text, default=None)
+    requirements: Mapped[str | None] = mapped_column(Text, default=None)
+    benefits: Mapped[str | None] = mapped_column(Text, default=None)
+    how_to_apply: Mapped[str | None] = mapped_column(Text, default=None)
+    # Nguồn mức quan trọng của kỹ năng: "dictionary" (tạm, mọi kỹ năng là bắt buộc) | "sections" | "ai" | "analysis"
+    # | "admin". Phân tích CV dùng thẳng danh sách đã có, trừ "dictionary" (trích lại bằng AI).
+    skills_source: Mapped[str | None] = mapped_column(String(16), default=None)
+    # JD thư viện: None / "published" = hiển thị cho sinh viên, "hidden" = đã ẩn (dữ liệu cũ vẫn giữ)
+    status: Mapped[str | None] = mapped_column(String(16), default=None)
+    # JD thư viện tạo từ JD sinh viên tự dán ("Đưa vào thư viện")
+    source_jd_id: Mapped[str | None] = mapped_column(String(64), default=None, index=True)
+    # Lần quản trị viên sửa gần nhất; None = chưa sửa, nên thư viện vẫn đồng bộ theo fixtures/jd_library.json
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=None)
+
 
 class GapAnalysis(Base):
     """Một lượt phân tích khoảng cách CV–JD (US-SV-02, US-SV-05), chạy nền và cập nhật tiến độ theo từng bước."""
@@ -257,6 +352,9 @@ class CvOptimization(Base):
     # Trả lời kiểm tra kỹ năng thiếu theo mã yêu cầu JD:
     # {requirement_id: {"has_experience", "context", "learning_note", "answered_at"}}
     capability_answers: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    # Ngữ cảnh SV bổ sung cho gợi ý cần số liệu (US-SV-03 AC2):
+    # {suggestion_id: {"answer", "proposed_text", "answered_at"}}; None ở phiên tạo trước khi có cột này
+    contexts: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     # Phiên bản CV tạo ra khi "Hoàn tất"
     result_cv_version_id: Mapped[str | None] = mapped_column(String(64), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -313,9 +411,12 @@ class Feedback(Base):
     # "thumb" | "csat"
     kind: Mapped[str] = mapped_column(String(8))
     value: Mapped[int] = mapped_column(Integer)
-    # "gap_analysis" | "interview" (chỉ với csat)
+    # csat: "gap_analysis" | "optimizer" | "interview";
+    # thumb: "gap_suggestion" | "interview_turn" | "job_recommendation" | "jd_compare" (None ở dữ liệu cũ)
     activity: Mapped[str | None] = mapped_column(String(32), default=None)
     comment: Mapped[str | None] = mapped_column(Text, default=None)
+    # Chỉ với csat 1–3 sao: mã lý do sinh viên chọn nhanh (src/services/feedback.py REASONS)
+    tags: Mapped[list[str] | None] = mapped_column(JSON(none_as_null=True), default=None)
     # Chỉ với csat: "Bạn có dùng lại không?" (S7b); None nếu SV bỏ qua câu này
     would_reuse: Mapped[bool | None] = mapped_column(Boolean, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -332,8 +433,9 @@ class InterviewSession(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     jd_id: Mapped[str] = mapped_column(ForeignKey("job_descriptions.id"), index=True)
-    cv_version_id: Mapped[str] = mapped_column(String(64))
-    cv_file_name: Mapped[str] = mapped_column(String(255))
+    cv_version_id: Mapped[str | None] = mapped_column(String(64), nullable=True, default=None)
+    cv_file_name: Mapped[str | None] = mapped_column(String(255), nullable=True, default=None)
+    interview_mode: Mapped[str] = mapped_column(String(16), default="with_cv")
     # "in_progress" | "completed"
     status: Mapped[str] = mapped_column(String(16), default="in_progress", index=True)
     # Câu đang trả lời, đánh số từ 1
@@ -450,3 +552,20 @@ class AssistantFeedback(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
     turn: Mapped["AssistantTurn"] = relationship("AssistantTurn", back_populates="feedback")
+
+
+class JobComparisonHistory(Base):
+    """Lịch sử các lần so sánh nhiều JD của sinh viên (Multi-JD Matching History)."""
+
+    __tablename__ = "jd_comparison_history"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    owner_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    cv_version_id: Mapped[str | None] = mapped_column(String(64), index=True, default=None)
+    cv_label: Mapped[str | None] = mapped_column(String(32), default=None)
+    cv_name: Mapped[str | None] = mapped_column(String(255), default=None)
+    jd_ids: Mapped[list[str]] = mapped_column(JSON, default=list)
+    total_compared: Mapped[int] = mapped_column(Integer, default=0)
+    comparisons: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    common_missing_skills: Mapped[list[str]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

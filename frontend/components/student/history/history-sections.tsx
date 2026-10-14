@@ -2,16 +2,18 @@
 
 import Link from "next/link"
 import { useState, type ReactNode } from "react"
-import { ArrowRight, ChevronLeft, ChevronRight, Loader2, MessagesSquare, RotateCcw, TimerOff } from "lucide-react"
+import { Clock, FileSearch, GitCompareArrows, Loader2, MessagesSquare, ScanText, type LucideIcon } from "lucide-react"
 
-import { Panel, SectionHeader } from "@/components/common/panel"
-import { ScoreLineChart, type ScorePoint } from "@/components/common/score-line-chart"
+import { EmptyState } from "@/components/common/empty-state"
+import { MatchBadge } from "@/components/common/match-badge"
+import { ProgressChart } from "@/components/student/history/progress-chart"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { MATCH_LABEL_META, formatPercent } from "@/lib/analysis"
-import { formatDate, formatWhen } from "@/lib/format"
-import { LABEL_META, STAR_META, STAR_ORDER, formatScore, labelOf, trendOf } from "@/lib/interview"
-import type { AnalysisRow, CvProgress, InterviewProgress, InterviewRow } from "@/lib/types"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { formatPercent } from "@/lib/analysis"
+import { formatDate } from "@/lib/format"
+import { STAR_META, STAR_ORDER, formatScore, trendOf } from "@/lib/interview"
+import type { AnalysisRow, CompareJdsResponse, CvProgress, InterviewProgress, InterviewRow } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 const pad = (n: number) => String(n).padStart(2, "0")
@@ -21,25 +23,6 @@ const shortDate = (iso: string) => {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`
 }
 const signed = (n: number, format: (n: number) => string = formatScore) => `${n > 0 ? "+" : ""}${format(n)}`
-
-function JdTitle({ jd }: { jd: { title: string; company: string | null } }) {
-  return (
-    <span className="grid min-w-0">
-      <span className="truncate font-heading text-base font-bold text-ink">{jd.title}</span>
-      {jd.company && <span className="truncate text-xs text-ink-2">{jd.company}</span>}
-    </span>
-  )
-}
-
-/** Tiêu đề mục đặt ngoài ô (như trang Tổng quan) kèm một dòng giải thích cách đọc số liệu. */
-function SectionTitle({ title, description }: { title: string; description: string }) {
-  return (
-    <div className="grid gap-1">
-      <SectionHeader title={title} />
-      <p className="text-xs text-ink-2">{description}</p>
-    </div>
-  )
-}
 
 // ---------- Tiến bộ phỏng vấn theo vị trí (PRD mục 5.1, 2 lớp) ----------
 
@@ -110,308 +93,241 @@ export function StarCompare({ group }: { group: InterviewProgress }) {
   )
 }
 
-function InterviewProgressCard({ group }: { group: InterviewProgress }) {
-  const points: ScorePoint[] = group.points.map((p, i) => ({
-    label: `Buổi ${i + 1}`,
-    sub: shortDate(p.completed_at),
-    detail: formatDate(p.completed_at),
-    value: p.score,
-  }))
-  const label = LABEL_META[labelOf(group.latest_score)]
-  const single = group.session_count === 1
-  // Mới có 2 buổi thì buổi trước chính là buổi đầu: chỉ hiện một dòng so sánh.
-  const previousIsFirst = group.previous_session_id === group.points[0].id
+// ---------- Vùng "Tiến bộ": 2 khối cạnh nhau (bản vẽ TienBo) ----------
 
+/** Badge chênh lệch cạnh tiêu đề khối: tăng xanh lá, giảm cam, không đổi xám (cùng kiểu MetricColumn). */
+function DeltaBadge({ text, value, title }: { text: string; value: number; title: string }) {
   return (
-    <Panel className="grid gap-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <JdTitle jd={group.jd} />
-        <div className="flex items-center gap-2">
-          <Badge variant="neutral">{group.session_count} buổi</Badge>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-violet hover:bg-violet-soft hover:text-violet"
-            nativeButton={false}
-            render={<Link href={`/student/interview/new?jd=${encodeURIComponent(group.jd.id)}`} />}
-          >
-            <RotateCcw aria-hidden />
-            Luyện lại
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        {/* Lớp 1: điểm tổng qua các buổi */}
-        <div className="grid content-start gap-3">
-          <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-            <p className="flex items-end gap-2">
-              <span className={cn("font-heading text-4xl leading-none font-extrabold", label.className)}>
-                {formatScore(group.latest_score)}
-              </span>
-              <span className="pb-0.5 text-sm font-semibold text-ink-3">/5</span>
-              <Badge variant="neutral" className={cn("mb-0.5", label.badge)}>
-                {label.text}
-              </Badge>
-            </p>
-            {single ? (
-              <p className="text-sm text-ink-2">Mới có 1 buổi trong khoảng này. Luyện thêm để theo dõi tiến bộ.</p>
-            ) : (
-              <div className="grid gap-0.5">
-                {group.delta_from_previous !== null && <DeltaLine label="so với buổi trước" delta={group.delta_from_previous} />}
-                {group.delta_from_first !== null && !previousIsFirst && (
-                  <p className="text-xs text-ink-2">
-                    {signed(group.delta_from_first)} so với buổi đầu trong khoảng ({formatScore(group.first_score)} →{" "}
-                    {formatScore(group.latest_score)})
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-          {!single && <ScoreLineChart points={points} highlight max={5} unit="điểm STAR" className="h-56" />}
-          <Link
-            href={`/student/interview/${encodeURIComponent(group.latest_session_id)}/report`}
-            className="inline-flex items-center gap-1 justify-self-start text-sm font-medium text-blue hover:underline"
-          >
-            Xem báo cáo buổi gần nhất
-            <ArrowRight className="size-4" aria-hidden />
-          </Link>
-        </div>
-        <StarCompare group={group} />
-      </div>
-    </Panel>
-  )
-}
-
-export function InterviewProgressSection({ groups }: { groups: InterviewProgress[] }) {
-  return (
-    <section className="grid gap-3">
-      <SectionTitle
-        title="Tiến bộ phỏng vấn"
-        description="Điểm STAR thang 0–5, so sánh trong từng vị trí. Chênh từ 0,3 điểm trở lên so với buổi trước được xem là thay đổi rõ."
-      />
-      {groups.length === 0 ? (
-        <Panel className="grid justify-items-center gap-2 py-10 text-center">
-          <MessagesSquare className="size-6 text-ink-3" aria-hidden />
-          <p className="text-sm text-ink-2">Chưa có buổi phỏng vấn nào trong khoảng này.</p>
-        </Panel>
-      ) : (
-        groups.map((group) => <InterviewProgressCard key={group.jd.id} group={group} />)
+    <span
+      title={title}
+      className={cn(
+        "rounded-badge border px-1.5 text-xs leading-5 font-semibold tabular-nums",
+        value > 0
+          ? "border-good-line bg-good-soft text-good"
+          : value < 0
+            ? "border-warn-line bg-warn-soft text-warn"
+            : "border-line-strong bg-surface text-ink-2",
       )}
-    </section>
+    >
+      {text}
+    </span>
   )
 }
 
-// ---------- Tiến bộ CV (độ khớp qua các phiên bản CV với cùng JD) ----------
+interface PickerProps {
+  label: string
+  items: { value: string; label: string }[]
+  value: string
+  onChange: (value: string) => void
+}
 
-function CvProgressGroup({ group }: { group: CvProgress }) {
-  const last = group.points.length - 1
+function Picker({ label, items, value, onChange }: PickerProps) {
   return (
-    <Panel className="grid content-start gap-3 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <JdTitle jd={group.jd} />
-        {group.delta !== null && (
-          <Badge variant={group.delta > 0 ? "good" : group.delta < 0 ? "bad" : "neutral"}>
-            {group.delta === 0 ? "Không đổi" : `${signed(group.delta, formatPercent)} điểm`}
-          </Badge>
-        )}
-      </div>
-      <ul className="grid gap-2.5">
-        {group.points.map((p, i) => (
-          <li key={p.analysis_id}>
-            <Link
-              href={`/student/analysis/${encodeURIComponent(p.analysis_id)}`}
-              className="grid grid-cols-[64px_minmax(0,1fr)_56px] items-center gap-3 rounded-lg px-1 py-0.5 text-sm hover:bg-surface"
-              aria-label={`CV ${p.cv_label}: khớp ${formatPercent(p.match_score)}%, xem phân tích`}
-            >
-              <span className={cn("font-medium", i === last ? "text-ink" : "text-ink-2")}>CV {p.cv_label}</span>
-              <span className="h-2 overflow-hidden rounded-full bg-surface">
-                <span
-                  className={cn("block h-full rounded-full", i === last ? "bg-blue" : "bg-blue/35")}
-                  style={{ width: `${p.match_score}%` }}
-                />
-              </span>
-              <strong className={cn("text-right font-heading", i === last ? "text-ink" : "text-ink-2")}>
-                {formatPercent(p.match_score)}%
-              </strong>
-            </Link>
-          </li>
+    <Select items={items} value={value} onValueChange={(v) => v && onChange(String(v))}>
+      <SelectTrigger
+        aria-label={label}
+        className="h-[38px] w-full min-w-0 rounded-[10px] border-line-strong bg-card px-3 text-sm font-medium text-ink shadow-xs sm:w-60"
+      >
+        <SelectValue className="min-w-0 truncate" />
+      </SelectTrigger>
+      <SelectContent align="end">
+        {items.map((item) => (
+          <SelectItem key={item.value} value={item.value}>
+            {item.label}
+          </SelectItem>
         ))}
-      </ul>
-      {group.points.length === 1 && (
-        <p className="text-xs text-ink-2">Tối ưu CV rồi phân tích lại với JD này để thấy độ khớp thay đổi.</p>
-      )}
-    </Panel>
+      </SelectContent>
+    </Select>
   )
 }
 
-export function CvProgressSection({ groups }: { groups: CvProgress[] }) {
-  return (
-    <section className="grid gap-3">
-      <SectionTitle
-        title="Tiến bộ CV"
-        description="Độ khớp CV–JD (0–100) qua các phiên bản CV với cùng một JD; mỗi phiên bản lấy lần phân tích gần nhất."
-      />
-      {groups.length === 0 ? (
-        <Panel className="grid justify-items-center gap-3 py-8 text-center">
-          <p className="text-sm text-ink-2">Chưa có lượt phân tích hoàn thành nào trong khoảng này.</p>
-          <Button variant="soft" nativeButton={false} render={<Link href="/student/analysis/new" />}>
-            Phân tích CV với JD
-          </Button>
-        </Panel>
-      ) : (
-        <div className="grid items-start gap-6 md:grid-cols-2">
-          {groups.map((group) => (
-            <CvProgressGroup key={group.jd.id} group={group} />
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-// ---------- Bảng buổi phỏng vấn & lượt phân tích ----------
-
-const PAGE_SIZE = 5
-
-function usePage<T>(rows: T[]) {
-  const [page, setPage] = useState(0)
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
-  const current = Math.min(page, pageCount - 1)
-  return { rows: rows.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE), current, pageCount, setPage }
-}
-
-interface TablePanelProps {
+/** Khung một khối: tiêu đề 16px + badge bên trái, bộ chọn bên phải; điện thoại thì bộ chọn xuống dòng, rộng hết. */
+function ProgressBlock({
+  id,
+  title,
+  badge,
+  picker,
+  children,
+}: {
+  id: string
   title: string
-  total: number
-  unit: string
-  head: ReactNode
-  columns: number
-  empty: string
-  page: ReturnType<typeof usePage>
+  badge?: ReactNode
+  picker?: ReactNode
   children: ReactNode
-}
-
-function TablePanel({ title, total, unit, head, columns, empty, page, children }: TablePanelProps) {
+}) {
   return (
-    <section className="grid gap-3">
-      <SectionHeader title={title} aside={<span className="text-sm text-ink-2">{total} {unit}</span>} />
-      <Panel className="grid overflow-hidden p-0">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead className="bg-blue-soft/40 text-left text-xs font-semibold tracking-wide text-ink-2 uppercase">{head}</thead>
-            <tbody className="divide-y divide-line">
-              {total === 0 ? (
-                <tr>
-                  <td colSpan={columns} className="px-6 py-10 text-center text-ink-2">
-                    {empty}
-                  </td>
-                </tr>
-              ) : (
-                children
-              )}
-            </tbody>
-          </table>
+    <section aria-labelledby={id} className="min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2.5">
+        <div className="flex items-center gap-2">
+          <h3 id={id} className="text-base font-semibold text-ink">
+            {title}
+          </h3>
+          {badge}
         </div>
-        {page.pageCount > 1 && (
-          <div className="flex items-center justify-end gap-1 border-t border-line px-6 py-3 text-xs text-ink-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Trang trước"
-              disabled={page.current === 0}
-              onClick={() => page.setPage(page.current - 1)}
-            >
-              <ChevronLeft aria-hidden />
-            </Button>
-            <span className="min-w-12 text-center font-medium text-ink">
-              {page.current + 1} / {page.pageCount}
-            </span>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Trang sau"
-              disabled={page.current >= page.pageCount - 1}
-              onClick={() => page.setPage(page.current + 1)}
-            >
-              <ChevronRight aria-hidden />
-            </Button>
-          </div>
-        )}
-      </Panel>
+        {picker && <div className="w-full sm:w-auto">{picker}</div>}
+      </div>
+      {children}
     </section>
   )
 }
 
-export function InterviewTable({ rows }: { rows: InterviewRow[] }) {
-  const page = usePage(rows)
+const jdLabel = (jd: { title: string; company: string | null }) => (jd.company ? `${jd.title} · ${jd.company}` : jd.title)
+
+export function InterviewProgressBlock({ groups }: { groups: InterviewProgress[] }) {
+  const [jdId, setJdId] = useState<string | null>(null)
+  const group = groups.find((g) => g.jd.id === jdId) ?? groups[0]
+
+  if (!group) {
+    return (
+      <ProgressBlock id="progress-interview" title="Điểm phỏng vấn">
+        <EmptyState
+          icon={MessagesSquare}
+          title="Chưa có buổi phỏng vấn nào"
+          description="Hoàn thành buổi phỏng vấn thử đầu tiên để theo dõi điểm qua từng buổi."
+          action={
+            <Button variant="soft" size="brand" nativeButton={false} render={<Link href="/student/interview/new" />}>
+              Luyện phỏng vấn
+            </Button>
+          }
+        />
+      </ProgressBlock>
+    )
+  }
+
+  const delta = group.delta_from_first
   return (
-    <TablePanel
-      title="Các buổi phỏng vấn thử"
-      total={rows.length}
-      unit="buổi"
-      columns={5}
-      empty="Không có buổi phỏng vấn nào trong khoảng này."
-      page={page}
-      head={
-        <tr>
-          <th scope="col" className="px-6 py-3">Thời gian</th>
-          <th scope="col" className="px-3 py-3">Vị trí</th>
-          <th scope="col" className="px-3 py-3">Điểm STAR</th>
-          <th scope="col" className="px-3 py-3">Câu hết giờ</th>
-          <th scope="col" className="px-6 py-3 text-right">Hành động</th>
-        </tr>
+    <ProgressBlock
+      id="progress-interview"
+      title="Điểm phỏng vấn"
+      badge={delta !== null && <DeltaBadge text={signed(delta)} value={delta} title="So với buổi đầu" />}
+      picker={
+        groups.length > 1 ? (
+          <Picker
+            label="Chọn vị trí"
+            items={groups.map((g) => ({ value: g.jd.id, label: g.jd.title }))}
+            value={group.jd.id}
+            onChange={setJdId}
+          />
+        ) : undefined
       }
     >
-      {page.rows.map((row) => {
-        const label = LABEL_META[row.label]
-        return (
-          <tr key={row.id} className="hover:bg-surface/60">
-            <td className="px-6 py-3.5">
-              <p className="font-medium whitespace-nowrap text-ink">{formatWhen(row.completed_at)}</p>
-              <p className="text-xs text-ink-2">{Math.max(1, Math.round(row.duration_seconds / 60))} phút</p>
-            </td>
-            <td className="min-w-44 px-3 py-3.5">
-              <p className="font-medium text-ink">{row.jd.title}</p>
-              {row.jd.company && <p className="text-xs text-ink-2">{row.jd.company}</p>}
-            </td>
-            <td className="px-3 py-3.5">
-              <span className="flex items-center gap-2 whitespace-nowrap">
-                <strong className={cn("font-heading", label.className)}>{formatScore(row.overall_score)}/5</strong>
-                <Badge variant="neutral" className={label.badge}>
-                  {label.text}
-                </Badge>
-              </span>
-            </td>
-            <td className="px-3 py-3.5">
-              {row.timed_out_count > 0 ? (
-                <Badge variant="warn">
-                  <TimerOff aria-hidden />
-                  {row.timed_out_count} câu
-                </Badge>
-              ) : (
-                <span className="text-ink-3">—</span>
-              )}
-            </td>
-            <td className="px-6 py-3.5 text-right">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-blue hover:bg-blue-soft hover:text-blue"
-                nativeButton={false}
-                render={<Link href={`/student/interview/${encodeURIComponent(row.id)}/report`} />}
-              >
-                Xem báo cáo
-              </Button>
-            </td>
-          </tr>
-        )
-      })}
-    </TablePanel>
+      <p className="mt-1.5 text-[26px] leading-8 text-ink tabular-nums">
+        {formatScore(group.latest_score)} <span className="text-[15px] text-ink-3">/ 5</span>
+      </p>
+      {group.points.length > 1 ? (
+        <ProgressChart
+          points={group.points.map((p) => ({
+            label: shortDate(p.completed_at),
+            detail: formatDate(p.completed_at),
+            value: p.score,
+          }))}
+          ticks={[1, 3, 5]}
+          format={(v) => `${formatScore(v)} / 5`}
+        />
+      ) : (
+        <p className="mt-3.5 text-sm text-ink-2">Mới có 1 buổi ở vị trí này. Luyện thêm để thấy điểm thay đổi.</p>
+      )}
+      <p className="mt-2 text-[13px] text-ink-3">
+        Điểm chỉ so sánh trong cùng một vị trí.{groups.length === 1 && ` ${jdLabel(group.jd)}.`}
+      </p>
+    </ProgressBlock>
   )
 }
 
-function AnalysisStatusCell({ row }: { row: AnalysisRow }) {
+export function CvProgressBlock({ groups }: { groups: CvProgress[] }) {
+  const [jdId, setJdId] = useState<string | null>(null)
+  const group = groups.find((g) => g.jd.id === jdId) ?? groups[0]
+
+  if (!group) {
+    return (
+      <ProgressBlock id="progress-cv" title="Độ khớp CV">
+        <EmptyState
+          icon={FileSearch}
+          title="Chưa có lượt phân tích nào"
+          description="Phân tích CV với một JD để xem độ khớp qua từng phiên bản CV."
+          action={
+            <Button variant="soft" size="brand" nativeButton={false} render={<Link href="/student/analysis/new" />}>
+              Phân tích CV với JD
+            </Button>
+          }
+        />
+      </ProgressBlock>
+    )
+  }
+
+  const latest = group.points[group.points.length - 1]
+  return (
+    <ProgressBlock
+      id="progress-cv"
+      title="Độ khớp CV"
+      badge={
+        group.delta !== null && (
+          <DeltaBadge text={signed(group.delta, formatPercent)} value={group.delta} title="So với phiên bản CV đầu" />
+        )
+      }
+      picker={
+        groups.length > 1 ? (
+          <Picker
+            label="Chọn vị trí để so độ khớp"
+            items={groups.map((g) => ({ value: g.jd.id, label: g.jd.title }))}
+            value={group.jd.id}
+            onChange={setJdId}
+          />
+        ) : undefined
+      }
+    >
+      <p className="mt-1.5 text-[26px] leading-8 text-ink tabular-nums">{formatPercent(latest.match_score)}%</p>
+      {group.points.length > 1 ? (
+        <ProgressChart
+          points={group.points.map((p) => ({
+            label: p.cv_label,
+            detail: `CV ${p.cv_label} · ${formatDate(p.completed_at)}`,
+            value: p.match_score,
+          }))}
+          ticks={[0, 50, 100]}
+          threshold={{ value: 75, label: "Cao" }}
+          format={(v) => `${formatPercent(v)}%`}
+        />
+      ) : (
+        <p className="mt-3.5 text-sm text-ink-2">Tối ưu CV rồi phân tích lại với vị trí này để thấy độ khớp thay đổi.</p>
+      )}
+      <p className="mt-2 text-[13px] text-ink-3">So với {jdLabel(group.jd)}</p>
+    </ProgressBlock>
+  )
+}
+
+// ---------- Vùng "Dòng thời gian": gộp phỏng vấn, phân tích và so sánh vị trí, chia theo tháng ----------
+
+export type TimelineFilter = "all" | "interview" | "analysis" | "compare"
+
+interface TimelineEntry {
+  key: string
+  at: string
+  icon: LucideIcon
+  kind: string
+  title: ReactNode
+  score: ReactNode
+  href: string
+  linkLabel: string
+  reviewed: boolean
+}
+
+function interviewEntry(row: InterviewRow, reviewed: boolean): TimelineEntry {
+  return {
+    key: `iv-${row.id}`,
+    at: row.completed_at,
+    icon: MessagesSquare,
+    kind: "Phỏng vấn",
+    title: row.jd.title,
+    // Phỏng vấn hiện x,x / 5, không gắn nhãn (DESIGN.md mục 8.1).
+    score: `${formatScore(row.overall_score)} / 5`,
+    href: `/student/interview/${encodeURIComponent(row.id)}/report`,
+    linkLabel: "Báo cáo",
+    reviewed,
+  }
+}
+
+function AnalysisScore({ row }: { row: AnalysisRow }) {
   if (row.status === "processing") {
     return (
       <Badge variant="blue">
@@ -421,62 +337,175 @@ function AnalysisStatusCell({ row }: { row: AnalysisRow }) {
     )
   }
   if (row.status === "failed" || row.match_score === null) return <Badge variant="bad">Lỗi</Badge>
-  const label = row.match_label ? MATCH_LABEL_META[row.match_label] : null
   return (
-    <span className="flex items-center gap-2 whitespace-nowrap">
-      <strong className="font-heading text-ink">{formatPercent(row.match_score)}%</strong>
-      {label && <Badge variant={label.badge}>{label.text}</Badge>}
-    </span>
+    <>
+      {formatPercent(row.match_score)}%
+      {row.match_label && <MatchBadge label={row.match_label} />}
+    </>
   )
 }
 
-export function AnalysisTable({ rows }: { rows: AnalysisRow[] }) {
-  const page = usePage(rows)
+function analysisEntry(row: AnalysisRow): TimelineEntry {
+  return {
+    key: `ga-${row.id}`,
+    at: row.created_at,
+    icon: ScanText,
+    kind: "Phân tích",
+    title: `CV ${row.cv_label} × ${row.jd.title}`,
+    score: <AnalysisScore row={row} />,
+    href: `/student/analysis/${encodeURIComponent(row.id)}`,
+    linkLabel: "Xem",
+    reviewed: false,
+  }
+}
+
+/** Lượt so sánh đã lưu (bản vẽ LichSuSoSanhA): mở lại đúng kết quả lúc so sánh, không chạy lại AI. */
+function compareEntry(row: CompareJdsResponse & { id: string; created_at: string }): TimelineEntry {
+  const top = row.comparisons[0]
+  return {
+    key: `cmp-${row.id}`,
+    at: row.created_at,
+    icon: GitCompareArrows,
+    kind: "So sánh",
+    title: (
+      <>
+        {row.comparisons.length} vị trí{" "}
+        <span className="font-normal text-ink-3">· {row.comparisons.map((c) => c.title).join(", ")}</span>
+      </>
+    ),
+    score: top && (
+      <>
+        <span className="text-[13px] font-medium whitespace-nowrap text-ink-3">cao nhất</span>
+        {formatPercent(top.match_score)}%
+        <MatchBadge label={top.match_label} />
+      </>
+    ),
+    href: `/student/analysis/compare/${encodeURIComponent(row.id)}`,
+    linkLabel: "Xem",
+    reviewed: false,
+  }
+}
+
+const isSaved = (row: CompareJdsResponse): row is CompareJdsResponse & { id: string; created_at: string } =>
+  Boolean(row.id && row.created_at)
+
+function monthLabel(iso: string, now: Date): string {
+  const d = new Date(iso)
+  return d.getFullYear() === now.getFullYear() ? `Tháng ${d.getMonth() + 1}` : `Tháng ${d.getMonth() + 1}/${d.getFullYear()}`
+}
+
+/**
+ * Máy tính: một dòng 5 cột (ngày, loại, tiêu đề, điểm, link). Điện thoại: 2 hàng — tiêu đề + điểm, rồi ngày · loại + link.
+ * Cụm ngày/loại là `display: contents` từ sm để hai ô của nó thành ô lưới riêng.
+ */
+function TimelineRow({ entry }: { entry: TimelineEntry }) {
+  const Icon = entry.icon
   return (
-    <TablePanel
-      title="Các lượt phân tích CV–JD"
-      total={rows.length}
-      unit="lượt"
-      columns={5}
-      empty="Không có lượt phân tích nào trong khoảng này."
-      page={page}
-      head={
-        <tr>
-          <th scope="col" className="px-6 py-3">Thời gian</th>
-          <th scope="col" className="px-3 py-3">Vị trí</th>
-          <th scope="col" className="px-3 py-3">CV</th>
-          <th scope="col" className="px-3 py-3">Độ khớp</th>
-          <th scope="col" className="px-6 py-3 text-right">Hành động</th>
-        </tr>
-      }
-    >
-      {page.rows.map((row) => (
-        <tr key={row.id} className="hover:bg-surface/60">
-          <td className="px-6 py-3.5 font-medium whitespace-nowrap text-ink">{formatWhen(row.created_at)}</td>
-          <td className="min-w-44 px-3 py-3.5">
-            <p className="font-medium text-ink">{row.jd.title}</p>
-            {row.jd.company && <p className="text-xs text-ink-2">{row.jd.company}</p>}
-          </td>
-          <td className="max-w-56 px-3 py-3.5">
-            <p className="font-medium text-ink">{row.cv_label}</p>
-            <p className="truncate text-xs text-ink-2">{row.cv_file_name}</p>
-          </td>
-          <td className="px-3 py-3.5">
-            <AnalysisStatusCell row={row} />
-          </td>
-          <td className="px-6 py-3.5 text-right">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-blue hover:bg-blue-soft hover:text-blue"
-              nativeButton={false}
-              render={<Link href={`/student/analysis/${encodeURIComponent(row.id)}`} />}
-            >
-              Xem phân tích
-            </Button>
-          </td>
-        </tr>
+    <li className="border-b border-line">
+      <Link
+        href={entry.href}
+        className="-mx-2.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 rounded-[10px] px-2.5 py-3 text-ink transition-colors hover:bg-panel sm:grid-cols-[64px_120px_minmax(0,1fr)_170px_72px] sm:py-3.5"
+      >
+        <span className="order-3 flex min-w-0 items-center gap-2 text-[13px] text-ink-3 sm:contents">
+          <span className="text-ink-3 tabular-nums sm:order-1 sm:text-sm">{shortDate(entry.at)}</span>
+          <span aria-hidden className="sm:hidden">
+            ·
+          </span>
+          <span className="inline-flex items-center gap-1.5 sm:order-2 sm:gap-2 sm:text-sm sm:text-ink-2">
+            <Icon className="size-3.5 sm:size-4" strokeWidth={1.75} aria-hidden />
+            {entry.kind}
+          </span>
+          {entry.reviewed && <span className="truncate text-accent-strong sm:hidden">· Cố vấn đã nhận xét</span>}
+        </span>
+        <span className="order-1 flex min-w-0 items-center gap-2.5 sm:order-3">
+          <span className="truncate text-[15px] font-medium">{entry.title}</span>
+          {entry.reviewed && (
+            <Badge variant="blue" className="hidden sm:inline-flex">
+              Cố vấn đã nhận xét
+            </Badge>
+          )}
+        </span>
+        <span className="order-2 inline-flex items-center justify-end gap-2 text-[15px] font-semibold tabular-nums sm:order-4">
+          {entry.score}
+        </span>
+        <span className="order-4 text-right text-sm font-semibold text-blue sm:order-5">{entry.linkLabel}</span>
+      </Link>
+    </li>
+  )
+}
+
+const PAGE_SIZE = 10
+
+export function Timeline({
+  filter,
+  interviews,
+  analyses,
+  comparisons,
+  reviewedIds,
+}: {
+  filter: TimelineFilter
+  interviews: InterviewRow[]
+  analyses: AnalysisRow[]
+  comparisons: CompareJdsResponse[]
+  reviewedIds: Set<string>
+}) {
+  const [limit, setLimit] = useState(PAGE_SIZE)
+  const show = (kind: TimelineFilter) => filter === "all" || filter === kind
+  const entries = [
+    ...(show("interview") ? interviews.map((r) => interviewEntry(r, reviewedIds.has(r.id))) : []),
+    ...(show("analysis") ? analyses.map(analysisEntry) : []),
+    ...(show("compare") ? comparisons.filter(isSaved).map(compareEntry) : []),
+  ].sort((a, b) => b.at.localeCompare(a.at))
+
+  if (entries.length === 0) {
+    const empty = {
+      all: { icon: ScanText, title: "Chưa có hoạt động nào" },
+      interview: { icon: MessagesSquare, title: "Chưa có buổi phỏng vấn nào" },
+      analysis: { icon: FileSearch, title: "Chưa có lượt phân tích nào" },
+      compare: { icon: GitCompareArrows, title: "Chưa có lượt so sánh vị trí nào" },
+    }[filter]
+    return <EmptyState icon={empty.icon} title={empty.title} className="border-b border-line" />
+  }
+
+  const now = new Date()
+  const visible = entries.slice(0, limit)
+  const months: { label: string; rows: TimelineEntry[] }[] = []
+  for (const entry of visible) {
+    const label = monthLabel(entry.at, now)
+    const current = months[months.length - 1]
+    if (current?.label === label) current.rows.push(entry)
+    else months.push({ label, rows: [entry] })
+  }
+
+  return (
+    <div>
+      {months.map((month, i) => (
+        <section key={month.label} aria-label={month.label}>
+          <h3 className={cn("pb-1.5 text-[13px] font-semibold text-ink-3", i === 0 ? "pt-0" : "pt-6")}>{month.label}</h3>
+          <ul>
+            {month.rows.map((entry) => (
+              <TimelineRow key={entry.key} entry={entry} />
+            ))}
+          </ul>
+        </section>
       ))}
-    </TablePanel>
+      {visible.some((e) => e.key.startsWith("cmp-")) && (
+        <p className="mt-3.5 flex items-start gap-2 text-[13px] text-ink-3">
+          <Clock className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+          Lượt so sánh mở lại đúng kết quả đã lưu, không phải chờ AI chạy lại. Xoá lượt so sánh ở trang kết quả.
+        </p>
+      )}
+      {entries.length > limit && (
+        <div className="mt-5 flex justify-center">
+          <Button
+            variant="outline"
+            className="h-[38px] rounded-full border-line-strong bg-card px-[18px] font-semibold shadow-xs"
+            onClick={() => setLimit((n) => n + PAGE_SIZE)}
+          >
+            Tải thêm
+          </Button>
+        </div>
+      )}
+    </div>
   )
 }

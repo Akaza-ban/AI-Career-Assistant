@@ -9,7 +9,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(_TMP / 'test.db').as_posix()}"
 os.environ["UPLOAD_DIR"] = str(_TMP / "uploads")
 # Test tự tạo dữ liệu cần dùng; không nạp nhóm SV giả định của bản demo.
 os.environ["SEED_DEMO_COHORT"] = "false"
-os.environ["APP_ENV"] = "test"
+# Test gọi API bằng header X-Demo-Role thay cho đăng nhập.
+os.environ["DEMO_LOGIN_ENABLED"] = "true"
 
 # Không gọi LLM thật khi chạy test (chậm, tốn credit): key rỗng → agent dùng quy tắc dự phòng.
 # Biến môi trường được ưu tiên hơn file .env nên ghi đè được key thật trong .env.

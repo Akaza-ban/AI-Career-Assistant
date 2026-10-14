@@ -77,8 +77,9 @@ class Settings(BaseSettings):
     # LLM Provider Configuration (Groq / OpenRouter / OpenAI)
     llm_provider: Literal["groq", "openrouter", "openai"] = Field(
         default="groq",
-        description="LLM provider: groq, openrouter, hoặc openai",
+        description="LLM provider: deepseek, groq, openrouter, hoặc openai",
     )
+    deepseek_api_key: str = Field(default="", description="API key cho DeepSeek")
     groq_api_key: str = Field(default="", description="API key cho Groq")
     openrouter_api_key: str = Field(default="", description="API key cho OpenRouter")
     openai_api_key: str = Field(default="", description="API key cho OpenAI")
@@ -156,10 +157,18 @@ class Settings(BaseSettings):
         Hỗ trợ fallback tự động nếu key của provider ưu tiên chưa được set.
         """
         provider = self.llm_provider.lower()
+        if provider == "deepseek":
+            api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+            base_url = self.llm_base_url or "https://api.deepseek.com"
+            return api_key, base_url
+
         if provider == "groq":
             api_key = self.groq_api_key or os.getenv("GROQ_API_KEY", "")
             base_url = self.llm_base_url or "https://api.groq.com/openai/v1"
-            if not api_key and (self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")):
+            if not api_key and (self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY")):
+                api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+                base_url = self.llm_base_url or "https://api.deepseek.com"
+            elif not api_key and (self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY")):
                 api_key = self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", "")
                 base_url = self.llm_base_url or "https://openrouter.ai/api/v1"
             elif not api_key and (self.openai_api_key or os.getenv("OPENAI_API_KEY")):
@@ -170,7 +179,10 @@ class Settings(BaseSettings):
         if provider == "openrouter":
             api_key = self.openrouter_api_key or os.getenv("OPENROUTER_API_KEY", "")
             base_url = self.llm_base_url or "https://openrouter.ai/api/v1"
-            if not api_key and (self.groq_api_key or os.getenv("GROQ_API_KEY")):
+            if not api_key and (self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY")):
+                api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+                base_url = self.llm_base_url or "https://api.deepseek.com"
+            elif not api_key and (self.groq_api_key or os.getenv("GROQ_API_KEY")):
                 api_key = self.groq_api_key or os.getenv("GROQ_API_KEY", "")
                 base_url = self.llm_base_url or "https://api.groq.com/openai/v1"
             return api_key, base_url

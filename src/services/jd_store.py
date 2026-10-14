@@ -96,6 +96,19 @@ class JDDocumentStore:
             store.add_documents(documents=docs, ids=ids)
         return len(docs)
 
+    def index_items(self, items: list[dict[str, Any]]) -> int:
+        """Nạp / cập nhật các JD (cùng dạng phần tử fixture) theo id cố định."""
+        if not items:
+            return 0
+        store = self._get_vector_store()
+        store.add_documents(documents=[self.build_jd_document(i) for i in items], ids=[i["id"] for i in items])
+        return len(items)
+
+    def remove(self, ids: list[str]) -> None:
+        """Bỏ JD khỏi kho (JD bị ẩn khỏi thư viện)."""
+        if ids:
+            self._get_vector_store().delete(ids=ids)
+
     def search_candidates(self, query_text: str, top_k: int = 6) -> list[tuple[Document, float]]:
         """Truy xuất Top-K JD ứng viên dựa trên độ tương đồng ngữ nghĩa."""
         store = self._get_vector_store()

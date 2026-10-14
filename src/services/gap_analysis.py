@@ -12,9 +12,10 @@ from src.api.errors import AppError
 from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
-from src.services import cv_versions
+from src.services import cv_versions, notifications
 from src.services.llm import llm_configured
 from src.services.providers.gateway import provider_scope
+from src.services.roadmap import get_roadmap_info
 from src.services.skill_matching import match_label
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ logger = logging.getLogger(__name__)
 STEPS = ["parse", "retrieve", "compare", "generate", "verify_grounding"]
 ANALYSIS_TIMEOUT_SECONDS = 150
 # Khớp JD_MIN_WORDS ở frontend/lib/types.ts (US-SV-02 AC2)
+# Nguồn mức quan trọng của kỹ năng JD tự dán đủ tin để không cần AI trích lại khi phân tích
+TRUSTED_SKILLS = ("ai", "analysis", "admin")
 JD_MIN_WORDS = 50
 
 
@@ -50,14 +53,37 @@ def create_analysis(db: Session, user: User, request: CreateGapAnalysisRequest) 
             )
         if not (request.jd_title and request.jd_title.strip()):
             raise AppError(422, "Hãy nhập tiêu đề vị trí tuyển dụng.", "jd_title_required")
+        # Tách các mục theo cấu trúc chung bằng quy tắc (không gọi AI); kỹ năng được trích lại bằng AI khi phân tích
+        from src.services import jd_parser
+
+        content = request.jd_text.strip()
+        draft = jd_parser.parse_rules(content, jd_parser.library_vocabulary(db))
         jd = JobDescription(
             id=f"jd_{uuid.uuid4().hex[:12]}",
             source="pasted",
             owner_id=user.id,
             title=request.jd_title.strip(),
-            company=(request.jd_company or "").strip() or None,
-            content=request.jd_text.strip(),
-            skills=[],
+            company=(request.jd_company or "").strip() or draft["company"],
+            level=draft["level"],
+            content=content,
+            skills=draft["skills"],
+            skills_source=draft["skills_source"],
+            **{
+                k: draft[k]
+                for k in (
+                    "employment_type",
+                    "work_mode",
+                    "location",
+                    "salary",
+                    "deadline",
+                    "experience",
+                    "majors",
+                    "description",
+                    "requirements",
+                    "benefits",
+                    "how_to_apply",
+                )
+            },
         )
         db.add(jd)
     else:
@@ -92,8 +118,21 @@ def _fail(analysis_id: str, message: str) -> None:
     _update(analysis_id, status="failed", current_step=None, error_message=message, completed_at=utcnow())
 
 
+def _with_roadmap(requirement: dict[str, Any]) -> dict[str, Any]:
+    """Bổ sung lộ trình roadmap.sh cho một yêu cầu (cả kết quả cũ lưu trước khi có trường này)."""
+    if requirement.get("roadmap_url"):
+        return requirement
+    info = get_roadmap_info(requirement.get("skill"))
+    return {
+        **requirement,
+        "roadmap_url": info["roadmap_url"],
+        "is_it_supported": info["is_it_supported"],
+        "roadmap_message": info["message"],
+    }
+
+
 def _build_result(final: dict[str, Any]) -> dict[str, Any]:
-    requirements = [{k: v for k, v in a.items() if k != "source"} for a in final.get("assessments", [])]
+    requirements = [_with_roadmap({k: v for k, v in a.items() if k != "source"}) for a in final.get("assessments", [])]
     suggestions = [
         {
             "id": s["id"],
@@ -131,8 +170,9 @@ async def run_analysis(analysis_id: str) -> None:
         state: dict[str, Any] = {
             "cv_raw": cv.content_text,
             "jd_raw": jd.content,
-            # JD thư viện có sẵn yêu cầu đã chuẩn hoá; JD tự dán sẽ được trích ở bước retrieve
-            "requirements": jd.skills if jd.source == "library" else [],
+            # JD thư viện (và JD tự dán đã có mức quan trọng từ AI / lượt phân tích trước) dùng thẳng yêu cầu đã có;
+            # còn lại trích bằng AI ở bước retrieve
+            "requirements": jd.skills if jd.source == "library" or jd.skills_source in TRUSTED_SKILLS else [],
             "llm_calls": 0,
         }
         jd_source, jd_id = jd.source, jd.id
@@ -175,6 +215,7 @@ async def run_analysis(analysis_id: str) -> None:
                     {"name": r["name"], "importance": r["importance"], "aliases": r.get("aliases", [])}
                     for r in final["requirements"]
                 ]
+                jd.skills_source = "analysis"
         analysis = db.get(GapAnalysis, analysis_id)
         if analysis is not None:
             analysis.status = "completed"
@@ -183,12 +224,31 @@ async def run_analysis(analysis_id: str) -> None:
             analysis.result = _build_result(final)
             analysis.llm_calls = final.get("llm_calls", 0)
             analysis.completed_at = utcnow()
+            _notify_completed(db, analysis)
         db.commit()
+
+
+def _notify_completed(db: Session, analysis: GapAnalysis) -> None:
+    owner = db.get(User, analysis.owner_id)
+    jd = db.get(JobDescription, analysis.jd_id)
+    if owner is None or jd is None:
+        return
+    score = analysis.match_score
+    label = "" if score is None else (" · Cao" if score >= 75 else " · Khá" if score >= 50 else " · Trung bình")
+    notifications.notify(
+        db,
+        owner,
+        "gap_analysis",
+        f"Phân tích CV với {jd.title} đã xong",
+        f"{analysis.cv_file_name} · Mức phù hợp {round(score) if score is not None else '—'}%{label}",
+        action_label="Xem kết quả",
+        action_href=f"/student/analysis/{analysis.id}",
+    )
 
 
 def to_response(analysis: GapAnalysis, jd: JobDescription) -> GapAnalysisResponse:
     result = analysis.result or {}
-    requirements = result.get("requirements", [])
+    requirements = [_with_roadmap(r) for r in result.get("requirements", [])]
     return GapAnalysisResponse(
         id=analysis.id,
         response_id=analysis.id,

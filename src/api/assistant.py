@@ -96,7 +96,16 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
             parts = route.split("/")
             if user.role == "advisor" and len(parts) == 4 and parts[2] == "students" and parts[3] not in students:
                 continue
-            if user.role == "student" and len(parts) >= 4 and parts[3] not in ("new", "start"):
+            if user.role == "student" and len(parts) >= 4 and parts[2] == "library":
+                # Chi tiết JD: JD thư viện đang hiển thị hoặc JD sinh viên tự thêm
+                jd = db.get(JobDescription, parts[3])
+                visible = jd is not None and (
+                    (jd.source == "library" and jd.status in (None, "published"))
+                    or (jd.owner_id == user.id and jd.status != "deleted")
+                )
+                if not visible:
+                    continue
+            elif user.role == "student" and len(parts) >= 4 and parts[3] not in ("new", "start", "compare"):
                 model = {"cv": CvVersion, "analysis": GapAnalysis, "interview": InterviewSession}.get(parts[2])
                 resource = db.get(model, parts[3]) if model else None
                 if resource is None or resource.owner_id != user.id:
@@ -218,6 +227,16 @@ def submit_feedback(body: AssistantFeedbackRequest, user: CurrentUser, db: DbSes
     feedback.comment = body.comment or None
     db.commit()
     return AssistantFeedbackResponse(id=feedback.id, turn_id=feedback.turn_id, rating=feedback.rating)
+
+
+@router.delete("/feedback/{turn_id}", status_code=204)
+def delete_feedback(turn_id: str, user: CurrentUser, db: DbSession) -> None:
+    """Bấm lại nút thích / không thích đã chọn để huỷ đánh giá (khi bấm nhầm)."""
+    _owned_turn(db, turn_id, user)
+    feedback = db.scalar(select(AssistantFeedback).where(AssistantFeedback.turn_id == turn_id))
+    if feedback is not None:
+        db.delete(feedback)
+        db.commit()
 
 
 @router.post("/reindex", response_model=ReindexResponse)

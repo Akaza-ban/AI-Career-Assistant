@@ -53,7 +53,7 @@ async def test_jd_library_has_seeded_jds_with_importance(client):
     assert len(jds) == 8
     da = jds["jd-da-intern"]
     assert da["source"] == "library" and da["content"]
-    assert {"name": "Power BI", "importance": "required"} in da["skills"]
+    assert ("Power BI", "required") in {(s["name"], s["importance"]) for s in da["skills"]}
     assert {s["importance"] for s in da["skills"]} == {"required", "preferred", "additional"}
 
 
@@ -146,19 +146,27 @@ async def test_advisor_cannot_create_analysis(client):
 
 
 @pytest.mark.asyncio
-async def test_feedback_first_submission_wins(client):
-    first = await client.post(
-        "/api/v1/feedback", json={"response_id": "sg_1", "kind": "thumb", "value": 1}, headers=STUDENT
-    )
-    assert first.json()["already_submitted"] is False
-    again = await client.post(
-        "/api/v1/feedback", json={"response_id": "sg_1", "kind": "thumb", "value": -1}, headers=STUDENT
-    )
-    assert again.json() == {**again.json(), "already_submitted": True, "value": 1}
+async def test_feedback_csat_once_thumb_changeable(client):
+    url = "/api/v1/feedback"
+    csat = {"response_id": "ga_1", "kind": "csat", "value": 4, "activity": "gap_analysis"}
+    assert (await client.post(url, json=csat, headers=STUDENT)).json()["already_submitted"] is False
+    again = await client.post(url, json={**csat, "value": 1}, headers=STUDENT)
+    assert again.json() == {**again.json(), "already_submitted": True, "value": 4}
 
-    status = await client.get("/api/v1/feedback", params={"response_id": "sg_1", "kind": "thumb"}, headers=STUDENT)
-    assert status.json() == {"kind": "thumb", "value": 1}
-    empty = await client.get("/api/v1/feedback", params={"response_id": "ga_1", "kind": "csat"}, headers=STUDENT)
+    # Like / dislike: bấm nút kia thì đổi, bấm lại nút đang chọn (DELETE) thì huỷ
+    thumb = {"response_id": "sg_1", "kind": "thumb", "value": 1, "activity": "gap_suggestion"}
+    assert (await client.post(url, json=thumb, headers=STUDENT)).json()["value"] == 1
+    changed = await client.post(url, json={**thumb, "value": -1}, headers=STUDENT)
+    assert changed.json() == {**changed.json(), "already_submitted": False, "value": -1}
+    params = {"response_id": "sg_1", "kind": "thumb"}
+    assert (await client.get(url, params=params, headers=STUDENT)).json() == {"kind": "thumb", "value": -1}
+    assert (await client.delete(url, params={"response_id": "sg_1"}, headers=STUDENT)).status_code == 204
+    assert (await client.get(url, params=params, headers=STUDENT)).json() == {"kind": "thumb", "value": None}
+    assert (await client.delete(url, params={"response_id": "sg_1"}, headers=STUDENT)).status_code == 204
+    # CSAT không huỷ được
+    csat_delete = await client.delete(url, params={"response_id": "ga_1", "kind": "csat"}, headers=STUDENT)
+    assert csat_delete.status_code == 422
+    empty = await client.get(url, params={"response_id": "ga_2", "kind": "csat"}, headers=STUDENT)
     assert empty.json() == {"kind": "csat", "value": None}
 
 

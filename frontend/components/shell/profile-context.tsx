@@ -6,37 +6,25 @@ import { api, ApiError } from "@/lib/api"
 import type { Role, UserProfile } from "@/lib/types"
 
 const ProfileContext = createContext<UserProfile | undefined>(undefined)
+const ReloadProfileContext = createContext<() => void>(() => { })
 
 /** Tải hồ sơ người dùng một lần cho cả khung giao diện. */
 export function ProfileProvider({ role, children }: { role: Role; children: ReactNode }) {
-  const [profile, setProfile] = useState<UserProfile>()
-  const [error, setError] = useState("")
-  useEffect(() => {
-    let active = true
-    api.getMe().then((user) => {
-      if (!active) return
-      if (user.role !== role) {
-        window.location.replace(user.role === "advisor" ? "/advisor" : "/student")
-        return
-      }
-      setProfile(user)
-    }).catch((cause: unknown) => {
-      if (!active) return
-      if (cause instanceof ApiError && cause.status === 401) window.location.replace("/login")
-      else setError(cause instanceof Error ? cause.message : "Không tải được tài khoản.")
-    })
-    return () => { active = false }
-  }, [role])
-  if (!profile || profile.role !== role) return (
-    <main className="grid min-h-screen place-content-center gap-4 p-8 text-center" aria-live="polite">
-      <p>{error || "Đang kiểm tra phiên đăng nhập…"}</p>
-      {error && <button type="button" onClick={() => window.location.reload()} className="text-blue underline">Thử lại</button>}
-    </main>
+  const fetchMe = useCallback(() => api.getMe(role), [role])
+  const { data, reload } = useApi(fetchMe)
+  return (
+    <ReloadProfileContext.Provider value={reload}>
+      <ProfileContext.Provider value={data}>{children}</ProfileContext.Provider>
+    </ReloadProfileContext.Provider>
   )
-  return <ProfileContext.Provider value={profile}>{children}</ProfileContext.Provider>
 }
 
 /** undefined trong lúc đang tải. */
 export function useProfile(): UserProfile | undefined {
   return useContext(ProfileContext)
+}
+
+/** Tải lại hồ sơ sau khi sửa (ví dụ đổi họ tên ở Cài đặt) để header cập nhật ngay. */
+export function useReloadProfile(): () => void {
+  return useContext(ReloadProfileContext)
 }

@@ -45,7 +45,7 @@ export function ChatPanel() {
     <section
       aria-label={role === "advisor" ? "Tin nhắn với sinh viên" : "Trò chuyện với cố vấn"}
       onKeyDown={(e) => e.key === "Escape" && closeChat()}
-      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(600px,calc(100dvh-6rem))] sm:w-[380px] sm:rounded-[20px] sm:border sm:border-line sm:shadow-float"
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card sm:inset-auto sm:right-6 sm:bottom-6 sm:h-[min(620px,calc(100dvh-6rem))] sm:w-[400px] sm:rounded-[18px] sm:shadow-dialog sm:ring-1 sm:ring-line"
     >
       {role === "advisor" ? <AdvisorChat /> : <StudentChat />}
     </section>
@@ -80,7 +80,7 @@ function StudentChat() {
       <>
         <PanelTop title="Trò chuyện với cố vấn" />
         <CenteredNote icon={UserRoundX} title="Bạn chưa được phân công cố vấn">
-          Khi nhà trường phân công, bạn có thể nhắn tin với cố vấn ở đây.
+          Khi được phân công cố vấn, bạn có thể nhắn tin với cố vấn ở đây.
         </CenteredNote>
       </>
     )
@@ -130,7 +130,7 @@ function ConversationList() {
     <>
       <PanelTop title="Tin nhắn" aside={unread > 0 ? `${unread} chưa đọc` : undefined} />
       <div className="border-b border-line px-4 py-3">
-        <label className="flex items-center gap-2 rounded-xl bg-surface px-3 py-2 focus-within:ring-2 focus-within:ring-blue/30">
+        <label className="flex h-10 items-center gap-2 rounded-[10px] bg-card px-3 ring-1 ring-line-strong transition-shadow focus-within:ring-ink">
           <Search className="size-4 shrink-0 text-ink-3" aria-hidden />
           <input
             type="search"
@@ -163,12 +163,12 @@ function ConversationList() {
                 <button
                   type="button"
                   onClick={() => openChat(r.student_id)}
-                  className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-surface"
+                  className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors hover:bg-panel"
                 >
                   <UserAvatar name={r.counterpart.full_name} src={r.counterpart.avatar_url} className="size-10" />
                   <span className="grid min-w-0 flex-1 grid-cols-1 gap-0.5">
                     <span className="flex items-baseline justify-between gap-2">
-                      <span className={cn("truncate text-sm text-ink", r.unread_count > 0 ? "font-bold" : "font-medium")}>
+                      <span className={cn("truncate text-sm text-ink", r.unread_count > 0 ? "font-semibold" : "font-medium")}>
                         {r.counterpart.full_name}
                       </span>
                       {r.last_message && (
@@ -254,8 +254,8 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
     <>
       <ThreadHeader counterpart={counterpart} studentId={studentId} onBack={onBack} />
       {counterpart?.office_hours && (
-        <p className="flex items-center gap-1.5 border-b border-line bg-blue-soft/50 px-4 py-2 text-xs text-ink-2">
-          <Clock className="size-3.5 shrink-0 text-blue" aria-hidden />
+        <p className="flex items-center gap-2 border-b border-line bg-panel px-4 py-2.5 text-[13px] text-ink-2">
+          <Clock className="size-3.5 shrink-0 text-ink-3" aria-hidden />
           Giờ tư vấn: {counterpart.office_hours}. Tin nhắn ngoài giờ sẽ được trả lời sau.
         </p>
       )}
@@ -265,7 +265,7 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
           const el = e.currentTarget
           stickToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
         }}
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-3"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4"
       >
         {error && !conversation ? (
           <ErrorState message={error.message} onRetry={() => void load()} />
@@ -285,15 +285,15 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
               return (
                 <Fragment key={m.id}>
                   {newDay && (
-                    <li className="py-2 text-center text-[11px] font-medium text-ink-3" aria-hidden>
+                    <li className="py-2 text-center text-xs font-medium text-ink-3" aria-hidden>
                       {dayLabel(m.created_at)}
                     </li>
                   )}
                   <li className={cn("grid max-w-[85%] gap-0.5", m.mine ? "justify-self-end justify-items-end" : "justify-self-start")}>
                     <p
                       className={cn(
-                        "rounded-2xl px-3.5 py-2 text-sm leading-6 wrap-anywhere whitespace-pre-wrap",
-                        m.mine ? "rounded-br-md bg-blue text-on-blue" : "rounded-bl-md bg-surface text-ink",
+                        "rounded-[18px] px-3.5 py-2 text-sm leading-6 wrap-anywhere whitespace-pre-wrap",
+                        m.mine ? "rounded-br-md bg-ink text-on-ink" : "rounded-bl-md bg-surface text-ink",
                       )}
                     >
                       <span className="sr-only">{m.mine ? "Bạn: " : `${conversation.counterpart.full_name}: `}</span>
@@ -303,7 +303,7 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
                       {formatTime(m.created_at)}
                       {m.id === lastMine?.id &&
                         (m.read_at ? (
-                          <span className="flex items-center gap-0.5 text-blue">
+                          <span className="flex items-center gap-0.5 text-ink-2">
                             <CheckCheck className="size-3.5" aria-hidden />
                             Đã xem
                           </span>
@@ -337,9 +337,9 @@ function ThreadHeader({
 }) {
   const { role, closeChat } = useChat()
   return (
-    <header className="flex items-center gap-2 border-b border-line px-3 py-3">
+    <header className="flex items-center gap-3 border-b border-line py-3 pr-3 pl-4">
       {onBack && (
-        <Button variant="ghost" size="icon" className="rounded-lg" aria-label="Quay lại danh sách tin nhắn" onClick={onBack}>
+        <Button variant="ghost" size="icon" className="rounded-full hover:bg-surface" aria-label="Quay lại danh sách tin nhắn" onClick={onBack}>
           <ArrowLeft aria-hidden />
         </Button>
       )}
@@ -347,8 +347,8 @@ function ThreadHeader({
         <>
           <UserAvatar name={counterpart.full_name} src={counterpart.avatar_url} className="size-9" />
           <span className="grid min-w-0 flex-1">
-            <span className="truncate font-heading text-sm font-bold text-ink">{counterpart.full_name}</span>
-            <span className="truncate text-xs text-ink-2">{counterpart.subtitle}</span>
+            <span className="truncate text-[15px] leading-5 font-semibold text-ink">{counterpart.full_name}</span>
+            <span className="truncate text-[13px] text-ink-3">{counterpart.subtitle}</span>
           </span>
         </>
       ) : (
@@ -361,7 +361,7 @@ function ThreadHeader({
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-lg text-ink-2"
+          className="rounded-full text-ink-2 hover:bg-surface"
           aria-label="Mở hồ sơ sinh viên"
           nativeButton={false}
           render={<Link href={`/advisor/students/${encodeURIComponent(studentId)}`} />}
@@ -395,13 +395,13 @@ function Composer({ disabled, onSend }: { disabled: boolean; onSend: (body: stri
 
   return (
     <form
-      className="grid gap-1.5 border-t border-line p-3"
+      className="grid gap-1.5 border-t border-line px-4 pt-3 pb-3.5"
       onSubmit={(e) => {
         e.preventDefault()
         void submit()
       }}
     >
-      <div className="flex items-end gap-2 rounded-2xl bg-surface py-1.5 pr-1.5 pl-3.5 focus-within:ring-2 focus-within:ring-blue/30">
+      <div className="flex items-end gap-2 rounded-[14px] bg-card py-1.5 pr-1.5 pl-3.5 ring-1 ring-line-strong transition-shadow focus-within:ring-ink">
         <textarea
           rows={1}
           value={text}
@@ -428,7 +428,7 @@ function Composer({ disabled, onSend }: { disabled: boolean; onSend: (body: stri
           <SendHorizontal aria-hidden />
         </Button>
       </div>
-      <p className="flex justify-between gap-2 px-1 text-[11px] text-ink-3">
+      <p className="flex justify-between gap-2 px-1 text-xs text-ink-3">
         <span>Enter để gửi, Shift + Enter để xuống dòng</span>
         {trimmed.length >= COUNTER_FROM && (
           <span className={cn(tooLong && "font-semibold text-bad")}>
@@ -445,10 +445,11 @@ function Composer({ disabled, onSend }: { disabled: boolean; onSend: (body: stri
 function PanelTop({ title, aside }: { title: string; aside?: string }) {
   const { closeChat } = useChat()
   return (
-    <header className="flex items-center gap-2 border-b border-line py-3 pr-3 pl-4">
-      <MessageCircle className="size-[18px] text-blue" aria-hidden />
-      <h2 className="flex-1 font-heading text-base font-bold text-ink">{title}</h2>
-      {aside && <span className="text-xs font-medium text-blue">{aside}</span>}
+    <header className="flex items-center gap-2 border-b border-line py-3.5 pr-3 pl-5">
+      <span className="grid min-w-0 flex-1">
+        <h2 className="truncate text-base leading-6 font-semibold text-ink">{title}</h2>
+        {aside && <span className="text-[13px] text-ink-3">{aside}</span>}
+      </span>
       <CloseButton onClick={closeChat} />
     </header>
   )
@@ -456,7 +457,7 @@ function PanelTop({ title, aside }: { title: string; aside?: string }) {
 
 function CloseButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button variant="ghost" size="icon" className="rounded-lg text-ink-2" aria-label="Đóng khung tin nhắn" onClick={onClick}>
+    <Button variant="ghost" size="icon" className="rounded-full text-ink-2 hover:bg-surface" aria-label="Đóng khung tin nhắn" onClick={onClick}>
       <X aria-hidden />
     </Button>
   )
@@ -465,11 +466,11 @@ function CloseButton({ onClick }: { onClick: () => void }) {
 function CenteredNote({ icon: Icon, title, children }: { icon: LucideIcon; title: string; children: ReactNode }) {
   return (
     <div className="grid h-full content-center justify-items-center gap-2 p-6 text-center">
-      <span className="grid size-12 place-items-center rounded-full bg-blue-soft text-blue">
-        <Icon className="size-6" aria-hidden />
+      <span className="mb-1 grid size-11 place-items-center rounded-full bg-surface text-ink-2">
+        <Icon className="size-5" strokeWidth={1.75} aria-hidden />
       </span>
-      <p className="font-heading text-sm font-bold text-ink">{title}</p>
-      <p className="text-xs leading-5 text-ink-2">{children}</p>
+      <p className="text-[15px] font-semibold text-ink">{title}</p>
+      <p className="max-w-[280px] text-[13px] leading-5 text-ink-3">{children}</p>
     </div>
   )
 }

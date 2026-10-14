@@ -6,6 +6,8 @@ Reads JSON from stdin, normalizes to common format, appends to .ai-log/session.j
 
 import json
 import os
+import re
+import sys
 import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
@@ -14,7 +16,20 @@ from pathlib import Path
 VN_TZ = timezone(timedelta(hours=7))
 
 
-def git(cmd: str, cwd: Path | None = None) -> str:
+SECRET_PATTERNS = (
+    re.compile(r"(?i)(api[_-]?key|token|password|secret)(\s*[=:]\s*)([^\s,;]+)"),
+    re.compile(r"\b(?:ai20k|sk)-(?:[A-Za-z0-9_-]{12,})\b"),
+)
+
+
+def redact(value: str) -> str:
+    """Remove common credentials before prompts or responses reach AI logs."""
+    text = str(value or "")
+    text = SECRET_PATTERNS[0].sub(r"\1\2[REDACTED]", text)
+    return SECRET_PATTERNS[1].sub("[REDACTED]", text)
+
+
+def git(cmd):
     try:
         return subprocess.check_output(cmd, shell=True, cwd=cwd, text=True, stderr=subprocess.DEVNULL).strip()
     except Exception:
@@ -121,15 +136,12 @@ def normalize(data: dict, tool: str) -> dict | None:
             base.update({"prompt": prompt, "response_summary": answer})
 
     elif tool == "codex":
-        base.update(
-            {
-                "prompt": data.get("prompt", ""),
-                "turn_id": data.get("turn_id", ""),
-                "transcript_path": data.get("transcript_path", ""),
-            }
-        )
-        if event == "Stop":
-            base["response_summary"] = (data.get("last_assistant_message") or "")[:500]
+        base.update({
+            "prompt": redact(data.get("prompt", ""))[:1000],
+            "response_summary": redact(data.get("last_assistant_message", ""))[:500],
+            "turn_id": data.get("turn_id", ""),
+            "transcript_path": data.get("transcript_path", ""),
+        })
 
     elif tool == "cursor":
         base.update(
@@ -193,8 +205,10 @@ def main() -> None:
     with open(log_file, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    # Output valid JSON (required by some tools like Gemini)
-    print(json.dumps({} if tool == "codex" else {"status": "logged"}))
+    # Codex treats unknown JSON fields as a hook failure. Successful Codex
+    # logging must exit 0 without output; Gemini still expects valid JSON.
+    if tool != "codex":
+        print(json.dumps({"status": "logged"}))
 
 
 if __name__ == "__main__":

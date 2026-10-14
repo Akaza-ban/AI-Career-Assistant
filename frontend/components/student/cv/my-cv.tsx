@@ -5,31 +5,27 @@ import { AlertCircle, SearchX } from "lucide-react"
 import { toast } from "sonner"
 
 import { ConfirmDialog } from "@/components/common/confirm-dialog"
-import { Panel } from "@/components/common/panel"
+import { EmptyState } from "@/components/common/empty-state"
+import { PageHeader } from "@/components/common/page-header"
+import { Zone } from "@/components/common/zone"
 import { CvPreviewDialog } from "@/components/student/cv/cv-preview-dialog"
 import {
   CvCard,
   CvDropzone,
   CvTips,
   CvToolbar,
-  UploadStatusBanner,
+  deleteDescription,
+  RetryButton,
   type CvSort,
 } from "@/components/student/cv/cv-sections"
 import { CV_ACCEPT, useCvUpload } from "@/components/student/cv/use-cv-upload"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
 import type { CvVersion } from "@/lib/types"
-import { useApi } from "@/lib/use-api"
 import { useAgentActions } from "@/lib/use-agent-actions"
-
-function deleteDescription(cv: CvVersion | null): string {
-  const kept = "Các báo cáo phân tích đã tạo từ CV này vẫn được giữ trong lịch sử."
-  if (cv && cv.version_count > 1) return `CV này có ${cv.version_count} phiên bản; tất cả sẽ bị xoá vĩnh viễn. ${kept}`
-  return `Tệp CV sẽ bị xoá vĩnh viễn. ${kept}`
-}
+import { useApi } from "@/lib/use-api"
 
 function sortCvs(list: CvVersion[], sort: CvSort): CvVersion[] {
   const copy = [...list]
@@ -38,27 +34,28 @@ function sortCvs(list: CvVersion[], sort: CvSort): CvVersion[] {
   return copy.sort((a, b) => b.uploaded_at.localeCompare(a.uploaded_at))
 }
 
-// Figma: frame "CV của tôi" (18:1835). US-SV-01.
+const GRID = "grid gap-5 [grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr))]"
+
+// Kiểu dashboard Stripe (DESIGN.md 3.6): tiêu đề trang + vùng kéo thả, rồi vùng "Tất cả CV", mẹo dạng gập ở cuối.
+// US-SV-01. Không có nút "Tải CV lên" ở tiêu đề vì vùng kéo thả đã có nút chọn file.
 export function MyCv() {
   const { data, error, reload } = useApi(api.listCvVersions)
   const inputRef = useRef<HTMLInputElement>(null)
   const { state: uploadState, upload, dismiss } = useCvUpload(() => reload())
-  const uploading = uploadState.status === "uploading"
 
   const [query, setQuery] = useState("")
   const [sort, setSort] = useState<CvSort>("recent")
   const [previewCv, setPreviewCv] = useState<CvVersion | null>(null)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [deleting, setDeleting] = useState<CvVersion | null>(null)
+  // Trợ lý AI không mở được hộp chọn file khi chưa có thao tác của người dùng, nên mở hộp thoại có nút chọn file.
   const [uploadOpen, setUploadOpen] = useState(false)
 
   useAgentActions({
     fillFilter: (name, value) => {
-      if (name === "keyword") {
-        setQuery(String(value))
-        return true
-      }
-      return false
+      if (name !== "keyword") return false
+      setQuery(String(value))
+      return true
     },
     openModal: (id) => {
       if (id !== "upload-cv-modal") return false
@@ -66,8 +63,15 @@ export function MyCv() {
       return true
     },
     resetView: ({ clear_filters, close_modals }) => {
-      if (clear_filters) { setQuery(""); setSort("recent") }
-      if (close_modals) { setUploadOpen(false); setPreviewOpen(false); setDeleting(null) }
+      if (clear_filters) {
+        setQuery("")
+        setSort("recent")
+      }
+      if (close_modals) {
+        setUploadOpen(false)
+        setPreviewOpen(false)
+        setDeleting(null)
+      }
     },
   })
 
@@ -83,7 +87,7 @@ export function MyCv() {
       toast.success(`Đã đặt ${cv.file_name} làm CV đang dùng`)
       reload()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Không đổi được phiên bản đang dùng.")
+      toast.error(err instanceof Error ? err.message : "Không đổi được CV đang dùng.")
     }
   }
 
@@ -105,9 +109,18 @@ export function MyCv() {
 
   const openPicker = () => inputRef.current?.click()
   const hasCvs = cvs.length > 0
+  const dropzone = (
+    <CvDropzone
+      onFile={(f) => void upload(f)}
+      onBrowse={openPicker}
+      state={uploadState}
+      onDismiss={dismiss}
+      prominent={Boolean(data) && !hasCvs}
+    />
+  )
 
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-14 md:gap-16">
       <input
         ref={inputRef}
         type="file"
@@ -122,82 +135,80 @@ export function MyCv() {
         }}
       />
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="grid min-w-0 gap-1">
-          <div className="flex items-center gap-2">
-            <h1 className="font-heading text-[28px] leading-9 font-bold">CV của tôi</h1>
-            {data && (
-              <Badge variant="neutral" className="h-auto bg-blue-soft px-2.5 py-0.5 font-medium">
-                {cvs.length} hồ sơ
-              </Badge>
-            )}
-          </div>
-          <p className="text-sm text-ink-2">Quản lý các phiên bản CV theo từng vị trí ứng tuyển.</p>
-        </div>
-        <CvTips />
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-8 md:gap-11">
+        <PageHeader title="CV của tôi" description="Quản lý các phiên bản CV theo từng vị trí ứng tuyển." />
+        {error ? null : !data ? <Skeleton className="h-[94px] rounded-card" /> : dropzone}
       </div>
 
-      <UploadStatusBanner state={uploadState} onDismiss={dismiss} />
-
       {error ? (
-        <Panel className="grid justify-items-center gap-3 py-12 text-center">
-          <AlertCircle className="size-8 text-bad" aria-hidden />
-          <p className="font-heading font-bold">Không tải được danh sách CV</p>
-          <p className="text-sm text-ink-2">{error.message}</p>
-          <Button variant="soft" onClick={reload}>
-            Thử lại
-          </Button>
-        </Panel>
+        <div className="flex flex-wrap items-center gap-3 rounded-card border border-dashed border-line-strong px-4 py-4 sm:px-5">
+          <AlertCircle className="size-5 shrink-0 text-bad" strokeWidth={1.75} aria-hidden />
+          <p className="min-w-0 flex-1 basis-48 text-sm text-ink-2">Không tải được danh sách CV. {error.message}</p>
+          <RetryButton onClick={reload} />
+        </div>
       ) : !data ? (
-        <div className="grid gap-6" aria-busy="true" aria-label="Đang tải danh sách CV">
-          <Skeleton className="h-[84px] rounded-[20px]" />
-          <Skeleton className="h-[52px] rounded-[20px]" />
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-7" aria-busy="true" aria-label="Đang tải danh sách CV">
+          <Skeleton className="h-8 w-40" />
+          <div className={GRID}>
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-[470px] rounded-[20px]" />
+              <Skeleton key={i} className="h-[284px] rounded-card" />
             ))}
           </div>
         </div>
-      ) : hasCvs ? (
-        <>
-          <CvDropzone onFile={(f) => void upload(f)} onBrowse={openPicker} disabled={uploading} />
-          <CvToolbar query={query} onQueryChange={setQuery} sort={sort} onSortChange={setSort} />
-          {visible.length > 0 ? (
-            <div data-agent-target="cv-list" className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-              {visible.map((cv, index) => (
-                <CvCard
-                  key={cv.id}
-                  cv={cv}
-                  index={index}
-                  onSetActive={handleSetActive}
-                  onPreview={openPreview}
-                  onDelete={setDeleting}
-                  deleteBlocked={cv.is_active && cvs.length > 1}
-                />
-              ))}
-            </div>
-          ) : (
-            <Panel className="grid justify-items-center gap-2 py-10 text-center">
-              <SearchX className="size-6 text-ink-3" aria-hidden />
-              <p className="text-sm font-medium">Không có CV nào khớp từ khoá</p>
-              <Button variant="link" onClick={() => setQuery("")}>
-                Xoá từ khoá
-              </Button>
-            </Panel>
-          )}
-        </>
       ) : (
-        <CvDropzone onFile={(f) => void upload(f)} onBrowse={openPicker} disabled={uploading} prominent />
+        hasCvs && (
+          <Zone
+            id="all-cv-title"
+            title="Tất cả CV"
+            aside={<CvToolbar query={query} onQueryChange={setQuery} sort={sort} onSortChange={setSort} />}
+          >
+            {visible.length > 0 ? (
+              <div data-agent-target="cv-list" className={GRID}>
+                {visible.map((cv) => (
+                  <CvCard
+                    key={cv.id}
+                    cv={cv}
+                    onSetActive={handleSetActive}
+                    onPreview={openPreview}
+                    onDelete={setDeleting}
+                    deleteBlocked={cv.is_active && cvs.length > 1}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={SearchX}
+                title="Không có CV nào khớp từ khoá"
+                description={`Không tìm thấy CV có tên chứa "${query.trim()}".`}
+                action={
+                  <Button variant="soft" className="h-9 rounded-full px-4" onClick={() => setQuery("")}>
+                    Xoá từ khoá
+                  </Button>
+                }
+              />
+            )}
+          </Zone>
+        )
       )}
 
-      <CvPreviewDialog cv={previewCv} open={previewOpen} onOpenChange={setPreviewOpen} />
+      {data && <CvTips />}
+
       <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
-        <DialogContent className="sm:max-w-xl" data-agent-target="upload-cv-modal">
-          <DialogTitle>Tải lên CV</DialogTitle>
-          <DialogDescription>Chọn file PDF hoặc DOCX từ máy tính để tạo phiên bản CV mới.</DialogDescription>
-          <Button disabled={uploading} onClick={openPicker}>Chọn file từ máy tính</Button>
+        <DialogContent className="sm:max-w-md" data-agent-target="upload-cv-modal">
+          <DialogTitle>Tải CV lên</DialogTitle>
+          <DialogDescription>Chọn file PDF hoặc DOCX từ máy tính để tạo CV mới.</DialogDescription>
+          <Button
+            size="brand"
+            onClick={() => {
+              setUploadOpen(false)
+              openPicker()
+            }}
+          >
+            Chọn file từ máy tính
+          </Button>
         </DialogContent>
       </Dialog>
+      <CvPreviewDialog cv={previewCv} open={previewOpen} onOpenChange={setPreviewOpen} />
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => !open && setDeleting(null)}

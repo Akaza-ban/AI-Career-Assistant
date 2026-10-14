@@ -143,7 +143,7 @@ async def test_out_of_scope_short_circuits_before_retrieval_and_llm(message: str
         "Công thức tính Match Score là gì?",
         "Tải CV ứng tuyển ngành thể thao",
         "Xem báo cáo thống kê sinh viên hôm nay",
-        "Dự báo tiến bộ sinh viên có trong CareerX không?",
+        "Dự báo tiến bộ sinh viên có trong CareerV không?",
     ],
 )
 def test_scope_guard_preserves_platform_questions(message: str) -> None:

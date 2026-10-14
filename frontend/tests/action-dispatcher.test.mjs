@@ -128,36 +128,53 @@ function providerFixture(actions) {
   return { ...f, inputs, render }
 }
 
-test("analysis highlight reveals the actual start button without submitting a job", () => {
-  const hooks = hooksFixture()
+test("analysis start button carries the agent target and reports the selection without submitting a job", () => {
+  // NewAnalysis and SinglePicker share one module, so each component gets its own hook cells behind one react proxy.
+  const page = hooksFixture(), picker = hooksFixture()
+  let current = page
+  const react = new Proxy({}, { get: (_, key) => current.react[key] })
   let handlers, jobs = 0
-  const cvs = [{ id: "cv-1", file_name: "CV.pdf", is_active: true }]
-  const api = { listCvVersions: () => cvs, listJdLibrary: () => [], createGapAnalysis: () => { jobs++ } }
+  const cvs = [{ id: "cv-1", file_name: "CV.pdf", label: "v1.0", status: "ready", is_active: true }]
+  const items = [{ id: "jd-1", title: "Backend Intern", company: "Công ty G" }]
+  const api = { listCvVersions: () => cvs, createGapAnalysis: () => { jobs++ } }
   const { NewAnalysis } = load("components/student/analysis/new-analysis.tsx", {
-    react: hooks.react, "react/jsx-runtime": hooks.jsxRuntime,
-    "next/navigation": { useRouter: () => ({}) }, "lucide-react": {}, "sonner": { toast: {} },
+    react, "react/jsx-runtime": page.jsxRuntime,
+    "next/navigation": { useRouter: () => ({ push() {}, replace() {} }), useSearchParams: () => new URLSearchParams() },
+    "lucide-react": {}, "sonner": { toast: {} },
     "@/lib/api": { api }, "@/lib/use-api": { useApi: (fetch) => ({ data: fetch() }) },
     "@/lib/use-agent-actions": { useAgentActions: (value) => { handlers = value } },
-    "@/lib/types": { JD_MIN_WORDS: 50 }, "@/lib/text": { countWords: () => 0 }, "@/lib/utils": { cn: () => "" },
     "@/components/common/bottom-action-bar": { BottomActionBar: "bar" },
-    "@/components/student/analysis/analysis-stepper": { AnalysisStepper: "stepper" },
-    "@/components/student/analysis/cv-pick-step": { CvPickStep: "cv-picker" },
-    "@/components/student/analysis/jd-picker-sections": { JD_TABS: [] },
+    "@/components/common/page-header": { PageHeader: "page-header" },
+    "@/components/common/segmented-control": { SegmentedControl: "segmented" },
+    "@/components/common/zone": { Zone: "zone" },
+    "@/components/student/analysis/compare-picker": { ComparePicker: "compare-picker" },
+    "@/components/student/analysis/cv-pick-step": { CvZone: "cv-zone" },
+    "@/components/student/analysis/jd-picker-sections": {
+      EMPTY_PASTE: { title: "", company: "", text: "", save: false }, SOURCE_OPTIONS: [],
+      usePickItems: () => ({ items }), pasteErrors: () => ({ text: "required" }), pasteMissingHint: () => "",
+      composeJdText: () => "", JdRadioList: "radio-list", JdPasteForm: "paste-form",
+    },
+    "@/components/student/library/library-data": { metaLine: (...parts) => parts.filter(Boolean).join(" · ") },
     "@/components/ui/button": { Button: "button" }, "@/components/ui/skeleton": { Skeleton: "skeleton" },
   })
-  const render = () => hooks.render(() => NewAnalysis({ initialCvId: null }))
-  const findButton = (tree) => {
+  const find = (tree, match) => {
     if (!tree || typeof tree !== "object") return null
-    if (tree.props?.["data-agent-target"] === "btn-start-analysis") return tree
+    if (match(tree)) return tree
     const children = Array.isArray(tree) ? tree : tree.props?.children
-    return (Array.isArray(children) ? children : [children]).map(findButton).find(Boolean) ?? null
+    return (Array.isArray(children) ? children : [children]).map((child) => find(child, match)).find(Boolean) ?? null
   }
-  assert.equal(findButton(render()), null)
-  handlers.prepareHighlight('[data-agent-target="btn-start-analysis"]')
-  const button = findButton(render())
+  const singlePicker = find(page.render(() => NewAnalysis({ initialCvId: null, initialJdIds: [] })), (node) => node.type?.name === "SinglePicker")
+  current = picker
+  const renderPicker = () => picker.render(() => singlePicker.type(singlePicker.props))
+  renderPicker() // chọn sẵn vị trí đầu danh sách
+  const button = find(renderPicker(), (node) => node.props?.["data-agent-target"] === "btn-start-analysis")
   assert.equal(button.type, "button")
-  assert.equal(button.props.disabled, true)
-  assert.equal(handlers.getContext().selected_cv_id, "cv-1")
+  assert.equal(button.props.disabled, false)
+  assert.deepEqual(JSON.parse(JSON.stringify(handlers.getContext())), {
+    selected_cv_id: "cv-1",
+    page_state: { active_tab: "list", selected_jd_id: "jd-1", selected_cv_name: "CV.pdf · v1.0", selected_jd_title: "Backend Intern · Công ty G" },
+  })
+  handlers.resetView({ clear_filters: true, close_modals: true })
   assert.equal(jobs, 0)
 })
 
@@ -196,25 +213,32 @@ test("provider dialog approval persists consent before analysis, while cancellat
 test("confirmation dialog exposes confirm/cancel, fallback description and busy dismissal guards", () => {
   const jsx = (type, props) => ({ type, props })
   const { ActionConfirmationDialog } = load("components/assistant/action-confirmation-dialog.tsx", {
-    "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": { Loader2: "loader", ShieldCheck: "shield" },
+    react: { useMemo: (factory) => factory() },
+    "react/jsx-runtime": { jsx, jsxs: jsx }, "lucide-react": { Loader2: "loader" },
     "@/components/ui/button": { Button: "button" },
-    "@/components/ui/dialog": Object.fromEntries(["Dialog", "DialogContent", "DialogDescription", "DialogFooter", "DialogHeader", "DialogTitle"].map((name) => [name, name])),
+    "@/components/ui/dialog": Object.fromEntries(["Dialog", "DialogContent", "DialogDescription", "DialogTitle"].map((name) => [name, name])),
   })
+  const find = (tree, match, found = []) => {
+    if (!tree || typeof tree !== "object") return found
+    if (match(tree)) found.push(tree)
+    const children = Array.isArray(tree) ? tree : tree.props?.children
+    for (const child of Array.isArray(children) ? children : [children]) find(child, match, found)
+    return found
+  }
   let approved = 0, rejected = 0
   const props = { action: { description_vi: "Phân tích CV" }, busy: false, onConfirm: async () => { approved++ }, onReject: async () => { rejected++ } }
   assert.equal(ActionConfirmationDialog({ ...props, action: null }), null)
   const tree = ActionConfirmationDialog(props)
-  const content = tree.props.children
-  assert.equal(content.props.children[0].props.children[2].props.children, "Phân tích CV")
-  const buttons = content.props.children[2].props.children
-  buttons[0].props.onClick()
-  buttons[1].props.onClick()
+  assert.equal(find(tree, (node) => node.type === "DialogDescription")[0].props.children, "Phân tích CV")
+  const [cancel, confirm] = find(tree, (node) => node.type === "button")
+  cancel.props.onClick()
+  confirm.props.onClick()
   assert.equal(rejected, 1)
   assert.equal(approved, 1)
   const busy = ActionConfirmationDialog({ ...props, busy: true })
   busy.props.onOpenChange(false)
   assert.equal(rejected, 1)
-  assert.ok(busy.props.children.props.children[2].props.children.every((button) => button.props.disabled))
+  assert.ok(find(busy, (node) => node.type === "button").every((button) => button.props.disabled))
 })
 
 test("navigation resolves guide aliases and encodes query values", async () => {
@@ -450,15 +474,15 @@ test("fixed spotlight uses viewport coordinates and follows nested scrolling", (
   const f = highlighterFixture({ top: 200, left: 80, bottom: 240, right: 180, width: 100, height: 40 })
   assert.equal(f.element.scrolled, undefined)
   let style = f.render().props.children[0].props.style
-  assert.equal(style.top, 196)
-  assert.equal(style.left, 76)
-  assert.equal(style.width, 108)
+  assert.equal(style.top, 194)
+  assert.equal(style.left, 74)
+  assert.equal(style.width, 112)
   assert.equal(f.listeners.get("scroll").capture, true)
   f.move({ top: 300, left: 80, bottom: 340, right: 180, width: 100, height: 40 })
   f.listeners.get("scroll").callback()
   f.flush()
   style = f.render().props.children[0].props.style
-  assert.equal(style.top, 296)
+  assert.equal(style.top, 294)
   f.cleanup()
 })
 

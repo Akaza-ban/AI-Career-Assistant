@@ -3,32 +3,31 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, Briefcase, Circle, CircleCheck, FileText, Loader2, RotateCcw } from "lucide-react"
+import { AlertCircle, Loader2, RotateCcw } from "lucide-react"
 import { toast } from "sonner"
 
-import { FeedbackWidget } from "@/components/FeedbackWidget"
-import { Panel } from "@/components/common/panel"
-import {
-  EvidenceList,
-  NextActions,
-  ResultDisclaimer,
-  ScoreCard,
-  SuggestionList,
-} from "@/components/student/analysis/analysis-result-sections"
+import { AiProgress } from "@/components/common/ai-progress"
+import { PageHeader } from "@/components/common/page-header"
+import { RateRow } from "@/components/common/rate-dialog"
+import { FallbackBanner } from "@/components/student/analysis/analysis-result-sections"
+import { ResultActionBar } from "@/components/student/analysis/result-action-bar"
+import { ResultScoreCard } from "@/components/student/analysis/result-score-card"
+import { ResultSkills } from "@/components/student/analysis/result-skills"
+import { ResultSuggestions } from "@/components/student/analysis/result-suggestions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ANALYSIS_STEPS } from "@/lib/analysis"
 import { api } from "@/lib/api"
-import { formatRelativeTime } from "@/lib/format"
 import type { GapAnalysis } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
-import { cn } from "@/lib/utils"
 
 /** Chu kỳ hỏi lại tiến độ khi backend còn đang phân tích. */
 const POLL_MS = 1500
+/** Sau mốc này đổi câu chữ "lâu hơn bình thường" (DESIGN.md mục 9). */
+const SLOW_MS = 15_000
 
-// Figma: frame "Phân tích CV và JD" (18:385). PRD US-SV-02 / US-SV-05, mục 5.2.
+// Bản mẫu "Kết quả phân tích" (DESIGN.md mục 7, WIREFRAMES A7). PRD US-SV-02 / US-SV-05, mục 5.2.
 export function AnalysisResult({ id }: { id: string }) {
   const fetchAnalysis = useCallback(() => api.getGapAnalysis(id), [id])
   const { data: analysis, error, reload } = useApi(fetchAnalysis)
@@ -42,47 +41,68 @@ export function AnalysisResult({ id }: { id: string }) {
 
   if (error) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">Không tải được kết quả phân tích</p>
+      <section
+        role="alert"
+        className="mx-auto mt-6 flex max-w-lg flex-col items-center gap-3 rounded-panel border border-line bg-card px-6 py-10 text-center shadow-card"
+      >
+        <AlertCircle className="size-7 text-bad" aria-hidden />
+        <h1 className="font-heading text-lg font-bold text-ink">Không tải được kết quả phân tích</h1>
         <p className="text-sm text-ink-2">{error.message}</p>
-        <Button variant="soft" onClick={reload}>
-          Thử lại
-        </Button>
-      </Panel>
+        <div className="flex flex-wrap justify-center gap-2 pt-1">
+          <Button size="brand" onClick={reload}>
+            Thử lại
+          </Button>
+          <Button variant="soft" size="brand" nativeButton={false} render={<Link href="/student" />}>
+            Về Tổng quan
+          </Button>
+        </div>
+      </section>
     )
   }
 
   if (!analysis) {
     return (
-      <div className="grid gap-8" aria-busy="true" aria-label="Đang tải kết quả phân tích">
-        <Skeleton className="h-24 rounded-[20px]" />
-        <Skeleton className="h-64 rounded-[20px]" />
-        <Skeleton className="h-[420px] rounded-[20px]" />
+      <div className="grid gap-14 md:gap-16" aria-busy="true" aria-label="Đang tải kết quả phân tích">
+        <div className="grid gap-3 pt-8 pb-2 md:pt-12">
+          <Skeleton className="h-9 w-2/3 max-w-md rounded-xl md:h-[46px]" />
+          <Skeleton className="h-6 w-1/2 max-w-sm rounded-lg" />
+        </div>
+        {[176, 420].map((h) => (
+          <div key={h} className="grid gap-7">
+            <Skeleton className="h-8 w-56 rounded-lg" />
+            <Skeleton className="rounded-card" style={{ height: h }} />
+          </div>
+        ))}
       </div>
     )
   }
 
   return (
-    <div className="grid gap-8">
-      <ResultHeader analysis={analysis} />
+    // Bố cục vùng và khối kiểu Stripe (DESIGN.md 3.6): tiêu đề trang, rồi các vùng cách nhau 56–64px, không thẻ bao.
+    <div className="grid gap-14 md:gap-16">
+      <div className="grid gap-6">
+        <ResultHeader analysis={analysis} />
+        {analysis.status === "completed" && !analysis.llm_used && <FallbackBanner />}
+      </div>
 
       {analysis.status === "processing" && <ProcessingView analysis={analysis} />}
       {analysis.status === "failed" && <FailedView analysis={analysis} />}
       {analysis.status === "completed" && (
         <>
-          <ScoreCard analysis={analysis} />
-          <EvidenceList requirements={analysis.requirements} />
-          <SuggestionList analysis={analysis} />
-          <NextActions analysis={analysis} />
-          {/* US-SV-06: khảo sát CSAT sau mỗi lượt phân tích */}
-          <FeedbackWidget
-            variant="stars"
+          <ResultScoreCard analysis={analysis} />
+          <ResultSkills analysis={analysis} />
+          <ResultSuggestions analysis={analysis} />
+          {/* US-SV-06: chỉ một dòng câu hỏi; bấm "Đánh giá" mới mở hộp chấm sao */}
+          <RateRow
             responseId={analysis.response_id}
             activity="gap_analysis"
-            title="Bạn đánh giá kết quả phân tích này hữu ích đến mức nào?"
+            title="Đánh giá lượt phân tích"
+            subtitle={`${analysis.jd.title} · CV ${analysis.cv_label}`}
+            question="Bạn thấy lượt phân tích này thế nào?"
+            buttonLabel="Đánh giá lượt này"
+            className="border-t border-line pt-8"
           />
-          <ResultDisclaimer />
+          <ResultActionBar analysis={analysis} />
         </>
       )}
     </div>
@@ -90,85 +110,39 @@ export function AnalysisResult({ id }: { id: string }) {
 }
 
 function ResultHeader({ analysis }: { analysis: GapAnalysis }) {
-  const company = analysis.jd.company ? ` – ${analysis.jd.company}` : ""
+  // US-SV-02 AC1: kết quả gắn với đúng cặp (phiên bản CV, JD)
+  const against = `so với ${analysis.cv_file_name} ${analysis.cv_label}`
   return (
-    <div className="grid gap-3 py-2">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
-        <Badge variant="violet">Báo cáo đối soát CV</Badge>
-        {analysis.jd.source === "pasted" && <Badge variant="neutral">JD tự dán</Badge>}
-        <span>{formatRelativeTime(analysis.created_at)}</span>
-      </div>
-      <h1 className="font-heading text-[32px] leading-10 font-bold">Kết quả phân tích CV – JD</h1>
-      {/* US-SV-02 AC1: kết quả gắn với đúng cặp (phiên bản CV, JD) */}
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-ink ring-1 ring-line">
-          <Briefcase className="size-3.5 shrink-0 text-blue" aria-hidden />
-          <span>
-            Vị trí: <strong className="font-semibold">{analysis.jd.title + company}</strong>
-          </span>
-        </span>
-        <span className="flex items-center gap-1.5 rounded-lg bg-card px-2.5 py-1.5 text-ink ring-1 ring-line">
-          <FileText className="size-3.5 shrink-0 text-blue" aria-hidden />
-          <span className="min-w-0 break-all">
-            CV: <strong className="font-semibold">{analysis.cv_file_name}</strong>{" "}
-            <span className="text-ink-3">({analysis.cv_label})</span>
-          </span>
-        </span>
-      </div>
-    </div>
+    <PageHeader
+      title={analysis.jd.title}
+      description={
+        <span className="break-words">{analysis.jd.company ? `${analysis.jd.company} · ${against}` : against}</span>
+      }
+      actions={analysis.jd.source === "pasted" ? <Badge variant="neutral">JD tự dán</Badge> : undefined}
+    />
   )
 }
 
 function ProcessingView({ analysis }: { analysis: GapAnalysis }) {
-  const current = ANALYSIS_STEPS.findIndex((s) => s.key === analysis.current_step)
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), SLOW_MS)
+    return () => clearTimeout(timer)
+  }, [])
+
+  const index = ANALYSIS_STEPS.findIndex((s) => s.key === analysis.current_step)
   return (
-    <Panel className="grid gap-5" aria-live="polite" aria-busy="true">
-      <div className="grid gap-1">
-        <h2 className="flex items-center gap-2 font-heading text-lg font-bold">
-          <Loader2 className="size-5 animate-spin text-violet" aria-hidden />
-          Đang phân tích CV với JD
-        </h2>
-        <p className="text-sm text-ink-2">
-          Thường mất 20–60 giây. Bạn cứ ở lại trang này, kết quả sẽ tự hiện khi xong.
-        </p>
-      </div>
-      <ol className="grid gap-2">
-        {ANALYSIS_STEPS.map((step, i) => {
-          const state = i < current ? "done" : i === current ? "running" : "waiting"
-          return (
-            <li
-              key={step.key}
-              className={cn(
-                "flex items-center gap-3 rounded-xl p-3",
-                state === "running" ? "bg-violet-soft/60 ring-1 ring-violet/20" : state === "done" ? "bg-surface" : "",
-              )}
-            >
-              {state === "done" ? (
-                <CircleCheck className="size-5 shrink-0 text-good" aria-hidden />
-              ) : state === "running" ? (
-                <Loader2 className="size-5 shrink-0 animate-spin text-violet" aria-hidden />
-              ) : (
-                <Circle className="size-5 shrink-0 text-ink-3" aria-hidden />
-              )}
-              <span className="grid min-w-0 flex-1">
-                <span className={cn("text-sm font-semibold", state === "waiting" ? "text-ink-2" : "text-ink")}>
-                  {i + 1}. {step.title}
-                </span>
-                <span className="text-xs text-ink-2">{step.description}</span>
-              </span>
-              <span
-                className={cn(
-                  "shrink-0 text-xs font-medium",
-                  state === "done" ? "text-good" : state === "running" ? "text-violet" : "text-ink-3",
-                )}
-              >
-                {state === "done" ? "Xong" : state === "running" ? "Đang chạy" : "Chờ"}
-              </span>
-            </li>
-          )
-        })}
-      </ol>
-    </Panel>
+    <AiProgress
+      className="rounded-none! border-0 border-b bg-transparent px-0 pt-0 pb-8 sm:px-0 sm:pt-0"
+      title="Đang phân tích…"
+      description={
+        slow
+          ? "Lâu hơn bình thường một chút… Bạn cứ ở lại trang này, kết quả sẽ tự hiện khi xong."
+          : "Thường mất 20–60 giây. Bạn cứ ở lại trang này, kết quả sẽ tự hiện khi xong."
+      }
+      steps={ANALYSIS_STEPS.map((s) => s.title)}
+      current={Math.max(0, index)}
+    />
   )
 }
 
@@ -189,23 +163,29 @@ function FailedView({ analysis }: { analysis: GapAnalysis }) {
   }
 
   return (
-    <Panel className="grid justify-items-center gap-3 py-10 text-center" role="alert">
-      <AlertCircle className="size-8 text-bad" aria-hidden />
-      <p className="font-heading text-lg font-bold">Phân tích chưa hoàn tất</p>
-      <p className="max-w-md text-sm text-ink-2">{analysis.error_message ?? "Có lỗi xảy ra trong lúc phân tích."}</p>
+    <section
+      role="alert"
+      className="flex flex-col items-center gap-3 border-y border-line px-4 py-12 text-center"
+    >
+      <span className="grid size-11 place-items-center rounded-full bg-bad-soft text-bad">
+        <AlertCircle className="size-5" aria-hidden />
+      </span>
+      <h2 className="text-[22px] leading-7 font-semibold text-ink">Phân tích chưa hoàn tất</h2>
+      <p className="max-w-md text-[15px] leading-6 text-ink-2">{analysis.error_message ?? "Có lỗi xảy ra trong lúc phân tích."}</p>
       <div className="flex flex-wrap justify-center gap-2 pt-2">
-        <Button onClick={retry} disabled={retrying}>
+        <Button size="brand" onClick={retry} disabled={retrying}>
           {retrying ? <Loader2 className="animate-spin" aria-hidden /> : <RotateCcw aria-hidden />}
-          Thử lại
+          Chạy lại
         </Button>
         <Button
           variant="soft"
+          size="brand"
           nativeButton={false}
           render={<Link href={`/student/analysis/new?cv=${encodeURIComponent(analysis.cv_version_id)}`} />}
         >
           Chọn lại CV / JD
         </Button>
       </div>
-    </Panel>
+    </section>
   )
 }

@@ -16,6 +16,7 @@ import type {
   StudentOverview,
   StudentProgress,
 } from "@/lib/types"
+import { roadmapUrlOf } from "@/lib/mocks/roadmap"
 
 const RECENT_LIMIT = 5
 /** Số buổi gần nhất dùng cho điểm trung bình S/T/A/R và biểu đồ nhỏ ở Tổng quan. */
@@ -138,7 +139,9 @@ export function buildOverview(input: OverviewInput): StudentOverview {
       ? {
           analysis_id: latestAnalysis.id,
           jd: latestAnalysis.jd,
-          skills: missing.slice(0, SKILLS_LIMIT).map((r) => ({ name: r.skill, importance: r.importance })),
+          skills: missing
+            .slice(0, SKILLS_LIMIT)
+            .map((r) => ({ name: r.skill, importance: r.importance, roadmap_url: roadmapUrlOf(r.skill) })),
           total_missing: missing.length,
         }
       : null,

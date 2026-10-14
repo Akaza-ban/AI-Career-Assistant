@@ -3,28 +3,69 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useState, type ReactNode } from "react"
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
-import { AlertCircle, ArrowLeft, Bot, ClipboardCheck, Loader2, LogOut, Pause, Play, ShieldCheck, Timer } from "lucide-react"
+import { AlertCircle, ChevronRight, EyeOff, Loader2, LogOut, Pause, ShieldCheck, Timer, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import { Panel } from "@/components/common/panel"
-import { useProfile } from "@/components/shell/profile-context"
-import { QuestionRoadmap, RoomHeader, RoomProgress } from "@/components/student/interview/interview-room"
-import { Badge } from "@/components/ui/badge"
+import { EmptyState } from "@/components/common/empty-state"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api, ApiError } from "@/lib/api"
-import { MIN_ANSWER_CHARS, PAUSE_MAX_SECONDS, QUESTION_COUNT, SECONDS_PER_QUESTION, mmss } from "@/lib/interview"
+import { formatDate } from "@/lib/format"
+import { MIN_ANSWER_CHARS, PAUSE_MAX_SECONDS, QUESTION_COUNT, SECONDS_PER_QUESTION } from "@/lib/interview"
+import { SetFocusTitle } from "@/components/shell/focus-title"
 import { useApi } from "@/lib/use-api"
 
+const MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
+
+/** Nút viền mảnh dạng pill (nút phụ trong chế độ tập trung). */
+export const outlinePill =
+  "bg-card text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-panel hover:text-ink"
+
+const RULES: { icon: LucideIcon; title: string; text: string }[] = [
+  {
+    icon: Timer,
+    title: "Mỗi câu có đồng hồ riêng",
+    text: `${SECONDS_PER_QUESTION / 60} phút mỗi câu, câu 1 chỉ bắt đầu tính giờ khi bạn bấm Sẵn sàng. Hết giờ, phần đang gõ được tự nộp; dưới ${MIN_ANSWER_CHARS} ký tự được 0 điểm.`,
+  },
+  {
+    icon: Pause,
+    title: "Được tạm dừng 1 lần",
+    text: `Dùng khi cần nghỉ giữa chừng, tối đa ${PAUSE_MAX_SECONDS} giây; đồng hồ sẽ dừng theo.`,
+  },
+  {
+    icon: EyeOff,
+    title: "Không hiện điểm trong lúc phỏng vấn",
+    text: `Điểm STAR và nhận xét có trong báo cáo sau khi bạn trả lời đủ ${QUESTION_COUNT} câu.`,
+  },
+  {
+    icon: LogOut,
+    title: "Rời phòng giữa chừng thì không lưu",
+    text: "Kết thúc sớm hoặc rời phòng thì buổi không được lưu và không tính lượt.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Trả lời bằng trải nghiệm thật",
+    text: "Nội dung không liên quan đến buổi phỏng vấn sẽ không được tính.",
+  },
+]
+
 /**
- * Phòng chờ trước khi bắt đầu: giao diện phòng phỏng vấn (chưa có câu hỏi) kèm popup luật buổi phỏng vấn.
+ * Phòng chờ (bản vẽ "Phòng chờ", WIREFRAMES A12): chế độ tập trung, luật buổi phỏng vấn ở giữa màn hình.
  * Buổi phỏng vấn chỉ được tạo khi SV bấm "Sẵn sàng", vì đồng hồ câu 1 bắt đầu chạy ngay lúc tạo buổi
- * (create_session ở src/services/interview.py); "Quay lại" về trang Thiết lập, giữ nguyên vị trí và CV đã chọn.
+ * (create_session ở src/services/interview.py); "Đổi CV và vị trí" về trang Thiết lập, giữ nguyên lựa chọn.
  */
-export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: string | null }) {
+export function InterviewLobby({
+  jdId,
+  cvId,
+  initialMode = null,
+}: {
+  jdId: string | null
+  cvId: string | null
+  /** "jd_only" (?mode=jd_only): phỏng vấn chỉ theo vị trí, không cần CV. */
+  initialMode?: string | null
+}) {
+  const jdOnly = initialMode === "jd_only" || !cvId
   const router = useRouter()
-  const profile = useProfile()
   const { data: jds, error: jdsError, reload: reloadJds } = useApi(api.listInterviewJds)
   const { data: cvs, error: cvsError, reload: reloadCvs } = useApi(api.listCvVersions)
   const jdKey = jdId ?? ""
@@ -35,61 +76,79 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   const params = new URLSearchParams()
   if (jdId) params.set("jd", jdId)
   if (cvId) params.set("cv", cvId)
+  if (jdOnly) params.set("mode", "jd_only")
   const setupHref = `/student/interview/new${params.size > 0 ? `?${params}` : ""}`
 
   if (jdsError || cvsError) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">Không mở được phòng phỏng vấn</p>
-        <p className="max-w-md text-sm text-ink-2">{(jdsError ?? cvsError)?.message}</p>
-        <Button
-          variant="soft"
-          onClick={() => {
-            reloadJds()
-            reloadCvs()
-          }}
-        >
-          Thử lại
-        </Button>
-      </Panel>
+      <Centered>
+        <EmptyState
+          icon={AlertCircle}
+          title="Không mở được phòng chờ"
+          description={(jdsError ?? cvsError)?.message}
+          action={
+            <Button
+              size="brand"
+              onClick={() => {
+                reloadJds()
+                reloadCvs()
+              }}
+            >
+              Thử lại
+            </Button>
+          }
+        />
+      </Centered>
     )
   }
 
   if (!jds || !cvs) {
     return (
-      <div className="grid gap-6" aria-busy="true" aria-label="Đang chuẩn bị phòng phỏng vấn">
-        <Skeleton className="h-20 rounded-[20px]" />
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <Skeleton className="h-[320px] rounded-[20px]" />
-          <Skeleton className="h-[360px] rounded-[20px]" />
+      <Centered>
+        <div className="grid gap-4" aria-busy="true" aria-label="Đang chuẩn bị phòng chờ">
+          <div className="flex items-center gap-3.5">
+            <Skeleton className="size-[52px] rounded-2xl" />
+            <Skeleton className="h-10 w-56 rounded-lg" />
+          </div>
+          <Skeleton className="mt-6 h-11 w-72 max-w-full rounded-lg" />
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-16 rounded-xl" />
+          ))}
         </div>
-      </div>
+      </Centered>
     )
   }
 
   const jd = jds.find((j) => j.id === jdId)
-  const cv = cvs.find((c) => c.id === cvId)
-  if (!jd || !cv) {
+  const cv = jdOnly ? null : cvs.find((c) => c.id === cvId)
+  if (!jd || cv === undefined) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-warn" aria-hidden />
-        <p className="font-heading font-bold">Chưa chọn vị trí hoặc CV cho buổi phỏng vấn</p>
-        <p className="max-w-md text-sm text-ink-2">Hãy chọn vị trí ứng tuyển và CV ở trang Thiết lập rồi bắt đầu lại.</p>
-        <Button nativeButton={false} render={<Link href={setupHref} />}>
-          Về trang Thiết lập
-        </Button>
-      </Panel>
+      <Centered>
+        <EmptyState
+          icon={AlertCircle}
+          title={jdOnly ? "Chưa chọn vị trí cho buổi phỏng vấn" : "Chưa chọn vị trí hoặc CV cho buổi phỏng vấn"}
+          description={`Hãy chọn vị trí ứng tuyển${jdOnly ? "" : " và CV"} ở trang Thiết lập rồi vào lại phòng chờ.`}
+          action={
+            <Button size="brand" nativeButton={false} render={<Link href={setupHref} />}>
+              Về trang Thiết lập
+            </Button>
+          }
+        />
+      </Centered>
     )
   }
 
   const exhausted = quota !== undefined && quota.remaining === 0
 
   async function ready() {
-    if (!jd || !cv) return
+    if (!jd || cv === undefined) return
     setStarting(true)
     try {
-      const session = await api.createInterview({ jd_id: jd.id, cv_version_id: cv.id })
+      const session = await api.createInterview({
+        jd_id: jd.id,
+        cv_version_id: cv?.id ?? null,
+        interview_mode: cv ? "with_cv" : "jd_only",
+      })
       // replace: bấm Back trong phòng không quay lại phòng chờ (sẽ tạo thêm buổi mới)
       router.replace(`/student/interview/${encodeURIComponent(session.id)}`)
     } catch (err) {
@@ -99,153 +158,92 @@ export function InterviewLobby({ jdId, cvId }: { jdId: string | null; cvId: stri
   }
 
   return (
-    <div className="grid gap-6">
-      <RoomHeader title={jd.title} tone="idle" status="Chưa bắt đầu">
-        <RoomProgress total={QUESTION_COUNT} answered={new Set()} currentIndex={null} label={`${QUESTION_COUNT} câu hỏi`}>
-          <span className="flex items-center gap-1 border-l border-line pl-4 font-heading text-base font-bold text-ink-3 tabular-nums">
-            <Timer className="size-4" aria-hidden />
-            {mmss(SECONDS_PER_QUESTION)}
-          </span>
-        </RoomProgress>
-      </RoomHeader>
-
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex min-w-0 gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-violet text-white">
-            <Bot className="size-5" aria-hidden />
-          </span>
-          <div className="grid min-w-0 flex-1 gap-2">
-            <p className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-heading font-bold text-violet">AI Career Coach</span>
-              <Badge variant="violet">Người phỏng vấn</Badge>
-            </p>
-            <div className="rounded-2xl rounded-tl-sm border border-violet/15 bg-violet-soft/40 p-4 text-[15px] leading-7 text-ink">
-              Chào {profile?.full_name ?? "bạn"}! Mình là AI Career Coach. Hôm nay mình sẽ phỏng vấn bạn cho vị trí{" "}
-              <strong>{jd.title}</strong> với {QUESTION_COUNT} câu hỏi hành vi. Khi bạn sẵn sàng, mình sẽ bắt đầu với câu hỏi
-              đầu tiên.
-            </div>
-          </div>
+    <Centered>
+      <SetFocusTitle title={`Phòng chờ · ${jd.title}`} />
+      <div className="flex items-center gap-3.5">
+        <span
+          className="grid size-[52px] shrink-0 place-items-center rounded-2xl bg-ink text-[15px] font-semibold tracking-[0.02em] text-on-ink"
+          aria-hidden
+        >
+          AI
+        </span>
+        <div className="min-w-0">
+          <p className="font-semibold text-ink">AI Career Coach</p>
+          <p className="text-sm text-ink-3">
+            Người phỏng vấn · {QUESTION_COUNT} câu · khoảng {MINUTES} phút
+          </p>
         </div>
-        <aside className="min-w-0 lg:sticky lg:top-52">
-          <QuestionRoadmap total={QUESTION_COUNT} turns={[]} currentIndex={null} />
-        </aside>
       </div>
 
-      <RulesDialog
-        context={`${jd.title} · ${cv.file_name} (${cv.label})`}
-        quota={quota ? `Còn ${quota.remaining}/${quota.limit} buổi cho vị trí này trong tuần` : null}
-        exhausted={exhausted}
-        starting={starting}
-        onBack={() => router.push(setupHref)}
-        onReady={() => void ready()}
-      />
-    </div>
+      <h1 className="mt-8 text-[30px] leading-9 font-semibold tracking-[-0.025em] text-ink md:mt-9 md:text-[40px] md:leading-[46px]">
+        Trước khi bắt đầu
+      </h1>
+      <dl className="mt-3 grid grid-cols-[48px_minmax(0,1fr)] gap-x-3 gap-y-1 text-base leading-[26px]">
+        <dt className="text-ink-3">Vị trí</dt>
+        <dd className="break-words text-ink">
+          <span className="font-medium">{jd.title}</span>
+          {jd.company && <span className="text-ink-2"> · {jd.company}</span>}
+        </dd>
+        <dt className="text-ink-3">CV</dt>
+        <dd className="break-words text-ink">
+          {cv ? cv.file_name : <span className="text-ink-2">Không dùng CV · câu hỏi dựa trên yêu cầu của vị trí</span>}
+        </dd>
+      </dl>
+
+      <ul className="mt-6 border-t border-line">
+        {RULES.map(({ icon: Icon, title, text }) => (
+          <li key={title} className="flex gap-3.5 border-b border-line py-[18px]">
+            <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-surface text-ink">
+              <Icon className="size-[18px]" strokeWidth={1.75} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="font-semibold text-ink">{title}</p>
+              <p className="text-sm leading-[22px] text-ink-2">{text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {exhausted ? (
+        <p className="mt-6 flex items-start gap-1.5 text-sm text-warn" role="alert">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          Bạn đã dùng hết lượt cho vị trí này trong tuần (làm mới ngày {formatDate(quota.resets_at)}). Hãy đổi sang vị trí
+          khác.
+        </p>
+      ) : (
+        quota && (
+          <p className="mt-6 text-sm text-ink-3">
+            Còn {quota.remaining} / {quota.limit} buổi cho vị trí này trong tuần.
+          </p>
+        )
+      )}
+
+      <div className="mt-6 flex flex-wrap items-center gap-2.5 md:mt-8">
+        <Button size="brand" onClick={() => void ready()} disabled={starting || exhausted || !quota}>
+          {starting && <Loader2 className="animate-spin" aria-hidden />}
+          {starting ? "Đang mở phòng…" : "Sẵn sàng"}
+          {!starting && <ChevronRight aria-hidden />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="brand"
+          className={outlinePill}
+          nativeButton={false}
+          render={<Link href={setupHref} aria-disabled={starting} />}
+        >
+          Đổi CV và vị trí
+        </Button>
+      </div>
+
+    </Centered>
   )
 }
 
-const RULES: { icon: typeof Timer; text: ReactNode }[] = [
-  {
-    icon: Timer,
-    text: (
-      <>
-        Mỗi câu có <strong>{SECONDS_PER_QUESTION / 60} phút</strong>. Hết giờ, phần bạn đang gõ được tự nộp; câu trả lời dưới{" "}
-        {MIN_ANSWER_CHARS} ký tự được 0 điểm.
-      </>
-    ),
-  },
-  {
-    icon: Pause,
-    text: (
-      <>
-        Được <strong>tạm dừng 1 lần</strong> mỗi buổi, tối đa {PAUSE_MAX_SECONDS} giây.
-      </>
-    ),
-  },
-  {
-    icon: ClipboardCheck,
-    text: (
-      <>
-        Điểm và nhận xét <strong>không hiện trong lúc phỏng vấn</strong>; bạn xem đầy đủ trong báo cáo sau khi trả lời đủ{" "}
-        {QUESTION_COUNT} câu.
-      </>
-    ),
-  },
-  {
-    icon: LogOut,
-    text: (
-      <>
-        Kết thúc sớm hoặc rời phòng giữa chừng thì buổi <strong>không được lưu</strong> và không tính lượt.
-      </>
-    ),
-  },
-  {
-    icon: ShieldCheck,
-    text: "Trả lời bằng trải nghiệm thật của bạn; nội dung không liên quan đến buổi phỏng vấn sẽ không được tính.",
-  },
-]
-
-interface RulesDialogProps {
-  /** "Vị trí · CV" của buổi sắp bắt đầu. */
-  context: string
-  quota: string | null
-  exhausted: boolean
-  starting: boolean
-  onBack: () => void
-  onReady: () => void
-}
-
-/** Popup luật buổi phỏng vấn; chỉ đóng bằng "Quay lại" hoặc "Sẵn sàng" (Esc và bấm ra ngoài không đóng). */
-function RulesDialog({ context, quota, exhausted, starting, onBack, onReady }: RulesDialogProps) {
+/** Khối một cột ở giữa màn hình, rộng tối đa 640px (DESIGN.md 5.5). */
+function Centered({ children }: { children: ReactNode }) {
   return (
-    <DialogPrimitive.Root open disablePointerDismissal>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-navy/60 backdrop-blur-sm duration-150 data-open:animate-in data-open:fade-in-0" />
-        <DialogPrimitive.Popup className="fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-32px)] w-[min(600px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 gap-5 overflow-y-auto rounded-[24px] bg-card p-6 shadow-float outline-none duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 sm:p-8">
-          <div className="grid gap-2">
-            <p className="text-xs font-bold tracking-[0.12em] text-violet uppercase">Trước khi bắt đầu</p>
-            <DialogPrimitive.Title className="font-heading text-[26px] leading-8 font-extrabold">
-              Luật buổi phỏng vấn
-            </DialogPrimitive.Title>
-            <DialogPrimitive.Description className="grid gap-0.5 text-sm text-ink-2">
-              <span className="truncate" title={context}>
-                {context}
-              </span>
-              {quota && <span className={exhausted ? "font-medium text-warn" : "text-violet"}>{quota}</span>}
-            </DialogPrimitive.Description>
-          </div>
-
-          <ul className="grid gap-2">
-            {RULES.map(({ icon: Icon, text }, i) => (
-              <li key={i} className="flex items-start gap-3 rounded-xl border border-line p-3 text-sm leading-6 text-ink">
-                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-violet-soft text-violet">
-                  <Icon className="size-4" aria-hidden />
-                </span>
-                <span className="pt-1">{text}</span>
-              </li>
-            ))}
-          </ul>
-
-          {exhausted ? (
-            <p className="flex items-start gap-1.5 text-sm text-warn" role="alert">
-              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
-              Bạn đã dùng hết lượt cho vị trí này trong tuần. Hãy quay lại chọn vị trí khác.
-            </p>
-          ) : (
-            <p className="text-sm text-ink-2">Đồng hồ câu 1 chỉ bắt đầu chạy khi bạn bấm Sẵn sàng.</p>
-          )}
-
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-5">
-            <Button variant="ghost" className="h-11 px-4" onClick={onBack} disabled={starting}>
-              <ArrowLeft aria-hidden />
-              Quay lại
-            </Button>
-            <Button variant="violet" size="brand" onClick={onReady} disabled={starting || exhausted}>
-              {starting ? <Loader2 className="animate-spin" aria-hidden /> : <Play aria-hidden />}
-              {starting ? "Đang mở phòng…" : "Sẵn sàng"}
-            </Button>
-          </div>
-        </DialogPrimitive.Popup>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+    <div className="grid min-h-[calc(100dvh-10rem)] place-items-center">
+      <div className="w-full max-w-[640px] py-4 sm:py-10">{children}</div>
+    </div>
   )
 }

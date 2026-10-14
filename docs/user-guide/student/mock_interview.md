@@ -9,29 +9,32 @@ tags: [interview, mock-interview, star, questions, feedback]
 
 ## Tổng quan
 
-Phỏng vấn thử giúp sinh viên luyện trả lời theo bối cảnh CV và vị trí ứng tuyển. Mỗi câu nên trình bày theo **STAR**: **Situation** (tình huống), **Task** (nhiệm vụ), **Action** (hành động bạn thực hiện), **Result** (kết quả). Báo cáo cho biết điểm và góp ý để luyện tập tiếp.
+Phỏng vấn thử giúp sinh viên luyện trả lời theo bối cảnh CV và vị trí ứng tuyển. AI hỏi **4 câu** và chấm theo khung **STAR**: **Situation** (Bối cảnh), **Task** (Nhiệm vụ), **Action** (Hành động bạn thực hiện), **Result** (Kết quả). Báo cáo cho biết điểm từng phần và hướng dẫn cải thiện.
 
-Route `/student/interview` trong frontmatter theo hợp đồng Assistant. Giao diện hiện tại thiết lập phiên tại `/student/interview/new`, thực hiện tại `/student/interview/{id}` và xem báo cáo tại `/student/interview/{id}/report`.
+Route `/student/interview` trong frontmatter theo hợp đồng Assistant. Giao diện thiết lập buổi tại `/student/interview/new`, phòng chờ tại `/student/interview/start`, buổi phỏng vấn tại `/student/interview/{id}` và báo cáo tại `/student/interview/{id}/report`.
 
 ## Các bước thực hiện
 
-1. Chuẩn bị CV và mở `/student/interview/new`.
-2. Chọn vị trí ứng tuyển và CV dùng làm bối cảnh. Đọc phần hướng dẫn và kiểm tra lượt luyện còn lại.
-3. Bấm **Bắt đầu phỏng vấn** khi đã chọn đủ thông tin và còn lượt cho vị trí này.
-4. Trong vòng đọc câu hỏi, xác định tình huống và nhiệm vụ cần kể. Phiên hiện tại gồm **4 câu hỏi**; theo dõi tiến độ trên giao diện.
-5. Trong vòng trả lời, nêu hành động của chính bạn và kết quả cụ thể theo STAR. Gửi câu trả lời bằng điều khiển trong phòng phỏng vấn, rồi tiếp tục câu tiếp theo.
-6. Hoàn thành các câu hỏi và mở báo cáo để đọc đánh giá, điểm STAR thang **0–5** cùng gợi ý cải thiện.
-7. Xem lại tại `/student/history`; nếu cần cố vấn góp ý, bật chia sẻ báo cáo tại `/student/share`.
+1. Chuẩn bị CV và mở `/student/interview/new` (mục **Luyện phỏng vấn** trên thanh bên). Bấm **Hướng dẫn** nếu muốn xem lại cách luyện.
+2. Kiểm tra số lượt còn lại, ví dụ **Còn 2 / 3 buổi tuần này**. Mỗi vị trí có giới hạn số buổi mỗi tuần.
+3. Ở **Chọn CV**, chọn CV dùng làm bối cảnh, hoặc chọn **Không dùng CV** để AI chỉ hỏi theo yêu cầu của vị trí (dùng được cả khi chưa tải CV). Ở **Chọn vị trí**, chọn một vị trí trong **Gợi ý & đã lưu** hoặc **Đã phân tích**; bấm **Tìm trong Thư viện JD** nếu chưa thấy.
+4. Kiểm tra khung **Buổi phỏng vấn của bạn** (vị trí, CV, 4 câu · khoảng 20 phút, chấm theo STAR thang 5), rồi bấm **Vào phòng chờ**.
+5. Trong phòng chờ, đọc luật rồi bấm **Sẵn sàng**. Buổi phỏng vấn chỉ được tạo và tính giờ khi bạn bấm Sẵn sàng.
+6. Với mỗi câu, xác định tình huống và nhiệm vụ cần kể, nêu hành động của chính bạn và kết quả cụ thể. Có thể gõ câu trả lời hoặc bấm **Nói câu trả lời** để nói bằng tiếng Việt (có thể xen thuật ngữ tiếng Anh), chữ nhận diện được sẽ hiện trong ô trả lời; bấm **Dừng nói** khi xong rồi sửa lại nếu cần. Nút này chỉ hiện khi hệ thống đã bật nhận diện giọng nói. Bấm **Gửi câu trả lời**; ở câu cuối, nút là **Gửi và kết thúc**. Có thể bấm **Kết thúc sớm**, nhưng buổi kết thúc sớm không được lưu.
+7. Mở báo cáo để xem **Điểm buổi phỏng vấn** (thang **0–5**), điểm từng phần S, T, A, R, **Hướng dẫn cải thiện** và **Chi tiết từng câu**. Từ báo cáo có thể bấm **Chia sẻ với cố vấn** hoặc **Luyện lại vị trí này**.
+8. Xem lại các buổi tại `/student/history` hoặc mục **Buổi gần đây** trên trang Luyện phỏng vấn.
 
 ## Các nút và thành phần giao diện
 
-Selector nút bắt đầu đã được gắn vào trang thiết lập phỏng vấn. Các selector còn lại là đề xuất cho phòng phỏng vấn và báo cáo, chưa được gắn trên giao diện.
+Các selector dưới đây đã được gắn vào trang thiết lập phỏng vấn.
 
-- **Nút "Bắt đầu phỏng vấn"**: Selector `[data-agent-target="btn-start-interview"]`. Mở phòng chờ với CV và vị trí đã chọn; bấm **Sẵn sàng** trong phòng chờ mới tạo phiên. Nút không khả dụng khi thiếu thông tin hoặc hết lượt.
-- **Vùng câu hỏi** (đề xuất): Selector `[data-agent-target="interview-question"]`. Hiển thị câu hiện tại để đọc trước khi trả lời.
-- **Ô trả lời** (đề xuất): Selector `[data-agent-target="interview-answer-input"]`. Nhập câu trả lời với đủ bốn phần STAR.
-- **Nút gửi câu trả lời** (đề xuất): Selector `[data-agent-target="btn-submit-interview-answer"]`. Gửi nội dung đã kiểm tra để tiếp tục phiên.
-- **Báo cáo phỏng vấn** (đề xuất): Selector `[data-agent-target="interview-report"]`. Hiển thị điểm và góp ý sau phiên.
+- **Nút "Vào phòng chờ"**: Selector `[data-agent-target="btn-start-interview"]`. Mở phòng chờ với CV và vị trí đã chọn; bấm **Sẵn sàng** trong phòng chờ mới tạo buổi. Nút không khả dụng khi thiếu thông tin hoặc hết lượt.
+- **Danh sách chọn vị trí**: Selector `[data-agent-target="select-jd"]`. Chọn vị trí sẽ được hỏi.
+- **Ô chọn CV**: Selector `[data-agent-target="select-cv"]`. Chọn CV dùng làm bối cảnh cho câu hỏi.
+
+## Đánh giá buổi phỏng vấn
+
+Cuối báo cáo có câu hỏi **Bạn thấy buổi luyện phỏng vấn này thế nào?**. Bấm **Đánh giá buổi này** để chọn số sao, lý do (khi chấm 1–3 sao) và viết góp ý nếu muốn. Ở từng câu trong **Chi tiết từng câu** có nút thích/không thích cho nhận xét của AI; bấm lại để huỷ nếu bấm nhầm.
 
 ## Câu hỏi thường gặp (FAQ)
 
@@ -39,14 +42,18 @@ Selector nút bắt đầu đã được gắn vào trang thiết lập phỏng 
 
 A: STAR giúp câu trả lời có bối cảnh, nhiệm vụ, hành động cá nhân và kết quả. Hãy làm rõ bạn đóng góp gì thay vì chỉ kể việc của cả nhóm.
 
-**Q: Vì sao không bắt đầu được phiên?**
+**Q: Vì sao không bắt đầu được buổi phỏng vấn?**
 
-A: Kiểm tra CV, vị trí và trạng thái tải dữ liệu. Nếu hết lượt trong tuần cho vị trí này, xem ngày làm mới trên trang hoặc chọn vị trí khác.
+A: Kiểm tra đã chọn CV và vị trí. Nếu hết lượt trong tuần cho vị trí này, xem ngày làm mới trên trang hoặc chọn vị trí khác.
 
 **Q: Điểm STAR có cùng thang với Match Score không?**
 
 A: Không. STAR dùng thang 0–5 để đánh giá câu trả lời; Match Score dùng 0–100% để đánh giá mức phù hợp CV với JD.
 
+**Q: Hệ thống có viết sẵn câu trả lời cho tôi không?**
+
+A: Không. Hệ thống chỉ gợi ý cách trình bày; hãy trả lời bằng trải nghiệm thật của bạn.
+
 **Q: Tôi tìm báo cáo cũ ở đâu?**
 
-A: Vào `/student/history`, tìm phiên phỏng vấn và mở báo cáo. So sánh các phiên cùng vị trí để thấy tiến bộ rõ hơn.
+A: Vào `/student/history`, chọn bộ lọc **Phỏng vấn** và bấm **Báo cáo** ở buổi cần xem. So sánh các buổi cùng vị trí để thấy tiến bộ rõ hơn.
