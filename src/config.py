@@ -93,6 +93,23 @@ class Settings(BaseSettings):
         description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng",
     )
 
+    # Assistant v2 raw-provider path (independent of legacy credential fallback).
+    llm_api_key: SecretStr = SecretStr("")
+    llm_model_agent: str = "deepseek-flash"
+    llm_model_router: str = "deepseek-flash"
+    llm_thinking_agent: Literal["enabled", "disabled"] = "enabled"
+    llm_reasoning_effort: Literal["low", "high", "max"] = "high"
+    llm_timeout_s: float = Field(default=60, gt=0, le=600)
+    llm_max_retries: int = Field(default=2, ge=0, le=8)
+    router_backend: Literal["deepseek", "shadow"] = "deepseek"
+    agent_max_steps: int = Field(default=8, ge=1)
+    agent_max_tool_calls: int = Field(default=12, ge=1)
+    agent_confirm_ttl_min: int = Field(default=30, ge=1)
+    ui_ack_timeout_s: float = Field(default=5, gt=0)
+    user_daily_token_cap: int = Field(default=100_000, ge=1)
+    trace_backend: Literal["langfuse", "langsmith", "none"] = "none"
+    workers: int = Field(default=1, ge=1, le=1)
+
     # LangSmith Tracing (AI Logs - Deliverable #4)
     langchain_tracing_v2: bool = Field(default=False, description="Automatic tracing is disabled by privacy policy")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")

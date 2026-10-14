@@ -423,7 +423,11 @@ def _finish(
                 else settings.provider_input_usd_per_million
             )
             output_rate = 0 if row.operation == "embedding" else settings.provider_output_usd_per_million
-            if row.operation == "chat" and model_name is not None and model_name != settings.model_name:
+            if (
+                row.operation == "chat"
+                and model_name is not None
+                and model_name not in {settings.model_name, settings.llm_model_agent, settings.llm_model_router}
+            ):
                 input_rate, output_rate = None, None
             row.cost_known = local or (bool(usage) and input_rate is not None and output_rate is not None)
             row.cost_usd = (
