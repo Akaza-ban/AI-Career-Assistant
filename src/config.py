@@ -45,14 +45,6 @@ class Settings(BaseSettings):
         description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng",
     )
 
-    # Soniox Speech-to-Text (Voice Transcribe)
-    soniox_api_key: str = Field(default="", description="API key cho Soniox Speech-to-Text")
-    soniox_model: str = Field(default="stt-rt-v5", description="Model Soniox STT mặc định")
-    soniox_ws_url: str = Field(
-        default="wss://stt-rt.soniox.com/transcribe-websocket",
-        description="Soniox WebSocket endpoint",
-    )
-
     # LangSmith Tracing (AI Logs - Deliverable #4)
     langchain_tracing_v2: bool = Field(default=True, description="Bật tracing LangSmith")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")

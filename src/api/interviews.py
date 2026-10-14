@@ -1,9 +1,9 @@
 """Phỏng vấn thử có chấm điểm STAR (US-SV-04): S5 thiết lập → S6 phòng phỏng vấn → S7 kết quả."""
 
-from fastapi import APIRouter, Query, Response, WebSocket, status
+from fastapi import APIRouter, File, Query, Response, UploadFile, status
+from pydantic import BaseModel
 
 from src.api.deps import CurrentStudent, DbSession
-from src.db.database import SessionLocal
 from src.db.models import utcnow
 from src.models.schemas import (
     CreateInterviewRequest,
@@ -14,26 +14,35 @@ from src.models.schemas import (
     SubmitAnswerRequest,
     SubmitAnswerResponse,
 )
-from src.services import interview, sharing, soniox_stt
+from src.services import groq_stt, interview, sharing
 
 router = APIRouter(prefix="/interviews", tags=["Mock Interview"])
 
 
-@router.websocket("/ws/transcribe")
-async def websocket_transcribe(
-    websocket: WebSocket,
-    session_id: str | None = None,
-) -> None:
-    """WebSocket Real-time Speech-to-Text proxy kết nối với Soniox STT:
+class TranscribeResponse(BaseModel):
+    text: str
 
-    Nhận audio PCM 16kHz từ microphone sinh viên -> gửi lên Soniox -> trả về tokens thời gian thực.
-    """
-    await websocket.accept()
-    db = SessionLocal()
-    try:
-        await soniox_stt.proxy_soniox_stream(websocket, session_id=session_id, db=db)
-    finally:
-        db.close()
+
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(
+    user: CurrentStudent,
+    db: DbSession,
+    file: UploadFile = File(..., description="File âm thanh ghi âm từ microphone (webm/wav/mp3)"),
+    session_id: str | None = Query(None, description="ID buổi phỏng vấn để bổ sung ngữ cảnh"),
+) -> dict[str, str]:
+    """Chuyển đổi âm thanh ghi âm thành văn bản qua Groq Whisper Turbo AI."""
+    audio_bytes = await file.read()
+    filename = file.filename or "recording.webm"
+    content_type = file.content_type or "audio/webm"
+
+    text = await groq_stt.transcribe_with_groq(
+        audio_bytes=audio_bytes,
+        filename=filename,
+        content_type=content_type,
+        session_id=session_id,
+        db=db,
+    )
+    return {"text": text}
 
 
 @router.get("/quota", response_model=InterviewQuota)

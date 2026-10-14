@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { MAX_ANSWER_CHARS, MIN_ANSWER_CHARS } from "@/lib/interview"
 import type { InterviewQuestion, InterviewTurn } from "@/lib/types"
-import { useSonioxStt } from "@/lib/use-soniox-stt"
+import { useGroqWhisper } from "@/lib/use-groq-whisper"
 import { cn } from "@/lib/utils"
 
 // S6: khung chat phỏng vấn. Logic đồng hồ / nộp bài nằm ở InterviewRoom; component này chỉ hiển thị.
@@ -56,12 +56,12 @@ export function InterviewChat(props: InterviewChatProps) {
     [props],
   )
 
-  const stt = useSonioxStt({
+  const stt = useGroqWhisper({
     sessionId,
     onTranscriptUpdate,
   })
 
-  const canSend = !sending && !paused && !stt.isRecording && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
+  const canSend = !sending && !paused && !stt.isRecording && !stt.isTranscribing && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
@@ -149,15 +149,27 @@ export function InterviewChat(props: InterviewChatProps) {
             </div>
 
             {stt.isRecording && (
-              <div className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft/80 px-3.5 py-2 text-xs font-medium text-bad ring-1 ring-bad/20">
+              <div className="flex items-center justify-between gap-2 rounded-xl bg-bad-soft/90 px-3.5 py-2 text-xs font-medium text-bad ring-1 ring-bad/20">
                 <span className="flex items-center gap-2">
                   <span className="relative flex size-2.5">
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-bad opacity-75" />
                     <span className="relative inline-flex size-2.5 rounded-full bg-bad" />
                   </span>
-                  <span>Đang thu âm qua Soniox STT: Hãy nói tự nhiên bằng tiếng Việt hoặc thuật ngữ chuyên môn…</span>
+                  <span>
+                    Đang thu âm qua <strong>Groq Whisper Turbo AI</strong>: Hãy nói tự nhiên bằng tiếng Việt hoặc thuật ngữ chuyên môn…
+                  </span>
                 </span>
-                <span className="text-[11px] opacity-80">Bấm &quot;Dừng nói&quot; khi hoàn tất</span>
+                <span className="rounded bg-bad/10 px-2 py-0.5 font-mono text-[11px] font-bold text-bad">
+                  {Math.floor(stt.recordSeconds / 60).toString().padStart(2, "0")}:
+                  {(stt.recordSeconds % 60).toString().padStart(2, "0")} · Bấm &quot;Dừng nói&quot; để gửi
+                </span>
+              </div>
+            )}
+
+            {stt.isTranscribing && (
+              <div className="flex items-center gap-2 rounded-xl bg-violet-soft/90 px-3.5 py-2 text-xs font-medium text-violet ring-1 ring-violet/20 animate-pulse">
+                <Loader2 className="size-3.5 animate-spin text-violet" />
+                <span>Đang chuyển giọng nói thành văn bản siêu tốc bằng Groq Whisper Turbo AI…</span>
               </div>
             )}
 
@@ -166,18 +178,21 @@ export function InterviewChat(props: InterviewChatProps) {
               onChange={(e) => props.onDraftChange(e.target.value)}
               onKeyDown={onKeyDown}
               maxLength={MAX_ANSWER_CHARS}
-              disabled={paused || sending}
+              disabled={paused || sending || stt.isTranscribing}
               placeholder={
                 paused
                   ? "Đang tạm dừng…"
                   : stt.isRecording
-                  ? "Đang lắng nghe và nhận diện giọng nói qua Soniox STT..."
+                  ? "Đang lắng nghe câu trả lời của bạn... Bấm 'Dừng nói' khi nói xong."
+                  : stt.isTranscribing
+                  ? "Groq Whisper Turbo đang nhận diện văn bản..."
                   : "Nhập câu trả lời của bạn hoặc bấm 'Nói câu trả lời' để ghi âm trực tiếp…"
               }
               aria-label={`Câu trả lời cho câu ${current.index}`}
               className={cn(
                 "min-h-28 resize-none border-0 bg-surface text-[15px] leading-6 focus-visible:ring-2",
                 stt.isRecording && "ring-2 ring-bad/30 bg-bad-soft/10",
+                stt.isTranscribing && "ring-2 ring-violet/30 bg-violet-soft/10",
               )}
             />
             <div className="flex items-center justify-between gap-2">
@@ -195,22 +210,26 @@ export function InterviewChat(props: InterviewChatProps) {
                     stt.isRecording && "animate-pulse ring-2 ring-bad/40",
                   )}
                   onClick={handleToggleRecord}
-                  disabled={paused || sending}
-                  title={stt.isRecording ? "Bấm để dừng nói" : "Bấm để nói câu trả lời qua Soniox STT"}
+                  disabled={paused || sending || stt.isTranscribing}
+                  title={
+                    stt.isRecording
+                      ? "Bấm để dừng nói và nhận diện văn bản"
+                      : "Bấm để nói câu trả lời qua Groq Whisper Turbo AI"
+                  }
                 >
-                  {stt.isConnecting ? (
-                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                  {stt.isTranscribing ? (
+                    <Loader2 className="size-4 animate-spin text-violet" aria-hidden />
                   ) : stt.isRecording ? (
                     <Square className="size-4 fill-current" aria-hidden />
                   ) : (
                     <Mic className="size-4 text-violet" aria-hidden />
                   )}
                   <span className="text-xs font-semibold">
-                    {stt.isConnecting
-                      ? "Đang nối STT…"
+                    {stt.isTranscribing
+                      ? "AI đang xử lý…"
                       : stt.isRecording
-                      ? "Dừng nói"
-                      : "Nói câu trả lời"}
+                      ? `Dừng nói (${Math.floor(stt.recordSeconds / 60).toString().padStart(2, "0")}:${(stt.recordSeconds % 60).toString().padStart(2, "0")})`
+                      : "Nói câu trả lời (Groq AI)"}
                   </span>
                 </Button>
 

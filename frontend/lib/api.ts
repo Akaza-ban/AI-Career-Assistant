@@ -305,6 +305,18 @@ export const api = {
       () => mockApi.getInterviewReport(sessionId),
       () => request(`/interviews/${encodeURIComponent(sessionId)}/report`),
     ),
+  /** Chuyển giọng nói ghi âm thành văn bản qua Groq Whisper Turbo AI */
+  transcribeAudio: (file: Blob, sessionId?: string): Promise<{ text: string }> =>
+    via(
+      "interview",
+      async () => ({ text: "Em có kinh nghiệm lập trình backend với Python và FastAPI." }),
+      () => {
+        const form = new FormData()
+        form.append("file", file, "audio.webm")
+        const url = sessionId ? `/interviews/transcribe?session_id=${encodeURIComponent(sessionId)}` : "/interviews/transcribe"
+        return request<{ text: string }>(url, { method: "POST", body: form })
+      },
+    ),
 
   // ---- Phản hồi (B3) ----
   sendFeedback: (body: FeedbackRequest): Promise<FeedbackResponse> =>
