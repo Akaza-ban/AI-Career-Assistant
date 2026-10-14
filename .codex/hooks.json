@@ -6,8 +6,8 @@
           {
             "type": "command",
             "command": "bash scripts/_pyrun.sh scripts/log_hook.py --tool=codex",
-            "commandWindows": "python scripts/log_hook.py --tool=codex",
-            "timeout": 10
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path (git rev-parse --show-toplevel) 'scripts/log_codex_hook.ps1')\"",
+            "timeout": 30
           }
         ]
       }
@@ -18,8 +18,8 @@
           {
             "type": "command",
             "command": "bash scripts/_pyrun.sh scripts/log_hook.py --tool=codex",
-            "commandWindows": "python scripts/log_hook.py --tool=codex",
-            "timeout": 10
+            "commandWindows": "powershell.exe -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path (git rev-parse --show-toplevel) 'scripts/log_codex_hook.ps1')\"",
+            "timeout": 30
           }
         ]
       }
