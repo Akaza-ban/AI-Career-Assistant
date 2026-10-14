@@ -8,7 +8,7 @@ from src.db.models import CvVersion, GapAnalysis, ShareGrant, utcnow
 from src.db.seed import DEMO_STUDENT_ID
 from src.services import cv_files, cv_versions
 from src.services.cv_files import CV_MAX_BYTES, _split_diacritics
-from tests.helpers import ADVISOR, STUDENT, make_docx, make_pdf, upload_cv
+from tests.helpers import ADVISOR, STUDENT, make_docx, make_image, make_pdf, make_scanned_pdf, upload_cv
 
 CV_TEXT = "Nguyen Minh Anh - Python FastAPI Docker SQL developer with REST API and data pipeline experience"
 
@@ -56,6 +56,7 @@ async def test_upload_creates_incrementing_versions_first_is_active(client):
     assert data["label"] == "v1.0"
     assert data["file_type"] == "pdf"
     assert data["page_count"] == 1
+    assert data["read_by_ocr"] is False
     assert data["is_active"] is True
     assert data["status"] == "ready"
     assert data["uploaded_at"].endswith("+00:00")
@@ -281,3 +282,38 @@ def test_detects_pdf_text_with_split_vietnamese_letters():
     )
     assert _split_diacritics(broken) is True
     assert _split_diacritics(normal) is False
+
+
+@pytest.mark.asyncio
+async def test_upload_scanned_pdf_triggers_ocr(client):
+    """PDF scan (chỉ có ảnh, không có text layer) được OCR tự động trích xuất nội dung."""
+    scanned_data = make_scanned_pdf(CV_TEXT)
+    res = await upload(client, "scanned_cv.pdf", scanned_data)
+    assert res.status_code == 201
+    data = res.json()
+    assert data["file_type"] == "pdf"
+    assert data["page_count"] == 1
+    assert data["status"] == "ready"
+    assert data["read_by_ocr"] is True
+
+    # Kiểm tra nội dung trích xuất qua text endpoint
+    text_res = await client.get(f"/api/v1/cv/{data['id']}/text", headers=STUDENT)
+    assert text_res.status_code == 200
+    assert "Python" in text_res.json()["text"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name, fmt", [("my_cv.png", "PNG"), ("my_cv.jpg", "JPEG")])
+async def test_upload_image_cv_is_rejected(client, name, fmt):
+    """Chỉ nhận PDF / DOCX; ảnh chụp CV hãy lưu thành PDF (PDF scan vẫn được OCR)."""
+    res = await upload(client, name, make_image(CV_TEXT, fmt=fmt))
+    assert res.status_code == 415
+    assert res.json()["code"] == "unsupported_file_type"
+
+
+@pytest.mark.asyncio
+async def test_upload_blank_scanned_pdf_fails_extractable(client):
+    """PDF scan trắng, OCR không đọc được chữ, bị từ chối với lỗi cv_not_extractable."""
+    res = await upload(client, "blank_scan.pdf", make_scanned_pdf(None))
+    assert res.status_code == 422
+    assert res.json()["code"] == "cv_not_extractable"

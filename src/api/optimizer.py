@@ -7,7 +7,12 @@ from fastapi import APIRouter
 from src.api import cv as cv_routes
 from src.api.deps import CurrentStudent, DbSession
 from src.db.models import User, utcnow
-from src.models.schemas import CapabilityAnswerRequest, OptimizerSessionResponse, SuggestionDecisionRequest
+from src.models.schemas import (
+    CapabilityAnswerRequest,
+    OptimizerSessionResponse,
+    SuggestionContextRequest,
+    SuggestionDecisionRequest,
+)
 from src.services import cv_optimizer
 
 router = APIRouter(prefix="/gap-analysis/{analysis_id}/optimizer", tags=["CV Optimizer"])
@@ -40,6 +45,18 @@ def decide_suggestion(
     chưa tạo phiên bản CV mới; mỗi quyết định được ghi Audit Trail (PRD mục 6.5).
     """
     cv_optimizer.decide(db, user, analysis_id, suggestion_id, body.decision, body.edited_text, utcnow())
+    return _response(db, user, analysis_id)
+
+
+@router.post("/suggestions/{suggestion_id}/context", response_model=OptimizerSessionResponse)
+async def provide_suggestion_context(
+    analysis_id: str, suggestion_id: str, body: SuggestionContextRequest, user: CurrentStudent, db: DbSession
+) -> dict[str, Any]:
+    """
+    US-SV-03 AC2: SV bổ sung số liệu thật cho gợi ý còn chỗ trống [ ]. Câu đề xuất được điền lại chỉ bằng thông tin
+    SV cung cấp (LLM nếu có, kèm kiểm tra không thêm số mới; không có LLM thì điền theo quy tắc).
+    """
+    await cv_optimizer.provide_context(db, user, analysis_id, suggestion_id, body.answer, utcnow())
     return _response(db, user, analysis_id)
 
 

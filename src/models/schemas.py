@@ -1,7 +1,7 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, PlainSerializer
+from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator
 
 # Thời điểm lưu trong DB là UTC dạng naive; khi trả về luôn kèm múi giờ để trình duyệt hiểu đúng.
 UtcDatetime = Annotated[
@@ -38,10 +38,18 @@ class UserProfile(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str = Field(..., description="Mã người dùng")
-    role: Literal["student", "advisor"] = Field(..., description="Vai trò")
+    role: Literal["student", "advisor", "admin"] = Field(..., description="Vai trò")
     full_name: str = Field(..., description="Họ và tên")
-    subtitle: str = Field(default="", description="Dòng phụ, ví dụ 'KDQT - K2021'")
+    subtitle: str = Field(default="", description="Dòng phụ: email (SV) hoặc chức danh (cố vấn)")
     avatar_url: str | None = Field(default=None, description="Ảnh đại diện")
+    must_change_password: bool = Field(
+        default=False, description="Đang dùng mật khẩu tạm do quản trị viên đặt: phải đổi trước khi dùng tiếp"
+    )
+
+    @field_validator("must_change_password", mode="before")
+    @classmethod
+    def _flag(cls, value: bool | None) -> bool:
+        return bool(value)
 
 
 # ============================================================================
@@ -95,9 +103,12 @@ class CvVersionResponse(BaseModel):
     family_id: str = Field(..., description="Mã CV (các phiên bản cùng mã là một CV, một thẻ trong 'CV của tôi')")
     version_count: int = Field(default=1, description="Số phiên bản của CV này (có ở danh sách CV)")
     file_name: str = Field(..., description="Tên file gốc")
-    file_type: Literal["pdf", "docx"] = Field(..., description="Định dạng file")
+    file_type: Literal["pdf", "docx", "png", "jpg", "jpeg"] = Field(..., description="Định dạng file")
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
+    read_by_ocr: bool = Field(
+        default=False, description="Chỉ có ở phản hồi tải lên: chữ được đọc bằng OCR vì file là PDF scan"
+    )
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
     status: Literal["processing", "ready", "failed"] = Field(default="ready", description="Trạng thái xử lý")
     error_message: str | None = Field(default=None, description="Lý do khi status = failed")
@@ -138,21 +149,66 @@ class JdSkill(BaseModel):
 
     name: str = Field(..., description="Tên kỹ năng / yêu cầu")
     importance: Importance = Field(..., description="Required (3) / Preferred (2) / Additional (1)")
+    aliases: list[str] = Field(default_factory=list, description="Tên gọi khác")
 
 
-class JobDescriptionResponse(BaseModel):
-    """JD trong thư viện hoặc JD sinh viên tự dán."""
+JobLevel = Literal["intern", "fresher", "junior"]
+EmploymentType = Literal["full_time", "part_time", "internship"]
+WorkMode = Literal["onsite", "remote", "hybrid"]
+ExperienceLevel = Literal["none", "under_1", "1_2", "2_plus"]
+
+
+class JdFields(BaseModel):
+    """Các trường của cấu trúc chung (đều không bắt buộc ở mức schema; service kiểm tra theo loại JD)."""
+
+    title: str | None = None
+    company: str | None = None
+    level: JobLevel | None = None
+    industry: str | None = None
+    employment_type: EmploymentType | None = None
+    work_mode: WorkMode | None = None
+    location: str | None = None
+    salary: str | None = Field(default=None, description="Chữ tự do: 12 – 15 triệu, Thoả thuận")
+    deadline: date | None = None
+    experience: ExperienceLevel | None = None
+    majors: list[str] | None = None
+    description: str | None = Field(default=None, description="Mô tả công việc")
+    requirements: str | None = Field(default=None, description="Yêu cầu ứng viên")
+    benefits: str | None = None
+    how_to_apply: str | None = None
+
+
+class JobDescriptionResponse(JdFields):
+    """JD trong thư viện hoặc JD sinh viên tự dán, theo cấu trúc chung."""
 
     model_config = ConfigDict(from_attributes=True)
 
     id: str
     title: str
-    company: str | None = None
-    industry: str | None = None
-    level: Literal["intern", "fresher", "junior"] | None = None
     content: str = Field(..., description="Toàn văn JD")
     skills: list[JdSkill] = Field(default_factory=list, description="Yêu cầu kỹ năng theo mức độ")
+    skills_source: str | None = Field(default=None, description="dictionary / sections / ai / analysis / admin")
     source: Literal["library", "pasted"]
+    created_at: UtcDatetime | None = None
+
+
+class JdSkillInput(BaseModel):
+    name: str
+    importance: Importance
+    aliases: list[str] = Field(default_factory=list)
+
+
+class ParseJdRequest(BaseModel):
+    text: str = Field(..., max_length=20000, description="Toàn văn JD")
+
+
+class JdDraftResponse(JdFields):
+    """Bản nháp tách từ toàn văn (chưa lưu)."""
+
+    skills: list[JdSkill] = Field(default_factory=list)
+    skills_source: str
+    used_ai: bool = Field(..., description="Có dùng AI để tách (khi quy tắc còn thiếu trường chính)")
+    word_count: int
 
 
 class JDRecommendationItem(BaseModel):
@@ -171,7 +227,9 @@ class JDRecommendationItem(BaseModel):
     matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
     partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
     missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
-    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    breakdown: list[dict[str, Any]] = Field(
+        default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
+    )
 
 
 class CareerAdvice(BaseModel):
@@ -215,7 +273,9 @@ class JDComparisonItem(BaseModel):
     matched_skills: list[str] = Field(default_factory=list, description="Kỹ năng sinh viên đã đáp ứng có bằng chứng")
     partial_skills: list[str] = Field(default_factory=list, description="Kỹ năng chỉ được liệt kê trong CV")
     missing_skills: list[str] = Field(default_factory=list, description="Kỹ năng còn thiếu theo yêu cầu JD")
-    breakdown: list[dict[str, Any]] = Field(default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional")
+    breakdown: list[dict[str, Any]] = Field(
+        default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
+    )
     llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
     llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
 
@@ -225,12 +285,13 @@ class CompareJDsRequest(BaseModel):
 
     cv_version_id: str | None = Field(default=None, description="Mã phiên bản CV của sinh viên")
     cv_text: str | None = Field(default=None, description="Hoặc văn bản CV trực tiếp")
-    jd_ids: list[str] = Field(..., min_length=2, max_length=3, description="Danh sách 2 đến 3 JD ID cần so sánh")
+    jd_ids: list[str] = Field(..., min_length=2, max_length=5, description="Danh sách 2 đến 5 JD ID cần so sánh")
 
 
 class CompareJDsResponse(BaseModel):
-    """Kết quả bảng so sánh 2-3 JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
+    """Kết quả bảng so sánh các JD sau khi phân tích qua LLM, sắp xếp theo điểm match giảm dần."""
 
+    id: str | None = Field(default=None, description="Mã bản ghi lịch sử so sánh")
     cv_version_id: str | None = None
     cv_label: str | None = None
     cv_name: str | None = None
@@ -241,6 +302,10 @@ class CompareJDsResponse(BaseModel):
     common_missing_skills: list[str] = Field(
         default_factory=list, description="Các kỹ năng còn thiếu chung ở tất cả các JD được chọn"
     )
+    common_missing_roadmaps: dict[str, str] = Field(
+        default_factory=dict, description="Kỹ năng thiếu chung → link roadmap.sh (chỉ kỹ năng có lộ trình riêng)"
+    )
+    created_at: UtcDatetime | None = Field(default=None, description="Thời gian thực hiện so sánh")
 
 
 class CreateGapAnalysisRequest(BaseModel):
@@ -282,6 +347,34 @@ class RequirementAssessment(BaseModel):
     status: Literal["matched", "partial", "missing"]
     evidence: Evidence | None = Field(default=None, description="None khi không tìm thấy trong CV — không tự điền")
     note: str | None = Field(default=None, description="Ghi chú, ví dụ 'FastAPI → tính là Python (taxonomy)'")
+    roadmap_url: str | None = Field(
+        default=None,
+        description="Đường dẫn lộ trình học kỹ năng trên roadmap.sh",
+    )
+    is_it_supported: bool = Field(
+        default=True,
+        description="Đánh dấu kỹ năng có thuộc lĩnh vực IT được roadmap.sh hỗ trợ hay không",
+    )
+    roadmap_message: str | None = Field(
+        default=None,
+        description="Thông báo cho người dùng nếu kỹ năng không thuộc IT hoặc chưa có roadmap",
+    )
+
+
+class SkillRoadmapResponse(BaseModel):
+    """Thông tin đường dẫn lộ trình học tập roadmap.sh cho một kỹ năng."""
+
+    skill: str
+    roadmap_url: str
+    is_matched: bool
+    is_it_supported: bool = Field(
+        default=True,
+        description="Chỉ hỗ trợ các lĩnh vực liên quan đến Công nghệ thông tin (IT)",
+    )
+    message: str | None = Field(
+        default=None,
+        description="Thông báo cho người dùng nếu kỹ năng không thuộc IT hoặc chưa có roadmap",
+    )
 
 
 class ScoreBreakdown(BaseModel):
@@ -400,7 +493,9 @@ class OptimizerSuggestion(BaseModel):
     rationale: str = ""
     evidence_span: EvidenceSpan
     status: Literal["pending", "accepted", "edited", "rejected"]
-    needs_context: bool = Field(default=False, description="US-SV-03 AC2 (chưa làm): cần SV bổ sung ngữ cảnh")
+    needs_context: bool = Field(
+        default=False, description="US-SV-03 AC2: câu đề xuất còn chỗ trống [ ] cần SV bổ sung số liệu thật"
+    )
     context_question: str | None = None
 
 
@@ -517,8 +612,9 @@ class InterviewSessionResponse(BaseModel):
     id: str
     status: Literal["in_progress", "completed"]
     jd: InterviewJd
-    cv_version_id: str
-    cv_file_name: str
+    cv_version_id: str | None = None
+    cv_file_name: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] = "with_cv"
     question_count: int
     seconds_per_question: int
     current_question: InterviewQuestion | None = Field(default=None, description="None khi đã hoàn thành")
@@ -528,13 +624,17 @@ class InterviewSessionResponse(BaseModel):
     pause_seconds_left: int | None = Field(default=None, description="Thời gian tạm dừng còn lại (giây)")
     turns: list[InterviewTurnOut] = Field(default_factory=list, description="Các câu đã trả lời, theo thứ tự")
     created_at: UtcDatetime
+    voice_input: bool = Field(
+        default=False, description="Server đã cấu hình SONIOX_API_KEY: cho trả lời bằng giọng nói"
+    )
 
 
 class CreateInterviewRequest(BaseModel):
-    """Bắt đầu buổi phỏng vấn mới cho một vị trí (JD) và một phiên bản CV."""
+    """Bắt đầu buổi phỏng vấn mới cho một vị trí (JD) và tùy chọn phiên bản CV."""
 
     jd_id: str
-    cv_version_id: str
+    cv_version_id: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] | None = None
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -574,7 +674,8 @@ class InterviewReportResponse(BaseModel):
     id: str
     response_id: str = Field(..., description="Dùng cho khảo sát CSAT")
     jd: InterviewJd
-    cv_file_name: str
+    cv_file_name: str | None = None
+    interview_mode: Literal["jd_only", "with_cv"] = "with_cv"
     created_at: UtcDatetime
     completed_at: UtcDatetime
     duration_seconds: int
@@ -622,8 +723,20 @@ class FeedbackRequest(BaseModel):
     response_id: str = Field(..., description="Id gợi ý (thumb) hoặc id lượt phân tích / phỏng vấn (csat)")
     kind: Literal["thumb", "csat"]
     value: int
-    activity: Literal["gap_analysis", "interview"] | None = Field(default=None, description="Bắt buộc với csat")
+    activity: (
+        Literal[
+            "gap_analysis",
+            "optimizer",
+            "interview",
+            "gap_suggestion",
+            "interview_turn",
+            "job_recommendation",
+            "jd_compare",
+        ]
+        | None
+    ) = Field(default=None, description="Bắt buộc với csat (gap_analysis / optimizer / interview)")
     comment: str | None = Field(default=None, max_length=2000)
+    tags: list[str] | None = Field(default=None, max_length=5, description="Chỉ với csat 1–3 sao: mã lý do")
     would_reuse: bool | None = Field(default=None, description="Chỉ với csat: 'Bạn có dùng lại không?'")
 
 
@@ -755,6 +868,7 @@ class NextStep(BaseModel):
 class SkillToLearn(BaseModel):
     name: str
     importance: Importance
+    roadmap_url: str | None = Field(default=None, description="Lộ trình học trên roadmap.sh (chỉ kỹ năng CNTT)")
 
 
 class SkillsToLearn(BaseModel):
@@ -943,10 +1057,8 @@ class AssignedStudentResponse(BaseModel):
     id: str
     full_name: str
     subtitle: str
-    student_code: str | None = None
     email: str
-    major: str | None = None
-    cohort: str | None = None
+    phone: str | None = None
     avatar_url: str | None = None
     target: InterviewJd | None = Field(default=None, description="Vị trí của buổi gần nhất (hoặc lần phân tích)")
     interview_count: int
@@ -1086,9 +1198,6 @@ class AdvisorOverviewResponse(BaseModel):
     scored_count: int
     average_delta: float | None = Field(default=None, description="TB chênh lệch gần nhất − buổi đầu của từng SV")
     delta_count: int
-    csat: float | None = None
-    csat_count: int
-    csat_target: float
     weekly_scores: list[WeeklyScore]
     status_counts: StatusCounts
     star: CohortStar | None = None
@@ -1096,6 +1205,9 @@ class AdvisorOverviewResponse(BaseModel):
     flagged_students: list[AssignedStudentResponse]
     top_improvers: list[AssignedStudentResponse]
     recent_reviews: list[RecentReview]
+    pending_sessions: list["PendingReviewSession"] = Field(
+        default_factory=list, description="Buổi SV đã chia sẻ mà bạn chưa nhận xét, cũ nhất trước (tối đa 10)"
+    )
 
 
 class ReviewRequest(BaseModel):
@@ -1124,7 +1236,7 @@ class ChatParticipant(BaseModel):
     id: str
     full_name: str
     role: Literal["student", "advisor"]
-    subtitle: str = Field(..., description="SV: ngành - khoá; cố vấn: chức danh")
+    subtitle: str = Field(..., description="SV: email; cố vấn: chức danh")
     avatar_url: str | None = None
     office_hours: str | None = Field(default=None, description="Giờ tư vấn (chỉ với cố vấn)")
 
@@ -1156,3 +1268,349 @@ class SendMessageRequest(BaseModel):
 
 class UnreadCountResponse(BaseModel):
     count: int
+
+
+# ============================================================================
+# Tài khoản: đăng nhập, đăng ký, quên / đổi mật khẩu
+# ============================================================================
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    role: Literal["student", "advisor", "admin"]
+    profile: UserProfile
+    must_change_password: bool = False
+
+
+class RegisterRequest(BaseModel):
+    """Chỉ sinh viên tự đăng ký. Email là email cá nhân."""
+
+    full_name: str
+    date_of_birth: date
+    phone: str
+    email: str
+    password: str
+    consent: bool = Field(..., description="Đồng ý xử lý CV và câu trả lời phỏng vấn")
+    integrity_pledge: bool = Field(..., description="Cam kết chỉ đưa vào CV kinh nghiệm có thật")
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ChangePasswordResponse(BaseModel):
+    password_updated_at: UtcDatetime
+
+
+# ============================================================================
+# Cài đặt & hồ sơ sinh viên
+# ============================================================================
+
+
+class StorageInfo(BaseModel):
+    used_bytes: int
+    limit_bytes: int
+    allocated_by: str
+
+
+class PrivacySettings(BaseModel):
+    anonymous_contribution: bool = False
+
+
+class NotificationSettings(BaseModel):
+    advisor_comment: bool = True
+    report_ready: bool = True
+    weekly_reminder: bool = False
+    email: bool = False
+
+
+class StudentSettingsResponse(BaseModel):
+    """Khớp StudentSettings trong frontend/lib/types.ts."""
+
+    full_name: str
+    email: str
+    phone: str | None = None
+    date_of_birth: date | None = None
+    password_updated_at: UtcDatetime | None = None
+    consent_accepted_at: UtcDatetime | None = None
+    storage: StorageInfo
+    privacy: PrivacySettings
+    notifications: NotificationSettings
+
+
+class UpdateSettingsRequest(BaseModel):
+    privacy: dict[str, bool] | None = None
+    notifications: dict[str, bool] | None = None
+
+
+class UpdateProfileRequest(BaseModel):
+    """Sửa hồ sơ cá nhân; trường bỏ trống (None) giữ nguyên."""
+
+    full_name: str | None = None
+    phone: str | None = None
+    date_of_birth: date | None = None
+
+
+class DataExportResponse(BaseModel):
+    download_url: str | None = Field(default=None, description="Đường dẫn tải file JSON toàn bộ dữ liệu")
+
+
+# ============================================================================
+# Thông báo
+# ============================================================================
+
+
+class NotificationResponse(BaseModel):
+    id: str
+    kind: Literal[
+        "advisor_comment",
+        "interview_report",
+        "gap_analysis",
+        "integrity_alert",
+        "student_activity",
+        "student_inactive",
+        "advisor_assigned",
+        "student_registered",
+    ]
+    title: str
+    body: str
+    created_at: UtcDatetime
+    read: bool
+    action_label: str | None = None
+    action_href: str | None = None
+
+
+# ============================================================================
+# JD đã lưu, JD tự dán
+# ============================================================================
+
+
+class SavedJdResponse(BaseModel):
+    jd_id: str
+    saved_at: UtcDatetime
+
+
+class CreatePastedJdRequest(JdFields):
+    text: str = Field(..., max_length=20000, description="Toàn văn JD (tối thiểu 50 từ)")
+    skills: list[JdSkillInput] | None = Field(default=None, description="Kỹ năng từ bước tách (POST /jd/parse)")
+    skills_source: Literal["dictionary", "sections", "ai"] | None = None
+    reviewed: bool = Field(False, description="Sinh viên đã xem lại các trường: bắt buộc đủ trường chính")
+
+
+class AdminJdRow(BaseModel):
+    id: str
+    title: str
+    company: str | None = None
+    industry: str | None = None
+    level: JobLevel | None = None
+    skills: list[JdSkill]
+    status: Literal["published", "hidden"]
+    usage_30d: int = Field(..., description="Lượt phân tích CV + buổi phỏng vấn hoàn thành trong 30 ngày")
+    updated_at: UtcDatetime
+
+
+class AdminUploadedJd(BaseModel):
+    """JD sinh viên tự dán, gộp theo vị trí – công ty (không kèm tên sinh viên)."""
+
+    sample_jd_id: str
+    title: str
+    company: str | None = None
+    level: JobLevel | None = None
+    skills: list[JdSkill]
+    student_count: int
+    last_added_at: UtcDatetime
+    library_jd_id: str | None = Field(default=None, description="JD thư viện tương ứng (nếu đã có)")
+
+
+class AdminJdDetail(JobDescriptionResponse):
+    status: str | None = None
+    source_jd_id: str | None = None
+    updated_at: UtcDatetime | None = None
+
+
+class AdminJdUpsert(JdFields):
+    skills: list[JdSkillInput] | None = None
+    text: str | None = Field(default=None, max_length=20000, description="Toàn văn đã dán (không có thì dựng từ mục)")
+    source_jd_id: str | None = Field(default=None, description="JD sinh viên tải lên được đưa vào thư viện")
+    status: Literal["published", "hidden"] | None = None
+
+
+class SuggestionContextRequest(BaseModel):
+    answer: str
+
+
+# ============================================================================
+# Cố vấn: buổi chờ nhận xét (Tổng quan)
+# ============================================================================
+
+
+class PendingReviewSession(BaseModel):
+    session_id: str
+    student_id: str
+    student_name: str
+    avatar_url: str | None = None
+    jd: InterviewJd
+    completed_at: UtcDatetime
+    overall_score: float | None = None
+
+
+AdvisorOverviewResponse.model_rebuild()
+
+
+# ============================================================================
+# Quản trị: thống kê toàn hệ thống, tài khoản cố vấn, phân công sinh viên
+# ============================================================================
+
+
+class AdminUserStats(BaseModel):
+    student_count: int
+    new_students_week: int = Field(..., description="SV tạo tài khoản trong 7 ngày qua")
+    student_series: list[int] = Field(..., description="Tổng số SV ở cuối mỗi tuần (cũ → mới), để vẽ đường mảnh")
+    active_count: int = Field(..., description="SV có lượt phân tích / buổi phỏng vấn hoàn thành trong kỳ")
+    active_series: list[int] = Field(..., description="Số SV hoạt động trong kỳ tính tới cuối mỗi tuần")
+    advisor_count: int = Field(..., description="Cố vấn đang hoạt động (không tính tài khoản tạm khoá)")
+    assigned_count: int
+    unassigned_count: int
+
+
+class AdminWeeklyUsage(BaseModel):
+    week_start: date
+    analyses: int
+    interviews: int
+
+
+class AdminUsageStats(BaseModel):
+    weekly: list[AdminWeeklyUsage]
+    analyses: int
+    analyses_change: float | None = Field(default=None, description="% thay đổi so với kỳ trước; None nếu kỳ trước = 0")
+    interviews: int
+    interviews_change: float | None = None
+    optimized_cvs: int = Field(..., description="Phiên bản CV tạo từ Trình tối ưu trong kỳ")
+
+
+class AdminReasonLabel(BaseModel):
+    reason: str
+    label: str
+
+
+class AdminReasonCount(BaseModel):
+    reason: str
+    label: str
+    activities: list[str] = Field(..., description="Các hoạt động có lý do này (gap_analysis / optimizer / interview)")
+    count: int
+
+
+class AdminHelpfulness(BaseModel):
+    activity: str = Field(..., description="gap_suggestion / interview_turn / job_recommendation / jd_compare")
+    label: str
+    likes: int
+    total: int
+
+
+class AdminSatisfaction(BaseModel):
+    csat: float | None = None
+    count: int
+    target: float
+    distribution: dict[str, int] = Field(..., description='Số lượt theo số sao: {"1": .., ..., "5": ..}')
+    low_count: int = Field(0, description="Số lượt chấm 1–3 sao trong kỳ")
+    reasons: list[AdminReasonCount] = Field(default_factory=list, description="Lý do chưa hài lòng, nhiều nhất trước")
+    helpful: list[AdminHelpfulness] = Field(default_factory=list, description="Like / dislike theo từng phần")
+
+
+class AdminComment(BaseModel):
+    """Đánh giá CSAT có nhận xét bằng chữ hoặc lý do; không có tên SV."""
+
+    id: str
+    value: int
+    activity: str | None = None
+    comment: str | None = None
+    tags: list[AdminReasonLabel] = Field(default_factory=list)
+    created_at: UtcDatetime
+
+
+class AdminStatsResponse(BaseModel):
+    days: int
+    users: AdminUserStats
+    usage: AdminUsageStats
+    satisfaction: AdminSatisfaction
+    recent_comments: list[AdminComment]
+
+
+class AdminCommentsResponse(BaseModel):
+    total: int = Field(..., description="Tổng số nhận xét khớp bộ lọc")
+    items: list[AdminComment]
+
+
+AdvisorAccountStatus = Literal["active", "password_pending", "disabled"]
+
+
+class AdminAdvisorResponse(BaseModel):
+    id: str
+    full_name: str
+    email: str
+    title: str
+    avatar_url: str | None = None
+    student_count: int
+    pending_reviews: int = Field(..., description="Buổi SV đã chia sẻ mà cố vấn chưa nhận xét")
+    status: AdvisorAccountStatus
+    last_active_at: UtcDatetime | None = None
+    created_at: UtcDatetime
+
+
+class CreateAdvisorRequest(BaseModel):
+    full_name: str
+    email: str
+    title: str
+    temporary_password: str
+
+
+class UpdateAdvisorRequest(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    title: str | None = None
+    disabled: bool | None = Field(default=None, description="true = tạm khoá, false = mở khoá")
+
+
+class ResetAdvisorPasswordRequest(BaseModel):
+    temporary_password: str
+
+
+class AdminStudentAdvisor(BaseModel):
+    id: str
+    full_name: str
+    disabled: bool
+
+
+class AdminStudentResponse(BaseModel):
+    id: str
+    full_name: str
+    email: str
+    phone: str | None = None
+    avatar_url: str | None = None
+    advisor: AdminStudentAdvisor | None = None
+    created_at: UtcDatetime
+    last_active_at: UtcDatetime | None = None
+
+
+class AssignAdvisorRequest(BaseModel):
+    student_ids: list[str] = Field(..., min_length=1, max_length=200)
+    advisor_id: str
+
+
+class AssignAdvisorResponse(BaseModel):
+    assigned: int = Field(..., description="Số SV được gán hoặc đổi sang cố vấn này")
+    unchanged: int = Field(..., description="Số SV vốn đã thuộc cố vấn này")

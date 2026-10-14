@@ -1,18 +1,17 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { AlertCircle } from "lucide-react"
 import { toast } from "sonner"
 
+import { EmptyState } from "@/components/common/empty-state"
+import { PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
-import { useProfile } from "@/components/shell/profile-context"
 import {
-  AccountCard,
-  ConsentCard,
-  NotificationsCard,
-  PasswordCard,
-  PersonalDataCard,
-  PrivacyCard,
+  AccountSection,
+  DataSection,
+  NotificationsSection,
+  PrivacySection,
   SETTINGS_SECTIONS,
   SettingsNav,
   type SettingsSectionId,
@@ -23,11 +22,8 @@ import { api } from "@/lib/api"
 import type { StudentSettings, UpdateSettingsRequest } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-const sectionClass = "grid scroll-mt-24 gap-8"
-
-// Figma: frame "Cài đặt & Quyền riêng tư" (18:7888). Quản lý tệp CV nằm ở trang CV của tôi.
+// Bản vẽ CaiDat. Quản lý tệp CV nằm ở trang CV của tôi.
 export function StudentSettingsPage() {
-  const profile = useProfile()
   const settingsQuery = useApi(api.getSettings)
   const sharingQuery = useApi(api.getSharing)
   // Bản sau lần cập nhật gần nhất; null = dùng dữ liệu vừa tải.
@@ -37,31 +33,49 @@ export function StudentSettingsPage() {
   const settings = updatedSettings ?? settingsQuery.data
   const ready = settings !== undefined
 
-  // Đánh dấu mục đang xem khi cuộn; mở /student/settings#privacy thì cuộn tới mục đó.
+  // Bấm mục lục thì giữ mục đã chọn trong lúc trang cuộn mượt tới đó.
+  const lockUntil = useRef(0)
+
+  // Đánh dấu mục đang xem khi cuộn: mục cuối cùng có đầu mục đã qua vạch 35% màn hình; cuộn chạm đáy trang thì
+  // chọn mục cuối, vì mục ngắn ở cuối trang không bao giờ lên tới vạch. Mở /student/settings#privacy thì cuộn tới mục đó.
   useEffect(() => {
     if (!ready) return
     const hash = window.location.hash.slice(1)
     if (SETTINGS_SECTIONS.some((s) => s.id === hash)) document.getElementById(hash)?.scrollIntoView()
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-        if (visible[0]) setActive(visible[0].target.id as SettingsSectionId)
-      },
-      { rootMargin: "-96px 0px -55% 0px" },
-    )
-    for (const s of SETTINGS_SECTIONS) {
-      const el = document.getElementById(s.id)
-      if (el) observer.observe(el)
+
+    function update() {
+      if (Date.now() < lockUntil.current) return
+      const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4
+      if (atBottom) {
+        setActive(SETTINGS_SECTIONS[SETTINGS_SECTIONS.length - 1].id)
+        return
+      }
+      const line = window.innerHeight * 0.35
+      let current: SettingsSectionId = SETTINGS_SECTIONS[0].id
+      for (const section of SETTINGS_SECTIONS) {
+        const el = document.getElementById(section.id)
+        if (el && el.getBoundingClientRect().top <= line) current = section.id
+      }
+      setActive(current)
     }
-    return () => observer.disconnect()
+
+    update()
+    window.addEventListener("scroll", update, { passive: true })
+    window.addEventListener("resize", update)
+    return () => {
+      window.removeEventListener("scroll", update)
+      window.removeEventListener("resize", update)
+    }
   }, [ready])
 
   function select(id: SettingsSectionId) {
     setActive(id)
+    lockUntil.current = Date.now() + 900
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" })
     history.replaceState(null, "", `#${id}`)
   }
 
+  // Công tắc lưu ngay khi bật/tắt.
   async function patch(body: UpdateSettingsRequest) {
     if (!settings) return
     const previous = settings
@@ -72,7 +86,7 @@ export function StudentSettingsPage() {
     })
     try {
       setSettings(await api.updateSettings(body))
-      toast.success("Đã lưu thay đổi.")
+      toast.success("Đã lưu")
     } catch (err) {
       setSettings(previous)
       toast.error(err instanceof Error ? err.message : "Không lưu được thay đổi.")
@@ -102,54 +116,47 @@ export function StudentSettingsPage() {
 
   if (settingsQuery.error) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">Không tải được cài đặt</p>
-        <p className="text-sm text-ink-2">{settingsQuery.error.message}</p>
-        <Button variant="soft" onClick={settingsQuery.reload}>
-          Thử lại
-        </Button>
+      <Panel className="mx-auto mt-10 w-full max-w-lg p-0">
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được cài đặt"
+          description={settingsQuery.error.message}
+          action={
+            <Button size="brand" onClick={settingsQuery.reload}>
+              Thử lại
+            </Button>
+          }
+        />
       </Panel>
     )
   }
 
   return (
-    <div className="grid gap-8">
-      <header className="grid gap-2 py-2">
-        <h1 className="font-heading text-[32px] leading-10 font-bold">Cài đặt & Quyền riêng tư</h1>
-        <p className="text-sm text-ink-2">Quản lý tài khoản, quyền riêng tư và các tuỳ chọn thông báo của bạn.</p>
-      </header>
+    <div className="grid gap-9 md:gap-11">
+      <PageHeader title="Cài đặt" />
 
       {!ready ? (
         <SettingsSkeleton />
       ) : (
-        <div className="grid items-start gap-8 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="lg:sticky lg:top-24">
+        <div className="flex items-start gap-16">
+          {/* Điện thoại: ẩn mục lục, các mục xếp nối tiếp nhau. */}
+          <aside className="sticky top-24 hidden w-[200px] shrink-0 lg:block">
             <SettingsNav active={active} onSelect={select} />
           </aside>
-
-          <div className="grid min-w-0 gap-8">
-            <section id="account" aria-label="Tài khoản & Bảo mật" className={sectionClass}>
-              <AccountCard fullName={profile?.full_name ?? ""} settings={settings} />
-              <PasswordCard
-                updatedAt={settings.password_updated_at}
-                onChanged={(at) => setSettings({ ...settings, password_updated_at: at })}
-              />
-            </section>
-            <section id="privacy" aria-label="Quyền riêng tư & Liêm chính" className={sectionClass}>
-              <ConsentCard consentAt={settings.consent_accepted_at} onWithdraw={withdrawConsent} />
-              <PrivacyCard
-                settings={settings}
-                advisorName={sharingQuery.data?.advisor?.full_name ?? null}
-                onChange={patch}
-              />
-            </section>
-            <section id="notifications" aria-label="Thông báo & Lời nhắc" className={sectionClass}>
-              <NotificationsCard settings={settings} onChange={patch} />
-            </section>
-            <section id="data" aria-label="Dữ liệu cá nhân" className={sectionClass}>
-              <PersonalDataCard storage={settings.storage} onDeleteAll={deleteAll} />
-            </section>
+          <div className="flex max-w-[960px] min-w-0 flex-1 flex-col gap-14 md:gap-16">
+            <AccountSection
+              settings={settings}
+              onSettingsChange={setSettings}
+              onPasswordChanged={(at) => setSettings({ ...settings, password_updated_at: at })}
+            />
+            <PrivacySection
+              settings={settings}
+              advisorName={sharingQuery.data?.advisor?.full_name ?? null}
+              onChange={patch}
+              onWithdraw={withdrawConsent}
+            />
+            <NotificationsSection settings={settings} onChange={patch} />
+            <DataSection storage={settings.storage} onDeleteAll={deleteAll} />
           </div>
         </div>
       )}
@@ -159,11 +166,17 @@ export function StudentSettingsPage() {
 
 function SettingsSkeleton() {
   return (
-    <div className="grid gap-8 lg:grid-cols-[280px_1fr]" aria-busy="true" aria-label="Đang tải cài đặt">
-      <Skeleton className="h-60 rounded-[20px]" />
-      <div className="grid gap-8">
-        <Skeleton className="h-[220px] rounded-[20px]" />
-        <Skeleton className="h-[360px] rounded-[20px]" />
+    <div className="flex gap-16" aria-busy="true" aria-label="Đang tải cài đặt">
+      <div className="hidden w-[200px] shrink-0 gap-2 lg:grid">
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-9 rounded-lg" />
+        ))}
+      </div>
+      <div className="grid min-w-0 flex-1 gap-4">
+        <Skeleton className="h-8 w-40" />
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-16 rounded-[10px]" />
+        ))}
       </div>
     </div>
   )

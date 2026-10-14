@@ -1,211 +1,189 @@
 "use client"
 
 import Link from "next/link"
-import { useCallback, useState } from "react"
-import { AlertCircle, MessagesSquare, TrendingUp } from "lucide-react"
+import { useCallback, useMemo, useState } from "react"
+import { AlertCircle, TrendingUp } from "lucide-react"
 
+import { EmptyState } from "@/components/common/empty-state"
+import { PageHeader } from "@/components/common/page-header"
 import { Panel } from "@/components/common/panel"
+import { SegmentedControl } from "@/components/common/segmented-control"
+import { Zone } from "@/components/common/zone"
 import {
-  AnalysisTable,
-  CvProgressSection,
-  InterviewProgressSection,
-  InterviewTable,
+  CvProgressBlock,
+  InterviewProgressBlock,
+  Timeline,
+  type TimelineFilter,
 } from "@/components/student/history/history-sections"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
-import { formatWhen } from "@/lib/format"
-import type { ProgressRange } from "@/lib/types"
-import { useApi } from "@/lib/use-api"
 import { useAgentActions } from "@/lib/use-agent-actions"
-import { cn } from "@/lib/utils"
+import { useApi } from "@/lib/use-api"
 
-const RANGES: { value: ProgressRange; label: string }[] = [
-  { value: "30d", label: "30 ngày qua" },
-  { value: "90d", label: "90 ngày" },
-  { value: "all", label: "Toàn bộ quá trình" },
+const FILTERS: { value: TimelineFilter; label: string }[] = [
+  { value: "all", label: "Tất cả" },
+  { value: "interview", label: "Phỏng vấn" },
+  { value: "analysis", label: "Phân tích CV" },
+  { value: "compare", label: "So sánh vị trí" },
 ]
-const ALL_POSITIONS = "all"
-const SESSION_TYPES = [
-  { value: "all", label: "Tất cả phiên" },
-  { value: "interview", label: "Mock Interview" },
-  { value: "analysis", label: "Phân tích CV–JD" },
-] as const
-type SessionType = typeof SESSION_TYPES[number]["value"]
 
-// Figma: frame "Lịch sử & Tiến bộ" (18:3779). Điểm STAR thang 0–5, so sánh trong từng vị trí (PRD mục 5.1).
+// Tên loại phiên trợ lý AI có thể gửi tới, quy về bộ lọc dòng thời gian.
+const FILTER_ALIASES: Record<string, TimelineFilter> = {
+  all: "all",
+  interview: "interview",
+  interviews: "interview",
+  mock_interview: "interview",
+  "mock interview": "interview",
+  analysis: "analysis",
+  analyses: "analysis",
+  gap_analysis: "analysis",
+  compare: "compare",
+  comparison: "compare",
+  comparisons: "compare",
+  jd_compare: "compare",
+}
+
+// Bản vẽ TienBo. Điểm phỏng vấn thang 0–5, chỉ so sánh trong cùng vị trí (PRD mục 5.1).
 export function StudentHistory() {
-  const [range, setRange] = useState<ProgressRange>("all")
-  const [jdId, setJdId] = useState<string | null>(null)
-  const [query, setQuery] = useState("")
-  const [sessionType, setSessionType] = useState<SessionType>("all")
-  const fetchProgress = useCallback(() => api.getProgress(range, jdId), [range, jdId])
+  const fetchProgress = useCallback(() => api.getProgress("all", null), [])
   const { data: progress, error, reload } = useApi(fetchProgress)
-  // Giữ dữ liệu bộ lọc cũ trên màn hình trong lúc tải bộ lọc mới, tránh nháy skeleton.
-  const stale = progress !== undefined && (progress.range !== range || progress.jd_id !== jdId)
+  // Chỉ để gắn badge "Cố vấn đã nhận xét"; lỗi thì bỏ qua badge.
+  const { data: sharing } = useApi(api.getSharing)
+  // Lượt so sánh vị trí đã lưu; lỗi thì dòng thời gian chỉ thiếu các lượt này.
+  const fetchComparisons = useCallback(() => api.listComparisonHistory(50), [])
+  const { data: comparisons } = useApi(fetchComparisons)
+  const [filter, setFilter] = useState<TimelineFilter>("all")
 
+  // Trợ lý AI chỉ lọc được theo loại phiên, vì trang không có ô tìm kiếm hay lọc vị trí, thời gian.
   useAgentActions({
     fillFilter: (name, value) => {
-      const text = String(value)
-      if (name === "keyword") { setQuery(text); return true }
-      if (name === "type" || name === "active_tab") {
-        const aliases: Record<string, SessionType> = { all: "all", interview: "interview", interviews: "interview", mock_interview: "interview", "mock interview": "interview", analysis: "analysis", analyses: "analysis", gap_analysis: "analysis" }
-        const type = aliases[text.toLowerCase()]
-        if (!type) return false
-        setSessionType(type)
-        return true
-      }
-      if (name === "date_range" && RANGES.some((item) => item.value === text)) {
-        setRange(text as ProgressRange)
-        return true
-      }
-      if (name === "position") {
-        const position = progress?.positions.find((p) => p.jd.id === text || p.jd.title.toLowerCase() === text.toLowerCase())
-        if (text !== ALL_POSITIONS && !position) return false
-        setJdId(position?.jd.id ?? null)
-        return true
-      }
-      return false
+      if (name !== "type" && name !== "active_tab") return false
+      const next = FILTER_ALIASES[String(value).toLowerCase()]
+      if (!next) return false
+      setFilter(next)
+      return true
     },
     resetView: ({ clear_filters }) => {
-      if (clear_filters) { setQuery(""); setSessionType("all"); setRange("all"); setJdId(null) }
+      if (clear_filters) setFilter("all")
     },
   })
-  const keyword = query.trim().toLocaleLowerCase("vi")
-  const interviews = progress?.interviews.filter((row) => `Mock Interview phỏng vấn ${row.jd.title} ${row.jd.company ?? ""}`.toLocaleLowerCase("vi").includes(keyword)) ?? []
-  const analyses = progress?.analyses.filter((row) => `Phân tích CV JD ${row.jd.title} ${row.jd.company ?? ""} ${row.cv_file_name}`.toLocaleLowerCase("vi").includes(keyword)) ?? []
+
+  const reviewedIds = useMemo(
+    () =>
+      new Set([
+        ...(sharing?.items ?? []).filter((i) => i.kind === "interview_report" && i.has_advisor_comment).map((i) => i.id),
+        ...(sharing?.feedback ?? []).map((f) => f.target.id),
+      ]),
+    [sharing],
+  )
 
   if (error) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">Không tải được lịch sử luyện tập</p>
-        <p className="text-sm text-ink-2">{error.message}</p>
-        <Button variant="soft" onClick={reload}>
-          Thử lại
-        </Button>
+      <Panel className="mx-auto mt-10 w-full max-w-lg p-0">
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được lịch sử luyện tập"
+          description={error.message}
+          action={
+            <Button size="brand" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
       </Panel>
     )
   }
 
-  const positionItems = [
-    { value: ALL_POSITIONS, label: "Tất cả vị trí" },
-    ...(progress?.positions ?? []).map((p) => ({ value: p.jd.id, label: p.jd.title })),
-  ]
-  const noActivity = progress !== undefined && progress.positions.length === 0
+  const noActivity = progress !== undefined && progress.positions.length === 0 && !comparisons?.length
 
   return (
-    <div className="grid gap-8">
-      <header className="flex flex-wrap items-end justify-between gap-4 py-2">
-        <div className="grid max-w-2xl gap-2">
-          <p className="flex flex-wrap items-center gap-2 text-xs text-ink-2">
-            <Badge variant="violet" className="h-auto px-2.5 py-0.5">
-              <TrendingUp aria-hidden />
-              Báo cáo tiến bộ
-            </Badge>
-            {progress?.last_activity_at && <span>Hoạt động gần nhất: {formatWhen(progress.last_activity_at)}</span>}
-          </p>
-          <h1 className="font-heading text-[32px] leading-10 font-bold">Lịch sử & Tiến bộ</h1>
-          <p className="text-sm text-ink-2">
-            Theo dõi điểm phỏng vấn STAR và độ khớp CV với từng vị trí qua các lần luyện tập.
-          </p>
-        </div>
-        {!noActivity && (
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Select
-              items={positionItems}
-              value={jdId ?? ALL_POSITIONS}
-              onValueChange={(v) => setJdId(v === ALL_POSITIONS ? null : String(v))}
-            >
-              <SelectTrigger data-agent-target="history-position-filter" className="h-10 min-w-52 bg-card" aria-label="Lọc theo vị trí">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {positionItems.map((item) => (
-                  <SelectItem key={item.value} value={item.value}>
-                    {item.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div data-agent-target="history-date-filter" role="group" aria-label="Khoảng thời gian" className="flex rounded-xl bg-blue-soft/60 p-1">
-              {RANGES.map((r) => (
-                <button
-                  key={r.value}
-                  type="button"
-                  aria-pressed={range === r.value}
-                  onClick={() => setRange(r.value)}
-                  className={cn(
-                    "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors",
-                    range === r.value ? "bg-card text-blue shadow-card" : "text-ink-2 hover:text-ink",
-                  )}
-                >
-                  {r.label}
-                </button>
-              ))}
+    <div className="grid gap-9 md:gap-11">
+      <PageHeader
+        title="Lịch sử & tiến bộ"
+        actions={
+          !noActivity && (
+            <div data-agent-target="history-type-filter" className="w-full sm:w-auto">
+              <SegmentedControl
+                options={FILTERS}
+                value={filter}
+                onChange={setFilter}
+                aria-label="Lọc dòng thời gian"
+                className="w-full sm:w-auto"
+              />
             </div>
-          </div>
-        )}
-      </header>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Input data-agent-target="history-search-input" value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Tìm kiếm phiên luyện tập" placeholder="Tìm theo vị trí, CV hoặc loại phiên…" className="h-10 min-w-56 flex-1 bg-card" />
-        <Select items={SESSION_TYPES} value={sessionType} onValueChange={(value) => setSessionType(value as SessionType)}>
-          <SelectTrigger data-agent-target="history-type-filter" aria-label="Loại phiên" className="h-10 min-w-44 bg-card"><SelectValue /></SelectTrigger>
-          <SelectContent>{SESSION_TYPES.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent>
-        </Select>
-      </div>
+          )
+        }
+      />
 
       {!progress ? (
         <HistorySkeleton />
       ) : noActivity ? (
         <EmptyHistory />
       ) : (
-        <div data-agent-target="history-session-list" className={cn("grid gap-10 transition-opacity", stale && "pointer-events-none opacity-60")} aria-busy={stale}>
-          <InterviewProgressSection groups={progress.interview_progress} />
-          <CvProgressSection groups={progress.cv_progress} />
-          {/* key: về trang 1 khi đổi bộ lọc */}
-          {sessionType !== "analysis" && <InterviewTable key={`iv-${progress.range}-${progress.jd_id}-${keyword}`} rows={interviews} />}
-          {sessionType !== "interview" && <AnalysisTable key={`ga-${progress.range}-${progress.jd_id}-${keyword}`} rows={analyses} />}
+        <div className="grid gap-14 md:gap-16">
+          <Zone id="progress-title" title="Tiến bộ">
+            <div className="grid gap-x-14 gap-y-12 lg:grid-cols-2">
+              <InterviewProgressBlock groups={progress.interview_progress} />
+              <CvProgressBlock groups={progress.cv_progress} />
+            </div>
+          </Zone>
+          <Zone id="timeline-title" title="Dòng thời gian">
+            <div data-agent-target="history-session-list">
+              {/* key: về trang đầu khi đổi bộ lọc */}
+              <Timeline
+                key={filter}
+                filter={filter}
+                interviews={progress.interviews}
+                analyses={progress.analyses}
+                comparisons={comparisons ?? []}
+                reviewedIds={reviewedIds}
+              />
+            </div>
+          </Zone>
         </div>
       )}
-
     </div>
   )
 }
 
 function EmptyHistory() {
   return (
-    <Panel className="grid justify-items-center gap-3 py-14 text-center">
-      <span className="grid size-12 place-items-center rounded-full bg-violet-soft text-violet">
-        <MessagesSquare className="size-6" aria-hidden />
-      </span>
-      <p className="font-heading text-lg font-bold">Chưa có dữ liệu tiến bộ</p>
-      <p className="max-w-md text-sm text-ink-2">
-        Phân tích CV với một JD hoặc hoàn thành buổi phỏng vấn thử đầu tiên. Mỗi lần tiếp theo sẽ được so sánh với lần trước
-        của cùng vị trí.
-      </p>
-      <div className="flex flex-wrap justify-center gap-2">
-        <Button variant="soft" size="brand" nativeButton={false} render={<Link href="/student/analysis/new" />}>
-          Phân tích CV với JD
-        </Button>
-        <Button variant="violet" size="brand" nativeButton={false} render={<Link href="/student/interview/new" />}>
-          Bắt đầu luyện phỏng vấn
-        </Button>
-      </div>
-    </Panel>
+    <EmptyState
+      icon={TrendingUp}
+      title="Chưa có dữ liệu tiến bộ"
+      description="Phân tích CV với một JD hoặc hoàn thành buổi phỏng vấn thử đầu tiên. Mỗi lần sau được so với lần trước của cùng vị trí."
+      className="border-y border-line py-14"
+      action={
+        <div className="flex flex-wrap justify-center gap-2.5">
+          <Button variant="soft" size="brand" nativeButton={false} render={<Link href="/student/analysis/new" />}>
+            Phân tích CV với JD
+          </Button>
+          <Button size="brand" nativeButton={false} render={<Link href="/student/interview/new" />}>
+            Luyện phỏng vấn
+          </Button>
+        </div>
+      }
+    />
   )
 }
 
 function HistorySkeleton() {
   return (
-    <div className="grid gap-10" aria-busy="true" aria-label="Đang tải lịch sử">
-      <Skeleton className="h-[380px] rounded-[20px]" />
-      <Skeleton className="h-[240px] rounded-[20px]" />
-      <Skeleton className="h-[360px] rounded-[20px]" />
+    <div className="grid gap-14" aria-busy="true" aria-label="Đang tải lịch sử">
+      <div className="grid gap-7">
+        <Skeleton className="h-8 w-40" />
+        <div className="grid gap-14 lg:grid-cols-2">
+          <Skeleton className="h-[290px] rounded-card" />
+          <Skeleton className="h-[290px] rounded-card" />
+        </div>
+      </div>
+      <div className="grid gap-4">
+        <Skeleton className="h-8 w-56" />
+        {[0, 1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-12 rounded-[10px]" />
+        ))}
+      </div>
     </div>
   )
 }

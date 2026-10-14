@@ -50,6 +50,43 @@ def _add_missing_columns() -> None:
                     conn.execute(text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {column_type}'))
 
 
+def _relax_interview_cv_columns() -> None:
+    """Phỏng vấn không cần CV (interview_mode = "jd_only"): cv_version_id / cv_file_name được để trống.
+
+    SQLite không đổi được NOT NULL tại chỗ nên dựng lại bảng interview_sessions và chép toàn bộ buổi phỏng vấn cũ sang
+    (không xoá dữ liệu). legacy_alter_table giữ khoá ngoại của interview_turns trỏ đúng bảng mới.
+    """
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("SELECT sql FROM sqlite_master WHERE type='table' AND name='interview_sessions'")
+        ).fetchone()
+        if not row or not row[0] or "cv_version_id VARCHAR(64) NOT NULL" not in row[0]:
+            return
+        table = Base.metadata.tables["interview_sessions"]
+        old_columns = {r[1] for r in conn.execute(text("PRAGMA table_info(interview_sessions)"))}
+        # Buổi phỏng vấn cũ đều có CV nên chế độ là "with_cv"
+        targets = [c.name for c in table.columns if c.name in old_columns]
+        sources = [f'"{c}"' for c in targets]
+        if "interview_mode" not in old_columns:
+            targets.append("interview_mode")
+            sources.append("'with_cv'")
+        columns = ", ".join(f'"{c}"' for c in targets)
+        values = ", ".join(sources)
+        indexes = conn.execute(
+            text(
+                "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='interview_sessions' AND sql IS NOT NULL"
+            )
+        ).fetchall()
+        for (name,) in indexes:
+            conn.execute(text(f'DROP INDEX "{name}"'))
+        conn.execute(text("PRAGMA legacy_alter_table=ON"))
+        conn.execute(text("ALTER TABLE interview_sessions RENAME TO interview_sessions_old"))
+        table.create(conn)
+        conn.execute(text(f"INSERT INTO interview_sessions ({columns}) SELECT {values} FROM interview_sessions_old"))
+        conn.execute(text("DROP TABLE interview_sessions_old"))
+        conn.execute(text("PRAGMA legacy_alter_table=OFF"))
+
+
 def init_db() -> None:
     """Tạo bảng / cột còn thiếu và nạp dữ liệu demo (idempotent, gọi khi khởi động app).
 
@@ -60,6 +97,7 @@ def init_db() -> None:
     from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
     from src.services.cv_versions import backfill as backfill_cv_versions
 
+    _relax_interview_cv_columns()
     Base.metadata.create_all(bind=engine)
     _add_missing_columns()
     with SessionLocal() as db:

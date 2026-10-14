@@ -60,7 +60,7 @@ export interface AnalysisSource {
 
 /** Dữ liệu một SV: phía SV (Minh Anh) lấy từ trạng thái mock của SV, SV giả định lấy từ COHORT. */
 export interface StudentSource {
-  profile: Pick<AssignedStudent, "id" | "full_name" | "subtitle" | "student_code" | "email" | "major" | "cohort" | "avatar_url">
+  profile: Pick<AssignedStudent, "id" | "full_name" | "subtitle" | "email" | "phone" | "avatar_url">
   /** Mới nhất trước. */
   cvs: CvVersion[]
   /** Lượt phân tích đã hoàn tất, mới nhất trước. */
@@ -318,10 +318,7 @@ interface CohortSpec {
   id: string
   full_name: string
   email: string
-  student_code: string
-  major: string
-  short: string
-  cohort: string
+  phone: string
   jd: string
   weak: StarCriterion
   /** (số ngày trước, kỹ năng thiếu, kỹ năng chỉ liệt kê) */
@@ -332,19 +329,14 @@ interface CohortSpec {
   /** (buổi thứ mấy, SV đã xem?, nội dung) */
   review: [number, boolean, string] | null
   note: [string, AdvisorNote["tags"], boolean] | null
-  /** Số sao CSAT SV chấm sau từng lượt dùng. */
-  csat: number[]
 }
 
 const COHORT: CohortSpec[] = [
   {
     id: "sv-0151",
     full_name: "Lê Quang Huy",
-    email: "huy.lq21@student.university.edu.vn",
-    student_code: "21125501",
-    major: "Công nghệ thông tin",
-    short: "CNTT",
-    cohort: "K2021",
+    email: "huy.lq@gmail.com",
+    phone: "0903 214 587",
     jd: "jd-be-intern",
     weak: "result",
     versions: [
@@ -358,18 +350,14 @@ const COHORT: CohortSpec[] = [
       [4, 3.9, 0],
     ],
     share: "all",
-    csat: [5, 4, 5, 5, 4],
     review: [4, true, "Em trình bày bối cảnh và nhiệm vụ rất rõ. Buổi tới thử nêu thêm kết quả đo được, ví dụ thời gian phản hồi API."],
     note: ["Tiến bộ đều qua 4 buổi. Có thể giới thiệu thực tập backend.", ["technical"], false],
   },
   {
     id: "sv-0152",
     full_name: "Phạm Thu Trang",
-    email: "trang.pt22@student.university.edu.vn",
-    student_code: "22124018",
-    major: "Hệ thống thông tin quản lý",
-    short: "HTTTQL",
-    cohort: "K2022",
+    email: "trang.pt@gmail.com",
+    phone: "0987 552 130",
     jd: "jd-ba-intern",
     weak: "action",
     versions: [[33, ["BPMN", "Jira", "Figma"], ["Agile/Scrum"]]],
@@ -380,18 +368,14 @@ const COHORT: CohortSpec[] = [
       [2, 2.9, 1],
     ],
     share: "latest",
-    csat: [4, 3, 3],
     review: null,
     note: ["Điểm không tăng mấy buổi gần đây, có câu hết giờ. Hẹn gặp trực tiếp.", ["watch"], true],
   },
   {
     id: "sv-0153",
     full_name: "Lê Thu Hà",
-    email: "ha.lt21@student.university.edu.vn",
-    student_code: "21123377",
-    major: "Kinh doanh quốc tế",
-    short: "KDQT",
-    cohort: "K2021",
+    email: "ha.lt@gmail.com",
+    phone: "0916 408 772",
     jd: "jd-xnk-fresher",
     weak: "task",
     versions: [[48, ["Incoterms", "Thủ tục hải quan"], ["Thanh toán quốc tế"]]],
@@ -400,18 +384,14 @@ const COHORT: CohortSpec[] = [
       [30, 3.1, 0],
     ],
     share: "cv",
-    csat: [4, 5],
     review: null,
     note: null,
   },
   {
     id: "sv-0154",
     full_name: "Phạm Quang Huy",
-    email: "huy.pq22@student.university.edu.vn",
-    student_code: "22125210",
-    major: "Công nghệ thông tin",
-    short: "CNTT",
-    cohort: "K2022",
+    email: "huy.pq@gmail.com",
+    phone: "0935 117 264",
     jd: "jd-fe-junior",
     weak: "result",
     versions: [[22, ["TypeScript", "Next.js", "Unit test"], ["Tailwind CSS"]]],
@@ -421,52 +401,40 @@ const COHORT: CohortSpec[] = [
       [5, 3.3, 0],
     ],
     share: "none",
-    csat: [4],
     review: null,
     note: null,
   },
   {
     id: "sv-0155",
     full_name: "Võ Ngọc Lan",
-    email: "lan.vn22@student.university.edu.vn",
-    student_code: "22126044",
-    major: "Marketing",
-    short: "MKT",
-    cohort: "K2022",
+    email: "lan.vn@gmail.com",
+    phone: "0978 630 415",
     jd: "jd-mkt-analyst",
     weak: "action",
     versions: [[10, ["A/B Testing", "Quảng cáo trả phí", "SQL", "SEO"], ["Báo cáo hiệu quả chiến dịch"]]],
     sessions: [[6, 2.7, 1]],
     share: "all",
-    csat: [5],
     review: null,
     note: null,
   },
   {
     id: "sv-0156",
     full_name: "Đặng Minh Khoa",
-    email: "khoa.dm21@student.university.edu.vn",
-    student_code: "21127102",
-    major: "Tài chính – Ngân hàng",
-    short: "TCNH",
-    cohort: "K2021",
+    email: "khoa.dm@gmail.com",
+    phone: "0908 742 091",
     jd: "jd-fa-fresher",
     weak: "result",
     versions: [[8, ["Định giá doanh nghiệp", "Mô hình tài chính", "CFA"], []]],
     sessions: [],
     share: "cv",
-    csat: [4],
     review: null,
     note: null,
   },
   {
     id: "sv-0157",
     full_name: "Trần Bảo Châu",
-    email: "chau.tb21@student.university.edu.vn",
-    student_code: "21124590",
-    major: "Hệ thống thông tin quản lý",
-    short: "HTTTQL",
-    cohort: "K2021",
+    email: "chau.tb@gmail.com",
+    phone: "0941 285 336",
     jd: "jd-da-intern",
     weak: "situation",
     versions: [[18, ["Tableau", "Google Analytics"], ["Thống kê"]]],
@@ -475,18 +443,14 @@ const COHORT: CohortSpec[] = [
       [3, 3.1, 0],
     ],
     share: "all",
-    csat: [5, 4],
     review: [1, true, "Câu trả lời về dashboard Power BI rất cụ thể. Giữ cách kể có số liệu như vậy."],
     note: null,
   },
   {
     id: "sv-0158",
     full_name: "Trần Văn Hưng",
-    email: "hung.tv22@student.university.edu.vn",
-    student_code: "22123881",
-    major: "Kinh doanh quốc tế",
-    short: "KDQT",
-    cohort: "K2022",
+    email: "hung.tv@gmail.com",
+    phone: "0962 019 548",
     jd: "jd-po-assistant",
     weak: "task",
     versions: [[30, ["Kiến thức ngân hàng số"], ["Phân tích dữ liệu"]]],
@@ -496,7 +460,6 @@ const COHORT: CohortSpec[] = [
       [7, 4.2, 0],
     ],
     share: "latest",
-    csat: [5, 5, 4],
     review: [3, false, "Rất tốt. Thử luyện thêm câu hỏi về xử lý xung đột ưu tiên giữa các bên liên quan."],
     note: ["Hồ sơ tốt, có thể giới thiệu vị trí PO Assistant.", ["soft_skill"], false],
   },
@@ -512,7 +475,6 @@ function starOffsets(weak: StarCriterion): Record<StarCriterion, number> {
 
 export interface CohortStudent extends StudentSource {
   notes: AdvisorNote[]
-  csat: number[]
 }
 
 /** Dựng dữ liệu các SV giả định, thời gian tính lùi từ lúc gọi. */
@@ -539,7 +501,7 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
           jd,
           cv_version_id: cvId,
           cv_label: `v1.${i}`,
-          cv_file_name: `CV_${spec.full_name.split(" ").at(-1)}_${spec.short}_v${i + 1}.docx`,
+          cv_file_name: `CV_${spec.full_name.split(" ").at(-1)}_v${i + 1}.docx`,
           status: "completed",
           current_step: null,
           match_score: score,
@@ -556,7 +518,7 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
         label: `v1.${i}`,
         family_id: `cv_${key}_1`,
         version_count: spec.versions.length,
-        file_name: `CV_${spec.full_name.split(" ").at(-1)}_${spec.short}_v${i + 1}.docx`,
+        file_name: `CV_${spec.full_name.split(" ").at(-1)}_v${i + 1}.docx`,
         file_type: "docx",
         size_bytes: 24_000,
         page_count: null,
@@ -618,11 +580,9 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
       profile: {
         id: spec.id,
         full_name: spec.full_name,
-        subtitle: `${spec.short} - ${spec.cohort}`,
-        student_code: spec.student_code,
+        subtitle: spec.email,
         email: spec.email,
-        major: spec.major,
-        cohort: spec.cohort,
+        phone: spec.phone,
         avatar_url: null,
       },
       cvs,
@@ -631,17 +591,16 @@ export function buildCohort(now = Date.now()): CohortStudent[] {
       shared,
       reviews,
       notes,
-      csat: spec.csat,
     }
   })
 }
 
 // ---------- Tổng quan cả nhóm (giống advisor.overview ở backend) ----------
 
-// "Hoạt động" = có lượt phân tích hoặc buổi phỏng vấn hoàn thành trong 30 ngày; mục tiêu ≥ 60% và CSAT ≥ 4 (PRD mục 9)
+// "Hoạt động" = có lượt phân tích hoặc buổi phỏng vấn hoàn thành trong 30 ngày; mục tiêu ≥ 60% (PRD mục 9).
+// CSAT toàn hệ thống nằm ở trang Quản trị (lib/mocks/admin.ts).
 const ACTIVE_DAYS = 30
 const ACTIVE_TARGET = 60
-const CSAT_TARGET = 4
 const WEEKS = 8
 const TOP_IMPROVERS = 5
 const RECENT_REVIEWS = 5
@@ -685,7 +644,7 @@ function cohortStar(sources: StudentSource[]): CohortStar | null {
   }
 }
 
-export function overviewOf(sources: StudentSource[], advisorName: string, csat: number[], now = Date.now()): AdvisorOverview {
+export function overviewOf(sources: StudentSource[], advisorName: string, now = Date.now()): AdvisorOverview {
   const rows = sources.map(summarize)
   const latest = rows.flatMap((r) => (r.latest_score !== null ? [r.latest_score] : []))
   const deltas = rows.flatMap((r) => (r.score_delta !== null ? [r.score_delta] : []))
@@ -716,9 +675,6 @@ export function overviewOf(sources: StudentSource[], advisorName: string, csat: 
     scored_count: latest.length,
     average_delta: mean(deltas),
     delta_count: deltas.length,
-    csat: mean(csat),
-    csat_count: csat.length,
-    csat_target: CSAT_TARGET,
     weekly_scores: weeklyScores(sources, now),
     status_counts: statusCounts,
     star,
@@ -731,5 +687,21 @@ export function overviewOf(sources: StudentSource[], advisorName: string, csat: 
       .sort((a, b) => b.score_delta! - a.score_delta!)
       .slice(0, TOP_IMPROVERS),
     recent_reviews: reviews.sort((a, b) => time(b.updated_at) - time(a.updated_at)).slice(0, RECENT_REVIEWS),
+    pending_sessions: sources
+      .flatMap((src) =>
+        src.sessions
+          .filter((s) => src.shared.has(s.id) && !src.reviews[s.id])
+          .map((s) => ({
+            session_id: s.id,
+            student_id: src.profile.id,
+            student_name: src.profile.full_name,
+            avatar_url: src.profile.avatar_url,
+            jd: s.jd,
+            completed_at: s.completed_at,
+            overall_score: s.overall_score,
+          })),
+      )
+      .sort((a, b) => time(a.completed_at) - time(b.completed_at))
+      .slice(0, 10),
   }
 }

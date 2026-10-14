@@ -36,6 +36,7 @@ ROUTES: dict[str, set[str]] = {
         "/student/interview/new",
         "/student/interview/start",
         "/student/history",
+        "/student/library",
         "/student/share",
         "/student/settings",
     },
@@ -60,6 +61,7 @@ def route_allowed(route: str, role: str) -> bool:
                 r"/student/cv/[\w-]{1,64}",
                 r"/student/analysis/[\w-]{1,64}(?:/(?:optimize|export))?",
                 r"/student/interview/[\w-]{1,64}(?:/report)?",
+                r"/student/library/[\w-]{1,64}",
             )
         )
     return role == "advisor" and bool(re.fullmatch(r"/advisor/students/[\w-]{1,64}", route))

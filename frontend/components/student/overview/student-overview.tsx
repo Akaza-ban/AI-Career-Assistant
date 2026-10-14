@@ -3,17 +3,18 @@
 import { useEffect } from "react"
 import { AlertCircle } from "lucide-react"
 
-import { Panel } from "@/components/common/panel"
+import { EmptyState } from "@/components/common/empty-state"
+import { Panel, SoftPanel } from "@/components/common/panel"
+import { Zone, ZoneLink } from "@/components/common/zone"
 import { useProfile } from "@/components/shell/profile-context"
+import { FitPositions } from "@/components/student/overview/fit-positions"
 import {
-  GreetingBanner,
-  InProgressPanel,
-  NextStepCard,
+  Greeting,
+  NextTasks,
+  ProgressMetrics,
   RecentAnalyses,
   RecentInterviews,
-  SkillsCard,
-  StarAverageCard,
-  StatCards,
+  SkillsToLearn,
   isNewStudent,
 } from "@/components/student/overview/overview-sections"
 import { Button } from "@/components/ui/button"
@@ -24,7 +25,7 @@ import { useApi } from "@/lib/use-api"
 /** Chu kỳ hỏi lại khi còn lượt phân tích đang chạy. */
 const POLL_MS = 4000
 
-// Figma: frame "Tổng quan Sinh viên" (18:2). Điểm STAR thang 0–5 (PRD mục 5.1).
+// Bản mẫu v2, artboard "Tổng quan" (WIREFRAMES.md A1). Điểm STAR thang 0–5 (PRD mục 5.1).
 export function StudentOverview() {
   const profile = useProfile()
   const { data: overview, error, reload } = useApi(api.getOverview)
@@ -39,13 +40,17 @@ export function StudentOverview() {
 
   if (error) {
     return (
-      <Panel className="grid justify-items-center gap-3 py-12 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="font-heading font-bold">Không tải được dữ liệu tổng quan</p>
-        <p className="text-sm text-ink-2">{error.message}</p>
-        <Button variant="soft" onClick={reload}>
-          Thử lại
-        </Button>
+      <Panel className="mx-auto mt-10 w-full max-w-lg p-0">
+        <EmptyState
+          icon={AlertCircle}
+          title="Không tải được dữ liệu tổng quan"
+          description={error.message}
+          action={
+            <Button size="brand" onClick={reload}>
+              Thử lại
+            </Button>
+          }
+        />
       </Panel>
     )
   }
@@ -55,25 +60,32 @@ export function StudentOverview() {
   // SV mới (chưa có CV, chưa phân tích, chưa phỏng vấn): chỉ hiện việc cần làm đầu tiên.
   const isNew = isNewStudent(overview)
 
-  // Chỉ lời chào đặt thẳng trên nền trang; các mục khác nằm trong ô, tiêu đề mục đặt ngoài ô.
+  // Phương án A (kiểu Stripe): các vùng có tiêu đề lớn + đường kẻ, bên trong là các khối không viền có dòng chân.
   return (
-    <div className="grid gap-10">
-      <GreetingBanner fullName={profile.full_name} overview={overview} />
-      <InProgressPanel inProgress={overview.in_progress} />
-      {isNew ? (
-        <NextStepCard step={overview.next_step} />
-      ) : (
+    <div className="grid gap-14 md:gap-16">
+      <div className="grid gap-9 md:gap-11">
+        <Greeting fullName={profile.full_name} overview={overview} />
+        <NextTasks overview={overview} />
+      </div>
+      {!isNew && (
         <>
-          <StatCards overview={overview} />
-          <div className="grid gap-x-8 gap-y-10 xl:grid-cols-12">
-            <NextStepCard step={overview.next_step} className="xl:col-span-7" />
-            <SkillsCard skills={overview.skills_to_learn} className="xl:col-span-5" />
-          </div>
-          <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
-            <RecentAnalyses items={overview.recent_analyses} />
-            <RecentInterviews items={overview.recent_interviews} />
-            <StarAverageCard star={overview.star} className="md:col-span-2 xl:col-span-1" />
-          </div>
+          <ProgressMetrics overview={overview} />
+          <Zone id="suggestions-title" title="Gợi ý cho bạn">
+            <div className="grid gap-x-12 gap-y-10 lg:grid-cols-2">
+              <FitPositions />
+              <SkillsToLearn skills={overview.skills_to_learn} />
+            </div>
+          </Zone>
+          <Zone
+            id="activity-title"
+            title="Hoạt động gần đây"
+            aside={<ZoneLink href="/student/history">Xem lịch sử</ZoneLink>}
+          >
+            <div className="grid gap-x-12 gap-y-10 lg:grid-cols-2">
+              <RecentAnalyses items={overview.recent_analyses} />
+              <RecentInterviews items={overview.recent_interviews} />
+            </div>
+          </Zone>
         </>
       )}
     </div>
@@ -82,29 +94,39 @@ export function StudentOverview() {
 
 function OverviewSkeleton() {
   return (
-    <div className="grid gap-10" aria-busy="true" aria-label="Đang tải tổng quan">
-      <div className="flex flex-wrap items-center justify-between gap-4 py-4 sm:py-6">
-        <div className="grid gap-2.5">
-          <Skeleton className="h-10 w-80 max-w-full" />
-          <Skeleton className="h-5 w-[420px] max-w-full" />
+    <div className="grid gap-8 md:gap-9" aria-busy="true" aria-label="Đang tải tổng quan">
+      <div className="flex min-h-[200px] flex-col justify-center gap-3.5 pt-2 md:min-h-[230px]">
+        <Skeleton className="h-9 w-72 max-w-full md:h-12 md:w-[420px]" />
+        <Skeleton className="h-9 w-80 max-w-full md:h-12 md:w-[560px]" />
+        <Skeleton className="h-6 w-[420px] max-w-full" />
+        <div className="mt-2 flex gap-2.5">
+          <Skeleton className="h-[46px] w-36 rounded-full" />
+          <Skeleton className="h-[46px] w-40 rounded-full" />
         </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-44 rounded-lg" />
-          <Skeleton className="h-10 w-40 rounded-lg" />
+      </div>
+      <SoftPanel className="grid gap-4">
+        <Skeleton className="h-7 w-48" />
+        <div className="flex flex-wrap gap-3.5">
+          <Skeleton className="h-[196px] flex-[1_1_280px] rounded-card" />
+          <Skeleton className="h-[196px] flex-[1_1_280px] rounded-card" />
+          <div className="flex min-w-[240px] flex-[1_1_240px] flex-col gap-2.5 lg:flex-[0_1_300px]">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-[50px] rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </SoftPanel>
+      <div className="grid gap-5">
+        <Skeleton className="h-8 w-56" />
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-[150px] rounded-card" />
+          ))}
         </div>
       </div>
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-[140px] rounded-[20px]" />
-        ))}
-      </div>
-      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-12">
-        <Skeleton className="h-[260px] rounded-[20px] xl:col-span-7" />
-        <Skeleton className="h-[260px] rounded-[20px] xl:col-span-5" />
-      </div>
-      <div className="grid gap-x-8 gap-y-10 md:grid-cols-2 xl:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <Skeleton key={i} className="h-[300px] rounded-[20px]" />
+      <div className="grid gap-x-10 gap-y-9 lg:grid-cols-[1.3fr_1fr]">
+        {[0, 1].map((i) => (
+          <Skeleton key={i} className="h-[260px] rounded-card" />
         ))}
       </div>
     </div>

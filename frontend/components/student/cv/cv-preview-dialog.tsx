@@ -11,10 +11,10 @@ import { formatBytes } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
-type Preview = { kind: "pdf"; url: string } | { kind: "text"; text: string } | { kind: "unavailable" }
+export type CvPreview = { kind: "pdf"; url: string } | { kind: "text"; text: string } | { kind: "unavailable" }
 
 // Trình duyệt hiển thị được PDF; DOCX (hoặc PDF không có file, ví dụ ở chế độ mock) thì xem bằng văn bản đã trích.
-async function loadPreview(cv: CvVersion): Promise<Preview> {
+export async function loadPreview(cv: CvVersion): Promise<CvPreview> {
   if (cv.file_type === "pdf") {
     const blob = await api.getCvFile(cv.id)
     if (blob) return { kind: "pdf", url: URL.createObjectURL(blob) }

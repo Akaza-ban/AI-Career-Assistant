@@ -95,10 +95,10 @@ def api_agent(knowledge_base: AssistantHybridRetriever) -> Iterator[AssistantAge
         app.dependency_overrides.pop(get_assistant_agent, None)
 
 
-def test_indexer_persists_seven_documents_and_selector(knowledge_base: AssistantHybridRetriever) -> None:
+def test_indexer_persists_eight_documents_and_selector(knowledge_base: AssistantHybridRetriever) -> None:
     store = knowledge_base.vector_store
     chunks = store.get_chunks()
-    assert len({chunk.source for chunk in chunks}) == 7
+    assert len({chunk.source for chunk in chunks}) == 8
     assert all(0 < len(chunk.content) <= 500 for chunk in chunks)
     assert any(chunk.selector == UPLOAD_SELECTOR and chunk.route == "/student/cv" for chunk in chunks)
     saved = json.loads(corpus_path(store).read_text(encoding="utf-8"))
@@ -262,7 +262,7 @@ async def test_unrelated_question_is_refused_without_sources(
     assert state["confidence"] == "low" and state["sources"] == []
     response = await agent.respond(message, context())
     assert response.sources == []
-    assert response.message.startswith("Xin lỗi,") and "CareerX" in response.message
+    assert response.message.startswith("Xin lỗi,") and "CareerV" in response.message
     assert response.actions == []
     structured.ainvoke.assert_not_called()
 
@@ -408,7 +408,7 @@ async def test_llm_receives_history_and_returns_only_grounded_safe_actions(
         "Xin lỗi, tài liệu hướng dẫn hiện tại chưa có thông tin chi tiết về nội dung này.",
         "Xin lỗi, hiện tại tài liệu hướng dẫn chưa có thông tin chi tiết về nội dung này. "
         "Bạn vui lòng nêu rõ thao tác cần hỗ trợ.",
-        "Tôi chỉ hỗ trợ tính năng CareerX và không thể trả lời chủ đề đó.",
+        "Tôi chỉ hỗ trợ tính năng CareerV và không thể trả lời chủ đề đó.",
     ],
 )
 @pytest.mark.parametrize("refusal_flag", [True, False, None])
@@ -641,6 +641,46 @@ async def test_analysis_actions_require_accessible_cv_and_jd(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["library", "own", "hidden", "foreign", "own_deleted"])
+async def test_navigate_to_jd_detail_only_for_visible_jds(
+    client: AsyncClient, api_agent: AssistantAgent, monkeypatch: pytest.MonkeyPatch, kind: str
+) -> None:
+    with SessionLocal() as db:
+        jd = db.scalar(
+            select(JobDescription).where(
+                JobDescription.source == "library",
+                JobDescription.status.is_(None) | (JobDescription.status == "published"),
+            )
+        )
+        if kind != "library":
+            other = f"sv-{uuid4().hex[:12]}"
+            db.add(User(id=other, role="student", full_name="Other", email=f"{other}@example.test"))
+            jd = JobDescription(
+                id=f"jd-{uuid4().hex[:12]}",
+                source="library" if kind == "hidden" else "pasted",
+                owner_id=None if kind == "hidden" else (other if kind == "foreign" else "sv-0142"),
+                title="Business Analyst",
+                content="Phân tích yêu cầu, SQL",
+                status={"hidden": "hidden", "own_deleted": "deleted"}.get(kind),
+            )
+            db.add(jd)
+            db.commit()
+        route = f"/student/library/{jd.id}"
+    llm, _ = fake_llm(
+        {
+            "message": "Mở chi tiết vị trí trong Thư viện JD.",
+            "intent": "action",
+            "actions": [{"action_type": "NAVIGATE_PAGE", "params": {"route": route}, "description_vi": "Mở chi tiết JD"}],
+        }
+    )
+    monkeypatch.setattr(api_agent, "_llm", llm)
+    response = await client.post(f"{API}/chat", json=payload("Mở chi tiết JD trong thư viện JD"), headers=STUDENT)
+    assert response.status_code == 200, response.text
+    routes = [a["params"]["route"] for a in response.json()["actions"] if a["action_type"] == "NAVIGATE_PAGE"]
+    assert (route in routes) == (kind in ("library", "own"))
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -734,6 +774,12 @@ async def test_feedback_persists_and_updates_without_duplicate(client: AsyncClie
             == 1
         )
         assert db.get(AssistantFeedback, second.json()["id"]).comment == "Cần rõ hơn"
+    # Bấm lại nút đã chọn để huỷ; huỷ lần nữa vẫn thành công
+    for _ in range(2):
+        undo = await client.delete(f"{API}/feedback/{chat['turn_id']}", headers=STUDENT)
+        assert undo.status_code == 204
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(AssistantFeedback).where(AssistantFeedback.turn_id == chat["turn_id"])) == 0
 
 
 @pytest.mark.asyncio
@@ -856,7 +902,7 @@ async def test_low_confidence_with_stale_sources_never_echoes_documents() -> Non
     )
     response = result["response"]
     assert (
-        response.message == "Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerX."
+        response.message == "Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerV."
     )
     assert response.actions == [] and response.sources == []
     structured.ainvoke.assert_not_called()
@@ -874,7 +920,7 @@ async def test_chat_api_refuses_out_of_scope_without_actions_or_sources(
     result = await client.post(f"{API}/chat", json=payload(message), headers=STUDENT)
     assert result.status_code == 200, result.text
     data = result.json()
-    assert data["message"].startswith("Xin lỗi,") and "CareerX" in data["message"]
+    assert data["message"].startswith("Xin lỗi,") and "CareerV" in data["message"]
     assert data["actions"] == [] and data["sources"] == []
     assert "Bộ lọc thời gian" not in data["message"]
     assert "thought" not in data

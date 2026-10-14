@@ -8,11 +8,11 @@
     "expected_route": "/student/cv"
   },
   {
-    "question": "Muốn tải CV và chọn đúng phiên bản trước khi phân tích, tôi làm thế nào? A. Chỉ đổi tên tệp. B. Bấm Tải lên CV, chọn tệp rồi kiểm tra phiên bản trong danh sách. C. Tải lên là tự chạy phân tích.",
+    "question": "Muốn tải CV và chọn đúng phiên bản trước khi phân tích, tôi làm thế nào? A. Chỉ đổi tên tệp. B. Bấm Chọn file hoặc kéo thả tệp, rồi kiểm tra phiên bản trong danh sách Tất cả CV. C. Tải lên là tự chạy phân tích.",
     "role": "student",
     "current_route": "/student/cv",
-    "gold_context_keywords": ["Tải lên CV", "danh sách", "phiên bản"],
-    "expected_answer": "Đáp án B; Mở /student/cv và bấm Tải lên CV; Sinh viên tự chọn tệp PDF hoặc DOCX từ máy; Kiểm tra tên tệp và phiên bản trong danh sách trước khi phân tích.",
+    "gold_context_keywords": ["Chọn file", "Tất cả CV", "phiên bản"],
+    "expected_answer": "Đáp án B; Mở /student/cv, kéo thả tệp hoặc bấm Chọn file; Sinh viên tự chọn tệp PDF hoặc DOCX từ máy; Kiểm tra tên tệp và phiên bản trong mục Tất cả CV trước khi phân tích.",
     "expected_route": "/student/cv"
   },
   {
@@ -32,11 +32,11 @@
     "expected_route": "/student/analysis"
   },
   {
-    "question": "Tôi dán JD nhưng nút Phân tích CV với JD chưa khả dụng. Điều kiện nào cần kiểm tra? A. Chỉ cần tên công ty. B. Có CV, tiêu đề JD và nội dung ít nhất 50 từ, đồng thời không đang gửi yêu cầu. C. Chỉ cần dán một dòng bất kỳ.",
+    "question": "Tôi dán JD nhưng nút Bắt đầu phân tích chưa khả dụng. Điều kiện nào cần kiểm tra? A. Chỉ cần tên công ty. B. Có tên vị trí, mô tả công việc, yêu cầu ứng viên và tổng cộng ít nhất 50 từ, đồng thời không đang gửi yêu cầu. C. Chỉ cần dán một dòng bất kỳ.",
     "role": "student",
     "current_route": "/student/analysis",
-    "gold_context_keywords": ["CV", "tiêu đề", "50 từ", "đang gửi"],
-    "expected_answer": "Đáp án B; Cần có CV được chọn; JD tự dán phải có tiêu đề và nội dung tối thiểu 50 từ; Nút tạm khóa khi đang gửi yêu cầu.",
+    "gold_context_keywords": ["tên vị trí", "mô tả công việc", "yêu cầu ứng viên", "50 từ", "đang gửi"],
+    "expected_answer": "Đáp án B; JD tự dán cần tên vị trí, mô tả công việc và yêu cầu ứng viên; Tổng cộng tối thiểu 50 từ; Nút tạm khóa khi đang gửi yêu cầu.",
     "expected_route": "/student/analysis"
   },
   {
@@ -56,11 +56,11 @@
     "expected_route": "/student/interview"
   },
   {
-    "question": "Quy trình bắt đầu Mock Interview đúng là gì? A. Không cần CV hay vị trí. B. Chọn CV và vị trí, còn lượt luyện, bấm Bắt đầu phỏng vấn rồi Sẵn sàng trong phòng chờ. C. Chỉ mở báo cáo cũ.",
+    "question": "Quy trình bắt đầu Mock Interview đúng là gì? A. Không cần CV hay vị trí. B. Chọn CV và vị trí, còn lượt luyện, bấm Vào phòng chờ rồi Sẵn sàng. C. Chỉ mở báo cáo cũ.",
     "role": "student",
     "current_route": "/student/interview",
-    "gold_context_keywords": ["CV", "vị trí", "Bắt đầu phỏng vấn", "Sẵn sàng", "phòng chờ"],
-    "expected_answer": "Đáp án B; Mở /student/interview/new và chọn CV cùng vị trí ứng tuyển; Kiểm tra còn lượt luyện cho vị trí này; Bấm Bắt đầu phỏng vấn rồi Sẵn sàng trong phòng chờ để tạo phiên.",
+    "gold_context_keywords": ["CV", "vị trí", "Vào phòng chờ", "Sẵn sàng"],
+    "expected_answer": "Đáp án B; Mở /student/interview/new và chọn CV cùng vị trí; Kiểm tra còn lượt luyện cho vị trí này; Bấm Vào phòng chờ rồi Sẵn sàng để tạo buổi phỏng vấn.",
     "expected_route": "/student/interview"
   },
   {
@@ -72,19 +72,19 @@
     "expected_route": "/student/interview"
   },
   {
-    "question": "Ở History, bộ lọc thời gian nào có sẵn? A. 30 ngày qua, 90 ngày hoặc Toàn bộ quá trình. B. Chỉ hôm nay. C. Luôn phải chọn riêng ngày bắt đầu và kết thúc.",
+    "question": "Ở trang Lịch sử & tiến bộ, có thể lọc dòng thời gian theo gì? A. Tất cả, Phỏng vấn hoặc Phân tích CV. B. Chỉ hôm nay. C. Luôn phải chọn riêng ngày bắt đầu và kết thúc.",
     "role": "student",
     "current_route": "/student/history",
-    "gold_context_keywords": ["30 ngày", "90 ngày", "Toàn bộ quá trình"],
-    "expected_answer": "Đáp án A; Có thể chọn 30 ngày qua, 90 ngày hoặc Toàn bộ quá trình; Giao diện hiện chưa có bộ chọn ngày bắt đầu và kết thúc riêng; Có thể kết hợp bộ lọc vị trí.",
+    "gold_context_keywords": ["Tất cả", "Phỏng vấn", "Phân tích CV", "Dòng thời gian"],
+    "expected_answer": "Đáp án A; Bộ lọc ở đầu trang gồm Tất cả, Phỏng vấn hoặc Phân tích CV; Bộ lọc áp dụng cho mục Dòng thời gian; Trang không có bộ lọc vị trí hay khoảng thời gian.",
     "expected_route": "/student/history"
   },
   {
-    "question": "Lịch sử trống dù tôi muốn xem các phiên cũ, nên xử lý thế nào? A. Chỉ đổi tên CV. B. Chọn Toàn bộ quá trình và Tất cả vị trí, kiểm tra đã có hoạt động hay chưa. C. Chỉ giữ khoảng 30 ngày.",
+    "question": "Lịch sử trống dù tôi muốn xem các buổi cũ, nên xử lý thế nào? A. Chỉ đổi tên CV. B. Chọn bộ lọc Tất cả, kiểm tra đã có hoạt động hay chưa. C. Chỉ xem mục Phỏng vấn.",
     "role": "student",
     "current_route": "/student/history",
-    "gold_context_keywords": ["toàn bộ quá trình", "tất cả vị trí", "chưa có hoạt động"],
-    "expected_answer": "Đáp án B; Lịch sử có thể trống vì chưa có hoạt động hoặc bộ lọc quá hẹp; Chọn Toàn bộ quá trình và Tất cả vị trí; Nếu chưa có dữ liệu, hoàn thành một phiên phân tích hoặc phỏng vấn đầu tiên.",
+    "gold_context_keywords": ["Tất cả", "chưa có hoạt động"],
+    "expected_answer": "Đáp án B; Lịch sử có thể trống vì chưa có hoạt động hoặc bộ lọc chỉ hiện một loại; Chọn bộ lọc Tất cả; Nếu vẫn trống, hoàn thành một lượt phân tích hoặc buổi phỏng vấn đầu tiên.",
     "expected_route": "/student/history"
   },
   {
@@ -92,7 +92,7 @@
     "role": "student",
     "current_route": "/student/history",
     "gold_context_keywords": ["/student/interview/{id}/report", "/student/analysis/{id}"],
-    "expected_answer": "Đáp án C; Chọn phiên trong bảng phỏng vấn để mở /student/interview/{id}/report; Chọn phiên trong bảng phân tích để mở /student/analysis/{id}; Mã id phải là mã phiên thực tế.",
+    "expected_answer": "Đáp án C; Ở buổi phỏng vấn trong Dòng thời gian, bấm Báo cáo để mở /student/interview/{id}/report; Ở lượt phân tích, bấm Xem để mở /student/analysis/{id}; Mã id là mã thực tế của buổi hoặc lượt đó.",
     "expected_route": "/student/history"
   },
   {
@@ -104,19 +104,19 @@
     "expected_route": "/advisor/dashboard"
   },
   {
-    "question": "Tỷ lệ sẵn sàng trên Dashboard Cố vấn nên được hiểu thế nào? A. Xác suất mỗi sinh viên được tuyển dụng. B. Tỷ trọng sinh viên thuộc nhóm trạng thái sẵn sàng, cần xem cùng tổng số và tiêu chí trạng thái. C. Điểm STAR trung bình.",
+    "question": "Tỷ lệ hoạt động 30 ngày qua trên Dashboard Cố vấn nên được hiểu thế nào? A. Xác suất mỗi sinh viên được tuyển dụng. B. Tỷ trọng sinh viên trong nhóm có hoạt động trong 30 ngày qua, cần xem cùng tổng số và mục tiêu. C. Điểm STAR trung bình.",
     "role": "advisor",
     "current_route": "/advisor/dashboard",
-    "gold_context_keywords": ["tỷ trọng", "sẵn sàng", "tổng số", "tiêu chí trạng thái"],
-    "expected_answer": "Đáp án B; Tỷ lệ sẵn sàng là tỷ trọng sinh viên thuộc nhóm trạng thái sẵn sàng trong tập đang thống kê; Xem cùng tổng số sinh viên và tiêu chí trạng thái hiển thị; Tỷ lệ không phải cam kết tuyển dụng.",
+    "gold_context_keywords": ["tỷ trọng", "30 ngày", "tổng số", "mục tiêu"],
+    "expected_answer": "Đáp án B; Đây là tỷ trọng sinh viên trong nhóm có hoạt động phân tích CV hoặc phỏng vấn thử trong 30 ngày qua; Xem cùng tổng số sinh viên và mục tiêu hiển thị; Tỷ lệ không phải cam kết tuyển dụng.",
     "expected_route": "/advisor/dashboard"
   },
   {
-    "question": "Cố vấn muốn tìm báo cáo chờ nhận xét nhưng không mở được nội dung chi tiết, cần làm gì? A. Chỉ nhìn điểm là được quyền đọc CV. B. Đổi sang tài khoản sinh viên bất kỳ. C. Xem nhóm status=pending và cần sinh viên bật quyền chia sẻ nội dung.",
+    "question": "Cố vấn muốn tìm buổi phỏng vấn chờ nhận xét nhưng không mở được nội dung chi tiết, cần làm gì? A. Chỉ nhìn điểm là được quyền đọc CV. B. Đổi sang tài khoản sinh viên bất kỳ. C. Xem nhóm status=pending và cần sinh viên bật quyền chia sẻ nội dung.",
     "role": "advisor",
     "current_route": "/advisor/dashboard",
-    "gold_context_keywords": ["Nhận xét báo cáo", "status=pending", "quyền chia sẻ", "/student/share"],
-    "expected_answer": "Đáp án C; Bấm Nhận xét báo cáo hoặc mở /advisor/students?status=pending; Cố vấn thấy số liệu tổng hợp của nhóm phụ trách; Nội dung CV hoặc báo cáo chi tiết cần sinh viên bật quyền chia sẻ tại /student/share.",
+    "gold_context_keywords": ["Chờ nhận xét", "status=pending", "quyền chia sẻ", "/student/share"],
+    "expected_answer": "Đáp án C; Ở khung Chờ nhận xét bấm Xem tất cả hoặc mở /advisor/students?status=pending; Cố vấn thấy số liệu tổng hợp của nhóm phụ trách; Nội dung CV hoặc báo cáo chi tiết cần sinh viên bật quyền chia sẻ tại /student/share.",
     "expected_route": "/advisor/dashboard"
   }
 ]

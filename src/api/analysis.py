@@ -1,29 +1,44 @@
 """Thư viện JD và phân tích khoảng cách CV–JD (US-SV-02, US-SV-05)."""
 
-from fastapi import APIRouter, BackgroundTasks, status
+import uuid
+
+from fastapi import APIRouter, BackgroundTasks, Query, status
 from sqlalchemy import select
 
 from src.api.deps import CurrentStudent, CurrentUser, DbSession
 from src.api.errors import AppError
-from src.db.models import CvVersion, GapAnalysis, JobDescription
+from src.db.models import CvVersion, GapAnalysis, JobComparisonHistory, JobDescription, utcnow
 from src.models.schemas import (
     CareerAdvice,
     CompareJDsRequest,
     CompareJDsResponse,
     CreateGapAnalysisRequest,
+    CreatePastedJdRequest,
     GapAnalysisResponse,
+    JdDraftResponse,
+    JdFields,
     JobDescriptionResponse,
+    ParseJdRequest,
     RecommendJDsRequest,
     RecommendJDsResponse,
+    SavedJdResponse,
+    SkillRoadmapResponse,
 )
-from src.services import gap_analysis
+from src.services import gap_analysis, jd_parser, jds
 from src.services.jd_recommendation import (
     compare_selected_jds_with_llm,
     generate_career_advice_with_llm,
     recommend_top_jds_from_cv,
 )
+from src.services.roadmap import get_roadmap_info
 
 router = APIRouter()
+
+
+def _roadmaps(skills: list[str]) -> dict[str, str]:
+    """Link roadmap.sh cho các kỹ năng có lộ trình riêng (bỏ qua kỹ năng ngoài CNTT)."""
+    infos = {skill: get_roadmap_info(skill) for skill in skills}
+    return {skill: info["roadmap_url"] for skill, info in infos.items() if info["is_it_supported"]}
 
 
 @router.post(
@@ -66,8 +81,8 @@ async def compare_jds(
         raise AppError(400, "Vui lòng cung cấp cv_version_id hoặc cv_text.", "cv_required")
 
     unique_jd_ids = list(dict.fromkeys(body.jd_ids))
-    if len(unique_jd_ids) < 2 or len(unique_jd_ids) > 3:
-        raise AppError(400, "Vui lòng chọn từ 2 đến 3 vị trí JD khác nhau để so sánh.", "invalid_jd_selection")
+    if len(unique_jd_ids) < 2 or len(unique_jd_ids) > 5:
+        raise AppError(400, "Vui lòng chọn từ 2 đến 5 vị trí JD khác nhau để so sánh.", "invalid_jd_selection")
 
     # Kiểm tra bảo mật: nếu là JD tự dán, phải thuộc quyền sở hữu của chính sinh viên
     pasted_jds = db.scalars(
@@ -91,14 +106,85 @@ async def compare_jds(
     if missing_ids:
         raise AppError(404, f"Không tìm thấy thông tin JD: {', '.join(missing_ids)}.", "jd_not_found")
 
+    # Lưu lịch sử so sánh vào cơ sở dữ liệu
+    history_id = f"cmp-{uuid.uuid4().hex[:12]}"
+    history_record = JobComparisonHistory(
+        id=history_id,
+        owner_id=user.id,
+        cv_version_id=body.cv_version_id,
+        cv_label=cv_label,
+        cv_name=cv_name,
+        jd_ids=unique_jd_ids,
+        total_compared=len(result["comparisons"]),
+        comparisons=result["comparisons"],
+        common_missing_skills=result["common_missing_skills"],
+        created_at=utcnow(),
+    )
+    db.add(history_record)
+    db.commit()
+
     return CompareJDsResponse(
+        id=history_id,
         cv_version_id=body.cv_version_id,
         cv_label=cv_label,
         cv_name=cv_name,
         total_compared=len(result["comparisons"]),
         comparisons=result["comparisons"],
         common_missing_skills=result["common_missing_skills"],
+        common_missing_roadmaps=_roadmaps(result["common_missing_skills"]),
+        created_at=history_record.created_at,
     )
+
+
+@router.get(
+    "/jd/compare/history",
+    response_model=list[CompareJDsResponse],
+    tags=["Gap Analysis"],
+)
+def list_comparison_history(
+    user: CurrentStudent,
+    db: DbSession,
+    limit: int = Query(default=10, ge=1, le=50, description="Số lượng lượt so sánh gần nhất"),
+) -> list[CompareJDsResponse]:
+    """Lấy danh sách các lượt so sánh JD của sinh viên (mới nhất trước)."""
+    records = db.scalars(
+        select(JobComparisonHistory)
+        .where(JobComparisonHistory.owner_id == user.id)
+        .order_by(JobComparisonHistory.created_at.desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        CompareJDsResponse(
+            id=r.id,
+            cv_version_id=r.cv_version_id,
+            cv_label=r.cv_label,
+            cv_name=r.cv_name,
+            total_compared=r.total_compared,
+            comparisons=r.comparisons,
+            common_missing_skills=r.common_missing_skills,
+            common_missing_roadmaps=_roadmaps(r.common_missing_skills),
+            created_at=r.created_at,
+        )
+        for r in records
+    ]
+
+
+@router.delete(
+    "/jd/compare/history/{history_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    tags=["Gap Analysis"],
+)
+def delete_comparison_history(
+    history_id: str,
+    user: CurrentStudent,
+    db: DbSession,
+) -> None:
+    """Xóa một lượt so sánh khỏi lịch sử."""
+    record = db.get(JobComparisonHistory, history_id)
+    if record and record.owner_id == user.id:
+        db.delete(record)
+        db.commit()
 
 
 @router.post(
@@ -152,24 +238,72 @@ async def recommend_jds(
 
 @router.get("/jd/library", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
 def list_jd_library(user: CurrentUser, db: DbSession) -> list[JobDescription]:
-    """Thư viện JD chuẩn hoá: nội dung đầy đủ và yêu cầu kỹ năng theo mức Required / Preferred / Additional."""
-    return list(
-        db.scalars(select(JobDescription).where(JobDescription.source == "library").order_by(JobDescription.title))
-    )
+    """Thư viện JD đang hiển thị, theo cấu trúc chung; kỹ năng theo mức Required / Preferred / Additional."""
+    return jds.published_library(db)
 
 
 @router.get("/jd", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
 def list_my_jds(user: CurrentStudent, db: DbSession) -> list[JobDescription]:
-    """Các vị trí SV có thể chọn khi luyện phỏng vấn: thư viện JD và các JD SV đã tự dán khi phân tích."""
-    library = db.scalars(
-        select(JobDescription).where(JobDescription.source == "library").order_by(JobDescription.title)
-    )
-    pasted = db.scalars(
-        select(JobDescription)
-        .where(JobDescription.source == "pasted", JobDescription.owner_id == user.id)
-        .order_by(JobDescription.created_at.desc())
-    )
-    return [*library, *pasted]
+    """Các vị trí SV chọn được: thư viện JD đang hiển thị và các JD SV đã tự dán (mới nhất trước)."""
+    return [*jds.published_library(db), *jds.list_pasted(db, user)]
+
+
+@router.post("/jd", response_model=JobDescriptionResponse, status_code=status.HTTP_201_CREATED, tags=["Gap Analysis"])
+def create_pasted_jd(body: CreatePastedJdRequest, user: CurrentStudent, db: DbSession) -> JobDescription:
+    """
+    Lưu JD tự dán theo cấu trúc chung. reviewed=true (hộp Thêm JD, bước xem lại): bắt buộc tên vị trí, cấp bậc, mô tả,
+    yêu cầu. Không gửi các trường (màn So sánh): chỉ cần tên vị trí, phần còn lại tự tách bằng quy tắc.
+    """
+    fields = body.model_dump(exclude_unset=True, exclude={"text", "reviewed"})
+    return jds.create_pasted(db, user, body.text, fields, reviewed=body.reviewed)
+
+
+@router.post("/jd/parse", response_model=JdDraftResponse, tags=["Gap Analysis"])
+async def parse_jd(body: ParseJdRequest, user: CurrentUser, db: DbSession) -> dict:
+    """
+    Tách toàn văn JD thành cấu trúc chung (chưa lưu): quy tắc trước, chỉ gọi AI khi còn thiếu tên vị trí, mô tả hoặc
+    yêu cầu. Dùng cho hộp Thêm JD của sinh viên và form Thêm JD vào thư viện của quản trị viên.
+    """
+    if user.role not in ("student", "admin"):
+        raise AppError(403, "Chức năng này dành cho sinh viên và quản trị viên.", "forbidden")
+    if len(body.text.split()) < jds.JD_MIN_WORDS:
+        raise AppError(422, f"Nội dung JD quá ngắn. Hãy dán tối thiểu {jds.JD_MIN_WORDS} từ.", "jd_too_short")
+    draft = await jd_parser.parse(db, body.text)
+    return {**draft, "word_count": jds.word_count(body.text)}
+
+
+@router.get("/jd/mine", response_model=list[JobDescriptionResponse], tags=["Gap Analysis"])
+def list_pasted_jds(user: CurrentStudent, db: DbSession) -> list[JobDescription]:
+    """JD của bạn: các JD sinh viên tự dán (chỉ người dán thấy), mới nhất trước."""
+    return jds.list_pasted(db, user)
+
+
+@router.patch("/jd/{jd_id}", response_model=JobDescriptionResponse, tags=["Gap Analysis"])
+def update_pasted_jd(jd_id: str, body: JdFields, user: CurrentStudent, db: DbSession) -> JobDescription:
+    """Sửa JD tự dán (không tách lại toàn văn, kỹ năng giữ nguyên)."""
+    return jds.update_pasted(db, user, jd_id, body.model_dump(exclude_unset=True))
+
+
+@router.delete("/jd/{jd_id}", status_code=status.HTTP_204_NO_CONTENT, tags=["Gap Analysis"])
+def delete_pasted_jd(jd_id: str, user: CurrentStudent, db: DbSession) -> None:
+    """Xoá JD tự dán khỏi danh sách; các lượt phân tích, phỏng vấn đã làm với JD này vẫn mở được."""
+    jds.delete_pasted(db, user, jd_id)
+
+
+@router.get("/jd/saved", response_model=list[SavedJdResponse], tags=["Gap Analysis"])
+def list_saved_jds(user: CurrentStudent, db: DbSession) -> list[dict]:
+    """Vị trí SV đã lưu (♥), mới lưu trước."""
+    return [jds.saved_out(s) for s in jds.list_saved(db, user)]
+
+
+@router.put("/jd/{jd_id}/saved", response_model=SavedJdResponse, tags=["Gap Analysis"])
+def save_jd(jd_id: str, user: CurrentStudent, db: DbSession) -> dict:
+    return jds.saved_out(jds.save(db, user, jd_id))
+
+
+@router.delete("/jd/{jd_id}/saved", status_code=status.HTTP_204_NO_CONTENT, tags=["Gap Analysis"])
+def unsave_jd(jd_id: str, user: CurrentStudent, db: DbSession) -> None:
+    jds.unsave(db, user, jd_id)
 
 
 @router.post(
@@ -200,3 +334,13 @@ def get_gap_analysis(analysis_id: str, user: CurrentStudent, db: DbSession) -> G
     if analysis is None or analysis.owner_id != user.id:
         raise AppError(404, "Không tìm thấy kết quả phân tích.", "analysis_not_found")
     return gap_analysis.to_response(analysis, db.get(JobDescription, analysis.jd_id))
+
+
+@router.get("/skills/roadmap", response_model=SkillRoadmapResponse, tags=["Gap Analysis"])
+def get_skill_roadmap(
+    user: CurrentUser,
+    skill: str = Query(..., min_length=1, description="Tên kỹ năng cần tra cứu lộ trình học trên roadmap.sh"),
+) -> SkillRoadmapResponse:
+    """Tra cứu đường dẫn lộ trình học tập roadmap.sh cho một kỹ năng bất kỳ."""
+    info = get_roadmap_info(skill)
+    return SkillRoadmapResponse(**info)

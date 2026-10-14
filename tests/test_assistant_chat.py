@@ -79,7 +79,7 @@ async def test_chat_chitchat_never_retrieves_or_generates_citations(
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert "CareerX" in body["message"]
+    assert "CareerV" in body["message"]
     assert "Theo tài liệu" not in body["message"] and "FAQ" not in body["message"]
     assert body["sources"] == [] and body["actions"] == []
     retriever.search.assert_not_called()

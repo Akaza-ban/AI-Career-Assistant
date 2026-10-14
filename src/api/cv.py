@@ -96,11 +96,12 @@ def list_cvs(user: CurrentStudent, db: DbSession) -> list[CvVersionResponse]:
 def upload_cv(
     user: CurrentStudent,
     db: DbSession,
-    file: Annotated[UploadFile, File(description="File CV định dạng PDF hoặc DOCX, tối đa 5MB")],
+    file: Annotated[UploadFile, File(description="File CV định dạng PDF hoặc DOCX (nhận cả PDF scan), tối đa 5MB")],
 ) -> CvVersionResponse:
     """
     Tải lên một CV mới (bản đầu tiên v1.0), không đụng tới các CV đã có.
-    Từ chối file sai định dạng / quá 5MB (AC3) và file không trích xuất được văn bản như PDF scan (AC2).
+    Từ chối file sai định dạng / quá 5MB (AC3). PDF scan được đọc bằng OCR (read_by_ocr = true); chỉ từ chối khi
+    vẫn không đọc được chữ (AC2).
     """
     file_name = file.filename or "cv"
     file_type = cv_files.file_type_of(file_name)
@@ -129,7 +130,7 @@ def upload_cv(
     except Exception:
         cv_files.delete_file(user.id, cv.id, file_type)
         raise
-    return to_response(cv)
+    return to_response(cv).model_copy(update={"read_by_ocr": extracted.read_by_ocr})
 
 
 @router.get("/{cv_id}/versions", response_model=list[CvVersionResponse])

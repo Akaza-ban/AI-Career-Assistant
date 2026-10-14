@@ -11,13 +11,13 @@ export const ANALYSIS_STEPS: { key: AnalysisStep; title: string; description: st
   { key: "verify_grounding", title: "Kiểm tra độ tin cậy", description: "Loại bỏ gợi ý không có căn cứ trong CV" },
 ]
 
-/** Thấp (< 50) / Trung bình (50–74) / Cao (≥ 75). */
+/** Trung bình (< 50) / Khá (50–74) / Cao (≥ 75), DESIGN.md mục 8.2. Không dùng màu đỏ cho mức thấp. */
 export const MATCH_LABEL_META: Record<
   MatchLabel,
-  { text: string; className: string; bar: string; badge: "bad" | "warn" | "good" }
+  { text: string; className: string; bar: string; badge: "neutral" | "blue" | "good" }
 > = {
-  low: { text: "Thấp", className: "text-bad", bar: "bg-bad", badge: "bad" },
-  medium: { text: "Trung bình", className: "text-warn", bar: "bg-warn", badge: "warn" },
+  low: { text: "Trung bình", className: "text-ink-2", bar: "bg-ink-3", badge: "neutral" },
+  medium: { text: "Khá", className: "text-accent-strong", bar: "bg-blue", badge: "blue" },
   high: { text: "Cao", className: "text-good", bar: "bg-good", badge: "good" },
 }
 

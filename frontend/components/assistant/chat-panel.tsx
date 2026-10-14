@@ -1,76 +1,157 @@
 'use client';
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react"
-import { AlertCircle, Bot, LoaderCircle, Minus, SendHorizontal, Sparkles, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  AlertCircle,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Crosshair,
+  Info,
+  MessageCircleQuestion,
+  RotateCw,
+  Sparkles,
+  SquarePen,
+  ThumbsDown,
+  ThumbsUp,
+  X,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { ActionBadges } from "@/components/assistant/action-badges"
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown"
 import { useAssistant } from "@/components/assistant/assistant-provider"
+import { targetLabel } from "@/components/assistant/element-highlighter"
 import { SourceAccordion } from "@/components/assistant/source-accordion"
-import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
-import { getAssistantStatus, submitFeedback, type AssistantStatusResponse } from "@/lib/assistant-api"
+import { getBreadcrumb, shellOf } from "@/components/shell/nav-config"
+import { useProfile } from "@/components/shell/profile-context"
+import { deleteFeedback, getAssistantStatus, submitFeedback, type AssistantStatusResponse } from "@/lib/assistant-api"
 import { isAssistantRefusal } from "@/lib/assistant-response"
 import { cn } from "@/lib/utils"
+import type { UserRole } from "@/types/assistant"
 
-function suggestionsFor(pathname: string): string[] {
-  if (pathname.startsWith("/advisor")) return ["Cách theo dõi tiến bộ sinh viên?", "Mở danh sách sinh viên"]
-  if (pathname.startsWith("/student/analysis")) return ["Match score tính thế nào?", "Nút phân tích ở đâu?"]
-  if (pathname.startsWith("/student/interview")) return ["Cách trả lời theo chuẩn STAR?", "Xem lịch sử các phiên"]
-  if (pathname.startsWith("/student/cv")) return ["Làm sao để tải lên CV?", "CV hỗ trợ định dạng nào?"]
-  if (pathname.startsWith("/student/history")) return ["Cách lọc lịch sử phỏng vấn?", "Mở trang phân tích CV"]
-  return ["Làm sao để bắt đầu phân tích CV?", "Hướng dẫn phỏng vấn thử"]
+/** Câu hỏi gợi ý theo trang đang mở (khớp tài liệu hướng dẫn của trợ lý). */
+const SUGGESTIONS: [RegExp, string[]][] = [
+  [/^\/student\/analysis/, ["Nút bắt đầu phân tích ở đâu?", "Mức phù hợp được tính thế nào?", "Dán JD cần những gì?", "So sánh nhiều vị trí cùng lúc thế nào?"]],
+  [/^\/student\/cv/, ["Làm sao để tải CV lên?", "CV hỗ trợ định dạng nào?", "Đổi CV đang dùng thế nào?", "Khôi phục phiên bản cũ ra sao?"]],
+  [/^\/student\/interview/, ["Trả lời theo khung STAR thế nào?", "Mỗi tuần được luyện mấy buổi?", "Xem báo cáo buổi cũ ở đâu?", "Chia sẻ báo cáo cho cố vấn thế nào?"]],
+  [/^\/student\/history/, ["Lọc chỉ các buổi phỏng vấn thế nào?", "Vì sao chưa thấy mức tiến bộ?", "Mở lại kết quả phân tích cũ ở đâu?"]],
+  [/^\/student\/library/, ["Thêm JD từ tin tuyển dụng bên ngoài thế nào?", "Mức phù hợp trong thư viện nghĩa là gì?", "Lưu vị trí để dùng lại thế nào?"]],
+  [/^\/student\/share/, ["Cố vấn xem được những gì?", "Tắt chia sẻ thì cố vấn còn thấy điểm không?", "Xem nhận xét của cố vấn ở đâu?"]],
+  [/^\/student/, ["Bắt đầu phân tích CV thế nào?", "Luyện phỏng vấn thử thế nào?", "Thêm JD của tôi ở đâu?", "Chia sẻ kết quả với cố vấn thế nào?"]],
+  [/^\/advisor\/students/, ["Lọc sinh viên cần chú ý thế nào?", "Gửi nhận xét buổi phỏng vấn ra sao?", "Ghi chú khác nhận xét thế nào?"]],
+  [/^\/advisor/, ["Sinh viên cần chú ý là gì?", "Tỷ lệ hoạt động 30 ngày nghĩa là gì?", "Tìm buổi chờ nhận xét ở đâu?", "Vì sao không xem được CV của sinh viên?"]],
+]
+
+function suggestionsFor(pathname: string, role: UserRole): { page: string; items: string[] } {
+  const items = SUGGESTIONS.find(([pattern]) => pattern.test(pathname))?.[1] ?? []
+  const page = getBreadcrumb(shellOf(role), pathname).at(-1)?.label ?? "này"
+  return { page, items }
 }
 
-function AssistantConnectionStatus() {
-  const [llmStatus, setLlmStatus] = useState<AssistantStatusResponse | null>(null)
+/** Sinh viên: hai chữ cuối của tên; cố vấn: học vị + tên (như lời chào ở trang Tổng quan). */
+function callName(fullName: string | undefined, role: UserRole): string {
+  if (!fullName) return ""
+  const words = fullName.trim().split(/\s+/)
+  if (role === "student") return words.slice(-2).join(" ")
+  const title = fullName.match(/^(ThS|TS|PGS\.TS|GS\.TS)\./i)?.[0]
+  return title ? `${title} ${words.at(-1)}` : (words.at(-1) ?? "")
+}
 
+/** Trạng thái AI; chỉ hỏi khi khung đang mở. `null` khi chưa biết, để không báo nhầm lúc mới mở. */
+function useAssistantStatus(): AssistantStatusResponse | null {
+  const [status, setStatus] = useState<AssistantStatusResponse | null>(null)
   useEffect(() => {
     let disposed = false
     let pending = false
     let controller: AbortController | null = null
-    const refreshStatus = async () => {
+    const refresh = async () => {
       if (pending) return
       pending = true
       controller = new AbortController()
       const timeout = window.setTimeout(() => controller?.abort(), 8000)
       try {
-        const status = await getAssistantStatus(controller.signal)
-        if (!disposed) setLlmStatus(status)
+        const next = await getAssistantStatus(controller.signal)
+        if (!disposed) setStatus(next)
       } catch {
-        if (!disposed) setLlmStatus({ is_live: false, status: "offline", provider: "none", model: "" })
+        if (!disposed) setStatus({ is_live: false, status: "offline", provider: "none", model: "" })
       } finally {
         window.clearTimeout(timeout)
         pending = false
       }
     }
-    void refreshStatus()
-    const interval = window.setInterval(() => { void refreshStatus() }, 35000)
+    void refresh()
+    const interval = window.setInterval(() => { void refresh() }, 35000)
     return () => {
       disposed = true
       window.clearInterval(interval)
       controller?.abort()
     }
   }, [])
+  return status
+}
 
-  const statusLabel = llmStatus?.is_live ? "Live" : "Offline"
+const iconButton = "grid size-9 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-surface hover:text-ink disabled:pointer-events-none disabled:opacity-40"
 
+function PanelHeader({ subtitle, onClose, onNewChat, canReset }: { subtitle: string; onClose: () => void; onNewChat?: () => void; canReset: boolean }) {
   return (
-    <p role="status" aria-live="polite" aria-label={statusLabel} title={statusLabel} className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-ink-2">
-      <span aria-hidden className={cn("size-2 shrink-0 rounded-full ring-2", llmStatus?.is_live ? "bg-emerald-500 ring-emerald-500/20" : "bg-amber-500 ring-amber-500/20")} />
-      <span className="truncate">{statusLabel}</span>
-    </p>
+    <header className="flex shrink-0 items-center gap-3 border-b border-line py-2.5 pr-2.5 pl-2 sm:pl-4">
+      <button type="button" onClick={onClose} aria-label="Đóng trợ lý" className={cn(iconButton, "sm:hidden")}>
+        <ChevronLeft className="size-5" aria-hidden />
+      </button>
+      <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-blue-soft text-blue max-sm:hidden">
+        <Sparkles className="size-[18px]" strokeWidth={1.75} aria-hidden />
+      </span>
+      <span className="grid min-w-0 flex-1">
+        <h2 id="assistant-chat-title" className="truncate text-[15px] leading-5 font-semibold text-ink">Trợ lý hướng dẫn</h2>
+        <span className="truncate text-[13px] text-ink-3">{subtitle}</span>
+      </span>
+      {onNewChat && (
+        <button type="button" onClick={onNewChat} disabled={!canReset} aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới" className={iconButton}>
+          <SquarePen className="size-[17px]" strokeWidth={1.75} aria-hidden />
+        </button>
+      )}
+      <button type="button" onClick={onClose} aria-label="Đóng trợ lý" title="Đóng" className={cn(iconButton, "max-sm:hidden")}>
+        <X className="size-[18px]" aria-hidden />
+      </button>
+    </header>
+  )
+}
+
+/** Khi trợ lý đang chỉ một nút: thu khung chat thành thẻ nhỏ ở trên để không che nút đó (bản vẽ TroLyChiNut). */
+function PointingCard({ selector, onClose, onReopen }: { selector: string; onClose: () => void; onReopen: () => void }) {
+  const label = useMemo(() => targetLabel(selector), [selector])
+  return (
+    <section
+      id="assistant-chat-panel"
+      aria-labelledby="assistant-chat-title"
+      className="fixed inset-x-2 top-2 z-[65] overflow-hidden rounded-[18px] bg-card shadow-dialog ring-1 ring-line sm:inset-x-auto sm:top-[4.75rem] sm:right-6 sm:w-[400px] print:hidden"
+    >
+      <PanelHeader subtitle="Đang chỉ vị trí nút trên trang" onClose={onClose} canReset={false} />
+      <div className="flex items-center gap-2.5 px-4 py-3 text-sm text-ink-2">
+        <Crosshair className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+        <span className="min-w-0 flex-1">
+          {label ? <>Đang chỉ <b className="font-semibold text-ink">{label}</b> trên trang.</> : "Đang chỉ vị trí trên trang."}
+        </span>
+        <button type="button" onClick={onReopen} className="shrink-0 font-semibold text-blue hover:underline">
+          Mở lại khung chat
+        </button>
+      </div>
+    </section>
   )
 }
 
 export function ChatPanel() {
-  const { isOpen, messages, isThinking, isExecutingAction, activeAction, pathname, userRole, error, sendMessage, clearChat, toggleChat } = useAssistant()
+  const {
+    isOpen, messages, isThinking, isExecutingAction, activeAction, pathname, userRole, error, highlightSelector,
+    sendMessage, retryLast, clearChat, closeChat, dismissHighlight,
+  } = useAssistant()
+  const profile = useProfile()
   const busy = isThinking || isExecutingAction || activeAction !== null
   const [draft, setDraft] = useState("")
-  const [feedbackRatings, setFeedbackRatings] = useState<Record<string, 1 | -1 | undefined>>({})
-  const [pendingFeedback, setPendingFeedback] = useState<Record<string, boolean | undefined>>({})
-  const feedbackRequests = useRef(new Set<string>())
+  const [ratings, setRatings] = useState<Record<string, 1 | -1 | undefined>>({})
+  const [pendingRating, setPendingRating] = useState<Record<string, boolean | undefined>>({})
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -84,50 +165,46 @@ export function ChatPanel() {
   }, [isOpen])
 
   useEffect(() => {
-    const input = inputRef.current
-    if (!input || !isOpen) return
-    input.style.height = "0px"
-    input.style.height = `${Math.min(input.scrollHeight, 144)}px`
-  }, [draft, isOpen])
-
-  useEffect(() => {
     if (!isOpen) return
-    const list = listRef.current
-    if (list) list.scrollTo({ top: list.scrollHeight, behavior: "instant" })
-  }, [messages, isThinking, error, isOpen])
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "instant" })
+  }, [messages, isThinking, error, isOpen, highlightSelector])
 
-  const submitMessage = () => {
-    if (!draft.trim() || busy) return
-    const text = draft.trim()
+  const submit = (text = draft) => {
+    const content = text.trim()
+    if (!content || busy) return
     setDraft("")
-    void sendMessage(text)
+    void sendMessage(content)
     inputRef.current?.focus({ preventScroll: true })
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-      event.preventDefault()
-      submitMessage()
+  // Bấm lại nút đã chọn để huỷ (khi bấm nhầm), như các nút thích khác trong ứng dụng.
+  const rate = async (turnId: string, rating: 1 | -1) => {
+    if (pendingRating[turnId]) return
+    const undo = ratings[turnId] === rating
+    setPendingRating((p) => ({ ...p, [turnId]: true }))
+    try {
+      if (undo) await deleteFeedback(turnId)
+      else await submitFeedback(turnId, rating)
+      setRatings((r) => ({ ...r, [turnId]: undo ? undefined : rating }))
+    } catch {
+      toast.error("Chưa lưu được đánh giá. Hãy thử lại.")
+    } finally {
+      setPendingRating((p) => ({ ...p, [turnId]: false }))
     }
   }
 
-  const handleFeedback = async (turnId: string, rating: 1 | -1): Promise<void> => {
-    if (feedbackRequests.current.has(turnId) || feedbackRatings[turnId] === rating) return
-    feedbackRequests.current.add(turnId)
-    setPendingFeedback((previous) => ({ ...previous, [turnId]: true }))
-    try {
-      await submitFeedback(turnId, rating)
-      setFeedbackRatings((previous) => ({ ...previous, [turnId]: rating }))
-      toast.success("Cảm ơn bạn đã phản hồi!")
-    } catch {
-      toast.error("Không thể gửi phản hồi. Vui lòng thử lại.")
-    } finally {
-      feedbackRequests.current.delete(turnId)
-      setPendingFeedback((previous) => ({ ...previous, [turnId]: false }))
-    }
+  const copy = (content: string) => {
+    navigator.clipboard.writeText(content).then(
+      () => toast.success("Đã sao chép câu trả lời"),
+      () => toast.error("Không sao chép được."),
+    )
   }
 
   if (!isOpen) return null
+  if (highlightSelector) return <PointingCard selector={highlightSelector} onClose={() => { dismissHighlight(); closeChat() }} onReopen={dismissHighlight} />
+
+  const { page, items } = suggestionsFor(pathname, userRole)
+  const name = callName(profile?.full_name, userRole)
 
   return (
     <section
@@ -136,96 +213,164 @@ export function ChatPanel() {
       aria-modal="false"
       aria-labelledby="assistant-chat-title"
       onKeyDown={(event) => {
-        if (event.key === "Escape") { event.stopPropagation(); toggleChat() }
+        if (event.key === "Escape") { event.stopPropagation(); closeChat() }
       }}
-      className="fixed bottom-24 right-6 z-50 flex h-[600px] max-h-[min(80dvh,calc(100dvh-7rem))] w-[420px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-line bg-card text-card-foreground shadow-2xl animate-in fade-in-0 slide-in-from-bottom-2 duration-200 print:hidden"
+      className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-card text-ink sm:inset-auto sm:right-6 sm:bottom-[calc(var(--tabbar-h,0px)+var(--actionbar-h,0px)+1rem)] sm:h-[min(620px,calc(100dvh-var(--tabbar-h,0px)-var(--actionbar-h,0px)-6rem))] sm:w-[400px] sm:rounded-[18px] sm:shadow-dialog sm:ring-1 sm:ring-line print:hidden"
     >
-      <header className="flex shrink-0 items-start gap-3 border-b border-line bg-linear-to-r from-blue-soft/80 to-violet-soft/60 px-4 py-4">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-linear-to-br from-blue to-violet text-white">
-          <Bot className="size-5" aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 id="assistant-chat-title" className="font-heading text-sm font-bold leading-snug">Trợ lý hướng dẫn</h2>
-          <AssistantConnectionStatus />
-        </div>
-        <div className="flex shrink-0 items-center gap-0.5">
-          <Button type="button" variant="ghost" size="icon-sm" disabled={isExecutingAction} aria-label="Xoá lịch sử chat" title="Xoá lịch sử chat" onClick={() => { clearChat(); setDraft(""); inputRef.current?.focus() }}>
-            <Trash2 aria-hidden />
-          </Button>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Thu nhỏ trợ lý" title="Thu nhỏ" onClick={toggleChat}><Minus aria-hidden /></Button>
-          <Button type="button" variant="ghost" size="icon-sm" aria-label="Đóng trợ lý" title="Đóng" onClick={toggleChat}><X aria-hidden /></Button>
-        </div>
-      </header>
+      <PanelHeader
+        subtitle="Hỏi cách dùng CareerV"
+        onClose={closeChat}
+        onNewChat={() => { clearChat(); setDraft(""); inputRef.current?.focus() }}
+        canReset={messages.length > 0 && !isExecutingAction}
+      />
+      <AssistantStatusStrip />
 
-      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-        {messages.length === 0 && (
-          <div className="flex h-full min-h-36 flex-col items-center justify-center gap-3 px-3 text-center">
-            <span className="grid size-12 place-items-center rounded-2xl bg-violet-soft text-violet"><Sparkles className="size-6" aria-hidden /></span>
-            <h3 className="font-heading text-base font-bold">Bạn cần hướng dẫn gì?</h3>
-            <p className="max-w-72 text-sm leading-relaxed text-ink-2">Hỏi về CV, phân tích kỹ năng, phỏng vấn STAR hoặc cách sử dụng trang hiện tại.</p>
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5">
+        {messages.length === 0 ? (
+          <div className="grid gap-5">
+            <div className="grid gap-1">
+              <h3 className="text-[17px] leading-6 font-semibold text-ink">{name ? `Chào ${name}, bạn cần giúp gì?` : "Bạn cần giúp gì?"}</h3>
+              <p className="text-sm leading-[22px] text-ink-2">Hỏi cách dùng trang đang mở, ý nghĩa các chỉ số hoặc nhờ trợ lý chỉ vị trí một nút.</p>
+            </div>
+            {items.length > 0 && (
+              <div className="grid gap-2">
+                <p className="text-xs font-semibold tracking-[0.03em] text-ink-3 uppercase">Gợi ý cho trang {page}</p>
+                <ul className="grid gap-2">
+                  {items.map((item) => (
+                    <li key={item}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => submit(item)}
+                        className="flex w-full items-center gap-2.5 rounded-xl bg-panel px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-surface disabled:opacity-50"
+                      >
+                        <MessageCircleQuestion className="size-4 shrink-0 text-ink-3" strokeWidth={1.75} aria-hidden />
+                        <span className="min-w-0 flex-1">{item}</span>
+                        <ChevronRight className="size-4 shrink-0 text-ink-3" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div role="log" aria-label="Trò chuyện với trợ lý" aria-live="polite" aria-relevant="additions" aria-busy={isThinking} className="grid gap-4">
+            {messages.map((message) =>
+              message.sender === "user" ? (
+                <p key={message.id} className="max-w-[85%] justify-self-end rounded-[18px] rounded-br-md bg-ink px-3.5 py-2 text-sm leading-[22px] whitespace-pre-wrap text-on-ink wrap-anywhere">
+                  <span className="sr-only">Bạn: </span>
+                  {message.content}
+                </p>
+              ) : (
+                <article key={message.id} className="grid gap-2.5">
+                  <div className="text-sm leading-[22px] text-ink wrap-anywhere">
+                    <span className="sr-only">Trợ lý: </span>
+                    <AssistantMarkdown content={message.content} userRole={userRole} />
+                  </div>
+                  {message.actions && <ActionBadges actions={message.actions} />}
+                  {message.sources && !isAssistantRefusal(message.content) && <SourceAccordion sources={message.sources} userRole={userRole} />}
+                  {!message.is_streaming && (
+                    <div role="group" aria-label="Đánh giá câu trả lời" className="-ml-1.5 flex items-center gap-0.5">
+                      {([1, -1] as const).map((value) => {
+                        const Icon = value === 1 ? ThumbsUp : ThumbsDown
+                        const on = ratings[message.id] === value
+                        return (
+                          <button
+                            key={value}
+                            type="button"
+                            aria-label={value === 1 ? "Hữu ích" : "Chưa hữu ích"}
+                            title={on ? "Bấm lại để huỷ" : value === 1 ? "Hữu ích" : "Chưa hữu ích"}
+                            aria-pressed={on}
+                            disabled={!!pendingRating[message.id]}
+                            onClick={() => { void rate(message.id, value) }}
+                            className={cn(
+                              "grid size-7 place-items-center rounded-lg transition-colors disabled:opacity-50",
+                              on ? (value === 1 ? "bg-good-soft text-good" : "bg-bad-soft text-bad") : "text-ink-3 hover:bg-surface hover:text-ink",
+                            )}
+                          >
+                            <Icon className="size-[15px]" strokeWidth={1.75} aria-hidden />
+                          </button>
+                        )
+                      })}
+                      <button type="button" aria-label="Sao chép câu trả lời" title="Sao chép" onClick={() => copy(message.content)} className="grid size-7 place-items-center rounded-lg text-ink-3 transition-colors hover:bg-surface hover:text-ink">
+                        <Copy className="size-[15px]" strokeWidth={1.75} aria-hidden />
+                      </button>
+                    </div>
+                  )}
+                </article>
+              ),
+            )}
+            {isThinking && (
+              <p role="status" className="flex items-center gap-2.5 text-[13px] text-ink-3">
+                <span className="flex gap-1" aria-hidden>
+                  {[0, 1, 2].map((i) => <span key={i} className="size-1.5 rounded-full bg-ink-3 motion-safe:animate-pulse" style={{ animationDelay: `${i * 150}ms` }} />)}
+                </span>
+                Đang tìm trong hướng dẫn…
+              </p>
+            )}
+            {error && (
+              <div role="alert" className="flex items-start gap-2.5 rounded-xl bg-bad-soft px-3.5 py-3 text-sm leading-[21px] text-bad">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className="min-w-0 flex-1">Chưa gửi được câu hỏi. {error}</span>
+                <button type="button" onClick={retryLast} disabled={busy} className="inline-flex shrink-0 items-center gap-1 font-semibold hover:underline">
+                  <RotateCw className="size-3.5" aria-hidden />
+                  Thử lại
+                </button>
+              </div>
+            )}
           </div>
         )}
-        <div role="log" aria-label="Tin nhắn với trợ lý" aria-live="polite" aria-relevant="additions" aria-busy={isThinking} className="space-y-4">
-          {messages.map((message) => (
-            <article key={message.id} className={cn("flex flex-col gap-1", message.sender === "user" ? "items-end" : "items-start")}>
-              <span className="px-1 text-[11px] font-medium text-ink-3">{message.sender === "user" ? "Bạn" : "Trợ lý"}</span>
-              <div className={cn("max-w-full rounded-2xl px-3.5 py-3 text-sm leading-relaxed wrap-anywhere", message.sender === "user" ? "max-w-[90%] rounded-tr-sm bg-blue text-on-blue" : "w-full rounded-tl-sm border border-line bg-card")}>
-                {message.sender === "user" ? <p className="whitespace-pre-wrap">{message.content}</p> : (
-                  <>
-                    <AssistantMarkdown content={message.content} userRole={userRole} />
-                    {message.sources && !isAssistantRefusal(message.content) && <SourceAccordion sources={message.sources} userRole={userRole} />}
-                    {message.actions && <ActionBadges actions={message.actions} />}
-                  </>
-                )}
-              </div>
-              {message.sender === "assistant" && (
-                <div role="group" aria-label="Đánh giá câu trả lời của trợ lý" aria-busy={!!pendingFeedback[message.id]} className="flex items-center gap-1 px-1">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Câu trả lời hữu ích"
-                    title="Hữu ích"
-                    aria-pressed={feedbackRatings[message.id] === 1}
-                    disabled={!!pendingFeedback[message.id] || !!message.is_streaming}
-                    onClick={() => { void handleFeedback(message.id, 1) }}
-                    className={cn("text-ink-3", feedbackRatings[message.id] === 1 && "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700")}
-                  >
-                    <ThumbsUp className="size-3.5" aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label="Câu trả lời chưa hữu ích"
-                    title="Chưa hữu ích"
-                    aria-pressed={feedbackRatings[message.id] === -1}
-                    disabled={!!pendingFeedback[message.id] || !!message.is_streaming}
-                    onClick={() => { void handleFeedback(message.id, -1) }}
-                    className={cn("text-ink-3", feedbackRatings[message.id] === -1 && "bg-bad-soft text-bad hover:bg-bad-soft hover:text-bad")}
-                  >
-                    <ThumbsDown className="size-3.5" aria-hidden />
-                  </Button>
-                </div>
-              )}
-            </article>
-          ))}
-        </div>
-        {isThinking && <p role="status" className="mt-4 flex items-center gap-2 text-xs text-ink-3"><LoaderCircle className="size-4 animate-spin" aria-hidden />Trợ lý đang suy nghĩ…</p>}
-        {error && <p role="alert" className="mt-3 flex items-start gap-2 rounded-xl bg-bad-soft p-3 text-xs text-bad"><AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />{error}</p>}
       </div>
 
-      <footer className="shrink-0 border-t border-line bg-surface/40 px-4 pb-3 pt-3">
-        <div className="mb-3 flex flex-wrap gap-2" aria-label="Câu hỏi gợi ý">
-          {suggestionsFor(pathname).map((suggestion) => <button key={suggestion} type="button" disabled={busy} onClick={() => { void sendMessage(suggestion) }} className="rounded-full border border-line bg-card px-3 py-1.5 text-left text-[11px] text-ink-2 transition-colors hover:border-blue/30 hover:bg-blue-soft hover:text-blue disabled:cursor-not-allowed disabled:opacity-50">{suggestion}</button>)}
+      <form
+        className="grid shrink-0 gap-1.5 border-t border-line px-4 pt-3 pb-3.5"
+        onSubmit={(event) => { event.preventDefault(); submit() }}
+      >
+        <div className="flex items-end gap-2 rounded-[14px] bg-card py-1.5 pr-1.5 pl-3.5 ring-1 ring-line-strong transition-shadow focus-within:ring-ink">
+          <label htmlFor="assistant-chat-input" className="sr-only">Câu hỏi cho trợ lý</label>
+          <textarea
+            ref={inputRef}
+            id="assistant-chat-input"
+            rows={1}
+            value={draft}
+            maxLength={8000}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              // Không gửi khi đang gõ dấu tiếng Việt bằng bộ gõ (IME)
+              if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault()
+                submit()
+              }
+            }}
+            placeholder="Hỏi trợ lý…"
+            className="field-sizing-content max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1 text-sm leading-6 outline-none placeholder:text-ink-3"
+          />
+          <button
+            type="submit"
+            disabled={!draft.trim() || busy}
+            aria-label="Gửi câu hỏi"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-colors disabled:bg-surface disabled:text-ink-3"
+          >
+            <ArrowUp className="size-4" strokeWidth={2} aria-hidden />
+          </button>
         </div>
-        <form onSubmit={(event) => { event.preventDefault(); submitMessage() }} className="flex items-end gap-2 rounded-xl border border-line bg-card p-2 focus-within:border-blue/40 focus-within:ring-2 focus-within:ring-blue/10">
-          <label htmlFor="assistant-chat-input" className="sr-only">Tin nhắn cho trợ lý</label>
-          <Textarea ref={inputRef} id="assistant-chat-input" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleKeyDown} rows={1} maxLength={8000} placeholder="Hỏi trợ lý một câu…" className="max-h-36 min-h-10 flex-1 resize-none overflow-y-auto border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0" />
-          <Button type="submit" size="icon-lg" disabled={!draft.trim() || busy} aria-label="Gửi tin nhắn" className="rounded-lg"><SendHorizontal className="size-4" aria-hidden /></Button>
-        </form>
-        <p className="mt-2 text-center text-[10px] text-ink-3">Enter để gửi · Shift + Enter để xuống dòng</p>
-      </footer>
+        {messages.length === 0 && (
+          <p className="text-xs leading-[18px] text-ink-3">Trợ lý trả lời theo hướng dẫn sử dụng và có thể chưa đúng. Trợ lý chỉ thao tác khi bạn bấm.</p>
+        )}
+      </form>
     </section>
+  )
+}
+
+/** AI bận: một dải vàng ngắn thay cho nhãn "Live / Offline" (bản vẽ TroLyTrangThai). */
+function AssistantStatusStrip() {
+  const status = useAssistantStatus()
+  if (!status || status.is_live) return null
+  return (
+    <p role="status" className="flex shrink-0 items-start gap-2 border-b border-warn-line bg-warn-soft px-4 py-2 text-[13px] leading-[19px] text-warn">
+      <Info className="mt-px size-[15px] shrink-0" strokeWidth={1.75} aria-hidden />
+      AI đang bận nên trợ lý trích thẳng từ hướng dẫn. Câu trả lời có thể ngắn hơn.
+    </p>
   )
 }

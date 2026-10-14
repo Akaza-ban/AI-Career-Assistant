@@ -31,9 +31,16 @@ export interface AssistantContextValue {
   pathname: string
   userRole: UserRole
   error: string | null
+  /** Bộ chọn của phần tử trợ lý đang chỉ trên trang; khung chat thu gọn để không che phần tử đó. */
+  highlightSelector: string | null
   sendMessage: (text: string) => Promise<void>
+  /** Gửi lại câu hỏi cuối khi lần gửi trước lỗi. */
+  retryLast: () => void
   clearChat: () => void
   toggleChat: () => void
+  openChat: () => void
+  closeChat: () => void
+  dismissHighlight: () => void
   executeAction: (action: AgentAction) => void
 }
 
@@ -100,6 +107,8 @@ function AssistantSession({ children, pathname, userRole }: {
   const pendingRequest = useRef<AbortController | null>(null)
 
   const toggleChat = useCallback(() => setIsOpen((open) => !open), [])
+  const openChat = useCallback(() => setIsOpen(true), [])
+  const closeChat = useCallback(() => setIsOpen(false), [])
   const dismissHighlight = useCallback(() => setHighlight(null), [])
   const setHighlightSelector = useCallback((selector: string | null, tooltip?: string, durationMs?: number) => {
     setHighlight(selector ? { id: crypto.randomUUID(), selector, tooltip, durationMs } : null)
@@ -208,12 +217,20 @@ function AssistantSession({ children, pathname, userRole }: {
     }
   }, [conversation, pathname, runner, userRole])
 
+  const retryLast = useCallback(() => {
+    const last = messages.at(-1)
+    if (!last || last.sender !== "user") return
+    setMessages((previous) => previous.slice(0, -1))
+    void sendMessage(last.content)
+  }, [messages, sendMessage])
+
+  const highlightSelector = highlight?.selector ?? null
   const value = useMemo<AssistantContextValue>(() => ({
     isOpen, messages, conversationId, isThinking, activeAction, isExecutingAction, pathname, userRole, error,
-    sendMessage, clearChat, toggleChat, executeAction,
+    highlightSelector, sendMessage, retryLast, clearChat, toggleChat, openChat, closeChat, dismissHighlight, executeAction,
   }), [
     isOpen, messages, conversationId, isThinking, activeAction, isExecutingAction, pathname, userRole, error,
-    sendMessage, clearChat, toggleChat, executeAction,
+    highlightSelector, sendMessage, retryLast, clearChat, toggleChat, openChat, closeChat, dismissHighlight, executeAction,
   ])
 
   return (
@@ -230,6 +247,11 @@ export function AssistantProvider({ children }: { children: ReactNode }) {
   const userRole: UserRole = pathname === "/advisor" || pathname.startsWith("/advisor/") ? "advisor" : "student"
   // Preserve chat across pages in the same role; isolate state when switching roles.
   return <AssistantSession key={userRole} pathname={pathname} userRole={userRole}>{children}</AssistantSession>
+}
+
+/** Dùng ở chỗ có thể nằm ngoài AssistantProvider (ví dụ khu quản trị không có trợ lý). */
+export function useOptionalAssistant(): AssistantContextValue | null {
+  return useContext(AssistantContext)
 }
 
 export function useAssistant(): AssistantContextValue {

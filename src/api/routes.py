@@ -4,14 +4,18 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
 
 from src.agents.graph import agent
+from src.api import admin as admin_routes
 from src.api import advisor as advisor_routes
 from src.api import analysis as analysis_routes
 from src.api import assistant as assistant_routes
+from src.api import auth as auth_routes
 from src.api import cv as cv_routes
 from src.api import feedback as feedback_routes
 from src.api import interviews as interview_routes
 from src.api import messages as message_routes
+from src.api import notifications as notification_routes
 from src.api import optimizer as optimizer_routes
+from src.api import settings as settings_routes
 from src.api import sharing as sharing_routes
 from src.api import students as student_routes
 from src.api.deps import CurrentUser
@@ -29,6 +33,10 @@ router.include_router(student_routes.router)
 router.include_router(sharing_routes.router)
 router.include_router(advisor_routes.router)
 router.include_router(message_routes.router)
+router.include_router(auth_routes.router)
+router.include_router(notification_routes.router)
+router.include_router(settings_routes.router)
+router.include_router(admin_routes.router)
 router.include_router(assistant_routes.router)
 
 
@@ -52,7 +60,7 @@ async def agent_status() -> AgentStatusResponse:
 
 @router.get("/me", response_model=UserProfile, tags=["Auth"])
 def get_me(user: CurrentUser) -> User:
-    """Hồ sơ người dùng đang đăng nhập (tạm thời xác định qua header X-Demo-Role)."""
+    """Hồ sơ người dùng đang đăng nhập (phiên đăng nhập, hoặc header X-Demo-Role ở bản demo)."""
     return user
 
 

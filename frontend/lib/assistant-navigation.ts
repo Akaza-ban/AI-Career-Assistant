@@ -11,7 +11,7 @@ const ROUTE_ALIASES: Record<string, string> = {
 const ROUTES: Record<UserRole, ReadonlySet<string>> = {
   student: new Set([
     "/student", "/student/cv", "/student/analysis/new", "/student/interview/new",
-    "/student/interview/start", "/student/history", "/student/share", "/student/settings",
+    "/student/interview/start", "/student/history", "/student/library", "/student/share", "/student/settings",
   ]),
   advisor: new Set(["/advisor", "/advisor/students"]),
 }
@@ -23,6 +23,6 @@ export function resolveAssistantRoute(route: unknown, role: UserRole): string | 
   if (ROUTES[role].has(resolved)) return resolved
   const pattern = role === "advisor"
     ? /^\/advisor\/students\/[\w-]{1,64}$/
-    : /^\/student\/(?:cv\/[\w-]{1,64}|analysis\/[\w-]{1,64}(?:\/(?:optimize|export))?|interview\/[\w-]{1,64}(?:\/report)?)$/
+    : /^\/student\/(?:cv\/[\w-]{1,64}|library\/[\w-]{1,64}|analysis\/[\w-]{1,64}(?:\/(?:optimize|export))?|interview\/[\w-]{1,64}(?:\/report)?)$/
   return pattern.test(resolved) ? resolved : null
 }

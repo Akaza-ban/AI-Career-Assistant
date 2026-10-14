@@ -18,7 +18,7 @@ export const mockStudent: UserProfile = {
   id: "sv-0142",
   role: "student",
   full_name: "Nguyễn Minh Anh",
-  subtitle: "KDQT - K2021",
+  subtitle: "minhanh.nguyen@gmail.com",
   avatar_url: null,
 }
 
@@ -26,7 +26,7 @@ export const mockAdvisor: UserProfile = {
   id: "cv-007",
   role: "advisor",
   full_name: "ThS. Trần Hoàng Nam",
-  subtitle: "Khoa HTTT",
+  subtitle: "Cố vấn hướng nghiệp",
   avatar_url: null,
 }
 
@@ -606,7 +606,7 @@ export const mockStudentNotifications: AppNotification[] = [
   {
     id: "n-s1",
     kind: "advisor_comment",
-    title: "ThS. Trần Hoàng Nam đã gửi nhận xét cho Buổi 5",
+    title: "ThS. Trần Hoàng Nam đã nhận xét buổi phỏng vấn Business Analyst Intern",
     body: "“Thầy đã xem qua phần trả lời STAR câu hỏi xử lý xung đột của em…”",
     created_at: minutesAgo(15),
     read: false,
@@ -616,8 +616,8 @@ export const mockStudentNotifications: AppNotification[] = [
   {
     id: "n-s2",
     kind: "interview_report",
-    title: "Báo cáo phỏng vấn Buổi 5 đã sẵn sàng – AI chấm 82/100",
-    body: "Xem phân tích STAR chi tiết và gợi ý cải thiện phần Result.",
+    title: "Báo cáo phỏng vấn Business Analyst Intern đã sẵn sàng",
+    body: "Điểm AI 3,6 / 5. Xem điểm từng tiêu chí STAR và phần nên luyện thêm.",
     created_at: minutesAgo(60),
     read: false,
     action_label: "Xem báo cáo",
@@ -626,11 +626,11 @@ export const mockStudentNotifications: AppNotification[] = [
   {
     id: "n-s3",
     kind: "gap_analysis",
-    title: "Phân tích CV CV_NguyenMinhAnh_BA_v2.1.docx hoàn tất",
-    body: "Độ khớp với JD Business Analyst Intern: 76/100.",
+    title: "Phân tích CV với Business Analyst Intern đã xong",
+    body: "CV_NguyenMinhAnh_BA_v2.1.docx · Mức phù hợp 76% · Cao",
     created_at: minutesAgo(180),
     read: false,
-    action_label: null,
+    action_label: "Xem kết quả",
     action_href: "/student/analysis/ga-001",
   },
 ]
@@ -639,12 +639,12 @@ export const mockAdvisorNotifications: AppNotification[] = [
   {
     id: "n-a1",
     kind: "student_activity",
-    title: "Nguyễn Minh Anh vừa hoàn thành Buổi 5 – báo cáo chờ duyệt",
-    body: "Điểm AI: 82/100. Sinh viên có yêu cầu xem xét lại câu hỏi số 3.",
+    title: "Nguyễn Minh Anh vừa chia sẻ buổi phỏng vấn Business Analyst Intern",
+    body: "Điểm AI 3,6 / 5. Buổi này đang chờ bạn nhận xét.",
     created_at: minutesAgo(10),
     read: false,
-    action_label: "Duyệt ngay",
-    action_href: "/advisor/students/sv-0142",
+    action_label: "Nhận xét",
+    action_href: "/advisor/students/sv-0142?tab=interviews",
   },
   {
     id: "n-a2",

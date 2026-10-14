@@ -214,6 +214,8 @@ async def test_overview_after_analysis_suggests_interview_and_missing_skills(cli
     skills = data["skills_to_learn"]
     assert skills["analysis_id"] == latest
     assert [s["name"] for s in skills["skills"]] == ["Python", "Power BI", "Tableau"]
+    # Python có lộ trình riêng trên roadmap.sh; Power BI, Tableau thì không
+    assert [s["roadmap_url"] for s in skills["skills"]] == ["https://roadmap.sh/python", None, None]
     assert skills["total_missing"] == 3
 
     assert [a["id"] for a in data["in_progress"]["analyses"]] == [running]

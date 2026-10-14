@@ -1,28 +1,59 @@
+from datetime import timedelta
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Cookie, Depends, Header, Request
 from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
+from src.config import get_settings
 from src.db.database import get_db
-from src.db.models import User
-from src.db.seed import DEMO_ADVISOR_ID, DEMO_STUDENT_ID
+from src.db.models import User, utcnow
+from src.db.seed import DEMO_ADMIN_ID, DEMO_ADVISOR_ID, DEMO_STUDENT_ID
+from src.services import auth
 
 DbSession = Annotated[Session, Depends(get_db)]
 
-# Đăng nhập tạm thời: frontend gửi vai trò đang chọn qua header X-Demo-Role và backend
-# ánh xạ sang người dùng demo cố định. Khi có đăng nhập bằng mật khẩu, chỉ cần thay phần thân
-# get_current_user (đọc session/JWT) — các route dùng CurrentUser không phải sửa.
-_DEMO_USER_BY_ROLE = {"student": DEMO_STUDENT_ID, "advisor": DEMO_ADVISOR_ID}
+# Bản demo: không có phiên đăng nhập thì frontend gửi vai trò qua header X-Demo-Role và backend ánh xạ sang
+# người dùng demo cố định (tắt bằng DEMO_LOGIN_ENABLED=false). Phiên đăng nhập luôn được ưu tiên.
+_DEMO_USER_BY_ROLE = {"student": DEMO_STUDENT_ID, "advisor": DEMO_ADVISOR_ID, "admin": DEMO_ADMIN_ID}
+
+SessionToken = Annotated[str | None, Cookie(alias=get_settings().session_cookie_name)]
+
+# "Hoạt động" ở trang Quản trị: chỉ ghi lại last_seen_at khi lần trước đã cách quá khoảng này, để không ghi DB mỗi request
+_SEEN_EVERY = timedelta(minutes=5)
+# Còn mật khẩu tạm thì chỉ gọi được các API tài khoản (đổi mật khẩu, đăng xuất) và /me
+_ALLOWED_WITH_TEMP_PASSWORD = ("/api/v1/auth/", "/api/v1/me")
 
 
-def get_current_user(db: DbSession, x_demo_role: Annotated[str | None, Header()] = None) -> User:
-    user_id = _DEMO_USER_BY_ROLE.get(x_demo_role or "")
-    if user_id is None:
-        raise AppError(401, "Bạn chưa đăng nhập. Hãy chọn vai trò ở trang chủ.", "unauthenticated")
-    user = db.get(User, user_id)
-    if user is None:
-        raise AppError(401, "Không tìm thấy tài khoản demo. Hãy khởi động lại backend.", "unauthenticated")
+def _session_user(db: Session, session_token: str | None, x_demo_role: str | None) -> User:
+    user = auth.user_from_session(db, session_token)
+    if user is not None:
+        return user
+    if get_settings().demo_login_enabled:
+        user_id = _DEMO_USER_BY_ROLE.get(x_demo_role or "")
+        if user_id is not None:
+            demo = db.get(User, user_id)
+            if demo is None:
+                raise AppError(401, "Không tìm thấy tài khoản demo. Hãy khởi động lại backend.", "unauthenticated")
+            return demo
+    raise AppError(401, "Phiên đăng nhập đã hết. Hãy đăng nhập lại.", "unauthenticated")
+
+
+def get_current_user(
+    request: Request,
+    db: DbSession,
+    session_token: SessionToken = None,
+    x_demo_role: Annotated[str | None, Header()] = None,
+) -> User:
+    user = _session_user(db, session_token, x_demo_role)
+    if user.disabled_at is not None:
+        raise AppError(401, "Tài khoản đã bị tạm khoá. Hãy liên hệ quản trị viên.", "account_disabled")
+    if user.must_change_password and not request.url.path.startswith(_ALLOWED_WITH_TEMP_PASSWORD):
+        raise AppError(403, "Hãy đổi mật khẩu tạm trước khi tiếp tục.", "password_change_required")
+    now = utcnow()
+    if user.last_seen_at is None or now - user.last_seen_at >= _SEEN_EVERY:
+        user.last_seen_at = now
+        db.commit()
     return user
 
 
@@ -45,3 +76,12 @@ def get_current_advisor(user: CurrentUser) -> User:
 
 
 CurrentAdvisor = Annotated[User, Depends(get_current_advisor)]
+
+
+def get_current_admin(user: CurrentUser) -> User:
+    if user.role != "admin":
+        raise AppError(403, "Chức năng này chỉ dành cho quản trị viên.", "forbidden")
+    return user
+
+
+CurrentAdmin = Annotated[User, Depends(get_current_admin)]

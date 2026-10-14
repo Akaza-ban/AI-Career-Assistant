@@ -6,7 +6,23 @@
 import { ApiError } from "@/lib/api-error"
 import { API_BASE_URL, isLive, type ApiGroup } from "@/lib/config"
 import { mockApi } from "@/lib/mocks/handlers"
+import { clearAuthMode, getAuthMode } from "@/lib/session"
 import type {
+  AdminJdDetail,
+  AdminJdRow,
+  AdminJdUpsert,
+  AdminUploadedJd,
+  JdDraft,
+  JdFields,
+  AdminAdvisor,
+  AdminCommentsPage,
+  AdminCommentsQuery,
+  AdminPeriod,
+  AdminStats,
+  AdminStudent,
+  AssignAdvisorResponse,
+  CreateAdvisorRequest,
+  UpdateAdvisorRequest,
   AdvisorInterviewReport,
   AdvisorNote,
   AdvisorNoteRequest,
@@ -20,12 +36,20 @@ import type {
   AssignedStudent,
   CapabilityAnswerRequest,
   ChangePasswordRequest,
+  LoginRequest,
+  LoginResponse,
+  PasswordResetConfirmRequest,
+  PasswordResetRequest,
+  RegisterRequest,
   ChatMessage,
   ChangePasswordResponse,
+  CompareJdsRequest,
+  CompareJdsResponse,
   Conversation,
   ConversationSummary,
   CreateGapAnalysisRequest,
   CreateInterviewRequest,
+  CreatePastedJdRequest,
   CvVersion,
   ExportCvRequest,
   ExportCvResponse,
@@ -40,8 +64,11 @@ import type {
   JobDescription,
   OptimizerSession,
   ProgressRange,
+  RecommendJdsRequest,
+  RecommendJdsResponse,
   ReviewInterviewRequest,
   Role,
+  SavedJd,
   SharedItem,
   SharingOverview,
   StudentOverview,
@@ -50,6 +77,7 @@ import type {
   SubmitAnswerRequest,
   SubmitAnswerResponse,
   SuggestionDecisionRequest,
+  UpdateProfileRequest,
   UpdateSettingsRequest,
   UpdateSharingRequest,
   UserProfile,
@@ -57,14 +85,6 @@ import type {
 
 export { ApiError }
 
-/**
- * Đăng nhập tạm: backend xác định người dùng demo qua header X-Demo-Role.
- * Vai trò suy ra từ khu vực đang mở (/advisor → cố vấn, còn lại → sinh viên).
- * Bỏ khi có đăng nhập thật.
- */
-function demoRole(): Role {
-  return typeof window !== "undefined" && window.location.pathname.startsWith("/advisor") ? "advisor" : "student"
-}
 
 /** Gửi request tới backend; lỗi mạng hoặc HTTP được đổi thành ApiError với thông báo hiển thị được. */
 async function send(path: string, init?: RequestInit): Promise<Response> {
@@ -75,7 +95,6 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
       ...init,
       headers: {
         ...(isForm ? {} : { "Content-Type": "application/json" }),
-        "X-Demo-Role": demoRole(),
         ...init?.headers,
       },
       credentials: "include",
@@ -91,6 +110,15 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
       // Body không phải JSON; dùng thông báo mặc định bên dưới.
     }
     const detail = typeof body?.detail === "string" ? body.detail : `Yêu cầu thất bại (${res.status}).`
+    // Phiên đăng nhập hết hạn: về trang Đăng nhập (trừ chính các request của trang tài khoản)
+    if (res.status === 401 && getAuthMode() && !path.startsWith("/auth/") && typeof window !== "undefined") {
+      clearAuthMode()
+      window.location.assign("/login?expired=1")
+    }
+    // Còn mật khẩu tạm (cố vấn mới được tạo tài khoản): phải đặt mật khẩu mới trước
+    if (res.status === 403 && body?.code === "password_change_required" && typeof window !== "undefined") {
+      window.location.assign("/change-password")
+    }
     throw new ApiError(res.status, detail, body?.code)
   }
   return res
@@ -107,7 +135,6 @@ const json = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 
 const advisorStudentPath = (studentId: string) => `/advisor/students/${encodeURIComponent(studentId)}`
 const conversationPath = (studentId: string) => `/conversations/${encodeURIComponent(studentId)}`
-const asRole = (role: Role): RequestInit => ({ headers: { "X-Demo-Role": role } })
 const optimizerPath = (analysisId: string) => `/gap-analysis/${encodeURIComponent(analysisId)}/optimizer`
 
 /** Gọi backend khi nhóm đã bật trong NEXT_PUBLIC_LIVE_APIS, ngược lại dùng mock. */
@@ -116,9 +143,25 @@ function via<T>(group: ApiGroup, mock: () => Promise<T>, live: () => Promise<T>)
 }
 
 export const api = {
+  // ---- Tài khoản ----
+  login: (body: LoginRequest): Promise<LoginResponse> =>
+    via("auth", () => mockApi.login(body), () => request("/auth/login", json(body))),
+  register: (body: RegisterRequest): Promise<LoginResponse> =>
+    via("auth", () => mockApi.register(body), () => request("/auth/register", json(body))),
+  /** Luôn trả thành công dù email có tồn tại hay không, để không lộ ai có tài khoản. */
+  requestPasswordReset: (body: PasswordResetRequest): Promise<void> =>
+    via("auth", () => mockApi.requestPasswordReset(body), () => request("/auth/password-reset", json(body))),
+  confirmPasswordReset: (body: PasswordResetConfirmRequest): Promise<LoginResponse> =>
+    via("auth", () => mockApi.confirmPasswordReset(body), () => request("/auth/password-reset/confirm", json(body))),
+  /** Kết thúc phiên đăng nhập (cookie); không lỗi nếu phiên đã hết. */
+  logout: (): Promise<void> => via("auth", async () => {}, () => request("/auth/logout", { method: "POST" })),
+  /** Đặt mật khẩu mới thay mật khẩu tạm ở lần đăng nhập đầu. Lỗi 400 "wrong_password" khi mật khẩu tạm không đúng. */
+  changeTemporaryPassword: (body: ChangePasswordRequest): Promise<ChangePasswordResponse> =>
+    via("auth", () => mockApi.changeTemporaryPassword(body), () => request("/auth/change-password", json(body))),
+
   // ---- Người dùng ----
   getMe: (role: Role): Promise<UserProfile> =>
-    via("me", () => mockApi.getMe(role), () => request("/me", { headers: { "X-Demo-Role": role } })),
+    via("me", () => mockApi.getMe(role), () => request("/me")),
   getOverview: (): Promise<StudentOverview> =>
     via("overview", () => mockApi.getOverview(), () => request("/students/me/overview")),
   /** jdId = null: mọi vị trí. */
@@ -135,38 +178,45 @@ export const api = {
     via(
       "notifications",
       () => mockApi.listNotifications(role),
-      () => request("/notifications", { headers: { "X-Demo-Role": role } }),
+      () => request("/notifications"),
+    ),
+  markNotificationRead: (role: Role, id: string): Promise<void> =>
+    via(
+      "notifications",
+      () => mockApi.markNotificationRead(role, id),
+      () =>
+        request(`/notifications/${encodeURIComponent(id)}/read`, { method: "POST" }),
     ),
   markAllNotificationsRead: (role: Role): Promise<void> =>
     via(
       "notifications",
       () => mockApi.markAllNotificationsRead(role),
-      () => request("/notifications/read-all", { method: "POST", headers: { "X-Demo-Role": role } }),
+      () => request("/notifications/read-all", { method: "POST" }),
     ),
 
   // ---- Tin nhắn SV ↔ cố vấn phụ trách (hội thoại theo mã SV) ----
   listConversations: (role: Role): Promise<ConversationSummary[]> =>
-    via("messages", () => mockApi.listConversations(role), () => request("/conversations", asRole(role))),
+    via("messages", () => mockApi.listConversations(role), () => request("/conversations")),
   getConversation: (role: Role, studentId: string): Promise<Conversation> =>
-    via("messages", () => mockApi.getConversation(role, studentId), () => request(conversationPath(studentId), asRole(role))),
+    via("messages", () => mockApi.getConversation(role, studentId), () => request(conversationPath(studentId))),
   sendMessage: (role: Role, studentId: string, body: string): Promise<ChatMessage> =>
     via(
       "messages",
       () => mockApi.sendMessage(role, studentId, body),
-      () => request(`${conversationPath(studentId)}/messages`, { ...json({ body }), ...asRole(role) }),
+      () => request(`${conversationPath(studentId)}/messages`, json({ body })),
     ),
   /** Đánh dấu đã đọc các tin người kia gửi (người kia thấy "Đã xem"). */
   markConversationRead: (role: Role, studentId: string): Promise<void> =>
     via(
       "messages",
       () => mockApi.markConversationRead(role, studentId),
-      () => request(`${conversationPath(studentId)}/read`, { method: "POST", ...asRole(role) }),
+      () => request(`${conversationPath(studentId)}/read`, { method: "POST" }),
     ),
   getUnreadMessageCount: (role: Role): Promise<number> =>
     via(
       "messages",
       () => mockApi.getUnreadMessageCount(role),
-      async () => (await request<{ count: number }>("/conversations/unread-count", asRole(role))).count,
+      async () => (await request<{ count: number }>("/conversations/unread-count")).count,
     ),
 
   // ---- CV ----
@@ -206,6 +256,45 @@ export const api = {
 
   // ---- JD & phân tích khoảng cách ----
   listJdLibrary: (): Promise<JobDescription[]> => via("gap", () => mockApi.listJdLibrary(), () => request("/jd/library")),
+  /** Gợi ý vị trí theo CV (tối đa top_n), chấm theo quy tắc; advice do LLM viết cho vị trí #1 khi generate_advice. */
+  recommendJds: (body: RecommendJdsRequest): Promise<RecommendJdsResponse> =>
+    via("gap", () => mockApi.recommendJds(body), () => request("/jd/recommend", json(body))),
+  listSavedJds: (): Promise<SavedJd[]> => via("gap", () => mockApi.listSavedJds(), () => request("/jd/saved")),
+  saveJd: (jdId: string): Promise<SavedJd> =>
+    via("gap", () => mockApi.saveJd(jdId), () => request(`/jd/${encodeURIComponent(jdId)}/saved`, { method: "PUT" })),
+  unsaveJd: (jdId: string): Promise<void> =>
+    via("gap", () => mockApi.unsaveJd(jdId), () => request(`/jd/${encodeURIComponent(jdId)}/saved`, { method: "DELETE" })),
+  /** Vị trí SV chọn được: thư viện JD và các JD SV đã tự dán (GET /jd). */
+  listMyJds: (): Promise<JobDescription[]> => via("gap", () => mockApi.listMyJds(), () => request("/jd")),
+  /** Lưu JD tự dán theo cấu trúc chung. reviewed (hộp Thêm JD): bắt buộc tên vị trí, cấp bậc, mô tả, yêu cầu. */
+  createPastedJd: (body: CreatePastedJdRequest): Promise<JobDescription> =>
+    via("gap", () => mockApi.createPastedJd(body), () => request("/jd", json(body))),
+  /** Tách toàn văn JD thành các trường (chưa lưu). Lỗi 422 "jd_too_short" khi dưới 50 từ. */
+  parseJd: (text: string): Promise<JdDraft> =>
+    via("gap", () => mockApi.parseJd(text), () => request("/jd/parse", json({ text }))),
+  /** JD của bạn: JD sinh viên tự dán, mới nhất trước. */
+  listPastedJds: (): Promise<JobDescription[]> => via("gap", () => mockApi.listPastedJds(), () => request("/jd/mine")),
+  updatePastedJd: (id: string, fields: JdFields): Promise<JobDescription> =>
+    via(
+      "gap",
+      () => mockApi.updatePastedJd(id, fields),
+      () => request(`/jd/${encodeURIComponent(id)}`, { ...json(fields), method: "PATCH" }),
+    ),
+  /** Bỏ khỏi danh sách; các lượt phân tích, phỏng vấn đã làm với JD này vẫn mở được. */
+  deletePastedJd: (id: string): Promise<void> =>
+    via("gap", () => mockApi.deletePastedJd(id), () => request(`/jd/${encodeURIComponent(id)}`, { method: "DELETE" })),
+  /** So sánh CV với 2–3 JD qua LLM; kết quả sắp theo match_score giảm dần. */
+  compareJds: (body: CompareJdsRequest): Promise<CompareJdsResponse> =>
+    via("gap", () => mockApi.compareJds(body), () => request("/jd/compare", json(body))),
+  /** Các lượt so sánh đã lưu, mới nhất trước; mỗi lượt giữ nguyên kết quả lúc so sánh. */
+  listComparisonHistory: (limit = 50): Promise<CompareJdsResponse[]> =>
+    via("gap", () => mockApi.listComparisonHistory(limit), () => request(`/jd/compare/history?limit=${limit}`)),
+  deleteComparisonHistory: (id: string): Promise<void> =>
+    via(
+      "gap",
+      () => mockApi.deleteComparisonHistory(id),
+      () => request(`/jd/compare/history/${encodeURIComponent(id)}`, { method: "DELETE" }),
+    ),
   createGapAnalysis: (body: CreateGapAnalysisRequest): Promise<GapAnalysis> =>
     via("gap", () => mockApi.createGapAnalysis(body), () => request("/gap-analysis", json(body))),
   getGapAnalysis: (id: string): Promise<GapAnalysis> =>
@@ -297,6 +386,13 @@ export const api = {
   // ---- Phản hồi (B3) ----
   sendFeedback: (body: FeedbackRequest): Promise<FeedbackResponse> =>
     via("feedback", () => mockApi.sendFeedback(body), () => request("/feedback", json(body))),
+  /** Huỷ like / dislike (bấm lại nút đang chọn). CSAT không huỷ được. */
+  deleteThumb: (responseId: string): Promise<void> =>
+    via(
+      "feedback",
+      () => mockApi.deleteThumb(responseId),
+      () => request(`/feedback?response_id=${encodeURIComponent(responseId)}&kind=thumb`, { method: "DELETE" }),
+    ),
   getFeedback: (responseId: string, kind: "thumb" | "csat"): Promise<FeedbackStatus> =>
     via(
       "feedback",
@@ -329,14 +425,24 @@ export const api = {
       () => mockApi.updateSettings(body),
       () => request("/students/me/settings", { ...json(body), method: "PATCH" }),
     ),
+  /** Lỗi 422 "invalid_phone" / "invalid_date_of_birth" / "invalid_full_name" khi dữ liệu chưa đúng. */
+  updateProfile: (body: UpdateProfileRequest): Promise<StudentSettings> =>
+    via("settings", () => mockApi.updateProfile(body), () => request("/students/me/profile", { ...json(body), method: "PATCH" })),
   /** Lỗi 400 code "wrong_password" khi mật khẩu hiện tại không đúng. */
   changePassword: (body: ChangePasswordRequest): Promise<ChangePasswordResponse> =>
     via("settings", () => mockApi.changePassword(body), () => request("/auth/change-password", json(body))),
   /** Các thao tác dữ liệu (feature flag dataActions). */
   withdrawConsent: (): Promise<StudentSettings> =>
     via("settings", () => mockApi.withdrawConsent(), () => request("/students/me/consent/withdraw", { method: "POST" })),
+  /** download_url là đường dẫn tuyệt đối tới file JSON (tải bằng cùng phiên đăng nhập); null ở chế độ mock. */
   requestDataExport: (): Promise<{ download_url: string | null }> =>
-    via("settings", () => mockApi.requestDataExport(), () => request("/students/me/data-export", { method: "POST" })),
+    via("settings", () => mockApi.requestDataExport(), async () => {
+      const res = await request<{ download_url: string | null }>("/students/me/data-export", { method: "POST" })
+      return { download_url: res.download_url && res.download_url.startsWith("/") ? `${API_BASE_URL}${res.download_url}` : res.download_url }
+    }),
+  /** File JSON toàn bộ dữ liệu của SV (tải qua cùng phiên / header demo); null ở chế độ mock. */
+  downloadDataExport: (): Promise<Blob | null> =>
+    via("settings", async () => null, async () => (await send("/students/me/data-export/download")).blob()),
   deleteAllData: (): Promise<void> =>
     via("settings", () => mockApi.deleteAllData(), () => request("/students/me/data", { method: "DELETE" })),
 
@@ -400,5 +506,64 @@ export const api = {
       "advisor",
       () => mockApi.deleteAdvisorNote(studentId, noteId),
       () => request(`${advisorStudentPath(studentId)}/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" }),
+    ),
+
+  // ---- Quản trị (chỉ tài khoản admin; vai trò khác nhận 403 "forbidden") ----
+  getAdminStats: (days: AdminPeriod): Promise<AdminStats> =>
+    via("admin", () => mockApi.getAdminStats(days), () => request(`/admin/stats?days=${days}`)),
+  /** Nhận xét kèm đánh giá sao của SV (không kèm tên), mới nhất trước. */
+  listAdminComments: (query: AdminCommentsQuery): Promise<AdminCommentsPage> =>
+    via(
+      "admin",
+      () => mockApi.listAdminComments(query),
+      () => {
+        const params = Object.entries(query).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        return request(`/admin/comments?${new URLSearchParams(params)}`)
+      },
+    ),
+  listAdminJds: (): Promise<AdminJdRow[]> => via("admin", () => mockApi.listAdminJds(), () => request("/admin/jds")),
+  /** JD sinh viên tự dán, gộp theo vị trí – công ty (không kèm tên sinh viên). */
+  listUploadedJds: (): Promise<AdminUploadedJd[]> =>
+    via("admin", () => mockApi.listUploadedJds(), () => request("/admin/jds/uploaded")),
+  /** JD thư viện để sửa, hoặc JD sinh viên tải lên để điền sẵn form "Đưa vào thư viện". */
+  getAdminJd: (id: string): Promise<AdminJdDetail> =>
+    via("admin", () => mockApi.getAdminJd(id), () => request(`/admin/jds/${encodeURIComponent(id)}`)),
+  /** Lỗi 409 "jd_duplicate"; 422 "jd_fields_required" / "jd_skills_required". */
+  createAdminJd: (body: AdminJdUpsert): Promise<AdminJdDetail> =>
+    via("admin", () => mockApi.createAdminJd(body), () => request("/admin/jds", json(body))),
+  /** Sửa JD thư viện hoặc ẩn / hiện (status). */
+  updateAdminJd: (id: string, body: AdminJdUpsert): Promise<AdminJdDetail> =>
+    via(
+      "admin",
+      () => mockApi.updateAdminJd(id, body),
+      () => request(`/admin/jds/${encodeURIComponent(id)}`, { ...json(body), method: "PATCH" }),
+    ),
+  listAdminAdvisors: (): Promise<AdminAdvisor[]> =>
+    via("admin", () => mockApi.listAdminAdvisors(), () => request("/admin/advisors")),
+  /** Lỗi 409 "email_taken" khi email đã có tài khoản; 422 "weak_password" khi mật khẩu tạm chưa đủ mạnh. */
+  createAdvisor: (body: CreateAdvisorRequest): Promise<AdminAdvisor> =>
+    via("admin", () => mockApi.createAdvisor(body), () => request("/admin/advisors", json(body))),
+  /** Sửa thông tin hoặc tạm khoá / mở khoá (tạm khoá đăng xuất mọi phiên của cố vấn). */
+  updateAdvisor: (id: string, body: UpdateAdvisorRequest): Promise<AdminAdvisor> =>
+    via(
+      "admin",
+      () => mockApi.updateAdvisor(id, body),
+      () => request(`/admin/advisors/${encodeURIComponent(id)}`, { ...json(body), method: "PATCH" }),
+    ),
+  resetAdvisorPassword: (id: string, temporaryPassword: string): Promise<AdminAdvisor> =>
+    via(
+      "admin",
+      () => mockApi.resetAdvisorPassword(id, temporaryPassword),
+      () =>
+        request(`/admin/advisors/${encodeURIComponent(id)}/reset-password`, json({ temporary_password: temporaryPassword })),
+    ),
+  listAdminStudents: (): Promise<AdminStudent[]> =>
+    via("admin", () => mockApi.listAdminStudents(), () => request("/admin/students")),
+  /** Gán / đổi cố vấn; đổi cố vấn thì tài liệu SV đã chia sẻ chuyển về riêng tư. 409 "advisor_disabled". */
+  assignAdvisor: (studentIds: string[], advisorId: string): Promise<AssignAdvisorResponse> =>
+    via(
+      "admin",
+      () => mockApi.assignAdvisor(studentIds, advisorId),
+      () => request("/admin/assignments", json({ student_ids: studentIds, advisor_id: advisorId })),
     ),
 }

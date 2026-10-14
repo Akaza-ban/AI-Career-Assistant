@@ -1,46 +1,55 @@
 "use client"
 
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useMemo, useState } from "react"
-import { ArrowRight, ClipboardPaste, Library, Loader2, Sparkles, X } from "lucide-react"
+import { ChevronRight, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 import { BottomActionBar } from "@/components/common/bottom-action-bar"
-import { AnalysisStepper } from "@/components/student/analysis/analysis-stepper"
-import { CvPickStep } from "@/components/student/analysis/cv-pick-step"
+import { PageHeader } from "@/components/common/page-header"
+import { SegmentedControl } from "@/components/common/segmented-control"
+import { Zone } from "@/components/common/zone"
+import { ComparePicker } from "@/components/student/analysis/compare-picker"
+import { CvZone } from "@/components/student/analysis/cv-pick-step"
 import {
-  IntegrityBox,
-  JD_TABS,
-  JdLibraryPicker,
+  EMPTY_PASTE,
   JdPasteForm,
-  SelectedCvCard,
-  type JdTab,
+  JdRadioList,
+  SOURCE_OPTIONS,
+  composeJdText,
+  pasteErrors,
+  pasteMissingHint,
+  usePickItems,
+  type JdSource,
   type PastedJd,
+  type PickItem,
+  type PickItemsState,
 } from "@/components/student/analysis/jd-picker-sections"
+import { metaLine } from "@/components/student/library/library-data"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { api } from "@/lib/api"
-import { countWords } from "@/lib/text"
-import { JD_MIN_WORDS, type JobDescription } from "@/lib/types"
-import { useApi } from "@/lib/use-api"
+import type { CvVersion } from "@/lib/types"
 import { useAgentActions } from "@/lib/use-agent-actions"
-import { cn } from "@/lib/utils"
+import { useApi } from "@/lib/use-api"
 
-const EMPTY_PASTE: PastedJd = { title: "", company: "", text: "" }
+type Mode = "single" | "multi"
 
-// Figma: frame "Chọn vị trí ứng tuyển" (18:2637). US-SV-02.
-export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
+const MODE_OPTIONS: { value: Mode; label: string }[] = [
+  { value: "single", label: "So với 1 vị trí" },
+  { value: "multi", label: "So với nhiều vị trí" },
+]
+
+/**
+ * Phân tích CV & JD (WIREFRAMES A4, A5; bản vẽ PhanTich1, PhanTichNhieu). US-SV-02.
+ * Chế độ nằm trong URL (?mode=multi) để quay lại được; ?cv= chọn sẵn CV, ?jd=<id>[,<id>] chọn sẵn vị trí.
+ */
+export function NewAnalysis({ initialCvId, initialJdIds }: { initialCvId: string | null; initialJdIds: string[] }) {
   const router = useRouter()
-  const { data: cvs } = useApi(api.listCvVersions)
-  const { data: library } = useApi(api.listJdLibrary)
-
+  const searchParams = useSearchParams()
+  const mode: Mode = searchParams.get("mode") === "multi" ? "multi" : "single"
+  const { data: cvs, error: cvError, reload: reloadCvs } = useApi(api.listCvVersions)
   const [cvId, setCvId] = useState<string | null>(initialCvId)
-  // Vào từ nút "Phân tích" trên thẻ CV (?cv=) thì CV đã chọn sẵn → vào thẳng bước 2.
-  const [step, setStep] = useState<0 | 1>(initialCvId ? 1 : 0)
-  const [tab, setTab] = useState<JdTab>("library")
-  const [paste, setPaste] = useState<PastedJd>(EMPTY_PASTE)
-  const [libraryJd, setLibraryJd] = useState<JobDescription | null>(null)
-  const [submitting, setSubmitting] = useState(false)
 
   // US-SV-02 AC3: chưa có CV thì chặn và đưa về trang CV để tải lên.
   useEffect(() => {
@@ -56,57 +65,161 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
     return cvs.find((cv) => cv.id === cvId) ?? cvs.find((cv) => cv.is_active) ?? cvs[0]
   }, [cvs, cvId])
 
+  const picks = usePickItems(selectedCv?.status === "ready" ? selectedCv.id : null, initialJdIds)
+  const industries = useMemo(
+    () => [...new Set((picks.jds ?? []).flatMap((jd) => (jd.industry ? [jd.industry] : [])))].sort((a, b) => a.localeCompare(b, "vi")),
+    [picks.jds],
+  )
+
+  // Ghi chế độ và CV vào URL để tải lại hoặc quay lại vẫn đúng màn đang xem (không tải lại trang).
+  function syncUrl(next: { mode?: Mode; cv?: string }) {
+    const params = new URLSearchParams(searchParams.toString())
+    if (next.mode) {
+      if (next.mode === "multi") params.set("mode", "multi")
+      else params.delete("mode")
+    }
+    if (next.cv) params.set("cv", next.cv)
+    const query = params.toString()
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname)
+  }
+
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-14">
+      {/* Dưới lg, thanh trên cùng đã hiện tên trang nên tiêu đề chỉ còn cho trình đọc màn hình (như Thư viện JD). */}
+      <PageHeader
+        className="pt-2 pb-0 max-lg:[&_h1]:sr-only max-sm:[&>div:last-child]:w-full md:pt-4 lg:pt-12"
+        title="Phân tích CV & JD"
+        description="So CV với vị trí bạn nhắm tới để biết còn thiếu gì."
+        actions={
+          <SegmentedControl
+            aria-label="Chế độ phân tích"
+            size="lg"
+        className="w-full p-1 sm:w-auto"
+            value={mode}
+            onChange={(m) => syncUrl({ mode: m })}
+            options={MODE_OPTIONS}
+          />
+        }
+      />
+
+      {cvError ? (
+        <Zone id="cv-zone-title" title="CV">
+          <div role="alert" className="flex flex-wrap items-center gap-3 text-sm text-ink-2">
+            Không tải được danh sách CV.
+            <Button variant="soft" className="h-9 rounded-full px-4" onClick={reloadCvs}>
+              Thử lại
+            </Button>
+          </div>
+        </Zone>
+      ) : !selectedCv ? (
+        <LoadingZones />
+      ) : (
+        <>
+          <CvZone
+            cvs={cvs ?? []}
+            selected={selectedCv}
+            onSelect={(cv) => {
+              setCvId(cv.id)
+              syncUrl({ cv: cv.id })
+            }}
+          />
+          {mode === "single" ? (
+            <SinglePicker
+              key="single"
+              cv={selectedCv}
+              picks={picks}
+              initialJdId={initialJdIds[0] ?? null}
+              industries={industries}
+            />
+          ) : (
+            <ComparePicker key="multi" cv={selectedCv} picks={picks} initialJdIds={initialJdIds} industries={industries} />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function LoadingZones() {
+  return (
+    <div className="grid gap-14" aria-busy="true" aria-label="Đang tải">
+      {[72, 280].map((h) => (
+        <div key={h} className="grid gap-5">
+          <Skeleton className="h-8 w-40 rounded-lg" />
+          <Skeleton className="rounded-card" style={{ height: h }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+interface SinglePickerProps {
+  cv: CvVersion
+  picks: PickItemsState
+  initialJdId: string | null
+  industries: string[]
+}
+
+/** Chế độ "So với 1 vị trí": chọn một vị trí gợi ý / đã lưu hoặc dán JD, rồi bắt đầu phân tích. */
+function SinglePicker({ cv, picks, initialJdId, industries }: SinglePickerProps) {
+  const router = useRouter()
+  const [tab, setTab] = useState<JdSource>("list")
+  const [selected, setSelected] = useState<PickItem | null>(null)
+  const [paste, setPaste] = useState<PastedJd>(EMPTY_PASTE)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Chọn sẵn vị trí từ ?jd= khi danh sách đã tải; nếu không có thì chọn vị trí đầu danh sách.
+  const [seeded, setSeeded] = useState(false)
+  if (!seeded && picks.items) {
+    setSeeded(true)
+    setSelected(picks.items.find((item) => item.id === initialJdId) ?? picks.items[0] ?? null)
+  }
+
+  const pasteReady = Object.keys(pasteErrors(paste)).length === 0
+  const ready = tab === "list" ? selected !== null : pasteReady
+  const hint = tab === "list" ? "Hãy chọn một vị trí." : pasteMissingHint(paste)
+  // Trợ lý AI: báo vị trí đang chọn và cho phép đặt lại lựa chọn.
   useAgentActions({
-    prepareHighlight: (selector) => {
-      if (step === 0 && selectedCv && /^\[data-agent-target=["']btn-start-analysis["']\]$/.test(selector)) {
-        setCvId(selectedCv.id)
-        setStep(1)
-      }
-    },
     getContext: () => ({
-      selected_cv_id: selectedCv?.id,
-      page_state: { active_step: step, active_tab: tab, selected_jd_id: tab === "library" ? libraryJd?.id : undefined },
+      selected_cv_id: cv.id,
+      page_state: {
+        active_tab: tab,
+        selected_jd_id: tab === "list" ? selected?.id : undefined,
+        // Tên hiển thị cho hộp xác nhận của trợ lý
+        selected_cv_name: `${cv.file_name} · ${cv.label}`,
+        selected_jd_title: tab === "list" && selected ? metaLine(selected.title, selected.company) : undefined,
+      },
     }),
     resetView: ({ clear_filters }) => {
       if (!clear_filters || submitting) return
-      setCvId(initialCvId)
-      setStep(initialCvId ? 1 : 0)
-      setTab("library")
+      setTab("list")
       setPaste(EMPTY_PASTE)
-      setLibraryJd(null)
+      setSelected(picks.items?.find((item) => item.id === initialJdId) ?? picks.items?.[0] ?? null)
     },
   })
 
-  const pasteTouched = paste.title.trim() !== "" || paste.text.trim() !== ""
-  const pasteReady = paste.title.trim() !== "" && countWords(paste.text) >= JD_MIN_WORDS
-  // SV chỉ chọn một nguồn JD: tab đang mở quyết định gửi JD thư viện hay JD tự dán.
-  const ready = tab === "library" ? libraryJd !== null : pasteReady
-  const missingHint =
-    tab === "library" ? "Hãy chọn một vị trí trong thư viện JD." : `Nhập tiêu đề và tối thiểu ${JD_MIN_WORDS} từ nội dung JD.`
-  const selectionLabel =
-    tab === "library"
-      ? libraryJd && { text: libraryJd.title, source: "Thư viện", icon: Library }
-      : paste.title.trim() && { text: paste.title.trim(), source: "Dán tay", icon: ClipboardPaste }
-
-  function reset() {
-    setPaste(EMPTY_PASTE)
-    setLibraryJd(null)
-  }
+  const chosen =
+    tab === "list"
+      ? selected && metaLine(selected.title, selected.company)
+      : paste.title.trim() && metaLine(paste.title.trim(), paste.company.trim())
 
   async function submit() {
-    if (!selectedCv || !ready) return
+    if (!ready) return
     setSubmitting(true)
     try {
       const analysis = await api.createGapAnalysis(
-        tab === "library"
-          ? { cv_version_id: selectedCv.id, jd_id: libraryJd!.id }
+        tab === "list"
+          ? { cv_version_id: cv.id, jd_id: selected!.id }
           : {
-              cv_version_id: selectedCv.id,
-              jd_text: paste.text,
+              cv_version_id: cv.id,
+              jd_text: composeJdText(paste),
               jd_title: paste.title.trim(),
               jd_company: paste.company.trim() || undefined,
             },
       )
+      if (tab === "paste" && paste.save) {
+        api.saveJd(analysis.jd.id).catch(() => toast.warning("Chưa lưu được JD này vào Đã lưu."))
+      }
       // Trang kết quả hiển thị tiến độ từng bước cho tới khi phân tích xong.
       router.push(`/student/analysis/${encodeURIComponent(analysis.id)}`)
     } catch (err) {
@@ -115,121 +228,65 @@ export function NewAnalysis({ initialCvId }: { initialCvId: string | null }) {
     }
   }
 
-  if (!cvs || !selectedCv) {
-    return (
-      <div className="grid gap-6" aria-busy="true" aria-label="Đang tải">
-        <Skeleton className="h-[88px] rounded-[20px]" />
-        <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <Skeleton className="h-[420px] rounded-[20px]" />
-          <Skeleton className="h-[640px] rounded-[20px]" />
-        </div>
-      </div>
-    )
-  }
-
-  const SelectionIcon = selectionLabel ? selectionLabel.icon : null
-  const steps = [
-    { title: "Chọn CV", description: step === 0 ? "Chọn phiên bản CV để đối chiếu" : selectedCv.file_name },
-    { title: "Chọn vị trí / JD", description: "Chọn từ thư viện hoặc dán JD" },
-    { title: "Xem phân tích", description: "Đối soát và đề xuất cải thiện" },
-  ]
-
-  if (step === 0) {
-    return (
-      <div className="grid gap-6">
-        <AnalysisStepper current={0} steps={steps} />
-        <CvPickStep
-          cvs={cvs}
-          selectedId={selectedCv.id}
-          onSelect={setCvId}
-          onContinue={() => {
-            setCvId(selectedCv.id)
-            setStep(1)
-            window.scrollTo({ top: 0 })
-          }}
-        />
-      </div>
-    )
-  }
-
   return (
-    <div className="grid gap-6">
-      <AnalysisStepper current={1} steps={steps} onStepClick={() => setStep(0)} />
-
-      <div className="grid items-start gap-6 lg:grid-cols-[320px_1fr]">
-        <aside className="grid min-w-0 gap-4 lg:sticky lg:top-24">
-          <SelectedCvCard selected={selectedCv} onChangeCv={() => setStep(0)} />
-          <IntegrityBox />
-        </aside>
-
-        <div className="grid min-w-0 gap-4">
-          <div role="tablist" aria-label="Cách chọn JD" className="flex gap-1 rounded-2xl border border-line bg-surface p-1.5">
-            {JD_TABS.map(({ value, label, icon: Icon }) => (
-              <button
-                key={value}
-                type="button"
-                role="tab"
-                aria-selected={tab === value}
-                onClick={() => setTab(value)}
-                className={cn(
-                  "flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors",
-                  tab === value ? "bg-card text-blue shadow-card" : "text-ink-2 hover:text-ink",
-                )}
-              >
-                <Icon className="size-4" aria-hidden />
-                {label}
-                {value === "library" && library && (
-                  <span className="rounded-full bg-violet-soft px-2 py-0.5 text-xs text-violet">{library.length} vị trí</span>
-                )}
-              </button>
-            ))}
-          </div>
-
-          {tab === "library" ? (
-            <JdLibraryPicker items={library} selected={libraryJd} onSelect={setLibraryJd} />
+    <>
+      <Zone
+        id="pick-title"
+        title="Chọn vị trí"
+        aside={
+          <SegmentedControl
+            aria-label="Cách chọn vị trí"
+            size="sm"
+            className="w-full sm:w-[280px]"
+            value={tab}
+            onChange={setTab}
+            options={SOURCE_OPTIONS}
+          />
+        }
+      >
+        <div className="-mt-3.5 max-w-[980px]">
+          {tab === "list" ? (
+            <div className="pt-3.5">
+              <JdRadioList state={picks} value={selected?.id ?? null} onChange={setSelected} onPaste={() => setTab("paste")} />
+            </div>
           ) : (
-            <JdPasteForm value={paste} onChange={setPaste} showErrors={pasteTouched} />
+            <div className="pt-6">
+              <JdPasteForm
+                value={paste}
+                onChange={setPaste}
+                showErrors={false}
+                industries={industries}
+                idPrefix="single-paste"
+              />
+            </div>
           )}
         </div>
-      </div>
+      </Zone>
 
-      {/* Thanh hành động dính đáy (Figma: node 18:2980) */}
       <BottomActionBar>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2 text-xs">
-            <span className="font-medium text-ink-2">Đã chọn:</span>
-            {selectionLabel && SelectionIcon ? (
-              <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-blue-soft py-1 pr-2 pl-3 font-medium text-blue">
-                <SelectionIcon className="size-3.5 shrink-0" aria-hidden />
-                <span className="max-w-72 truncate">
-                  {selectionLabel.text} ({selectionLabel.source})
-                </span>
-                <button
-                  type="button"
-                  onClick={reset}
-                  aria-label="Bỏ chọn vị trí"
-                  className="grid size-4 shrink-0 place-items-center rounded-full hover:bg-blue/10"
-                >
-                  <X className="size-3" aria-hidden />
-                </button>
-              </span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-[1_1_240px] items-baseline gap-2.5">
+            <span className="shrink-0 text-sm text-ink-3">Đã chọn</span>
+            {chosen ? (
+              <b className="truncate font-semibold text-ink">{chosen}</b>
             ) : (
-              <span className="text-ink-3">Chưa có vị trí nào</span>
+              <span className="truncate text-sm text-ink-3">Chưa có vị trí nào</span>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {!ready && <span className="text-xs text-ink-2">{missingHint}</span>}
-            <Button variant="ghost" className="h-10 px-4 text-ink-2" onClick={reset} disabled={submitting}>
-              Huỷ & Chọn lại
-            </Button>
-            <Button data-agent-target="btn-start-analysis" className="h-10 px-6 shadow-md" onClick={submit} disabled={submitting || !ready}>
-              {submitting ? <Loader2 className="animate-spin" aria-hidden /> : <Sparkles aria-hidden />}
-              {submitting ? "Đang gửi…" : "Phân tích CV với JD"}
-              {!submitting && <ArrowRight aria-hidden />}
-            </Button>
-          </div>
+          {!ready && hint && <span className="text-[13px] text-ink-3">{hint}</span>}
+          <Button
+            data-agent-target="btn-start-analysis"
+            size="brand"
+            onClick={submit}
+            disabled={submitting || !ready}
+            className="max-sm:w-full"
+          >
+            {submitting && <Loader2 className="animate-spin" aria-hidden />}
+            {submitting ? "Đang gửi…" : "Bắt đầu phân tích"}
+            {!submitting && <ChevronRight aria-hidden />}
+          </Button>
         </div>
       </BottomActionBar>
-    </div>
+    </>
   )
 }

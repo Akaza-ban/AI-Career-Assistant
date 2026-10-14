@@ -52,39 +52,36 @@ const INTRO_POINTS = [
 /** Hình minh hoạ bên trái popup: câu hỏi, đồng hồ và điểm STAR như trong phòng (chỉ để trang trí). */
 function IntroArt() {
   return (
-    <div aria-hidden className="relative hidden overflow-hidden bg-navy md:block">
-      <span className="absolute -top-24 -left-24 size-64 rounded-full border border-white/15" />
-      <span className="absolute -right-20 -bottom-28 size-72 rounded-full border border-white/15" />
-      <span className="absolute top-1/2 left-1/2 size-56 -translate-x-1/2 -translate-y-1/2 rounded-full bg-violet/25 blur-3xl" />
+    <div aria-hidden className="relative hidden overflow-hidden bg-panel md:block">
       <div className="absolute inset-0 grid place-content-center gap-3 px-10">
-        <div className="grid w-60 gap-2 rounded-xl border border-white/25 bg-white/5 p-3">
-          <span className="w-fit rounded-full bg-violet px-2 py-0.5 text-[10px] font-semibold text-white">
-            Câu 1/{QUESTION_COUNT}
+        <div className="grid w-60 gap-2 rounded-xl bg-card p-3 shadow-card">
+          <span className="w-fit rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-on-ink">
+            Câu 1 / {QUESTION_COUNT}
           </span>
-          <span className="h-1.5 w-11/12 rounded bg-white/40" />
-          <span className="h-1.5 w-3/4 rounded bg-white/25" />
+          <span className="h-1.5 w-11/12 rounded bg-line-strong" />
+          <span className="h-1.5 w-3/4 rounded bg-line" />
         </div>
         <div className="flex items-center gap-2 self-end justify-self-end">
-          <span className="flex items-center gap-1 rounded-lg bg-gold px-2.5 py-1 font-heading text-sm font-bold text-navy tabular-nums">
+          <span className="flex items-center gap-1 rounded-full bg-card px-3 py-1 text-sm font-semibold text-ink tabular-nums shadow-card">
             <Timer className="size-3.5" />
             {mmss(SECONDS_PER_QUESTION)}
           </span>
-          <span className="grid size-7 place-items-center rounded-full bg-white/15 text-white">
+          <span className="grid size-7 place-items-center rounded-full bg-card text-ink shadow-card">
             <Pause className="size-3.5" />
           </span>
         </div>
-        <div className="grid w-60 grid-cols-4 gap-1.5 rounded-xl border border-white/25 bg-white/5 p-3">
+        <div className="grid w-60 grid-cols-4 gap-1.5 rounded-xl bg-card p-3 shadow-card">
           {STAR_ORDER.map((key, i) => (
             <span
               key={key}
               className={cn(
-                "relative grid h-10 place-items-center rounded-lg font-heading text-base font-bold",
-                i < 3 ? "bg-white/15 text-white" : "border border-dashed border-white/30 text-white/50",
+                "relative grid h-10 place-items-center rounded-lg text-base font-semibold",
+                i < 3 ? "bg-surface text-ink" : "border border-dashed border-line-strong text-ink-3",
               )}
             >
               {STAR_META[key].letter}
               {i < 3 && (
-                <span className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full bg-good text-white">
+                <span className="absolute -top-1.5 -right-1.5 grid size-4 place-items-center rounded-full bg-good text-on-ink">
                   <Check className="size-2.5" />
                 </span>
               )}
@@ -129,10 +126,10 @@ export function InterviewIntro({ open, onClose, onStartTour }: InterviewIntroPro
       }}
     >
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-navy/60 backdrop-blur-sm duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
+        <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-sm duration-150 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0" />
         <DialogPrimitive.Popup
           initialFocus={startRef}
-          className="fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-32px)] w-[min(880px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[24px] bg-card shadow-float outline-none duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+          className="fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-32px)] w-[min(880px,calc(100vw-32px))] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[22px] bg-card shadow-dialog outline-none duration-200 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95 md:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
           <IntroArt />
           <div className="relative grid gap-5 overflow-y-auto p-6 sm:p-8">
             <DialogPrimitive.Close
@@ -142,9 +139,9 @@ export function InterviewIntro({ open, onClose, onStartTour }: InterviewIntroPro
               <X className="size-4" aria-hidden />
             </DialogPrimitive.Close>
             <div className="grid gap-3 pr-6">
-              <p className="text-xs font-bold tracking-[0.12em] text-violet uppercase">Phòng phỏng vấn thử</p>
-              <DialogPrimitive.Title className="font-heading text-[28px] leading-9 font-extrabold text-balance">
-                Sẵn sàng cho <span className="text-grad">buổi phỏng vấn thử</span> của bạn?
+              <p className="text-[13px] font-semibold text-ink-3">Phòng phỏng vấn thử</p>
+              <DialogPrimitive.Title className="text-[28px] leading-9 font-semibold tracking-[-0.02em] text-balance">
+                Sẵn sàng cho buổi phỏng vấn thử của bạn?
               </DialogPrimitive.Title>
               <DialogPrimitive.Description className="text-[15px] leading-6 text-ink-2">
                 {QUESTION_COUNT} câu hỏi hành vi như một buổi phỏng vấn thật, khoảng {MINUTES} phút. AI chấm từng câu theo
@@ -153,8 +150,8 @@ export function InterviewIntro({ open, onClose, onStartTour }: InterviewIntroPro
             </div>
             <ol className="grid gap-2">
               {INTRO_POINTS.map((point, i) => (
-                <li key={point} className="flex items-center gap-3 rounded-xl border border-line p-3 text-sm font-medium text-ink">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-soft font-heading text-xs font-bold text-violet">
+                <li key={point} className="flex items-center gap-3 border-b border-line py-3 text-sm font-medium text-ink first:border-t">
+                  <span className="grid size-[26px] shrink-0 place-items-center rounded-full bg-blue-soft text-xs font-semibold text-accent-strong">
                     {i + 1}
                   </span>
                   {point}
@@ -169,10 +166,10 @@ export function InterviewIntro({ open, onClose, onStartTour }: InterviewIntroPro
               </label>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-5">
-              <Button variant="ghost" className="h-11 px-4" onClick={() => close(false)}>
+              <Button variant="ghost" size="brand" onClick={() => close(false)}>
                 Bỏ qua
               </Button>
-              <Button ref={startRef} variant="violet" size="brand" onClick={() => close(true)}>
+              <Button ref={startRef} size="brand" onClick={() => close(true)}>
                 Bắt đầu hướng dẫn
                 <ArrowRight aria-hidden />
               </Button>
@@ -201,8 +198,8 @@ function steps(weeklyLimit: number): TourStep[] {
   return [
     {
       target: "setup",
-      title: "Chọn vị trí và CV",
-      body: "AI đặt câu hỏi theo vị trí bạn chọn và đối chiếu với kinh nghiệm trong CV. Các kỹ năng của vị trí hiện ngay bên dưới để bạn chuẩn bị ví dụ từ trước.",
+      title: "Chọn CV và vị trí",
+      body: "Chọn CV bạn dùng để trả lời, rồi chọn vị trí trong danh sách gợi ý, vị trí đã lưu hoặc vị trí đã phân tích. AI đặt câu hỏi theo vị trí và đối chiếu với kinh nghiệm trong CV.",
     },
     {
       title: `${QUESTION_COUNT} câu hỏi, ${QUESTION_COUNT} chủ đề`,
@@ -211,7 +208,7 @@ function steps(weeklyLimit: number): TourStep[] {
         <ol className="grid gap-2 sm:grid-cols-2">
           {QUESTION_THEMES.map((theme, i) => (
             <li key={theme} className="flex items-center gap-2.5 rounded-xl bg-surface px-3 py-2.5 text-sm font-medium text-ink">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-violet-soft text-xs font-bold text-violet">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-blue-soft text-xs font-semibold text-accent-strong">
                 {i + 1}
               </span>
               {theme}
@@ -232,11 +229,11 @@ function steps(weeklyLimit: number): TourStep[] {
       // Bản minh hoạ đồng hồ và nút Tạm dừng giống trong phòng phỏng vấn
       illustration: (
         <div className="flex items-center justify-center gap-3 rounded-xl bg-surface p-4" aria-hidden>
-          <span className="flex items-center gap-1.5 rounded-lg bg-card px-3.5 py-2 font-heading text-lg font-bold text-ink tabular-nums shadow-card">
+          <span className="flex items-center gap-1.5 rounded-full bg-card px-3.5 py-2 text-lg font-semibold text-ink tabular-nums shadow-card">
             <Timer className="size-4" />
             {mmss(SECONDS_PER_QUESTION)}
           </span>
-          <span className="flex items-center gap-1.5 rounded-lg border border-line bg-card px-3.5 py-2 text-sm font-medium text-ink shadow-card">
+          <span className="flex items-center gap-1.5 rounded-full bg-card px-3.5 py-2 text-sm font-semibold text-ink shadow-card">
             <Pause className="size-4" />
             Tạm dừng
           </span>
@@ -251,7 +248,7 @@ function steps(weeklyLimit: number): TourStep[] {
           <div className="grid grid-cols-4 gap-2">
             {STAR_ORDER.map((key) => (
               <span key={key} className="grid justify-items-center gap-0.5 rounded-xl bg-surface px-1 py-2.5 text-center">
-                <span className="font-heading text-lg font-bold text-blue">{STAR_META[key].letter}</span>
+                <span className="text-lg font-semibold text-ink">{STAR_META[key].letter}</span>
                 <span className="text-xs text-ink-2">{STAR_META[key].label}</span>
               </span>
             ))}
@@ -263,8 +260,8 @@ function steps(weeklyLimit: number): TourStep[] {
               .join("; ")}
             .
           </p>
-          <p className="flex items-start gap-2 rounded-xl bg-blue-soft/60 px-3 py-2.5 text-sm leading-5 text-ink">
-            <History className="mt-0.5 size-4 shrink-0 text-blue" aria-hidden />
+          <p className="flex items-start gap-2 rounded-xl bg-panel px-3 py-2.5 text-sm leading-5 text-ink-2">
+            <History className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden />
             Mọi buổi đã hoàn thành được lưu ở trang Lịch sử & Tiến bộ để bạn xem lại báo cáo và theo dõi điểm qua các buổi.
           </p>
         </div>
@@ -276,8 +273,8 @@ function steps(weeklyLimit: number): TourStep[] {
       body: (
         <>
           Mỗi vị trí có <strong className="text-ink">{weeklyLimit} buổi chấm điểm mỗi tuần</strong>; chỉ buổi làm đủ{" "}
-          {QUESTION_COUNT} câu mới tính lượt. Bấm <strong className="text-ink">Bắt đầu phỏng vấn</strong> để vào phòng; đồng
-          hồ chỉ chạy khi bạn đọc luật và bấm <strong className="text-ink">Sẵn sàng</strong>.
+          {QUESTION_COUNT} câu mới tính lượt. Bấm <strong className="text-ink">Vào phòng chờ</strong> để xem luật; đồng hồ chỉ
+          chạy khi bạn bấm <strong className="text-ink">Sẵn sàng</strong>.
         </>
       ),
     },
@@ -333,7 +330,10 @@ function layoutFor(target: HTMLElement | null, bubble: HTMLElement): Layout {
   if (right + w <= vw - EDGE) return beside("right", right)
   if (below + h <= vh - EDGE) return stacked("bottom", below)
   if (hole.left - GAP - w >= EDGE) return beside("left", hole.left - GAP - w)
-  return stacked("top", Math.max(EDGE, hole.top - GAP - h))
+  if (hole.top - GAP - h >= EDGE) return stacked("top", hole.top - GAP - h)
+  // Ô cao hơn màn hình, không còn chỗ trống quanh ô: đặt popup ở góc dưới bên phải trong ô, che phần cuối ít quan trọng.
+  const left = clamp(hole.left + hole.width - w - 24, EDGE, vw - w - EDGE)
+  return { hole, bubble: { top: vh - h - EDGE - 8, left }, caret: null }
 }
 
 /** Mũi nhọn trên cạnh bong bóng, chỉ về phía ô đang nói tới. */
@@ -384,7 +384,12 @@ export function InterviewTour({ open, onClose, weeklyLimit }: InterviewTourProps
   useLayoutEffect(() => {
     if (!open) return
     const target = targetKey ? document.querySelector<HTMLElement>(`[data-tour="${targetKey}"]`) : null
-    target?.scrollIntoView({ block: "center", behavior: "instant" })
+    // Ô cao hơn màn hình thì cuộn tới đầu ô (dưới header dính) để thấy phần đầu, không thì đặt giữa màn hình.
+    if (target) {
+      const tall = target.offsetHeight > window.innerHeight - 160
+      if (tall) window.scrollTo({ top: target.getBoundingClientRect().top + window.scrollY - 96, behavior: "instant" })
+      else target.scrollIntoView({ block: "center", behavior: "instant" })
+    }
     measure()
   }, [open, index, targetKey, measure])
 
@@ -412,54 +417,53 @@ export function InterviewTour({ open, onClose, weeklyLimit }: InterviewTourProps
     >
       <DialogPrimitive.Portal>
         {/* Lớp chặn bấm vào trang; bước có ô nổi bật thì phần tối nằm ở bóng của ô khoét sáng */}
-        <div className={cn("fixed inset-0 z-50", layout?.hole ? "bg-transparent" : "bg-navy/60")} aria-hidden />
+        <div className={cn("fixed inset-0 z-50", layout?.hole ? "bg-transparent" : "bg-ink/30")} aria-hidden />
         {layout?.hole && (
           <div
             aria-hidden
-            className="pointer-events-none fixed z-50 rounded-[26px] shadow-[0_0_0_3px_var(--violet),0_0_0_10px_rgb(103_65_224/0.25),0_0_0_9999px_rgb(11_21_51/0.6)] transition-all duration-300 ease-out"
+            className="pointer-events-none fixed z-50 rounded-[22px] shadow-[0_0_0_2px_var(--ink),0_0_0_9999px_rgb(24_24_27/0.45)] transition-all duration-300 ease-out"
             style={layout.hole}
           />
         )}
         <DialogPrimitive.Popup
           ref={bubbleCallbackRef}
           initialFocus={nextRef}
-          className="fixed z-50 grid w-[min(460px,calc(100vw-32px))] gap-5 rounded-[20px] bg-card p-6 text-ink shadow-float outline-none transition-[top,left] duration-300 ease-out"
+          className="fixed z-50 grid w-[min(460px,calc(100vw-32px))] gap-5 rounded-[22px] bg-card p-6 text-ink shadow-dialog outline-none transition-[top,left] duration-300 ease-out"
           // Ẩn bằng opacity (không dùng visibility) cho tới khi đo xong vị trí, để nút "Tiếp" vẫn nhận được focus ban đầu
           style={{ ...layout?.bubble, opacity: layout ? 1 : 0 }}
         >
           {layout?.caret && <Caret {...layout.caret} />}
           <div className="flex gap-1.5" aria-hidden>
             {all.map((_, i) => (
-              <span key={i} className={cn("h-1.5 flex-1 rounded-full transition-colors", i <= index ? "bg-violet" : "bg-line")} />
+              <span key={i} className={cn("h-1.5 flex-1 rounded-full transition-colors", i <= index ? "bg-ink" : "bg-line-strong")} />
             ))}
           </div>
           <div className="flex items-start gap-3.5">
-            <span className="grid size-10 shrink-0 place-items-center rounded-full bg-violet font-heading text-base font-bold text-white shadow-[0_6px_14px_-6px_var(--violet)]">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-ink text-base font-semibold text-on-ink">
               {index + 1}
             </span>
             <div className="grid min-w-0 flex-1 gap-0.5">
-              <span className="flex items-center justify-between gap-3 text-xs font-semibold text-violet">
+              <span className="flex items-center justify-between gap-3 text-[13px] font-semibold text-ink-3">
                 Bước {index + 1}/{all.length}
                 <button type="button" onClick={onClose} className="font-medium text-ink-2 hover:text-ink hover:underline">
                   Bỏ qua hướng dẫn
                 </button>
               </span>
-              <DialogPrimitive.Title className="font-heading text-xl leading-7 font-bold">{step.title}</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="text-xl leading-7 font-semibold">{step.title}</DialogPrimitive.Title>
             </div>
           </div>
           <DialogPrimitive.Description className="text-[15px] leading-6 text-ink-2">{step.body}</DialogPrimitive.Description>
           {step.illustration}
           <div className="flex items-center justify-end gap-2 border-t border-line pt-4">
             {index > 0 && (
-              <Button variant="ghost" className="h-10 px-3" onClick={() => setIndex(index - 1)}>
+              <Button variant="ghost" className="h-10 rounded-full px-3.5 font-semibold" onClick={() => setIndex(index - 1)}>
                 <ArrowLeft aria-hidden />
                 Quay lại
               </Button>
             )}
             <Button
               ref={nextRef}
-              variant="violet"
-              className="h-10 px-5"
+              className="h-10 rounded-full px-5 font-semibold"
               onClick={() => (last ? onClose() : setIndex(index + 1))}
             >
               {last ? "Đã hiểu, bắt đầu thôi" : "Tiếp"}
