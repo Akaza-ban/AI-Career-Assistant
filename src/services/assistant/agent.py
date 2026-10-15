@@ -411,6 +411,7 @@ class AssistantAgent:
             return self._fallback(state).model_copy(update={"intent": "qa", "actions": [], "ui_actions": []})
         client = self._llm if self._llm is not None else get_assistant_llm()
         stream = None
+        text = ""
         try:
             with provider_scope(mask_only=True) as scope:
                 data = scope.mask_payload(
@@ -441,11 +442,16 @@ class AssistantAgent:
                 ]
                 text, done = "", False
                 stream = client.chat_stream(
-                    scope.prepared(messages), thinking=False, model=get_settings().llm_model_agent, temperature=0
+                    scope.prepared(messages),
+                    thinking=False,
+                    model=get_settings().llm_model_agent,
+                    temperature=0,
+                    stream_text=_event_sink.get() is not None,
                 )
                 async for event in stream:
                     if isinstance(event, ContentDelta):
                         text += event.text
+                        emit_event("token", {"text": event.text})
                     elif isinstance(event, Done):
                         if event.message.get("tool_calls"):
                             raise GatewayError("Unexpected how-to tool call")
@@ -454,6 +460,24 @@ class AssistantAgent:
                     raise GatewayError("Incomplete how-to response")
                 text = scope.sanitize_output(text)
                 if not safe_guide_output(text):
+                    if _event_sink.get() is not None and text:
+                        emit_event(
+                            "notice",
+                            {
+                                "code": "grounding_advisory",
+                                "message": "Please verify this answer against the cited guide.",
+                            },
+                        )
+                        return AssistantResponse(
+                            message=text,
+                            intent="qa",
+                            sources=state["sources"],
+                            ui_actions=attached_actions(
+                                AttachmentMetadata.model_validate(state["retrieved_chunks"][0]),
+                                context.user_role,
+                                context.route,
+                            ),
+                        )
                     return fallback
                 if is_refusal_response(text):
                     return AssistantResponse(message=text, intent="qa")
@@ -471,12 +495,16 @@ class AssistantAgent:
                     ui_actions=attached_actions(answer.attachment, context.user_role, context.route),
                 )
         except (MaskingError, GatewayError) as error:
+            if _event_sink.get() is not None and text:
+                raise
             if isinstance(error, MaskingError) or error.stage in {"mask", "egress", "response_mask"}:
                 return AssistantResponse(
                     message="Trợ lý tạm thời chưa thể xử lý an toàn. Bạn vui lòng thử lại sau.", intent="qa"
                 )
             return fallback
         except Exception:
+            if _event_sink.get() is not None and text:
+                raise
             logger.warning("Assistant how-to generation unavailable")
             return fallback
         finally:

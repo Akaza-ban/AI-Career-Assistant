@@ -7,6 +7,7 @@ calls. Assistant messages remain provider dictionaries, never LangChain messages
 import asyncio
 import copy
 import json
+import re
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -214,9 +215,13 @@ class LlmClient:
         model: str | None = None,
         max_tokens: int | None = None,
         temperature: float | None = None,
+        stream_text: bool = False,
     ) -> AsyncIterator[ContentDelta | ReasoningDelta | ToolCallDelta | Done]:
+        if stream_text and tools:
+            raise GatewayError("Text streaming cannot use tools", stage="validation")
         iterator = self._run(
             messages,
+            stream_text=stream_text,
             tools=tools,
             thinking=thinking,
             model=model,
@@ -234,6 +239,7 @@ class LlmClient:
         self, messages: list[dict[str, Any]] | PreparedPayload, **options: Any
     ) -> AsyncIterator[ContentDelta | ReasoningDelta | ToolCallDelta | Done]:
         with provider_scope() as scope:
+            stream_text = options.pop("stream_text", False)
             payload = self._payload(messages, **options)
             if not self.recorded and not self.settings.llm_api_key.get_secret_value():
                 raise GatewayError("LLM_API_KEY is required")
@@ -251,6 +257,8 @@ class LlmClient:
                             message = upstream.choices[0].message.model_dump(exclude_none=True)
                         else:
                             accumulated: dict[str, Any] = {}
+                            private_pending = ""
+                            public_text = ""
                             calls: dict[int, dict[str, Any]] = {}
                             finished = False
                             async for chunk in upstream:
@@ -285,6 +293,20 @@ class LlmClient:
                                                     )
                                         elif key in {"content", "reasoning_content", "refusal"}:
                                             accumulated[key] = accumulated.get(key, "") + value
+                                            if value and key == "content" and scope.mask_only and stream_text:
+                                                private_pending += value
+                                                # Preserve cross-chunk identifiers for the existing masker.
+                                                # Flush complete sentences only; never mask individual tokens.
+                                                boundary = list(re.finditer(r"[.!?](?=\s)|\n", private_pending))
+                                                if boundary:
+                                                    end = boundary[-1].end()
+                                                    unit, private_pending = private_pending[:end], private_pending[end:]
+                                                    safe = scope.sanitize_output(scope.mask_payload(unit, wire=True))
+                                                    egress_scan(safe, scope)
+                                                    public_text += safe
+                                                    for token in re.findall(r"\S+\s*|\s+", safe):
+                                                        emitted = True
+                                                        yield ContentDelta(token)
                                             if value and key != "refusal" and not scope.mask_only:
                                                 emitted = True
                                                 yield ContentDelta(value) if key == "content" else ReasoningDelta(value)
@@ -294,6 +316,16 @@ class LlmClient:
                                         finished = True
                             if not finished:
                                 raise GatewayError("Provider stream ended without a finish marker")
+                            if scope.mask_only and stream_text:
+                                if calls:
+                                    raise GatewayError("Unexpected tool call in text stream")
+                                safe = scope.sanitize_output(scope.mask_payload(private_pending, wire=True))
+                                egress_scan(safe, scope)
+                                public_text += safe
+                                for token in re.findall(r"\S+\s*|\s+", safe):
+                                    emitted = True
+                                    yield ContentDelta(token)
+                                accumulated["content"] = public_text
                             if calls:
                                 accumulated["tool_calls"] = [calls[index] for index in sorted(calls)]
                             message = validate_chat_message(accumulated)
@@ -337,7 +369,7 @@ class LlmClient:
                 if retry:
                     await asyncio.sleep(min(0.5 * 2**attempt, 8.0))
                     continue
-                if scope.mask_only and options["stream"]:
+                if scope.mask_only and options["stream"] and not stream_text:
                     if message.get("content"):
                         yield ContentDelta(message["content"])
                     for index, call in enumerate(message.get("tool_calls", [])):

@@ -1,11 +1,13 @@
 """Authenticated Assistant conversations, action audit, feedback and reindexing."""
 
 import logging
-from typing import Annotated
+from collections.abc import Callable
+from typing import Annotated, Any
 from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import Response
 from sqlalchemy import or_, select, update
 
 from src.api.deps import CurrentAdvisor, CurrentUser, DbSession
@@ -105,6 +107,7 @@ def get_conversation_history(conversation_id: str, user: CurrentUser, db: DbSess
                     intent=turn.intent,
                     interrupted=turn.interrupted if sender == "assistant" else False,
                     sources=turn.sources_json if sender == "assistant" else [],
+                    **(turn.context_json.get("assistant_output", {}) if sender == "assistant" else {}),
                 )
             )
     return messages
@@ -215,7 +218,7 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
 @router.post("/chat", response_model=ChatResponse | AssistantRunResponse)
 async def chat(
     body: ChatRequest, request: Request, user: CurrentUser, db: DbSession, agent: AgentDependency
-) -> ChatResponse | AssistantRunResponse:
+) -> ChatResponse | AssistantRunResponse | Response:
     context = body.context
     if (
         context.user_role != user.role
@@ -267,18 +270,32 @@ async def chat(
         conversation = AssistantConversation(
             id=str(uuid4()), user_id=user.id, role=user.role, title=body.message[:120], created_at=utcnow()
         )
+    if body.chip is not None:
+        previous_turn = db.scalar(
+            select(AssistantTurn)
+            .where(AssistantTurn.conversation_id == conversation.id)
+            .order_by(AssistantTurn.created_at.desc(), AssistantTurn.id.desc())
+            .limit(1)
+        )
+        offered = previous_turn.context_json.get("assistant_output", {}).get("chips", []) if previous_turn else []
+        if body.chip.model_dump(mode="json") not in offered:
+            raise AppError(422, "Invalid assistant choice.", "invalid_chip")
     run, created = runs.reserve(db, body, user, conversation)
     if not created:
         return runs.run_response(run)
     # Do not keep a read transaction open while waiting for upstream IO.
     db.commit()
 
-    async def respond() -> ChatResponse:
+    async def respond(event_sink: Callable[[str, dict[str, Any]], None] | None = None) -> ChatResponse:
         from src.db.database import SessionLocal
 
         with SessionLocal() as work_db:
-            return await _respond(body, user, work_db, agent, run.id, conversation.id, history, selected_cv_unavailable)
+            return await _respond(
+                body, user, work_db, agent, run.id, conversation.id, history, selected_cv_unavailable, event_sink
+            )
 
+    if "text/event-stream" in request.headers.get("accept", ""):
+        return runs.stream(run.id, conversation.id, body, request, respond)
     return await runs.execute(run.id, body, request, respond)
 
 
@@ -291,6 +308,7 @@ async def _respond(
     conversation_id: str,
     history: list[dict[str, str]],
     selected_cv_unavailable: bool,
+    event_sink: Callable[[str, dict[str, Any]], None] | None = None,
 ) -> ChatResponse:
     context = body.context
     conversation = _owned_conversation(db, conversation_id, user)
@@ -307,7 +325,10 @@ async def _respond(
         identities=(Identity(name=user.full_name, email=user.email, phone=user.phone or ""),),
         mask_only=True,
     ):
-        result = await agent.respond(body.message, context, history=history, allowed_student_ids=students)
+        options = {"event_sink": event_sink} if event_sink is not None else {}
+        if body.chip is not None:
+            options["chip"] = body.chip
+        result = await agent.respond(body.message, context, history=history, allowed_student_ids=students, **options)
     from src.models.assistant import NavigateAction
     from src.services.assistant.guardrails import validate_ui_actions
     from src.services.assistant.ui_registry import resolve_route
@@ -323,8 +344,25 @@ async def _respond(
             )
             if not _resource_actions(db, user, [legacy], students):
                 raise AppError(403, "Trang chưa khả dụng cho tài khoản này.", "forbidden")
+    for card in result.cards:
+        try:
+            route = resolve_route(card.route_id, card.params, user.role)
+        except ValueError:
+            raise AppError(422, "Invalid assistant card.", "invalid_card") from None
+        if not _resource_actions(
+            db, user, [NavigateAction(description_vi=card.label, params={"route": route})], students
+        ):
+            raise AppError(403, "Trang chưa khả dụng cho tài khoản này.", "forbidden")
     actions = _resource_actions(db, user, result.actions, students)
-    message = result.message
+    from src.services.assistant.howto import answer_language
+    from src.services.assistant.streaming import OutputGuard
+
+    output_guard = OutputGuard("you" if answer_language(body.message) == "en" else "bạn")
+    message = output_guard.feed(result.message) + output_guard.finish()
+    if not message.strip():
+        from src.services.assistant.howto import capability_menu
+
+        message = capability_menu(answer_language(body.message), user.role)
     if (
         any(action.action_type == "START_ANALYSIS" for action in result.actions)
         and not any(action.action_type == "START_ANALYSIS" for action in actions)
@@ -345,7 +383,17 @@ async def _respond(
     turn.assistant_message = message
     turn.intent = result.intent
     turn.sources_json = [source.model_dump(mode="json") for source in result.sources]
+    turn.context_json = {
+        **turn.context_json,
+        "assistant_output": {
+            "cards": [card.model_dump(mode="json") for card in result.cards],
+            "chips": [chip.model_dump(mode="json") for chip in result.chips],
+            "ui_actions": [action.model_dump(mode="json") for action in ui_actions],
+        },
+    }
     run.status = "done"
+    if result.route is not None:
+        run.route = result.route
     run.updated_at = utcnow()
     conversation.updated_at = utcnow()
     db.add(conversation)
@@ -374,6 +422,9 @@ async def _respond(
         actions=actions,
         ui_actions=ui_actions,
         sources=result.sources,
+        cards=result.cards,
+        chips=result.chips,
+        route=result.route,
     )
 
 

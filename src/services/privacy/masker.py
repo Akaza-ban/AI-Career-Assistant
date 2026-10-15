@@ -73,8 +73,9 @@ class PlaceholderFilter:
     State is bounded; an unterminated placeholder never buffers model text.
     """
 
-    def __init__(self, neutral: str = "bạn") -> None:
+    def __init__(self, neutral: str = "bạn", *, defer_replacement: bool = False) -> None:
         self.neutral = neutral
+        self.defer_replacement = defer_replacement
         self._inside = False
         self._pending = ""
 
@@ -83,12 +84,15 @@ class PlaceholderFilter:
         for char in text:
             if self._inside:
                 if self._pending == "]" and char == "]":
+                    if self.defer_replacement:
+                        result.append(self.neutral)
                     self._inside, self._pending = False, ""
                 else:
                     self._pending = "]" if char == "]" else ""
             elif self._pending == "[":
                 if char == "[":
-                    result.append(self.neutral)
+                    if not self.defer_replacement:
+                        result.append(self.neutral)
                     self._inside, self._pending = True, ""
                 else:
                     result.append("[" + char)
@@ -100,7 +104,7 @@ class PlaceholderFilter:
         return "".join(result)
 
     def finish(self) -> str:
-        tail = self._pending if not self._inside else ""
+        tail = self._pending if not self._inside else self.neutral if self.defer_replacement else ""
         self._pending, self._inside = "", False
         return tail
 

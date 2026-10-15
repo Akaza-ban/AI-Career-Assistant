@@ -21,5 +21,8 @@ class OriginProtectionMiddleware(BaseHTTPMiddleware):
                 )
         response = await call_next(request)
         if request.url.path.startswith("/api/v1/"):
-            response.headers["Cache-Control"] = "no-store"
+            if response.headers.get("content-type", "").startswith("text/event-stream"):
+                response.headers["Cache-Control"] = "no-cache"
+            else:
+                response.headers["Cache-Control"] = "no-store"
         return response

@@ -5,9 +5,12 @@ storage remain the existing ORM models; no graph/checkpoint state is stored.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from threading import get_ident
+from typing import Any
 
 from fastapi import Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -178,3 +181,125 @@ async def execute(
         raise
     finally:
         _tasks.pop(run_id, None)
+
+
+def stream(
+    run_id: str,
+    conversation_id: str,
+    body: ChatRequest,
+    request: Request,
+    respond: Callable[..., Awaitable[ChatResponse]],
+) -> StreamingResponse:
+    """One producer per reserved run. Generator teardown always joins upstream."""
+    from src.services.assistant import streaming
+    from src.services.assistant.howto import answer_language
+
+    async def events() -> AsyncIterator[str]:
+        queue: asyncio.Queue[tuple[str, dict[str, Any]]] = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        loop_thread = get_ident()
+        encoder = streaming.EventEncoder(run_id, conversation_id)
+        guard = streaming.OutputGuard("you" if answer_language(body.message) == "en" else "bạn")
+        partial = ""
+
+        def sink(name: str, data: dict[str, Any]) -> None:
+            nonlocal partial
+            if name not in streaming.EVENTS:
+                raise ValueError("Unsupported assistant event")
+            if name == "token":
+                text = guard.feed(data["text"])
+                if not text:
+                    return
+                if len(partial) + len(text) > 16000:
+                    raise ValueError("Assistant output exceeds the response limit")
+                partial += text
+                with SessionLocal() as db:
+                    db.execute(
+                        update(AssistantTurn).where(AssistantTurn.run_id == run_id).values(assistant_message=partial)
+                    )
+                    db.commit()
+                data = {"text": text}
+            elif name == "route":
+                with SessionLocal() as db:
+                    db.execute(update(AssistantRun).where(AssistantRun.id == run_id).values(route=data["route"]))
+                    db.commit()
+            if get_ident() == loop_thread:
+                queue.put_nowait((name, data))
+            else:
+                loop.call_soon_threadsafe(queue.put_nowait, (name, data))
+
+        async def worker() -> ChatResponse:
+            try:
+                with SessionLocal() as db:
+                    run = db.get(AssistantRun, run_id)
+                    if run.status != "running":
+                        raise asyncio.CancelledError
+                sink("status", {"status": "thinking"})
+                response = await respond(sink)
+                if not partial:
+                    sink("token", {"text": response.message})
+                tail = guard.finish()
+                if tail:
+                    partial_text = partial + tail
+                    sink("token", {"text": tail})
+                else:
+                    partial_text = partial
+                response = response.model_copy(update={"message": partial_text})
+                with SessionLocal() as db:
+                    db.execute(
+                        update(AssistantTurn)
+                        .where(AssistantTurn.run_id == run_id)
+                        .values(assistant_message=partial_text)
+                    )
+                    db.commit()
+                if response.sources:
+                    sink("citations", {"sources": [source.model_dump(mode="json") for source in response.sources]})
+                for card in response.cards:
+                    sink("card", {"card": card.model_dump(mode="json")})
+                if response.chips:
+                    sink("card", {"chips": [chip.model_dump(mode="json") for chip in response.chips]})
+                for action in response.ui_actions:
+                    sink("ui_action", {"action": action.model_dump(mode="json")})
+                sink("final", response.model_dump(mode="json"))
+                return response
+            except asyncio.CancelledError:
+                finish_interrupted(run_id, body, "cancelled")
+                queue.put_nowait(("final", {"status": "cancelled", "interrupted": True, "message": partial}))
+                raise
+            except Exception:
+                finish_interrupted(run_id, body, "failed")
+                queue.put_nowait(
+                    ("error", {"code": "assistant_unavailable", "message": "Assistant temporarily unavailable."})
+                )
+                raise
+
+        task = asyncio.create_task(worker())
+        _tasks[run_id] = task
+        next_heartbeat = asyncio.get_running_loop().time() + streaming.HEARTBEAT_SECONDS
+        try:
+            while not task.done() or not queue.empty():
+                if await request.is_disconnected():
+                    break
+                try:
+                    name, data = await asyncio.wait_for(queue.get(), timeout=0.1)
+                    yield encoder.encode(name, data)
+                except TimeoutError:
+                    pass
+                now = asyncio.get_running_loop().time()
+                if not task.done() and now >= next_heartbeat:
+                    yield encoder.encode("heartbeat", {})
+                    next_heartbeat = now + streaming.HEARTBEAT_SECONDS
+        finally:
+            if not task.done():
+                task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                finish_interrupted(run_id, body, "cancelled")
+            except Exception:
+                pass  # The stream contains a sanitized error, never a traceback.
+            _tasks.pop(run_id, None)
+
+    return StreamingResponse(
+        events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
+    )
