@@ -114,3 +114,6 @@ def init_db() -> None:
         fail_interrupted_analyses(db)
         # Phiên bản CV tạo trước khi có lịch sử phiên bản theo từng CV
         backfill_cv_versions(db)
+        from src.services.assistant.runs import sweep_running
+
+        sweep_running(db)

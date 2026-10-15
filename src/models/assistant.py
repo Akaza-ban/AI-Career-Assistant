@@ -2,6 +2,7 @@
 
 import math
 import re
+from datetime import datetime
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID, uuid4
 
@@ -264,6 +265,7 @@ class ClientPageContext(StrictModel):
 class ChatRequest(StrictModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: str | None = Field(default=None, max_length=64)
+    client_request_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=64)
     context: ClientPageContext
 
 
@@ -297,6 +299,17 @@ class AssistantResponse(StrictModel):
 class ChatResponse(AssistantResponse):
     conversation_id: str
     turn_id: str
+    run_id: str | None = None
+
+
+class AssistantRunResponse(StrictModel):
+    id: str
+    conversation_id: str
+    client_request_id: str
+    route: str
+    status: Literal["running", "done", "failed", "cancelled", "interrupted"]
+    created_at: datetime
+    updated_at: datetime
 
 
 class AssistantStatusResponse(StrictModel):

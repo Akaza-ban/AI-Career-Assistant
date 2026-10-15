@@ -5,7 +5,7 @@ from typing import Annotated
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy import or_, select
 
 from src.api.deps import CurrentAdvisor, CurrentUser, DbSession
@@ -30,12 +30,14 @@ from src.models.assistant import (
     AgentAction,
     AssistantFeedbackRequest,
     AssistantFeedbackResponse,
+    AssistantRunResponse,
     AssistantStatusResponse,
     ChatRequest,
     ChatResponse,
     ReindexResponse,
     route_allowed,
 )
+from src.services.assistant import runs
 from src.services.assistant.agent import ASSISTANT_INDEX_LOCK, AssistantAgent, get_assistant_agent
 from src.services.assistant.indexer import build_assistant_index
 from src.services.llm import check_llm_health
@@ -139,8 +141,10 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
     return safe
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: AgentDependency) -> ChatResponse:
+@router.post("/chat", response_model=ChatResponse | AssistantRunResponse)
+async def chat(
+    body: ChatRequest, request: Request, user: CurrentUser, db: DbSession, agent: AgentDependency
+) -> ChatResponse | AssistantRunResponse:
     context = body.context
     if (
         context.user_role != user.role
@@ -151,12 +155,19 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
         raise AppError(403, "Ngữ cảnh không khớp với tài khoản đang đăng nhập.", "forbidden")
     # The authenticated identity is authoritative, not context sent by the browser.
     context = context.model_copy(update={"user_id": user.id, "user_role": user.role})
+    body = body.model_copy(update={"context": context})
+    if body.conversation_id:
+        _owned_conversation(db, body.conversation_id, user)
+    previous = runs.existing_run(db, body, user)
+    if previous is not None:
+        return runs.run_response(previous)
     history: list[dict[str, str]] = []
     if body.conversation_id:
         conversation = _owned_conversation(db, body.conversation_id, user)
         recent = db.scalars(
             select(AssistantTurn)
             .where(AssistantTurn.conversation_id == conversation.id)
+            .where(AssistantTurn.assistant_message != "")
             .order_by(AssistantTurn.created_at.desc(), AssistantTurn.id.desc())
             .limit(get_settings().assistant_history_turns)
         ).all()
@@ -171,6 +182,32 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
         conversation = AssistantConversation(
             id=str(uuid4()), user_id=user.id, role=user.role, title=body.message[:120], created_at=utcnow()
         )
+    run, created = runs.reserve(db, body, user, conversation)
+    if not created:
+        return runs.run_response(run)
+    # Do not keep a read transaction open while waiting for upstream IO.
+    db.commit()
+
+    async def respond() -> ChatResponse:
+        from src.db.database import SessionLocal
+
+        with SessionLocal() as work_db:
+            return await _respond(body, user, work_db, agent, run.id, conversation.id, history)
+
+    return await runs.execute(run.id, body, request, respond)
+
+
+async def _respond(
+    body: ChatRequest,
+    user: User,
+    db: DbSession,
+    agent: AssistantAgent,
+    run_id: str,
+    conversation_id: str,
+    history: list[dict[str, str]],
+) -> ChatResponse:
+    context = body.context
+    conversation = _owned_conversation(db, conversation_id, user)
     students = (
         list(db.scalars(select(AdvisorAssignment.student_id).where(AdvisorAssignment.advisor_id == user.id)))
         if user.role == "advisor"
@@ -191,16 +228,15 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
         action.action_type == "START_ANALYSIS" for action in actions
     ):
         message = "CV hoặc JD đã chọn chưa khả dụng cho tài khoản này. Hãy chọn lại trước khi bắt đầu phân tích."
-    turn = AssistantTurn(
-        id=str(uuid4()),
-        conversation_id=conversation.id,
-        user_message=body.message,
-        assistant_message=message,
-        intent=result.intent,
-        context_json=context.model_dump(mode="json"),
-        sources_json=[source.model_dump(mode="json") for source in result.sources],
-        created_at=utcnow(),
-    )
+    run = runs.owned_run(db, run_id, user)
+    if run.status != "running":
+        raise AppError(409, "Lượt chạy đã kết thúc.", "run_finished")
+    turn = db.scalar(select(AssistantTurn).where(AssistantTurn.run_id == run_id))
+    turn.assistant_message = message
+    turn.intent = result.intent
+    turn.sources_json = [source.model_dump(mode="json") for source in result.sources]
+    run.status = "done"
+    run.updated_at = utcnow()
     conversation.updated_at = utcnow()
     db.add(conversation)
     db.add(turn)
@@ -222,6 +258,7 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
     return ChatResponse(
         conversation_id=conversation.id,
         turn_id=turn.id,
+        run_id=run_id,
         message=message,
         intent=result.intent,
         actions=actions,
