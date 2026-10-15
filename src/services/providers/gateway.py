@@ -911,16 +911,19 @@ def load_e5_model(model_name: str, device: str) -> Any:
 
 
 def encode_e5(model: Any, texts: list[str], prefix: str) -> list[list[float]]:
-    return embedding_call(
-        texts,
-        lambda masked: model.encode(
-            [prefix + text for text in masked],
-            normalize_embeddings=True,
-            convert_to_numpy=True,
-            show_progress_bar=False,
-        ).tolist(),
-        local=True,
-    )
+    def dispatch(masked: list[str]) -> list[list[float]]:
+        payload = {
+            "texts": [prefix + text for text in masked],
+            "normalize_embeddings": True,
+            "convert_to_numpy": True,
+            "show_progress_bar": False,
+        }
+        # Include the complete native encode input, even though today's task
+        # prefixes are server constants. Future callers cannot hide PII there.
+        egress_scan(payload, _scope.get())
+        return model.encode(payload.pop("texts"), **payload).tolist()
+
+    return embedding_call(texts, dispatch, local=True)
 
 
 class LocalChromaEmbeddings(Embeddings):

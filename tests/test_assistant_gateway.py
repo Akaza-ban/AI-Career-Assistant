@@ -81,3 +81,12 @@ async def test_transport_cleanup_errors_have_no_raw_exception_context() -> None:
         await gateway.close_model_stream(stream)
     assert error.value.__context__ is None
     assert "private@example.test" not in str(error.value)
+
+
+def test_e5_scans_native_prefix_as_part_of_full_embedding_payload() -> None:
+    model = Mock()
+    with gateway.provider_scope(mask_only=True, identities=(Identity(name="Nguyễn Minh An"),)):
+        for prefix in ("person@example.test ", "0912345678 ", "Nguyen Minh An "):
+            with pytest.raises(gateway.GatewayError):
+                gateway.encode_e5(model, ["How do I upload a CV?"], prefix)
+    model.encode.assert_not_called()
