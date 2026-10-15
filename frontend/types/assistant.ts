@@ -33,7 +33,24 @@ export interface SourceCitation {
   selector?: string | null
 }
 
+export interface AssistantCard {
+  ref: string
+  label: string
+  route_id: string
+  params: Record<string, string>
+}
+
+export interface AssistantChip {
+  label: string
+  route: "navigate" | "locate" | "howto"
+  slots: Record<string, string | boolean | null>
+}
+
 export interface ChatMessage {
+  client_request_id?: string
+  cards?: AssistantCard[]
+  chips?: AssistantChip[]
+  notices?: string[]
   id: string
   sender: "user" | "assistant"
   content: string
@@ -62,9 +79,12 @@ export interface ChatRequestPayload {
   conversation_id?: string
   client_request_id: string
   context: ClientPageContext
+  chip?: AssistantChip
 }
 
 export interface ChatResponsePayload {
+  cards?: AssistantCard[]
+  chips?: AssistantChip[]
   conversation_id: string
   turn_id: string
   run_id?: string
@@ -83,4 +103,10 @@ export interface AssistantRunPayload {
   status: "running" | "done" | "failed" | "cancelled" | "interrupted"
   created_at: string
   updated_at: string
+}
+
+export type AssistantEventName = "route" | "status" | "token" | "citations" | "card" | "ui_action" | "notice" | "final" | "error" | "heartbeat"
+export interface AssistantStreamEvent {
+  event: AssistantEventName
+  data: Record<string, unknown> & { run_id: string; conversation_id: string }
 }
