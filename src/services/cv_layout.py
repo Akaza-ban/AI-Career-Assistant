@@ -93,7 +93,18 @@ def cv_language(text: str, lines: list[dict[str, Any]]) -> str:
     """ "vi" hoặc "en": theo chữ có dấu; CV quét mất dấu thì theo tiêu đề mục (vd "KINHNGHIEM" vẫn là tiếng Việt)."""
     if len(_VIET.findall(text)) >= 15:
         return "vi"
-    vi_heads = ("kinhnghiem", "duan", "hocvan", "kynang", "kinang", "chungchi", "hoatdong", "muctieu", "ngoaingu")
+    vi_heads = (
+        "kinhnghiem",
+        "duan",
+        "hocvan",
+        "kynang",
+        "kinang",
+        "chungchi",
+        "hoatdong",
+        "muctieu",
+        "ngoaingu",
+        "ngonngu",
+    )
     headings = [fold(line["text"]) for line in lines if line["is_heading"]]
     if any(h.startswith(vi_heads) for h in headings):
         return "vi"
@@ -130,15 +141,24 @@ def layout_lines(text: str) -> dict[int, dict[str, Any]]:
         elif block == "header":
             if no == 1:
                 info["kind"] = "name"
+            elif (
+                no == 2
+                and out.get(1, {}).get("kind") == "name"
+                and len(clean.split()) <= 3
+                and not _is_contactish(clean)
+                and not any(c.isdigit() for c in clean)
+            ):
+                # Dòng tên thứ hai bị ngắt xuống dòng (ví dụ: PHẠM \n MỸ LINH)
+                info["kind"] = "name"
             elif fold(clean) in _CONTACT_HEADINGS:
                 # Nhãn "CONTACT", "Thông tin liên hệ" ở cột bên: bỏ khi trình bày (dòng liên hệ đã đủ rõ)
                 info["kind"] = "heading"
-            elif len(clean.split()) >= 12 and not _is_contactish(clean):
+            elif len(clean.split()) >= 6 and not _is_contactish(clean):
                 info["kind"] = "text"
             else:
                 info["kind"] = "contact"
         else:
-            info.update(_classify(clean, block, marker, prev_kind))
+            info.update(_classify(clean, block, marker, prev_kind, blank=blank))
         out[no] = info
         if not info.get("cont"):
             prev_kind = info["kind"]
@@ -170,13 +190,22 @@ def _is_cont(
     return len(before) >= long_len and (before.endswith((",", "-", "&", "/", "(")) or last_word in _JOINERS)
 
 
-def _classify(text: str, block: str, marker: bool, prev_kind: str | None) -> dict[str, Any]:
+def _classify(text: str, block: str, marker: bool, prev_kind: str | None, blank: bool = False) -> dict[str, Any]:
     label = _LABEL.match(text)
     label_ok = bool(label and not label.group("rest").startswith("//") and len(label.group("label").split()) <= 4)
     if label_ok and block in BULLET_SECTIONS and fold(label.group("label")) in {fold(t) for t in _TECH_LABELS}:
         return {"kind": "tech"}
-    if not marker and block in ENTRY_SECTIONS and (parts := split_date(text)) and len(parts[0]) <= MAX_ENTRY_TITLE:
-        return {"kind": "entry", "date": parts[1]}
+    if not marker and block in ENTRY_SECTIONS:
+        if (parts := split_date(text)) and len(parts[0]) <= MAX_ENTRY_TITLE:
+            return {"kind": "entry", "date": parts[1]}
+        # Dòng tên dự án / công việc không kèm ngày tháng (ví dụ có "|", đứng sau tiêu đề mục, hoặc cách đoạn với mục trước)
+        if (
+            len(text) <= MAX_ENTRY_TITLE
+            and not text.endswith(_TERMINAL)
+            and not label_ok
+            and ("|" in text or prev_kind in ("heading", None) or (blank and prev_kind in ("bullet", "tech", "role")))
+        ):
+            return {"kind": "entry", "date": None}
     if (
         not marker
         and prev_kind == "entry"
@@ -222,3 +251,283 @@ def is_real_column_split(boxes: list[dict[str, Any]], split_x: float) -> bool:
         if DATE_ONLY.match(" ".join(b["text"] for b in sorted(row, key=lambda b: b["x0"])).strip()):
             dates += 1
     return tight < 2 and not (dates >= 2 and dates >= len(rows) * 0.5)
+
+
+_MISREAD_BULLET_RE = re.compile(r"^(?:[·•●∙◦‧«»▪■]\s*|\.\s*(?=[A-ZĐ][a-zà-ỹ])|\.\s+|[eo]\s+(?=[A-ZĐ]))")
+
+
+def _boxes_to_lines(boxes: list[dict[str, Any]]) -> str:
+    """Gom các hộp chữ/từ thành từng dòng theo toạ độ dọc và sắp xếp từ trái qua phải."""
+    if not boxes:
+        return ""
+
+    boxes_sorted = sorted(boxes, key=lambda b: (b["top"], b["x0"]))
+    lines: list[list[dict[str, Any]]] = []
+    current_line = [boxes_sorted[0]]
+
+    for b in boxes_sorted[1:]:
+        ref = current_line[-1]
+        line_h = max(ref["bottom"] - ref["top"], b["bottom"] - b["top"])
+        ref_mid = (ref["top"] + ref["bottom"]) / 2.0
+        b_mid = (b["top"] + b["bottom"]) / 2.0
+        if abs(ref_mid - b_mid) <= line_h * 0.45:
+            current_line.append(b)
+        else:
+            lines.append(current_line)
+            current_line = [b]
+    lines.append(current_line)
+
+    result: list[str] = []
+    prev_bottom = None
+    for line in lines:
+        line_sorted = sorted(line, key=lambda b: b["x0"])
+        line_text = _MISREAD_BULLET_RE.sub("• ", " ".join(b["text"] for b in line_sorted).strip())
+        if not line_text:
+            continue
+        line_top = min(b["top"] for b in line_sorted)
+        line_bottom = max(b["bottom"] for b in line_sorted)
+        line_h = max(1.0, line_bottom - line_top)
+        if prev_bottom is not None and (line_top - prev_bottom) > line_h * 1.5:
+            result.append("")
+        result.append(line_text)
+        prev_bottom = line_bottom
+    return "\n".join(result)
+
+
+def extract_layout_aware_text(
+    boxes: list[dict[str, Any]],
+    width: float,
+    height: float,
+) -> str:
+    """
+    Trích xuất văn bản từ danh sách bounding boxes theo đúng thứ tự đọc tự nhiên (Reading Order).
+    Hỗ trợ xử lý:
+    1. Bố cục 1 cột toàn trang.
+    2. Bố cục 2 cột toàn trang (Sidebar trái + Cột chính phải).
+    3. Bố cục lai (Hybrid Layout): nửa trên 1 cột (Header, Kinh nghiệm làm việc toàn chiều rộng),
+       nửa dưới chia thành 2 box song song (Học vấn bên trái, Kỹ năng bên phải).
+    """
+    if not boxes:
+        return ""
+
+    # Chuẩn hoá toạ độ boxes
+    norm_boxes: list[dict[str, Any]] = []
+    for b in boxes:
+        t = str(b.get("text", "")).strip()
+        if not t:
+            continue
+        x0 = float(b.get("x0", b.get("xmin", 0.0)))
+        x1 = float(b.get("x1", b.get("xmax", 0.0)))
+        top = float(b.get("top", b.get("ymin", 0.0)))
+        bottom = float(b.get("bottom", b.get("ymax", 0.0)))
+        norm_boxes.append(
+            {
+                "text": t,
+                "x0": x0,
+                "x1": x1,
+                "top": top,
+                "bottom": bottom,
+            }
+        )
+
+    if not norm_boxes:
+        return ""
+
+    # 1. Gom boxes thành các dòng vật lý
+    boxes_sorted = sorted(norm_boxes, key=lambda b: (b["top"], b["x0"]))
+    lines: list[list[dict[str, Any]]] = []
+    current_line = [boxes_sorted[0]]
+
+    for b in boxes_sorted[1:]:
+        ref = current_line[-1]
+        line_h = max(ref["bottom"] - ref["top"], b["bottom"] - b["top"])
+        ref_mid = (ref["top"] + ref["bottom"]) / 2.0
+        b_mid = (b["top"] + b["bottom"]) / 2.0
+        if abs(ref_mid - b_mid) <= line_h * 0.45:
+            current_line.append(b)
+        else:
+            lines.append(sorted(current_line, key=lambda it: it["x0"]))
+            current_line = [b]
+    if current_line:
+        lines.append(sorted(current_line, key=lambda it: it["x0"]))
+
+    # 2. Phân tích từng dòng vật lý
+    line_infos: list[dict[str, Any]] = []
+    min_gutter = max(24.0, width * 0.04)
+
+    for line in lines:
+        l_x0 = min(b["x0"] for b in line)
+        l_x1 = max(b["x1"] for b in line)
+        l_top = min(b["top"] for b in line)
+        l_bottom = max(b["bottom"] for b in line)
+        line_text = " ".join(b["text"] for b in line)
+
+        # Tìm các khoảng trống ngăn đôi (gaps) trong dòng
+        gaps: list[tuple[float, float, float, float]] = []
+        for idx in range(len(line) - 1):
+            gap_w = line[idx + 1]["x0"] - line[idx]["x1"]
+            gap_mid = (line[idx]["x1"] + line[idx + 1]["x0"]) / 2.0
+            if gap_w >= min_gutter and (0.22 * width <= gap_mid <= 0.70 * width):
+                gaps.append((gap_mid, gap_w, line[idx]["x1"], line[idx + 1]["x0"]))
+
+        line_infos.append(
+            {
+                "words": line,
+                "text": line_text,
+                "x0": l_x0,
+                "x1": l_x1,
+                "top": l_top,
+                "bottom": l_bottom,
+                "gaps": gaps,
+            }
+        )
+
+    # 3. Phân đoạn trang thành các dải (bands)
+    bands: list[tuple[str, int, int, float | None]] = []
+    i = 0
+    n = len(line_infos)
+
+    while i < n:
+        best_zone: tuple[int, int, float] | None = None
+
+        # Thu thập các ứng viên vạch chia split_x trong khoảng [0.22 * width, 0.68 * width]
+        candidates: set[float] = set()
+        for lookahead in range(i, min(i + 4, n)):
+            for g_mid, _, g_x0, g_x1 in line_infos[lookahead]["gaps"]:
+                if 0.22 * width <= g_mid <= 0.68 * width:
+                    candidates.add(round(g_mid / 5.0) * 5.0)
+                    # Thêm cả các điểm gần mép rãnh chia
+                    candidates.add(round((g_x0 + 10.0) / 5.0) * 5.0)
+                    candidates.add(round((g_x1 - 10.0) / 5.0) * 5.0)
+
+        for sx in sorted(candidates):
+            if not (0.22 * width <= sx <= 0.68 * width):
+                continue
+            j = i
+            has_split_line = False
+            left_words: list[dict[str, Any]] = []
+            right_words: list[dict[str, Any]] = []
+            zone_words: list[dict[str, Any]] = []
+
+            while j < n:
+                lj = line_infos[j]
+                # Nếu có từ đè ngang qua vạch chia sx
+                line_crossing = any(w["x0"] < sx - 4 and w["x1"] > sx + 4 for w in lj["words"])
+                if line_crossing:
+                    break
+
+                w_left = [w for w in lj["words"] if w["x1"] <= sx + 5]
+                w_right = [w for w in lj["words"] if w["x0"] >= sx - 5]
+
+                if w_left and w_right:
+                    gap = min(w["x0"] for w in w_right) - max(w["x1"] for w in w_left)
+                    if gap < min_gutter:
+                        # Dòng chữ liên tục chạy qua vạch chia -> kết thúc vùng 2 cột
+                        break
+                    has_split_line = True
+
+                left_words.extend(w_left)
+                right_words.extend(w_right)
+                zone_words.extend(lj["words"])
+                j += 1
+
+            num_lines = j - i
+            if left_words and right_words:
+                left_w = max(w["x1"] for w in left_words) - min(w["x0"] for w in left_words)
+                right_w = max(w["x1"] for w in right_words) - min(w["x0"] for w in right_words)
+            else:
+                left_w = right_w = 0.0
+
+            if (
+                num_lines >= 2
+                and has_split_line
+                and len(left_words) >= 3
+                and len(right_words) >= 3
+                and left_w >= 0.18 * width
+                and right_w >= 0.18 * width
+            ):
+                zone_boxes = [
+                    {"x0": w["x0"], "x1": w["x1"], "top": w["top"], "bottom": w["bottom"], "text": w["text"]}
+                    for w in zone_words
+                ]
+                if is_real_column_split(zone_boxes, sx):
+                    if best_zone is None or num_lines > (best_zone[1] - best_zone[0]):
+                        best_zone = (i, j, sx)
+
+        if best_zone is not None and (best_zone[1] - best_zone[0]) >= 2:
+            start_z, end_z, split_x = best_zone
+            bands.append(("two_column", start_z, end_z, split_x))
+            i = end_z
+        else:
+            start_s = i
+            while i < n:
+                has_next_two_col = False
+                if i > start_s:
+                    for lookahead in range(i, min(i + 2, n)):
+                        if line_infos[lookahead]["gaps"]:
+                            has_next_two_col = True
+                            break
+                if has_next_two_col and i > start_s:
+                    break
+                i += 1
+            bands.append(("single", start_s, i, None))
+
+    # 4. Trích xuất text từng band
+    from src.services.skill_matching import _match_section
+
+    extracted_parts: list[str] = []
+    for b_type, b_start, b_end, split_x in bands:
+        b_lines = line_infos[b_start:b_end]
+        b_words = [w for lj in b_lines for w in lj["words"]]
+        if not b_words:
+            continue
+
+        if b_type == "two_column" and split_x is not None:
+            left_words = [w for w in b_words if w["x1"] <= split_x + 5]
+            right_words = [w for w in b_words if w["x0"] >= split_x - 5]
+
+            left_text = _boxes_to_lines(left_words)
+            right_text = _boxes_to_lines(right_words)
+
+            band_top = min(w["top"] for w in b_words)
+            # Nếu là 2-column sidebar ở nửa trên trang (y <= 0.25 * height),
+            # kiểm tra header lines ở đỉnh cột phải (tên ứng viên, chức danh ngắn) để đưa lên đầu
+            if band_top <= 0.25 * height:
+                right_lines = [line_str.strip() for line_str in right_text.splitlines() if line_str.strip()]
+                header_lines: list[str] = []
+                body_right_lines: list[str] = []
+                found_section = False
+
+                for line in right_lines:
+                    sec, is_heading = _match_section(line)
+                    # Nếu là heading, hoặc câu dài (>= 6 từ), hoặc kết thúc bằng dấu chấm -> bắt đầu thân bài cột phải!
+                    if is_heading or len(line.split()) >= 6 or line.endswith("."):
+                        found_section = True
+
+                    if not found_section and len(header_lines) < 3:
+                        header_lines.append(line)
+                    else:
+                        body_right_lines.append(line)
+
+                parts: list[str] = []
+                if header_lines:
+                    parts.append("\n".join(header_lines))
+                if left_text.strip():
+                    parts.append(left_text.strip())
+                if body_right_lines:
+                    parts.append("\n".join(body_right_lines))
+                combined = "\n\n".join(p for p in parts if p.strip()).strip()
+                if combined:
+                    extracted_parts.append(combined)
+            else:
+                # Vùng 2 cột cục bộ (ví dụ: Box Học vấn bên trái & Box Kỹ năng bên phải)
+                if left_text.strip():
+                    extracted_parts.append(left_text.strip())
+                if right_text.strip():
+                    extracted_parts.append(right_text.strip())
+        else:
+            text_s = _boxes_to_lines(b_words)
+            if text_s.strip():
+                extracted_parts.append(text_s.strip())
+
+    return "\n\n".join(extracted_parts).strip()

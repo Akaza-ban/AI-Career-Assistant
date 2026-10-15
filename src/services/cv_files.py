@@ -3,6 +3,7 @@
 import io
 import logging
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -135,49 +136,44 @@ def _find_column_gutter(words: list[dict[str, Any]], width: float) -> float | No
     return None
 
 
-def _extract_pdfplumber_page(page: Any) -> str:
-    from src.services.skill_matching import _match_section
+def clean_stutter_text(text: str) -> str:
+    """Khử hiện tượng lặp đôi ký tự (DDựự áánn -> Dự án, 771155 -> 715) do Canva/PDF export 2 layer chữ đè nhau."""
+    if not text:
+        return text
 
+    def _clean_line(line: str) -> str:
+        line_nfc = unicodedata.normalize("NFC", line)
+        tokens = re.split(r"(\s+)", line_nfc)
+        has_obvious_stutter = any(
+            len(t) >= 4 and len(t) % 2 == 0 and all(t[i] == t[i + 1] for i in range(0, len(t), 2))
+            for t in tokens
+            if t.strip()
+        )
+        if not has_obvious_stutter:
+            return line_nfc
+
+        def _clean_token(t: str) -> str:
+            if not t.strip():
+                return t
+            n = len(t)
+            if n >= 2 and n % 2 == 0 and all(t[i] == t[i + 1] for i in range(0, n, 2)):
+                return "".join(t[i] for i in range(0, n, 2))
+            return t
+
+        return "".join(_clean_token(t) for t in tokens)
+
+    return "\n".join(_clean_line(line) for line in text.splitlines())
+
+
+def _extract_pdfplumber_page(page: Any) -> str:
     words = page.extract_words()
     if not words:
         return (page.extract_text() or "").strip()
 
-    from src.services.cv_layout import is_real_column_split
+    from src.services.cv_layout import extract_layout_aware_text
 
-    split_x = _find_column_gutter(words, page.width)
-    if split_x is None or not is_real_column_split(words, split_x):
-        return _words_to_lines(words)
-
-    left_words = [w for w in words if w["x1"] <= split_x]
-    right_words = [w for w in words if w["x0"] >= split_x]
-    crossing_words = [w for w in words if w["x0"] < split_x < w["x1"]]
-
-    left_text = _words_to_lines(left_words)
-    right_text = _words_to_lines(right_words + crossing_words)
-
-    right_lines = [line_str.strip() for line_str in right_text.splitlines() if line_str.strip()]
-    header_lines: list[str] = []
-    body_right_lines: list[str] = []
-    found_section = False
-
-    for line in right_lines:
-        sec, is_heading = _match_section(line)
-        if is_heading or (sec and header_lines):
-            found_section = True
-        if not found_section and len(header_lines) < 3:
-            header_lines.append(line)
-        else:
-            body_right_lines.append(line)
-
-    parts: list[str] = []
-    if header_lines:
-        parts.append("\n".join(header_lines))
-    if left_text.strip():
-        parts.append(left_text.strip())
-    if body_right_lines:
-        parts.append("\n".join(body_right_lines))
-
-    return "\n\n".join(p for p in parts if p.strip()).strip()
+    raw_text = extract_layout_aware_text(words, page.width, page.height)
+    return clean_stutter_text(raw_text)
 
 
 def _extract_pdf(data: bytes) -> tuple[str, int]:
@@ -225,17 +221,118 @@ def _extract_docx(data: bytes) -> str:
     return "\n".join(lines)
 
 
+def reformat_cv_with_deepseek(raw_text: str) -> str:
+    """
+    Sử dụng model DeepSeek (deepseek-chat) để đọc hiểu ngữ nghĩa văn bản thô trích xuất từ CV,
+    tự động phân loại chính xác các mục (Học vấn, Kinh nghiệm, Kỹ năng, Dự án...)
+    và sắp xếp lại theo cấu trúc chuẩn Harvard (Harvard Resume Format) rõ ràng, trung thực.
+    """
+    if not raw_text or len(raw_text.strip()) < 50:
+        return raw_text
+
+    try:
+        import os
+
+        settings = get_settings()
+        api_key, _ = settings.get_llm_credentials()
+        # Tránh gọi LLM ngoài trong unit test hoặc khi chưa cấu hình key
+        if not api_key or api_key.startswith("sk-dummy") or api_key == "test-key" or os.getenv("PYTEST_CURRENT_TEST"):
+            return raw_text
+
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        chat_model = settings.get_chat_model(temperature=0.1, timeout=25)
+
+        system_prompt = (
+            "Bạn là chuyên gia phân tích và tái cấu trúc hồ sơ CV theo định dạng chuẩn Harvard (Harvard Resume Format).\n"
+            "Dưới đây là toàn bộ văn bản thô được trích xuất từ CV của ứng viên (có thể bị xáo trộn vị trí các cột, dính chữ ngang, hoặc ngắt dòng lộn xộn do OCR).\n\n"
+            "NHIỆM VỤ CỦA BẠN:\n"
+            "1. XÁC ĐỊNH NGÔN NGỮ CHỦ ĐẠO CỦA CV GỐC (CRITICAL - ĐỒNG BỘ NGÔN NGỮ 100%):\n"
+            "   - Nếu CV gốc viết bằng TIẾNG ANH: TẤT CẢ tiêu đề mục BẮT BUỘC dùng TIẾNG ANH (SUMMARY, EDUCATION, WORK EXPERIENCE, PROJECTS, SKILLS, CERTIFICATIONS, LANGUAGES). TUYỆT ĐỐI KHÔNG dịch tiêu đề sang tiếng Việt. Toàn bộ văn bản xuất ra phải 100% tiếng Anh.\n"
+            "   - Nếu CV gốc viết bằng TIẾNG VIỆT: TẤT CẢ tiêu đề mục BẮT BUỘC dùng TIẾNG VIỆT (TÓM TẮT BẢN THÂN, HỌC VẤN, KINH NGHIỆM LÀM VIỆC, DỰ ÁN, KỸ NĂNG, CHỨNG CHỈ, NGOẠI NGỮ). Toàn bộ văn bản xuất ra phải 100% tiếng Việt.\n"
+            "   - TUYỆT ĐỐI KHÔNG ĐƯỢC TRỘN LẪN TIẾNG ANH VÀ TIẾNG VIỆT (không để nội dung tiếng Anh nhưng tiêu đề tiếng Việt hoặc ngược lại).\n\n"
+            "2. ĐỌC HIỂU NGỮ NGHĨA VÀ PHÂN BIỆT ĐẦY ĐỦ CÁC THÀNH PHẦN:\n"
+            "   - Thông tin liên hệ (Họ tên in hoa, vị trí, email, phone, location, LinkedIn/GitHub/Portfolio).\n"
+            "   - Tóm tắt bản thân / Mục tiêu nghề nghiệp (Summary / Objective).\n"
+            "   - Kinh nghiệm làm việc (Work Experience): Tên tổ chức/công ty, chức danh, thời gian, bullet trách nhiệm.\n"
+            "   - Học vấn (Education): Tên trường, chuyên ngành/bằng cấp, thời gian, môn học/GPA/thành tích.\n"
+            "   - Kỹ năng (Skills): Nhóm kỹ năng, công cụ, ngôn ngữ lập trình, thư viện...\n"
+            "   - Dự án (Projects): Tên dự án, dòng Technologies, bullet mô tả tính năng/kết quả.\n"
+            "   - Chứng chỉ (Certifications): Tất cả chứng chỉ nghề nghiệp, khóa học, job simulation, ngoại ngữ kèm thời gian.\n"
+            "   - Ngoại ngữ (Languages): Danh sách ngôn ngữ và trình độ tương ứng.\n\n"
+            "3. CẤU TRÚC MẪU CHUẨN HARVARD BẮT BUỘC:\n\n"
+            "[HỌ VÀ TÊN IN HOA]\n"
+            "[Vị trí chuyên môn nếu có]\n"
+            "[Địa chỉ / Location] | [Số điện thoại / Phone] | [Email] | [LinkedIn / GitHub / Website]\n\n"
+            "SUMMARY (hoặc TÓM TẮT BẢN THÂN nếu CV tiếng Việt)\n"
+            "[Đoạn văn giới thiệu bản thân liền mạch, súc tích]\n\n"
+            "EDUCATION (hoặc HỌC VẤN nếu CV tiếng Việt)\n"
+            "[Tên trường học / University]\n"
+            "[Bằng cấp / Degree / Chuyên ngành] | [Thời gian]\n"
+            "• [Relevant Coursework / GPA / Xếp loại nếu có]\n\n"
+            "WORK EXPERIENCE (hoặc KINH NGHIỆM LÀM VIỆC nếu CV tiếng Việt)\n"
+            "[Tên công ty / Organization] | [Vị trí / Role]\n"
+            "[Thời gian]\n"
+            "• [Chi tiết trách nhiệm hoặc thành tích 1]\n"
+            "• [Chi tiết trách nhiệm hoặc thành tích 2]\n\n"
+            "PROJECTS (hoặc DỰ ÁN nếu CV tiếng Việt)\n"
+            "[Tên dự án] | [Vai trò hoặc Team Project nếu có] | [Thời gian nếu có] (TUYỆT ĐỐI KHÔNG để dấu • ở dòng tên dự án)\n"
+            "Technologies: [Liệt kê công nghệ, thư viện, công cụ sử dụng] (TUYỆT ĐỐI KHÔNG để dấu • ở dòng này)\n"
+            "• [Mô tả chi tiết giải pháp, hành động, kết quả 1]\n"
+            "• [Mô tả chi tiết giải pháp, hành động, kết quả 2]\n\n"
+            "SKILLS (hoặc KỸ NĂNG nếu CV tiếng Việt)\n"
+            "• [Nhóm kỹ năng 1]: [Danh sách kỹ năng]\n"
+            "• [Nhóm kỹ năng 2]: [Danh sách kỹ năng]\n\n"
+            "CERTIFICATIONS (hoặc CHỨNG CHỈ nếu CV tiếng Việt)\n"
+            "[Tên chứng chỉ 1] (Credential ID: ... nếu có) by [Đơn vị cấp nếu có] | [Thời gian]\n"
+            "[Tên chứng chỉ 2] (Credential ID: ... nếu có) by [Đơn vị cấp nếu có] | [Thời gian]\n"
+            "(BẮT BUỘC liệt kê đầy đủ 100% mọi chứng chỉ có trong CV gốc, đếm kỹ để không bỏ sót bất kỳ chứng chỉ nào, kể cả SQL Intermediate, Python Basic, Job Simulation, HackerRank, Forage, Coursera, TOEIC, IELTS... TUYỆT ĐỐI KHÔNG để dấu • ở đầu dòng chứng chỉ)\n\n"
+            "LANGUAGES (hoặc NGOẠI NGỮ nếu CV tiếng Việt)\n"
+            "• [Ngôn ngữ 1] ([Trình độ / Mức độ thông thạo])\n"
+            "• [Ngôn ngữ 2] ([Trình độ / Mức độ thông thạo])\n\n"
+            "4. QUY TẮC BẮT BUỘC (CRITICAL GUARDRAILS):\n"
+            "- ĐỒNG BỘ NGÔN NGỮ TUYỆT ĐỐI: CV tiếng Anh thì mọi tiêu đề mục là TIẾNG ANH. CV tiếng Việt thì mọi tiêu đề mục là TIẾNG VIỆT.\n"
+            "- GIỮ NGUYÊN 100% SỰ THẬT: Số liệu, tên chứng chỉ, mã Credential ID, thời gian, tên công nghệ. KHÔNG TỰ BỎ SÓT và KHÔNG BỊA ĐẶT.\n"
+            "- MỤC CHỨNG CHỈ & NGOẠI NGỮ: Tách biệt hoàn toàn thành 2 mục riêng biệt. BẮT BUỘC giữ lại ĐẦY ĐỦ 100% TẤT CẢ các chứng chỉ có trong văn bản thô (đếm kỹ từng dòng chứng chỉ để đảm bảo không bỏ sót bất kỳ chứng chỉ nào) và mọi ngôn ngữ có trong CV gốc. TUYỆT ĐỐI KHÔNG lấy ngày tháng của chứng chỉ gán sang mục Ngoại ngữ.\n"
+            "- MỤC DỰ ÁN & KINH NGHIỆM: Tên dự án, tên công ty, dòng Technologies: ... TUYỆT ĐỐI KHÔNG có dấu gạch đầu dòng (•). Chỉ các câu mô tả công việc mới có dấu •.\n"
+            "- Giữa các mục lớn và giữa các dự án/công ty phải có 1 dòng trống để tách bạch rõ ràng.\n"
+            "- Tự động ghép nối các câu bị ngắt dòng giữa chừng do OCR thành câu hoàn chỉnh.\n"
+            "- CHỈ xuất ra duy nhất nội dung văn bản CV đã được định dạng, KHÔNG thêm lời giải thích, chào hỏi hay bọc trong markdown ```."
+        )
+
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=f"VĂN BẢN CV THÔ TỪ BẢN QUÉT / TRÍCH XUẤT:\n\n{raw_text}"),
+        ]
+
+        response = chat_model.invoke(messages)
+        formatted_text = str(response.content).strip()
+        if formatted_text.startswith("```"):
+            lines = formatted_text.splitlines()
+            if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].startswith("```"):
+                formatted_text = "\n".join(lines[1:-1]).strip()
+
+        if len(formatted_text) >= len(raw_text) * 0.4:
+            logger.info("Đã dùng DeepSeek chuẩn hóa cấu trúc CV theo format Harvard thành công.")
+            return formatted_text
+        return raw_text
+    except Exception as e:
+        logger.warning("Không thể định dạng lại CV bằng DeepSeek (fallback về text thô): %s", e)
+        return raw_text
+
+
 def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
     """Trích văn bản từ CV; tự động kích hoạt OCR khi là PDF scan không có lớp text."""
     read_by_ocr = False
     try:
         if file_type == "pdf":
             text, page_count = _extract_pdf(data)
-            # Nếu PDF không có lớp văn bản hoặc ít hơn MIN_TEXT_CHARS, tự động kích hoạt OCR
-            if len("".join(text.split())) < MIN_TEXT_CHARS:
-                logger.info("PDF có ít hơn %d ký tự văn bản. Tiến hành quét OCR qua các trang...", MIN_TEXT_CHARS)
+            chars_count = len("".join(text.split()))
+            # Nếu PDF không có lớp văn bản hoặc quá ít ký tự (< 120 ký tự, tránh file scan có text rác / watermark), quét OCR
+            if chars_count < 120:
+                logger.info("PDF chỉ có %d ký tự văn bản. Tiến hành quét OCR qua các trang...", chars_count)
                 ocr_text, ocr_pages = ocr.ocr_pdf_bytes(data)
-                if len("".join(ocr_text.split())) >= MIN_TEXT_CHARS:
+                if len("".join(ocr_text.split())) > chars_count:
                     text = ocr_text
                     page_count = ocr_pages or page_count
                     read_by_ocr = True
@@ -250,6 +347,12 @@ def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
         ) from e
 
     text = "\n".join(line.rstrip() for line in text.splitlines()).strip()
+    text = clean_stutter_text(text)
+
+    # Khi chữ được bóc tách từ OCR hoặc có layout phức tạp, dùng DeepSeek định dạng lại theo chuẩn Harvard
+    if read_by_ocr or len(text) >= 100:
+        text = reformat_cv_with_deepseek(text)
+
     if len("".join(text.split())) < MIN_TEXT_CHARS:
         raise AppError(
             422,

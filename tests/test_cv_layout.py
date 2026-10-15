@@ -5,7 +5,13 @@ import io
 from docx import Document
 
 from src.services.cv_files import build_docx
-from src.services.cv_layout import cv_language, is_real_column_split, layout_lines, split_date
+from src.services.cv_layout import (
+    cv_language,
+    extract_layout_aware_text,
+    is_real_column_split,
+    layout_lines,
+    split_date,
+)
 from src.services.ocr import _MISREAD_BULLET
 from src.services.skill_matching import split_cv_lines
 
@@ -151,3 +157,71 @@ def test_docx_follows_the_template():
     assert heading.runs[0].bold and heading.runs[0].font.all_caps
     tools = next(p for p in paragraphs if p.text == "Tools: Git, Docker")
     assert tools.runs[0].text == "Tools:" and tools.runs[0].bold
+
+
+def test_hybrid_layout_separates_education_and_skills():
+    """Bố cục lai: nửa trên 1 cột (Kinh nghiệm), nửa dưới chia đôi (Học vấn trái, Kỹ năng phải)."""
+    boxes = [
+        # Header (1 cột)
+        _box(50, 200, 50, "Anh Tuấn"),
+        _box(50, 180, 80, "Video Editor"),
+        # Kinh nghiệm làm việc (1 cột toàn chiều rộng x=50 đến x=550)
+        _box(50, 250, 150, "Kinh nghiệm làm việc"),
+        _box(50, 550, 180, "Công ty Sáng tạo Truyền thông | Thực tập sinh Dựng phim 08/2023 - 05/2024"),
+        _box(50, 540, 210, "Hỗ trợ chuyên viên chính cắt ghép dữ liệu quay thô và đồng bộ âm thanh"),
+        _box(50, 530, 240, "Tìm kiếm, chọn lọc và quản lý kho tài nguyên âm nhạc không vi phạm bản quyền"),
+        # Nửa dưới chia 2 box song song: Học vấn (x=50-250), Kỹ năng (x=300-550)
+        _box(60, 150, 320, "Học vấn"),
+        _box(60, 250, 350, "Khóa học Kỹ thuật Dựng phim Chuyên sâu"),
+        _box(60, 250, 380, "Tập trung vào tư duy dựng phim điện ảnh, kỹ thuật cắt cảnh đa chiều"),
+        _box(60, 250, 410, "và quy trình chuẩn bị tệp chất lượng cao"),
+        _box(310, 400, 320, "Kỹ năng"),
+        _box(310, 430, 350, "Công cụ phần mềm: Đồ họa cơ bản"),
+        _box(310, 430, 380, "Dựng phim chuyên nghiệp, Xử lý kỹ xảo"),
+        _box(440, 540, 350, "Kỹ năng chuyên môn: Cắt dựng video ngắn"),
+        _box(440, 540, 380, "Thiết kế 2D, Phối màu cơ bản"),
+    ]
+    extracted = extract_layout_aware_text(boxes, width=600.0, height=800.0)
+    lines = [line.strip() for line in extracted.splitlines() if line.strip()]
+
+    # Kiểm tra "Học vấn" không bị gộp chung dòng với "Kỹ năng"
+    assert "Học vấn Kỹ năng" not in extracted
+    assert "Học vấn" in lines
+    assert "Kỹ năng" in lines
+
+    # Học vấn xuất hiện trước, và tất cả nội dung học vấn phải đứng trước Kỹ năng
+    idx_edu = lines.index("Học vấn")
+    idx_skills = lines.index("Kỹ năng")
+    assert idx_edu < idx_skills
+
+    # Đoạn mô tả học vấn nằm trọn giữa tiêu đề Học vấn và Kỹ năng
+    idx_course = lines.index("Khóa học Kỹ thuật Dựng phim Chuyên sâu")
+    assert idx_edu < idx_course < idx_skills
+
+
+def test_project_entries_without_dates():
+    cv = """NGUYEN VAN A
+a@example.com
+DU AN
+Depression Factors Classification | Team Project (4 members)
+Technologies: Python, Java, Weka, scikit-learn
+• Developed ML models to predict depression levels
+• Evaluated and compared 6 classification algorithms
+
+RAG-based Vietnamese Real Estate Chatbot
+Technologies: Python, Selenium, Milvus, LLMs
+• Deployed production-ready chatbot
+
+Airline Customer Booking Forecast
+Python, Pandas, Scikit-learn
+• Conducted exploratory data analysis
+"""
+    layout = layout_lines(cv)
+    rows = {line["text"]: layout[line["line_no"]]["kind"] for line in split_cv_lines(cv)}
+    assert rows["Depression Factors Classification | Team Project (4 members)"] == "entry"
+    assert rows["Technologies: Python, Java, Weka, scikit-learn"] == "tech"
+    assert rows["Developed ML models to predict depression levels"] == "bullet"
+    assert rows["RAG-based Vietnamese Real Estate Chatbot"] == "entry"
+    assert rows["Technologies: Python, Selenium, Milvus, LLMs"] == "tech"
+    assert rows["Airline Customer Booking Forecast"] == "entry"
+    assert rows["Python, Pandas, Scikit-learn"] == "role"

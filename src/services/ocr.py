@@ -147,7 +147,9 @@ def format_ocr_boxes(boxes: list[Any], width: float, height: float) -> str:
         text = str(item[1]).strip()
         score = float(item[2]) if len(item) > 2 else 1.0
 
-        if not text or score < 0.25:
+        # Giữ lại các box có score >= 0.25, hoặc >= 0.18 nếu có chứa số, email, liên kết, dấu câu quan trọng
+        min_score = 0.18 if any(c.isdigit() or c in "@.:/|-" for c in text) else 0.25
+        if not text or score < min_score:
             continue
 
         ymin = float(min(pt[1] for pt in box))
@@ -172,50 +174,26 @@ def format_ocr_boxes(boxes: list[Any], width: float, height: float) -> str:
     if not items:
         return ""
 
-    # Kiểm tra bố cục 2 cột
-    from src.services.cv_layout import is_real_column_split
+    from src.services.cv_files import clean_stutter_text
+    from src.services.cv_layout import extract_layout_aware_text
 
-    split_x = _check_column_split(items, width)
-    boxes = [
-        {"x0": it["xmin"], "x1": it["xmax"], "top": it["ymin"], "bottom": it["ymax"], "text": it["text"]}
-        for it in items
-    ]
-    if split_x is not None and is_real_column_split(boxes, split_x):
-        from src.services.skill_matching import _match_section
+    raw_result = extract_layout_aware_text(items, width, height)
+    return clean_stutter_text(raw_result)
 
-        left_items = [it for it in items if it["xmax"] <= split_x]
-        right_items = [it for it in items if it["xmin"] >= split_x]
-        mid_items = [it for it in items if it["xmin"] < split_x < it["xmax"]]
 
-        left_text = _group_and_sort_lines(left_items)
-        right_text = _group_and_sort_lines(right_items + mid_items)
+def enhance_image_for_ocr(pil_img: Image.Image) -> Image.Image:
+    """Tăng tương phản và độ sắc nét giúp OCR dễ dàng đọc được các chữ mờ, xám hoặc font mảnh."""
+    try:
+        from PIL import ImageEnhance
 
-        right_lines = [line_str.strip() for line_str in right_text.splitlines() if line_str.strip()]
-        header_lines: list[str] = []
-        body_right_lines: list[str] = []
-        found_section = False
-
-        for line in right_lines:
-            sec, is_heading = _match_section(line)
-            if is_heading or (sec and header_lines):
-                found_section = True
-            if not found_section and len(header_lines) < 3:
-                header_lines.append(line)
-            else:
-                body_right_lines.append(line)
-
-        parts = []
-        if header_lines:
-            parts.append("\n".join(header_lines))
-        if left_text.strip():
-            parts.append(left_text.strip())
-        if body_right_lines:
-            parts.append("\n".join(body_right_lines))
-
-        return "\n\n".join(p for p in parts if p.strip()).strip()
-
-    # Bố cục 1 cột thông thường
-    return _group_and_sort_lines(items).strip()
+        # Tăng tương phản nhẹ (1.35x)
+        enhancer = ImageEnhance.Contrast(pil_img)
+        img_contrast = enhancer.enhance(1.35)
+        # Tăng độ sắc nét nét chữ (1.25x)
+        enhancer = ImageEnhance.Sharpness(img_contrast)
+        return enhancer.enhance(1.25)
+    except Exception:
+        return pil_img
 
 
 def _ocr_with_pytesseract(pil_img: Image.Image) -> str:
@@ -236,19 +214,20 @@ def _ocr_with_pytesseract(pil_img: Image.Image) -> str:
 
 
 def ocr_image(pil_img: Image.Image) -> str:
-    """Thực hiện OCR trên một đối tượng PIL Image."""
+    """Thực hiện OCR trên một đối tượng PIL Image sau khi tăng cường độ tương phản và sắc nét."""
     # Đảm bảo ảnh ở định dạng RGB
     if pil_img.mode != "RGB":
         pil_img = pil_img.convert("RGB")
 
     width, height = pil_img.size
+    processed_img = enhance_image_for_ocr(pil_img)
 
-    # 1. Thử chạy với RapidOCR (ONNX)
+    # 1. Thử chạy với RapidOCR (ONNX) kết hợp tham số phát hiện nét chữ mảnh/mờ
     engine = get_ocr_engine()
     if engine is not None:
         try:
-            np_img = np.array(pil_img)
-            res, _ = engine(np_img)
+            np_img = np.array(processed_img)
+            res, _ = engine(np_img, text_score=0.15, box_thresh=0.2, unclip_ratio=2.0)
             if res:
                 text = format_ocr_boxes(res, float(width), float(height))
                 if text and len("".join(text.split())) >= 20:
@@ -257,7 +236,7 @@ def ocr_image(pil_img: Image.Image) -> str:
             logger.warning("Lỗi trong quá trình xử lý RapidOCR: %s", e)
 
     # 2. Thử dự phòng với pytesseract
-    fallback_text = _ocr_with_pytesseract(pil_img)
+    fallback_text = _ocr_with_pytesseract(processed_img)
     if fallback_text and len("".join(fallback_text.split())) >= 20:
         return fallback_text
 
@@ -291,8 +270,8 @@ def ocr_pdf_bytes(data: bytes) -> tuple[str, int]:
         page_count = len(pdf)
         for i in range(page_count):
             page = pdf[i]
-            # scale=2.0 tương đương ~144-150 DPI, đủ rõ chữ và xử lý nhanh
-            pil_img = page.render(scale=2.0).to_pil()
+            # scale=3.0 tương đương ~216 DPI (rõ chữ nhỏ 8-10pt, dấu tiếng Việt và số điện thoại)
+            pil_img = page.render(scale=3.0).to_pil()
             p_text = ocr_image(pil_img)
             if p_text.strip():
                 pages_text.append(p_text.strip())

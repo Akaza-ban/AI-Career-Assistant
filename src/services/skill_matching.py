@@ -61,11 +61,39 @@ _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ),
     (
         "skills",
-        ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies", "ngoại ngữ", "language"),
+        (
+            "kỹ năng",
+            "kĩ năng",
+            "skills",
+            "công cụ",
+            "tools",
+            "technical",
+            "technologies",
+            "ngoại ngữ",
+            "ngôn ngữ",
+            "languages",
+            "language",
+            "lĩnh vực chuyên môn",
+            "chuyên môn",
+        ),
     ),
     (
         "certifications",
-        ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award", "honors", "achievements"),
+        (
+            "chứng chỉ",
+            "chứng nhận",
+            "giải thưởng",
+            "thành tích",
+            "certifications",
+            "certification",
+            "certificates",
+            "certificate",
+            "certificat",
+            "awards",
+            "award",
+            "honors",
+            "achievements",
+        ),
     ),
     (
         "summary",
@@ -149,6 +177,9 @@ def strip_bullet(raw: str) -> str:
 
 def split_cv_lines(text: str) -> list[dict[str, Any]]:
     """Tách CV thành các dòng không rỗng, đánh số từ 1 và gắn mục (section) chứa dòng đó."""
+    from src.services.cv_files import clean_stutter_text
+
+    text = clean_stutter_text(text)
     lines: list[dict[str, Any]] = []
     current = "header"
     for raw in text.splitlines():
