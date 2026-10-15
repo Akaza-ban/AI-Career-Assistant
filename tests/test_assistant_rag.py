@@ -271,7 +271,7 @@ async def test_unrelated_question_is_refused_without_sources(
 async def test_precise_question_returns_one_to_three_relevant_sources(
     knowledge_base: AssistantHybridRetriever,
 ) -> None:
-    response = await AssistantAgent(knowledge_base).respond("làm sao tải lên CV PDF DOCX?", context())
+    response = await AssistantAgent(knowledge_base).respond("Làm sao dùng nút Chọn file để tải CV lên?", context())
     assert 1 <= len(response.sources) <= 3
     assert all(source.route == "/student/cv" for source in response.sources)
     assert any(source.selector == UPLOAD_SELECTOR for source in response.sources)
@@ -372,7 +372,7 @@ async def test_business_filter_neutralizes_name_without_restoration(knowledge_ba
     )
     agent = AssistantAgent(retriever=knowledge_base, llm=llm)
     with provider_scope(identities=(Identity(name="Alice Morgan"),)):
-        response = await agent.respond("Làm sao tải lên CV PDF DOCX? Name: Alice Morgan", context())
+        response = await agent.respond("Làm sao dùng nút Chọn file để tải CV lên? Name: Alice Morgan", context())
     structured.ainvoke.assert_awaited_once()
     assert response.actions[0].params.value == "bạn"
     assert "Alice Morgan" not in str(structured.ainvoke.call_args.args[0])
@@ -409,7 +409,7 @@ async def test_llm_receives_history_and_returns_only_grounded_safe_actions(
     )
     agent = AssistantAgent(retriever=knowledge_base, llm=llm)
     response = await agent.respond(
-        "Làm sao tải lên CV PDF DOCX?",
+        "Làm sao dùng nút Chọn file để tải CV lên?",
         context(),
         history=[{"role": "user", "content": "Tôi có CV"}, {"role": "assistant", "content": "Bạn có thể tải lên"}],
     )
@@ -455,7 +455,7 @@ async def test_llm_refusal_omits_retrieved_sources_and_actions(
             ],
         }
     )
-    response = await AssistantAgent(knowledge_base, llm).respond("Làm sao tải lên CV PDF DOCX?", context())
+    response = await AssistantAgent(knowledge_base, llm).respond("Làm sao dùng nút Chọn file để tải CV lên?", context())
     structured.ainvoke.assert_awaited_once()
     assert response.message == answer
     assert response.sources == []
@@ -466,7 +466,7 @@ async def test_llm_refusal_omits_retrieved_sources_and_actions(
 @pytest.mark.parametrize("failure", [TimeoutError("LLM timeout"), ValueError("invalid JSON")])
 async def test_llm_failure_uses_grounded_fallback(knowledge_base: AssistantHybridRetriever, failure: Exception) -> None:
     llm, _ = fake_llm(error=failure)
-    result = await AssistantAgent(knowledge_base, llm).respond("làm sao tải lên CV PDF DOCX?", context())
+    result = await AssistantAgent(knowledge_base, llm).respond("Làm sao dùng nút Chọn file để tải CV lên?", context())
     assert result.sources and result.message.startswith("Theo tài liệu")
 
 
@@ -845,7 +845,7 @@ async def test_reindex_requires_advisor_and_refreshes_retrieval(client: AsyncCli
     assert (await client.post(f"{API}/reindex", headers=STUDENT)).status_code == 403
     response = await client.post(f"{API}/reindex", headers=ADVISOR)
     assert response.status_code == 200 and response.json()["chunks_indexed"] > 0
-    chat = await client.post(f"{API}/chat", json=payload("Làm sao tải lên CV PDF DOCX?"), headers=STUDENT)
+    chat = await client.post(f"{API}/chat", json=payload("Làm sao dùng nút Chọn file để tải CV lên?"), headers=STUDENT)
     assert chat.status_code == 200
     assert any(source["selector"] == UPLOAD_SELECTOR for source in chat.json()["sources"])
 

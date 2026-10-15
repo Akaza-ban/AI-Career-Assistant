@@ -152,3 +152,85 @@ async def test_api_rejects_invalid_server_ui_payload(client, element_id: str) ->
     finally:
         app.dependency_overrides.pop(get_assistant_agent, None)
 
+
+def test_registry_frontend_drift_in_both_directions() -> None:
+    import re
+    from pathlib import Path
+
+    frontend = Path(__file__).resolve().parents[1] / "frontend"
+    tagged: dict[str, list[str]] = {}
+    for directory in ("app", "components", "lib"):
+        for path in (frontend / directory).rglob("*"):
+            if path.suffix not in {".ts", ".tsx"}:
+                continue
+            for element_id in re.findall(r'data-assistant-id=["\']([\w-]+)["\']', path.read_text(encoding="utf-8")):
+                tagged.setdefault(element_id, []).append(str(path.relative_to(frontend)))
+    registered = set(load_ui_registry())
+    assert not registered - tagged.keys(), f"Registry IDs missing from frontend: {registered - tagged.keys()}"
+    assert not tagged.keys() - registered, f"Frontend IDs missing from registry: {tagged.keys() - registered}"
+    assert all(len(paths) == 1 for paths in tagged.values()), tagged
+
+
+def test_route_registry_matches_real_authenticated_pages() -> None:
+    import re
+    from pathlib import Path
+
+    app = Path(__file__).resolve().parents[1] / "frontend/app"
+    pages = {
+        "/" + "/".join(part for part in path.relative_to(app).parts[:-1] if not part.startswith("("))
+        for role in ("student", "advisor")
+        for path in (app / role).rglob("page.tsx")
+    }
+    registered = {re.sub(r"{\w+}", "[id]", entry.path_template) for entry in load_routes().values()}
+    assert pages == registered, {"missing_routes": pages - registered, "missing_pages": registered - pages}
+
+
+def test_registered_comparison_routes_keep_owner_scoping() -> None:
+    from types import SimpleNamespace
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+
+    from src.api.assistant import _resource_actions
+    from src.db.models import JobComparisonHistory
+    from src.models.assistant import NavigateAction
+
+    engine = create_engine("sqlite://")
+    JobComparisonHistory.__table__.create(engine)
+    with Session(engine) as db:
+        db.add_all(
+            [
+                JobComparisonHistory(id="owned", owner_id="student-one"),
+                JobComparisonHistory(id="private", owner_id="student-two"),
+            ]
+        )
+        db.commit()
+        actions = [
+            NavigateAction(description_vi="Mở trang", params={"route": "/student/analysis/compare/" + key})
+            for key in ("owned", "private", "missing")
+        ]
+        safe = _resource_actions(db, SimpleNamespace(id="student-one", role="student"), actions, [])
+        assert [action.params.route for action in safe] == ["/student/analysis/compare/owned"]
+    engine.dispose()
+
+
+def test_classifier_only_locate_does_not_intercept_legacy_imperatives() -> None:
+    from unittest.mock import MagicMock
+
+    from src.models.assistant import ClientPageContext
+    from src.services.assistant.agent import AssistantAgent
+    from src.services.assistant.router.models import LocateSlots, RouterDecision
+
+    agent = AssistantAgent()
+    agent._ui_router = MagicMock()
+    agent._ui_router.decide.return_value = RouterDecision(
+        route="locate",
+        source="classifier",
+        confidence=0.71,
+        language="vi",
+        slots=LocateSlots(target_hint="Hãy bắt đầu phân tích CV"),
+    )
+    context = ClientPageContext(current_url="/student/cv", route="/student/cv", user_role="student")
+    result = agent._inspect({"message": "Hãy bắt đầu phân tích CV", "context": context})
+    assert result["input_allowed"] is True
+    assert "response" not in result

@@ -5,10 +5,10 @@
       "student"
     ],
     "labels_vi": [
-      "student home"
+      "Tổng quan"
     ],
     "labels_en": [
-      "student home"
+      "Overview"
     ],
     "aliases": [
       "/student/overview"
@@ -21,10 +21,10 @@
       "student"
     ],
     "labels_vi": [
-      "cv list"
+      "CV của tôi"
     ],
     "labels_en": [
-      "cv list"
+      "My CVs"
     ],
     "aliases": [],
     "params": []
@@ -35,10 +35,10 @@
       "student"
     ],
     "labels_vi": [
-      "analysis new"
+      "Phân tích CV & JD"
     ],
     "labels_en": [
-      "analysis new"
+      "CV and JD analysis"
     ],
     "aliases": [
       "/student/analysis"
@@ -51,10 +51,10 @@
       "student"
     ],
     "labels_vi": [
-      "interview home"
+      "Luyện phỏng vấn"
     ],
     "labels_en": [
-      "interview home"
+      "Interview practice"
     ],
     "aliases": [
       "/student/interview"
@@ -67,10 +67,10 @@
       "student"
     ],
     "labels_vi": [
-      "interview lobby"
+      "Phòng chờ"
     ],
     "labels_en": [
-      "interview lobby"
+      "Interview lobby"
     ],
     "aliases": [],
     "params": []
@@ -81,10 +81,10 @@
       "student"
     ],
     "labels_vi": [
-      "interview history"
+      "Lịch sử & Tiến bộ"
     ],
     "labels_en": [
-      "interview history"
+      "History and progress"
     ],
     "aliases": [],
     "params": []
@@ -95,10 +95,10 @@
       "student"
     ],
     "labels_vi": [
-      "jd list"
+      "Thư viện JD"
     ],
     "labels_en": [
-      "jd list"
+      "Job library"
     ],
     "aliases": [],
     "params": []
@@ -109,10 +109,10 @@
       "student"
     ],
     "labels_vi": [
-      "sharing"
+      "Chia sẻ"
     ],
     "labels_en": [
-      "sharing"
+      "Sharing"
     ],
     "aliases": [],
     "params": []
@@ -123,10 +123,10 @@
       "student"
     ],
     "labels_vi": [
-      "student settings"
+      "Cài đặt"
     ],
     "labels_en": [
-      "student settings"
+      "Settings"
     ],
     "aliases": [],
     "params": []
@@ -137,10 +137,10 @@
       "advisor"
     ],
     "labels_vi": [
-      "advisor home"
+      "Tổng quan cố vấn"
     ],
     "labels_en": [
-      "advisor home"
+      "Advisor overview"
     ],
     "aliases": [
       "/advisor/dashboard"
@@ -153,10 +153,10 @@
       "advisor"
     ],
     "labels_vi": [
-      "advisor students"
+      "Sinh viên phụ trách"
     ],
     "labels_en": [
-      "advisor students"
+      "Assigned students"
     ],
     "aliases": [],
     "params": []
@@ -167,10 +167,10 @@
       "student"
     ],
     "labels_vi": [
-      "cv detail"
+      "Chi tiết CV"
     ],
     "labels_en": [
-      "cv detail"
+      "CV details"
     ],
     "aliases": [],
     "params": [
@@ -183,10 +183,10 @@
       "student"
     ],
     "labels_vi": [
-      "jd detail"
+      "Chi tiết JD"
     ],
     "labels_en": [
-      "jd detail"
+      "Job details"
     ],
     "aliases": [],
     "params": [
@@ -199,10 +199,10 @@
       "student"
     ],
     "labels_vi": [
-      "analysis compare"
+      "So sánh vị trí"
     ],
     "labels_en": [
-      "analysis compare"
+      "Compare positions"
     ],
     "aliases": [],
     "params": []
@@ -213,10 +213,10 @@
       "student"
     ],
     "labels_vi": [
-      "analysis comparison"
+      "Kết quả so sánh"
     ],
     "labels_en": [
-      "analysis comparison"
+      "Comparison result"
     ],
     "aliases": [],
     "params": [
@@ -229,10 +229,10 @@
       "student"
     ],
     "labels_vi": [
-      "analysis detail"
+      "Kết quả phân tích"
     ],
     "labels_en": [
-      "analysis detail"
+      "Analysis result"
     ],
     "aliases": [],
     "params": [
@@ -245,10 +245,10 @@
       "student"
     ],
     "labels_vi": [
-      "analysis optimize"
+      "Tối ưu CV"
     ],
     "labels_en": [
-      "analysis optimize"
+      "Optimize CV"
     ],
     "aliases": [],
     "params": [
@@ -261,10 +261,10 @@
       "student"
     ],
     "labels_vi": [
-      "analysis export"
+      "Xuất CV"
     ],
     "labels_en": [
-      "analysis export"
+      "Export CV"
     ],
     "aliases": [],
     "params": [
@@ -277,10 +277,10 @@
       "student"
     ],
     "labels_vi": [
-      "interview session"
+      "Phòng phỏng vấn"
     ],
     "labels_en": [
-      "interview session"
+      "Interview room"
     ],
     "aliases": [],
     "params": [
@@ -293,10 +293,10 @@
       "student"
     ],
     "labels_vi": [
-      "interview report"
+      "Báo cáo phỏng vấn"
     ],
     "labels_en": [
-      "interview report"
+      "Interview report"
     ],
     "aliases": [],
     "params": [
@@ -309,10 +309,10 @@
       "advisor"
     ],
     "labels_vi": [
-      "advisor student"
+      "Hồ sơ sinh viên"
     ],
     "labels_en": [
-      "advisor student"
+      "Student profile"
     ],
     "aliases": [],
     "params": [

@@ -21,6 +21,7 @@ from src.db.models import (
     CvVersion,
     GapAnalysis,
     InterviewSession,
+    JobComparisonHistory,
     JobDescription,
     User,
     utcnow,
@@ -176,6 +177,14 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
             if not route_allowed(route, user.role):
                 continue
             parts = route.split("/")
+            if user.role == "student" and len(parts) == 5 and parts[2:4] == ["analysis", "compare"]:
+                comparison = db.scalar(
+                    select(JobComparisonHistory.id).where(
+                        JobComparisonHistory.id == parts[4], JobComparisonHistory.owner_id == user.id
+                    )
+                )
+                if comparison is None:
+                    continue
             if user.role == "advisor" and len(parts) == 4 and parts[2] == "students" and parts[3] not in students:
                 continue
             if user.role == "student" and len(parts) >= 4 and parts[2] == "library":

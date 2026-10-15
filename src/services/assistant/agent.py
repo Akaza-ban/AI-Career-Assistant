@@ -42,6 +42,7 @@ from src.services.assistant.guardrails import (
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
 from src.services.assistant.locate import locate_actions
 from src.services.assistant.router import LocalRouter
+from src.services.assistant.router.rules import decide_rules
 from src.services.assistant.text import fold_diacritics as normalized
 from src.services.llm import assistant_llm_configured as llm_configured
 from src.services.llm import get_assistant_llm
@@ -127,7 +128,10 @@ class AssistantAgent:
         if self._ui_router is None:
             self._ui_router = LocalRouter()
         decision = self._ui_router.decide(message, role=state["context"].user_role)
-        if decision.route == "locate":
+        # During legacy migration, a classifier-only locate label must not
+        # intercept an imperative that carries no locate evidence.
+        rules = decide_rules(message, role=state["context"].user_role, language=decision.language)
+        if decision.route == "locate" and (rules.route == "locate" or classify_intent(message) != "action"):
             context = state["context"]
             actions = locate_actions(message, context.user_role, context.route)
             if actions:
