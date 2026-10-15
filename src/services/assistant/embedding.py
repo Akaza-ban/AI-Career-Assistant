@@ -9,7 +9,7 @@ from threading import RLock
 from typing import Any, ClassVar
 
 from src.config import get_settings
-from src.services.providers.gateway import embedding_call, encode_e5, load_e5_model
+from src.services.providers.gateway import embedding_call, encode_e5, load_e5_model, provider_scope
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +75,7 @@ class AssistantEmbeddingService:
     def _encode(self, texts: list[str], prefix: str) -> list[list[float]]:
         if not texts:
             return []
-        with self._lock:
+        with self._lock, provider_scope(mask_only=True):
             if self._model is not None:
                 try:
                     vectors = encode_e5(self._model, texts, prefix)

@@ -10,7 +10,7 @@ from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.services.privacy.detectors import Detector
+from src.services.privacy.detectors import Detector, filename_probe
 from src.services.privacy.types import (
     KINDS,
     MAX_PLACEHOLDER_LENGTH,
@@ -51,8 +51,7 @@ def mask_only(
             detector = get_detector()
         escaped = text if wire else escape_inbound(text)
         probe = re.sub(r"\[\[[^\[\]]*\]\]", lambda m: " " * len(m.group()), escaped) if wire else escaped
-        probe = re.sub(r"(?<=\w)[_-](?=\w)", " ", probe)
-        probe = re.sub(r"\.(?:pdf|docx|txt)\b", lambda m: " " * len(m.group()), probe, flags=re.I)
+        probe = filename_probe(probe)
         spans = detector.detect(probe, identities=identities, document_type="message")
         chunks: list[str] = []
         cursor = 0

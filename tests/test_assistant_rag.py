@@ -353,7 +353,7 @@ def fake_llm(result: Any = None, error: Exception | None = None) -> tuple[MagicM
 
 
 @pytest.mark.asyncio
-async def test_business_filter_restores_name_but_provider_sees_only_placeholder(knowledge_base):
+async def test_business_filter_neutralizes_name_without_restoration(knowledge_base):
     from src.services.privacy.types import Identity
     from src.services.providers.gateway import provider_scope
 
@@ -374,7 +374,7 @@ async def test_business_filter_restores_name_but_provider_sees_only_placeholder(
     with provider_scope(identities=(Identity(name="Alice Morgan"),)):
         response = await agent.respond("Nút tải lên CV PDF DOCX ở đâu? Name: Alice Morgan", context())
     structured.ainvoke.assert_awaited_once()
-    assert response.actions[0].params.value == "Alice Morgan"
+    assert response.actions[0].params.value == "bạn"
     assert "Alice Morgan" not in str(structured.ainvoke.call_args.args[0])
 
 

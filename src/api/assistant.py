@@ -50,8 +50,8 @@ async def get_assistant_status(user: CurrentUser) -> AssistantStatusResponse:
     """Report live LLM connectivity independently of retrieval fallback readiness."""
     from src.services.providers.gateway import provider_scope
 
-    with provider_scope(user_id=user.id):
-        return AssistantStatusResponse.model_validate(await check_llm_health())
+    with provider_scope(user_id=user.id, mask_only=True):
+        return AssistantStatusResponse.model_validate(await check_llm_health(assistant=True))
 
 
 def _owned_conversation(db: DbSession, conversation_id: str, user: User) -> AssistantConversation:
@@ -154,7 +154,11 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
     from src.services.privacy.types import Identity
     from src.services.providers.gateway import provider_scope
 
-    with provider_scope(user_id=user.id, identities=(Identity(name=user.full_name, email=user.email),)):
+    with provider_scope(
+        user_id=user.id,
+        identities=(Identity(name=user.full_name, email=user.email, phone=user.phone or ""),),
+        mask_only=True,
+    ):
         result = await agent.respond(body.message, context, history=history, allowed_student_ids=students)
     actions = _resource_actions(db, user, result.actions, students)
     message = result.message
@@ -245,7 +249,7 @@ def reindex(user: CurrentAdvisor) -> ReindexResponse:
     try:
         from src.services.providers.gateway import provider_scope
 
-        with ASSISTANT_INDEX_LOCK, provider_scope(user_id=user.id):
+        with ASSISTANT_INDEX_LOCK, provider_scope(user_id=user.id, mask_only=True):
             count = build_assistant_index()
     except Exception:
         logger.warning("Assistant reindex failed")

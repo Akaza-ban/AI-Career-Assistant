@@ -126,6 +126,8 @@ class LlmClient:
         temperature: float | None,
     ) -> dict[str, Any]:
         with provider_scope() as scope:
+            if not self.settings.pii_masking_enabled:
+                raise MaskingError("Local privacy protection unavailable; please try again later")
             if isinstance(messages, PreparedPayload):
                 if messages.scope is not scope:
                     raise MaskingError("Prepared messages belong to another scope")
@@ -133,17 +135,26 @@ class LlmClient:
                 scope._detector()  # Fail closed even for caller-masked messages.
             else:
                 log = [
-                    scope.mask_payload(copy.deepcopy(message), wire=message.get("role") in {"assistant", "tool"})
+                    scope.mask_payload(
+                        copy.deepcopy(message),
+                        wire=not scope.mask_only and message.get("role") in {"assistant", "tool"},
+                    )
                     for message in messages
                 ]
                 log = scope._mask_dictionary(log)
                 # Rewriting reasoning invalidates the replay contract. Callers
                 # must checkpoint masked messages; unsafe replay fails closed.
                 for original, masked in zip(messages, log, strict=True):
-                    if original.get("role") == "assistant" and original != masked:
+                    if not scope.mask_only and original.get("role") == "assistant" and original != masked:
                         raise MaskingError("Assistant replay must already be masked")
             self._check_tool_results(log)
             enabled = self.settings.llm_thinking_agent == "enabled" if thinking is None else thinking
+            if scope.mask_only:
+                if thinking is True:
+                    raise GatewayError("Thinking mode is unavailable for the assistant", stage="validation")
+                enabled = False
+                for message in log:
+                    message.pop("reasoning_content", None)
             payload: dict[str, Any] = {
                 "model": model or self.settings.llm_model_agent,
                 "messages": log,
@@ -152,10 +163,13 @@ class LlmClient:
             }
             if enabled:
                 payload["reasoning_effort"] = self.settings.llm_reasoning_effort
-            elif temperature is not None:
-                payload["temperature"] = temperature
+            elif temperature is not None or scope.mask_only:
+                payload["temperature"] = 0 if scope.mask_only else temperature
             if tools is not None:
-                payload["tools"] = scope.mask_payload(tools)
+                # Definitions are server-owned protocol, not user prose. Keep
+                # regex, identity and dictionary checks without NER inventing
+                # people from schema titles such as Message or ToolCall.
+                payload["tools"] = scope.mask_payload(tools, detect_names=not scope.mask_only)
             if max_tokens is not None:
                 payload["max_tokens"] = max_tokens
             if stream:
@@ -227,6 +241,7 @@ class LlmClient:
                 call_id = _start("recorded_chat" if self.recorded else "chat", scope)
                 status, usage, emitted, upstream = "failed", None, False, None
                 retry = False
+                sanitized_error: GatewayError | None = None
                 try:
                     async with asyncio.timeout(self.settings.llm_timeout_s):
                         upstream = await self._transport.create(payload)
@@ -259,16 +274,17 @@ class LlmClient:
                                                     else:
                                                         call[call_key] = call.get(call_key, "") + call_value
                                                 function = fragment.get("function", {})
-                                                emitted = True
-                                                yield ToolCallDelta(
-                                                    index,
-                                                    function.get("arguments", ""),
-                                                    fragment.get("id"),
-                                                    function.get("name"),
-                                                )
+                                                if not scope.mask_only:
+                                                    emitted = True
+                                                    yield ToolCallDelta(
+                                                        index,
+                                                        function.get("arguments", ""),
+                                                        fragment.get("id"),
+                                                        function.get("name"),
+                                                    )
                                         elif key in {"content", "reasoning_content", "refusal"}:
                                             accumulated[key] = accumulated.get(key, "") + value
-                                            if value and key != "refusal":
+                                            if value and key != "refusal" and not scope.mask_only:
                                                 emitted = True
                                                 yield ContentDelta(value) if key == "content" else ReasoningDelta(value)
                                         else:
@@ -280,6 +296,12 @@ class LlmClient:
                             if calls:
                                 accumulated["tool_calls"] = [calls[index] for index in sorted(calls)]
                             message = validate_chat_message(accumulated)
+                        if scope.mask_only:
+                            message.pop("reasoning_content", None)
+                            # Validate the complete response before delivering any
+                            # content/tool delta: identifiers and placeholders can
+                            # straddle arbitrary upstream chunk boundaries.
+                            message = scope.sanitize_output(scope.mask_payload(message, wire=True))
                         egress_scan(message, scope)
                         status = "success"
                     # Finish accounting and close transport BEFORE publishing Done.
@@ -290,7 +312,7 @@ class LlmClient:
                     status = "timeout"
                     retry = not emitted and attempt < self.settings.llm_max_retries
                     if not retry:
-                        raise GatewayTimeoutError("Provider request timed out") from None
+                        sanitized_error = GatewayTimeoutError("Provider request timed out")
                 except (GatewayError, MaskingError):
                     raise
                 except Exception as error:
@@ -298,7 +320,7 @@ class LlmClient:
                     if not retry:
                         code = provider_error_status(error)
                         reasoning = code == 400 and "reasoning" in str(error).lower()
-                        raise LlmProviderError(code, reasoning_contract=reasoning) from None
+                        sanitized_error = LlmProviderError(code, reasoning_contract=reasoning)
                 finally:
                     try:
                         if options["stream"] and upstream is not None:
@@ -307,8 +329,18 @@ class LlmClient:
                         _finish(
                             call_id, status, {"usage": usage or {}}, local=self.recorded, model_name=payload["model"]
                         )
+                if sanitized_error is not None:
+                    # Raise after the provider handler has exited: no raw error
+                    # body is retained in __context__, even for error exporters.
+                    raise sanitized_error
                 if retry:
                     await asyncio.sleep(min(0.5 * 2**attempt, 8.0))
                     continue
+                if scope.mask_only and options["stream"]:
+                    if message.get("content"):
+                        yield ContentDelta(message["content"])
+                    for index, call in enumerate(message.get("tool_calls", [])):
+                        function = call["function"]
+                        yield ToolCallDelta(index, function.get("arguments", ""), call.get("id"), function.get("name"))
                 yield Done(message)
                 return

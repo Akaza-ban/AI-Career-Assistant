@@ -179,7 +179,7 @@ class ProviderScope:
         self._identifiers: dict[str, Any] = {}
         self._detection_cache: dict[tuple[str, str], list[Span]] | None = None
 
-    def _detector(self) -> Detector:
+    def _detector(self, *, detect_names: bool = True) -> Detector:
         from src.services.privacy.ner import get_detector
 
         if not get_settings().pii_masking_enabled:
@@ -191,7 +191,9 @@ class ProviderScope:
             def detect(self, text: str, **kwargs: Any) -> list[Span]:
                 key = (text, str(kwargs.get("document_type", "message")))
                 cache = scope._detection_cache
-                if cache is None:
+                if scope.mask_only and not detect_names:
+                    spans = merge_spans([*regex_spans(text), *identity_spans(text, scope.identities)], len(text))
+                elif cache is None:
                     spans = active.detect(text, **kwargs)
                 else:
                     if key not in cache:
@@ -248,7 +250,7 @@ class ProviderScope:
     def mask_text(self, text: str, *, origin: str = "message", wire: bool = False, detect_names: bool = True) -> str:
         if origin not in self.origins:
             raise MaskingError("Document outside the authorized privacy scope")
-        detector = self._detector()
+        detector = self._detector(detect_names=detect_names)
         if self.mask_only:
             return mask_only(text, detector=detector, identities=self.identities, wire=wire)
         if not wire:
@@ -326,6 +328,22 @@ class ProviderScope:
         if isinstance(value, Mapping):
             if value.get("type") in {"image_url", "input_image", "image", "input_audio", "file"}:
                 raise MaskingError("Only locally extracted text may enter model requests")
+            if self.mask_only and isinstance(value.get("arguments"), str):
+                # Tool arguments are JSON data. Mask their values structurally so
+                # a detector cannot swallow quotes and break the tool contract.
+                try:
+                    arguments = json.loads(value["arguments"])
+                except (ValueError, TypeError):
+                    pass
+                else:
+                    return {
+                        key: json.dumps(
+                            self._mask_payload(arguments, wire=wire, detect_names=detect_names), ensure_ascii=False
+                        )
+                        if key == "arguments"
+                        else self._mask_payload(item, wire=wire, detect_names=detect_names)
+                        for key, item in value.items()
+                    }
             # Key names are part of the outbound payload too; egress rejects
             # unsafe schema/parameter keys instead of silently renaming them.
             return {key: self._mask_payload(item, wire=wire, detect_names=detect_names) for key, item in value.items()}
@@ -693,6 +711,8 @@ class GatewayChat:
             cancelled = False
             stage = "mask"
             try:
+                if not self.settings.pii_masking_enabled:
+                    raise MaskingError("Local privacy protection unavailable; please try again later")
                 if isinstance(payload, PreparedPayload):
                     if payload.scope is not scope:
                         raise MaskingError("Prepared payload belongs to another privacy scope")

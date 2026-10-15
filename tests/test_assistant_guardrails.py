@@ -233,7 +233,7 @@ async def test_history_rag_and_page_data_cannot_close_xml_or_introduce_system_me
         "retrieved_documents",
     ]
     assert json.loads(root.findtext("untrusted_chat_history")) == history
-    assert json.loads(root.findtext("untrusted_page_context"))["page_state"]["search_query"] == attack
+    assert json.loads(root.findtext("untrusted_page_context"))["page_state"] == {}
     assert json.loads(root.findtext("allowed_student_ids")) == [attack]
     documents = json.loads(root.findtext("retrieved_documents"))
     assert documents[0]["title"] == attack

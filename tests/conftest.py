@@ -14,7 +14,14 @@ os.environ["DEMO_LOGIN_ENABLED"] = "true"
 
 # Không gọi LLM thật khi chạy test (chậm, tốn credit): key rỗng → agent dùng quy tắc dự phòng.
 # Biến môi trường được ưu tiên hơn file .env nên ghi đè được key thật trong .env.
-for _key in ("GROQ_API_KEY", "OPENROUTER_API_KEY", "OPENAI_API_KEY", "LANGCHAIN_API_KEY"):
+for _key in (
+    "GROQ_API_KEY",
+    "OPENROUTER_API_KEY",
+    "OPENAI_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "LLM_API_KEY",
+    "LANGCHAIN_API_KEY",
+):
     os.environ[_key] = ""
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 

@@ -4,7 +4,7 @@ import pytest
 
 from src.services.privacy.detectors import Detector
 from src.services.privacy.masker import PlaceholderFilter, mask_only, neutralize_placeholders
-from src.services.privacy.types import Identity, MaskingError
+from src.services.privacy.types import Identity, MaskingError, Span
 from tests.test_privacy_detectors import EmptyNer
 
 
@@ -40,3 +40,26 @@ def test_mask_only_fails_closed_without_leaking_exception() -> None:
     with pytest.raises(MaskingError) as error:
         mask_only("secret@example.test", detector=BrokenDetector())
     assert "secret@example.test" not in str(error.value)
+
+
+def test_filename_normalization_preserves_contact_punctuation() -> None:
+    for raw in ("first_last@example.test", "first-last@example.test", "@first_last", "@first-last"):
+        wire = mask_only(raw, detector=Detector(EmptyNer()))
+        assert raw not in wire
+        assert wire in {"[[EMAIL]]", "[[HANDLE]]"}
+
+
+def test_message_ner_cannot_expand_exact_name_or_id_boundaries() -> None:
+    text = "Open CV Alice Morgan; Passport: X1234567; Find"
+
+    class BroadNer:
+        def detect(self, value: str) -> list[Span]:
+            return [
+                Span(value.index("CV"), value.index(";"), "PERSON"),
+                Span(value.index(":"), value.rindex(";"), "PERSON"),
+                Span(value.index("Find"), len(value), "PERSON"),
+            ]
+
+    assert mask_only(text, detector=Detector(BroadNer()), identities=(Identity(name="Alice Morgan"),)) == (
+        "Open CV [[PERSON]]; Passport: [[ID]]; Find"
+    )

@@ -8,6 +8,7 @@ from functools import lru_cache
 from html import escape
 from threading import RLock
 from typing import Any, Literal, TypedDict
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -39,8 +40,11 @@ from src.services.assistant.guardrails import (
     sanitize_and_inspect_prompt,
 )
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
-from src.services.llm import llm_configured
-from src.services.providers.gateway import provider_scope, wrap_chat
+from src.services.llm import assistant_llm_configured as llm_configured
+from src.services.llm import get_assistant_llm
+from src.services.privacy.types import MaskingError
+from src.services.providers.gateway import GatewayError, provider_scope, wrap_chat
+from src.services.providers.llm_client import LlmClient
 
 logger = logging.getLogger(__name__)
 ASSISTANT_INDEX_LOCK = RLock()
@@ -132,6 +136,17 @@ class AssistantAgent:
             with ASSISTANT_INDEX_LOCK:
                 retriever = self._retriever or AssistantHybridRetriever()
                 chunks = retriever.search(state["message"], context.user_role, route=context.route)
+        except (MaskingError, GatewayError):
+            return {
+                "sources": [],
+                "confidence": "low",
+                "response": AssistantResponse(
+                    message="Trợ lý tạm thời chưa thể xử lý an toàn. Bạn vui lòng thử lại sau.",
+                    intent=state["intent"],
+                    actions=[],
+                    sources=[],
+                ),
+            }
         except Exception as exc:
             logger.warning("Assistant retrieval unavailable (%s)", type(exc).__name__)
             return {"sources": [], "confidence": "low"}
@@ -272,7 +287,7 @@ class AssistantAgent:
         )
 
     async def _generate(self, state: AssistantState) -> dict[str, Any]:
-        response = self._fallback(state)
+        response = state.get("response") or self._fallback(state)
         if not response.sources:
             return {"response": response}
         if state["confidence"] == "high" and state["sources"] and (self._llm is not None or llm_configured()):
@@ -286,18 +301,27 @@ class AssistantAgent:
             )
             # History remains quoted data, never replayed as privileged model roles.
             # Escape every value so embedded closing tags cannot break isolation.
+            # Browser page_state is arbitrary input and can include CV/JD bodies
+            # or transcripts. Only the validated page/role hint goes outbound.
+            outbound_context = context.model_copy(
+                update={
+                    "user_id": None,
+                    "selected_cv_id": None,
+                    "page_state": {},
+                    "current_url": urlsplit(context.current_url).path,
+                }
+            )
             prompt_data = {
                 "untrusted_user_query": state["message"],
-                "untrusted_chat_history": json.dumps(state["history"], ensure_ascii=False),
-                "untrusted_page_context": json.dumps(context.model_dump(), ensure_ascii=False),
+                "untrusted_chat_history": json.dumps(state["history"][-4:], ensure_ascii=False),
+                "untrusted_page_context": json.dumps(outbound_context.model_dump(), ensure_ascii=False),
                 "allowed_student_ids": json.dumps(state["allowed_student_ids"], ensure_ascii=False),
                 "retrieved_documents": json.dumps(
                     [source.model_dump() for source in state["sources"]], ensure_ascii=False
                 ),
             }
             try:
-                llm = self._llm or get_settings().get_chat_model(temperature=0.1)
-                with provider_scope() as scope:
+                with provider_scope(mask_only=True) as scope:
                     # Escape/render only after privacy masking, preserving XML's
                     # single encoding layer and literal-placeholder protection.
                     masked_data = scope.mask_payload(prompt_data)
@@ -310,40 +334,70 @@ class AssistantAgent:
                             )
                         ),
                     ]
-                    structured = wrap_chat(
-                        llm, timeout=get_settings().assistant_llm_timeout_seconds
-                    ).with_structured_output(AssistantLlmOutput, method="function_calling")
-                    result = await structured.ainvoke(scope.prepared(messages))
+                    if self._llm is None or isinstance(self._llm, LlmClient):
+                        client = self._llm if self._llm is not None else get_assistant_llm()
+                        try:
+                            raw = await client.chat(
+                                scope.prepared(
+                                    [
+                                        {
+                                            "role": "system",
+                                            "content": scope.mask_text(system.content, wire=True, detect_names=False)
+                                            + "\nReturn your response using assistant_response.",
+                                        },
+                                        {"role": "user", "content": messages[1].content},
+                                    ]
+                                ),
+                                tools=[
+                                    {
+                                        "type": "function",
+                                        "function": {
+                                            "name": "assistant_response",
+                                            "description": "Return the grounded assistant response.",
+                                            "parameters": AssistantLlmOutput.model_json_schema(),
+                                        },
+                                    }
+                                ],
+                                thinking=False,
+                                temperature=0,
+                            )
+                            calls = raw.get("tool_calls", [])
+                            if calls:
+                                if len(calls) != 1 or calls[0]["function"]["name"] != "assistant_response":
+                                    raise GatewayError("Unexpected assistant response tool")
+                                result = client.parse_tool_arguments(raw)[calls[0]["id"]]
+                            else:
+                                result = json.loads(raw.get("content", ""))
+                        finally:
+                            if self._llm is None:
+                                await client.aclose()
+                    else:
+                        # Preserve the existing injected recording-backend seam;
+                        # production assistant generation uses LlmClient above.
+                        structured = wrap_chat(
+                            self._llm, timeout=get_settings().assistant_llm_timeout_seconds
+                        ).with_structured_output(AssistantLlmOutput, method="function_calling")
+                        result = await structured.ainvoke(scope.prepared(messages))
                     result = (
                         result if isinstance(result, AssistantLlmOutput) else AssistantLlmOutput.model_validate(result)
                     )
-                    business_actions = []
-                    for action in result.actions:
-                        payload = action.model_dump()
-                        for key in ("description_vi", "confirmation_message"):
-                            if isinstance(payload.get(key), str):
-                                payload[key] = scope.restore_business(payload[key])
-                        params = dict(payload["params"])
-                        # Only text fields accept PII; IDs/routes/selectors stay opaque.
-                        if action.action_type == "FILL_FILTER" and params.get("filter_name") == "keyword":
-                            params["value"] = scope.restore_business(params.get("value"))
-                        if action.action_type in {"HIGHLIGHT_ELEMENT", "SCROLL_TO"} and isinstance(
-                            params.get("tooltip"), str
-                        ):
-                            params["tooltip"] = scope.restore_business(params["tooltip"])
-                        if action.action_type == "NAVIGATE_PAGE" and isinstance(params.get("query"), dict):
-                            params["query"] = {
-                                key: scope.restore_business(value) if key == "keyword" else value
-                                for key, value in params["query"].items()
-                            }
-                        payload["params"] = params
-                        business_actions.append(type(action).model_validate(payload))
+                    result = scope.sanitize_output(result)
                     response = AssistantResponse(
-                        message=scope.restore_business(result.message),
+                        message=result.message,
                         intent=result.intent,
-                        actions=[] if result.is_refusal else validate_llm_actions(business_actions),
+                        actions=[] if result.is_refusal else validate_llm_actions(result.actions),
                         sources=[] if result.is_refusal else state["sources"],
                     )
+            except (MaskingError, GatewayError) as error:
+                if isinstance(error, MaskingError) or error.stage in {"mask", "egress", "response_mask"}:
+                    response = AssistantResponse(
+                        message="Trợ lý tạm thời chưa thể xử lý an toàn. Bạn vui lòng thử lại sau.",
+                        intent=state["intent"],
+                        actions=[],
+                        sources=[],
+                    )
+                else:
+                    logger.warning("Assistant generation unavailable; using grounded fallback")
             except Exception:
                 logger.warning("Assistant generation unavailable; using grounded fallback")
         return {"response": self._guard(response, state)}
@@ -355,7 +409,7 @@ class AssistantAgent:
         history: list[dict[str, str]] | None = None,
         allowed_student_ids: list[str] | None = None,
     ) -> AssistantResponse:
-        with provider_scope():
+        with provider_scope(mask_only=True):
             result = await self.graph.ainvoke(
                 {
                     "message": message,

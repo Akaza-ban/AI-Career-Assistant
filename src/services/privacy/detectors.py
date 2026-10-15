@@ -64,6 +64,19 @@ _NOT_NAME = frozenset(
 )
 
 
+def filename_probe(text: str) -> str:
+    """Normalize only filenames, without breaking email/handle punctuation."""
+
+    def normalize(match: re.Match[str]) -> str:
+        value = match.group()
+        if "@" in value:
+            return value
+        value = re.sub(r"[_-]", " ", value)
+        return re.sub(r"\.(?:pdf|docx|txt)$", lambda suffix: " " * len(suffix.group()), value, flags=re.I)
+
+    return re.sub(r"[^\s/\\<>\"']+\.(?:pdf|docx|txt)\b", normalize, text, flags=re.I)
+
+
 def _fold(text: str) -> tuple[str, list[int]]:
     folded: list[str] = []
     indices: list[int] = []
@@ -117,7 +130,7 @@ def _fuzzy_name_spans(folded: str, indices: list[int], needle: str) -> list[Span
 
 
 def identity_spans(text: str, identities: Iterable[Identity]) -> list[Span]:
-    folded, indices = _fold(text)
+    folded, indices = _fold(filename_probe(text))
     spans: list[Span] = []
     for identity in identities:
         names = {identity.name.strip()}
@@ -209,6 +222,39 @@ def header_spans(text: str) -> list[Span]:
     return spans
 
 
+def _message_ner_spans(text: str, found: Iterable[Span], deterministic: list[Span]) -> list[Span]:
+    """Prefer exact identity/regex boundaries to broad local NER predictions.
+
+    Subtract already-covered ranges rather than discarding a broad entity:
+    another person's name in its uncovered remainder must still be masked.
+    """
+    non_names = _NOT_NAME | {"find", "open", "how", "email", "phone", "cccd", "cmnd", "dob", "passport", "name"}
+    result = []
+    for span in found:
+        segments = [(span.start, span.end)]
+        for known in deterministic:
+            segments = [
+                (left, right)
+                for start, end in segments
+                for left, right in (
+                    (start, min(end, known.start)),
+                    (max(start, known.end), end),
+                )
+                if left < right
+            ]
+        for start, end in segments:
+            while start < end and not text[start].isalnum():
+                start += 1
+            while end > start and not text[end - 1].isalnum():
+                end -= 1
+            if start == end:
+                continue
+            if span.kind == "PERSON" and set(text[start:end].casefold().split()).issubset(non_names):
+                continue
+            result.append(Span(start, end, span.kind, span.layer))
+    return result
+
+
 def merge_spans(spans: Iterable[Span], text_length: int) -> list[Span]:
     """Union overlapping detections, retaining the most specific kind/earliest layer."""
     priority = {"EMAIL": 0, "URL": 1, "ID": 2, "PHONE": 3, "DOB": 4, "ADDRESS": 5, "PERSON": 6, "HANDLE": 7}
@@ -291,7 +337,8 @@ class Detector:
             spans.extend(regex_spans(text))
             if document_type == "cv":
                 spans.extend(header_spans(text))
-            spans.extend(_ner_spans(text, self.ner))
+            found = _ner_spans(text, self.ner)
+            spans.extend(_message_ner_spans(text, found, spans) if document_type == "message" else found)
             return merge_spans(spans, len(text))
         except MaskingError:
             raise
