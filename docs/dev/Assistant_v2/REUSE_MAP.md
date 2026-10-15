@@ -6,6 +6,13 @@ Decisions refer to future implementation: **reuse** existing behavior; **extend*
 
 ## 1. Current assistant and persistence
 
+Implementation follow-up (2026-10-15): sections 2.1/2.4 now extend the existing
+dependency, graph, conversations and turns with slim runs and owner-scoped
+history. The new `src/services/assistant/runs.py` owns reservation/cancellation
+because T0 found no equivalent registry. See [implementation details and
+limitations](RUNS_IMPLEMENTATION.md). The audit inventory below records the
+pre-implementation state.
+
 | Capability | Existing code | Decision (reuse / extend / new) | Reason |
 |---|---|---|---|
 | HTTP surface | `src/api/assistant.py`: `get_assistant_status` GET `/status`; `chat` POST `/chat`; `confirm_action` POST `/action/confirm`; `submit_feedback` POST `/feedback`; `delete_feedback` DELETE `/feedback/{turn_id}`; `reindex` POST `/reindex`. Mounted under `/api/v1/assistant` by `src/api/routes.py` and `src/main.py`. | extend | Chat is JSON-only today. SSE, run read/cancel and history endpoints are missing. Keep existing JSON responses compatible while adding the architecture's slim run lifecycle. Reindex is an advisor maintenance operation, not a chat tool. |

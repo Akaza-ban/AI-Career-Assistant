@@ -255,3 +255,30 @@ Validation:
 Existing user edits in this notes file are preserved separately from the T0
 commit. T0 creates REUSE_MAP.md because it was absent and explicitly requested;
 it creates no source module and changes no protected hooks/logs.
+
+
+## Sections 2.1 and 2.4 implementation (2026-10-15)
+
+See [identity and slim runs](Assistant_v2/RUNS_IMPLEMENTATION.md) for reuse,
+endpoint contracts, migration/downgrade, and compatibility decisions.
+Assistant routes reuse verified auth without demo fallback or activity writes.
+Cancellation/cache registries require single-worker deployment; no new boot
+refusal, waiting states, operations or checkpointer were added. Structured JSON
+upstream generation exposes no partial answer before completion. Legacy callers
+without client_request_id keep working with a fresh server ID; updated browser
+calls generate and reuse their own IDs. A separate migration correction handles
+SQLite downgrade on freshly created databases; regression tests cover both
+fresh and legacy-upgraded layouts.
+
+Validation: 12 focused lifecycle/auth/history/migration tests passed; 62 existing
+chat/status regressions passed in the earlier run. Four frontend API tests,
+frontend typecheck, frontend lint (two existing api.ts warnings), changed-file
+Ruff, and diff whitespace checks passed. Full-suite attempt reproduced T0's
+existing account-fixture failure (20 passed, 1 failed): registration followed by
+/me sends the seeded student's explicit cookie. Repository-wide Ruff retains
+three pre-existing errors in src/api/analysis.py and src/db/seed.py. These
+baseline failures prevent claiming every commit passes the complete suite.
+Expanded offline assistant/cross-user compatibility: 374 passed, 1 failed. All
+assistant cases passed; the remaining JD recommendation test returns a private
+vector candidate. Details are in the implementation report. Existing user edits
+are preserved and excluded from the implementation commits.
