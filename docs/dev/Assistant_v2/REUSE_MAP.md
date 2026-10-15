@@ -217,3 +217,13 @@ claimed, and the missing 100+ real utterances remain a release-evidence gap.
 
 - **Evaluation follow-up:** `diagnostics.py` reuses existing Observation/metrics arithmetic for selective coverage, per-reason safety and slot attribution; scores/gold remain unchanged. `rules_report.py` reuses evaluate() while reading only the selected train/dev file, because the general load_suite() reads heldout even for dev. Added explicit tests for the no-heldout/no-dev-text boundary.
 - The [extended report](../../../eval/router/rules_dev_report.md) distinguishes genuine train extractor bugs, two unresolved slot conventions, remaining multi-family/classifier-handoff ambiguity and targeted-versus-whole-suite validation.
+
+
+## Architecture 6.3 implementation (2026-10-15)
+
+- Extended `src/models/assistant.py` with the two-variant `UIAction` union and additive `ui_actions`, keeping the legacy `AgentAction` contract. `guardrails.validate_ui_actions` validates server output against registry and session role. `route_allowed`/`ROUTES` now derive from one route registry; nonexistent advisor pages are excluded.
+- New `ui_registry.py` plus `resources/{routes,ui_registry}.json` supply the missing registry/loader found by T0. New `locate.py` supplies the missing fuzzy matcher, reusing shared text folding and settings. The existing LangGraph inspect/retrieval path and LocalRouter are extended, with no second orchestrator.
+- Reused `dispatchAgentAction`, its URL/DOM waits and preparation event, `ElementHighlighter`, the provider abort controller and `ActionBadges`. `dispatchUIActions` only sequences existing dispatch calls, with no acknowledgements. `InterviewTour` remains unchanged; no new overlay/tour was built. Frontend navigation imports the backend JSON data directly; Turbopack root includes the repository.
+- Added 14 literal frontend IDs, role/registry/owner rejection tests, bidirectional attribute drift, actual-page route drift, and 44 authored matcher fixtures. Provider/RAG tests now use a howto question about the actual Chọn file label, since locate no longer needs a provider.
+
+See [registered targets, matching results and validation](UI_LOCATE_IMPLEMENTATION.md).

@@ -611,3 +611,15 @@ fallback:
 
 
 T2.3b commit grouping deviation: `6a13a8b` combines the first three approved groups and the previously uncommitted T2.3 baseline needed for a buildable router commit. Documentation is separate; unrelated edits are not included.
+
+
+## Architecture 6.3 — registry and locate (2026-10-15)
+
+- Implemented the approved registry/locate/frontend/drift scope with 14 static-page guide targets. New `ui_actions` contains only highlight(element_id) and navigate(route_id, params); the legacy action/API contract remains during migration. No new acknowledgement endpoint, overlay, tour feature or UI operation was added.
+- Reused the existing route guard, LocalRouter/rules, text folding, graph, API resource guard, dispatcher URL/DOM waits, highlighter, provider cancellation and manual action-card links. A classifier-only locate prediction cannot intercept a legacy imperative without locate evidence. Saved comparison links now enforce owner in SQL; no comparison resolver was added.
+- Threshold 0.78 and top-1 margin 0.10 are settings-backed. The authored matcher regression set scores 44/44 (34 target matches, 10 abstentions); this is not held-out or real-user accuracy. Unknown/ambiguous locate goes to guide RAG with actions suppressed. Data-dependent empty/error states may leave a target absent; bounded DOM waits fail locally and manual links remain.
+- Invalid role/registry output is rejected by the API and emits no actions. Existing run error sanitization maps this internal rejection to HTTP 503; no new run error protocol was introduced.
+- Plan detail: relevant tests shipped with each feature; final regression fixes are in the drift/test commit. Documentation is a separate commit to follow architecture commit discipline. Provider tests use an explicit howto question about Chọn file, since locate now bypasses providers. Turbopack root includes the repository to import the same backend JSON files.
+- Validation: all 143 combined backend assistant tests passed (including 21 UI cases). 34 frontend tests, type generation/TypeScript, frontend lint (two existing warnings), and production build passed. The build used real fonts and temporary isolated output because default `.next` refused an unlink; temporary build/tsconfig changes were restored. Ruff passes for changed Python files. Repository-wide Ruff still has three untouched errors in `src/api/analysis.py` and `src/db/seed.py`. Repository pytest fail-fast passes 20 tests then fails the untouched account registration profile test (demo name returned).
+
+See [full registered-element list, matching behavior and checks](Assistant_v2/UI_LOCATE_IMPLEMENTATION.md).
