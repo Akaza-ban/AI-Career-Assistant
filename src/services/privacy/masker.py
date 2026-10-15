@@ -60,10 +60,11 @@ def mask_only(
             cursor = span.end
         chunks.append(escaped[cursor:])
         return "".join(chunks)
-    except PrivacyError:
-        raise
     except Exception:
-        raise MaskingError("Local privacy protection unavailable; please try again later") from None
+        pass
+    # Raise outside the handler, so exporters cannot inspect a detector's raw
+    # input through the exception's otherwise hidden __context__.
+    raise MaskingError("Local privacy protection unavailable; please try again later")
 
 
 class PlaceholderFilter:

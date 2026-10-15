@@ -593,6 +593,18 @@ def validate_chat_message(message: dict[str, Any]) -> dict[str, Any]:
     return ChatCompletionMessage.model_validate(message).model_dump(exclude_none=True)
 
 
+async def close_model_stream(stream: Any) -> None:
+    failed = False
+    try:
+        await stream.close()
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        failed = True
+    if failed:
+        raise GatewayError("Provider connection cleanup failed")
+
+
 class RawChatTransport:
     """Gateway-owned SDK transport, including offline HTTP protocol recordings.
 
@@ -647,7 +659,7 @@ class RawChatTransport:
         return await self._client.chat.completions.create(**payload)
 
     async def close(self) -> None:
-        await self._client.close()
+        await close_model_stream(self._client)
 
     def assert_recording_consumed(self) -> None:
         if self._exchanges:

@@ -22,6 +22,7 @@ from src.services.providers.gateway import (
     _finish,
     _retryable,
     _start,
+    close_model_stream,
     egress_scan,
     provider_error_status,
     provider_scope,
@@ -324,7 +325,7 @@ class LlmClient:
                 finally:
                     try:
                         if options["stream"] and upstream is not None:
-                            await upstream.close()
+                            await close_model_stream(upstream)
                     finally:
                         _finish(
                             call_id, status, {"usage": usage or {}}, local=self.recorded, model_name=payload["model"]

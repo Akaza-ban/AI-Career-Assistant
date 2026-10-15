@@ -40,6 +40,7 @@ def test_mask_only_fails_closed_without_leaking_exception() -> None:
     with pytest.raises(MaskingError) as error:
         mask_only("secret@example.test", detector=BrokenDetector())
     assert "secret@example.test" not in str(error.value)
+    assert error.value.__context__ is None
 
 
 def test_filename_normalization_preserves_contact_punctuation() -> None:

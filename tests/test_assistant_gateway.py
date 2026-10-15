@@ -1,6 +1,7 @@
 import json
 import logging
-from unittest.mock import Mock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -71,3 +72,12 @@ def test_nested_assistant_scope_keeps_authenticated_identity() -> None:
             assert assistant.vault is None
             with gateway.provider_scope() as nested:
                 assert nested is assistant
+
+
+@pytest.mark.asyncio
+async def test_transport_cleanup_errors_have_no_raw_exception_context() -> None:
+    stream = SimpleNamespace(close=AsyncMock(side_effect=RuntimeError("private@example.test")))
+    with pytest.raises(gateway.GatewayError) as error:
+        await gateway.close_model_stream(stream)
+    assert error.value.__context__ is None
+    assert "private@example.test" not in str(error.value)
