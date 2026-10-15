@@ -233,3 +233,11 @@ See [registered targets, matching results and validation](UI_LOCATE_IMPLEMENTATI
 Extended the existing MarkdownDocChunker, indexer, and Chroma serialization; BM25 continues to persist the same DocChunk models. Static route IDs come from the T3.1 registry (including legacy route aliases); registered selector IDs become per-chunk ui_targets. Optional frontmatter targets are validated against the guide role/route before index replacement. A deterministic corpus-wide content/metadata hash stamps docs_version. Existing chunks remain readable and require reindexing to acquire attachment metadata.
 
 The 15-case pre-change retrieval snapshot in `eval/howto/retrieval_baseline.json` uses the existing deterministic hashing fixture, temporary Chroma/BM25, and existing keyword metrics. It is a reproducible regression baseline, distinct from T0's historical E5/fallback evaluation.
+
+## Architecture 6.1/6.2 how-to generation and evaluation
+
+- Extended the existing LangGraph retrieval/generation nodes, Settings, prompt module, hybrid score records and eval/run_rag_eval.py. Ranking/citation order is unchanged; the E5 pre-generation confidence gate uses the existing score before its page boost.
+- Extracted generic ModelCache storage from router/cache.py; DecisionCache retains all prior eligibility rules (33 cache tests). New howto.py supplies the missing guide-answer policy/cache value, role-specific menus and metadata attachment; no equivalent guide answer cache/attachment policy existed. The TTL/LRU algorithm and UI validation/registries are reused.
+- Reused LlmClient.chat_stream and mask-only provider_scope; no second SDK, privacy module or embedding path. Guide text/history are quoted, citations remain retrieval-owned and actions remain registry-owned.
+- Reused the existing knowledge_base test fixture, optionally selecting cached E5, existing 15-case golden corpus/keyword metrics, and benchmark rank-metric utilities. New eval/howto fixtures add 40 authored negatives and freeze original-retriever snapshots for both embedding profiles.
+- See [implementation, measurements, limitations and reproduction](HOWTO_IMPLEMENTATION.md), especially the distinction between zero before/after regression and T0's historical MRR figure.
