@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from src.config import Settings
 from src.services.privacy import ner
 from src.services.privacy.masker import mask
-from src.services.privacy.types import MaskingError, NerUnavailableError, VaultError
+from src.services.privacy.types import MaskingError, NerUnavailableError
 from tests.test_privacy_detectors import EmptyNer
 from tests.test_privacy_masker import TestVault
 
@@ -59,9 +59,8 @@ def test_production_privacy_refusals_keep_existing_auth_settings_contract(startu
     with pytest.raises(ValidationError, match="PII_MASKING_ENABLED"):
         Settings(_env_file=None, app_env="production", auth_secret_key="x" * 32, pii_masking_enabled=False)
     missing = Settings(_env_file=None, app_env="production", auth_secret_key="x" * 32)
-    with pytest.raises(VaultError, match="PII_VAULT_KEY"):
-        ner.initialize_privacy(missing)
-    assert startup_model == []
+    ner.initialize_privacy(missing)
+    assert len(startup_model) == 1
     good = Settings(
         _env_file=None, app_env="production", auth_secret_key="x" * 32, pii_vault_key=Fernet.generate_key().decode()
     )

@@ -32,6 +32,84 @@ def escape_inbound(text: str) -> str:
     return text.replace("&", "&amp;").replace("[[", "&#91;&#91;")
 
 
+def mask_only(
+    text: str,
+    *,
+    detector: Detector | None = None,
+    identities: Iterable[Identity] = (),
+    wire: bool = False,
+) -> str:
+    """One-way assistant masking: no vault, original/token mapping or resolution.
+
+    Filename separators are normalized only in the detection probe, preserving
+    offsets and the original spelling of all non-sensitive text.
+    """
+    try:
+        if detector is None:
+            from src.services.privacy.ner import get_detector
+
+            detector = get_detector()
+        escaped = text if wire else escape_inbound(text)
+        probe = re.sub(r"\[\[[^\[\]]*\]\]", lambda m: " " * len(m.group()), escaped) if wire else escaped
+        probe = re.sub(r"(?<=\w)[_-](?=\w)", " ", probe)
+        probe = re.sub(r"\.(?:pdf|docx|txt)\b", lambda m: " " * len(m.group()), probe, flags=re.I)
+        spans = detector.detect(probe, identities=identities, document_type="message")
+        chunks: list[str] = []
+        cursor = 0
+        for span in spans:
+            chunks.extend((escaped[cursor : span.start], f"[[{span.kind}]]"))
+            cursor = span.end
+        chunks.append(escaped[cursor:])
+        return "".join(chunks)
+    except PrivacyError:
+        raise
+    except Exception:
+        raise MaskingError("Local privacy protection unavailable; please try again later") from None
+
+
+class PlaceholderFilter:
+    """Remove arbitrary double-bracket output, even across stream boundaries.
+
+    State is bounded; an unterminated placeholder never buffers model text.
+    """
+
+    def __init__(self, neutral: str = "bạn") -> None:
+        self.neutral = neutral
+        self._inside = False
+        self._pending = ""
+
+    def feed(self, text: str) -> str:
+        result: list[str] = []
+        for char in text:
+            if self._inside:
+                if self._pending == "]" and char == "]":
+                    self._inside, self._pending = False, ""
+                else:
+                    self._pending = "]" if char == "]" else ""
+            elif self._pending == "[":
+                if char == "[":
+                    result.append(self.neutral)
+                    self._inside, self._pending = True, ""
+                else:
+                    result.append("[" + char)
+                    self._pending = ""
+            elif char == "[":
+                self._pending = "["
+            else:
+                result.append(char)
+        return "".join(result)
+
+    def finish(self) -> str:
+        tail = self._pending if not self._inside else ""
+        self._pending, self._inside = "", False
+        return tail
+
+
+def neutralize_placeholders(text: str, *, neutral: str = "bạn") -> str:
+    guard = PlaceholderFilter(neutral)
+    return guard.feed(text) + guard.finish()
+
+
 def _unescape(text: str) -> str:
     # One pass, not repeated HTML decoding (which could reactivate an injection).
     return _ESCAPE_RE.sub(lambda m: "&" if m.group() == "&amp;" else "[[", text)

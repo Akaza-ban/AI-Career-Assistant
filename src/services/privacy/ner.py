@@ -12,7 +12,7 @@ from threading import Lock
 
 from src.config import Settings, get_settings
 from src.services.privacy.detectors import Detector
-from src.services.privacy.types import Kind, MaskingError, Ner, NerUnavailableError, Span, VaultError
+from src.services.privacy.types import Kind, MaskingError, Ner, NerUnavailableError, Span
 
 _LABEL_KINDS: dict[str, Kind] = {
     "PER": "PERSON",
@@ -213,13 +213,8 @@ def initialize_privacy(settings: Settings | None = None) -> Detector:
     settings = settings or get_settings()
     if not settings.pii_masking_enabled:
         raise MaskingError("PII masking is disabled; provider calls are forbidden")
-    if settings.app_env == "production":
-        from cryptography.fernet import Fernet
-
-        try:
-            Fernet(settings.pii_vault_key.get_secret_value().encode("ascii"))
-        except Exception:
-            raise VaultError("Production requires a valid PII_VAULT_KEY") from None
+    # Detection and mask-only assistant calls need no encryption key. Persistent
+    # vault consumers validate their key when constructing PiiVault.
     with _lock:
         if _detector is None:
             _detector = Detector(load_ner(settings.pii_ner_backend, settings=settings))
