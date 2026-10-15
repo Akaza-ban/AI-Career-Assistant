@@ -166,3 +166,75 @@ the only added commit beyond the six suggested implementation commits plus docs,
 and corrects the existing third-party identifier contract rather than adding a
 feature. Local protected hooks/logs and the
 user-supplied architecture/prompt files were not modified or committed.
+
+## T0 rev 4.1 reuse audit (2026-10-15)
+
+Source snapshot: `a61004e0d21b3a5cdd03fd1963844c53b34e67b2` plus the existing
+working tree. See `docs/dev/Assistant_v2/REUSE_MAP.md` for current function-level
+evidence. This is a docs-only task; no assistant behavior, source, dependency,
+business row or migration is changed. Historical AUTH_NOTES/TOOL_MATRIX claims
+are not assumed to describe current code.
+
+- Keep the existing LangGraph inspect/classify/retrieve/generate structure and
+  `AssistantAgent.respond` entry point: extending it is the smaller diff. No
+  checkpointer, interrupt, thinking replay, operations or write tools are added.
+- Retain single-worker deployment as a limitation, without new boot-refusal
+  logic. Only the bare open-intent follow-up after exactly one persisted target
+  is in scope; turns currently do not store card targets.
+- Use the mask-only assistant privacy contract. Existing gateway, detectors,
+  E5 adapter, raw LlmClient, highlighter, dispatcher and hybrid RAG should be
+  extended rather than duplicated. Vault-backed restoration and thinking
+  defaults still need adaptation in later tasks; do not remove them from other
+  product paths in T0.
+- Safer role interpretation: advisor static pages/how-to only, despite an
+  existing assigned-student detail route. Existing assignment/sharing services
+  do not authorize new advisor result tools. Admin assistant scope is absent.
+- CV newest uses family head/version sequence and uploaded_at; no updated_at
+  column exists. Interview started_at is an output alias for created_at, stored
+  as naive UTC. Local date windows must convert from Asia/Ho_Chi_Minh to UTC.
+- Facts proposal: category earned/possible are stored, category percentages are
+  not; partial requirements remain separate from matched. Use at most five
+  validated missing skill names. Recorded question count means an owner-scoped
+  count of turn rows, distinct from the planned four. Previous interview means
+  the previous completed same-jd_id record, not build_report's first session;
+  omit comparisons for incomplete current sessions. Exclude body, evidence,
+  feedback, answers/transcripts, suggestions and report guidance.
+- Current auth regresses the historical no-demo claim: invalid/missing session
+  may fall back to X-Demo-Role when demo mode is enabled. get_current_user also
+  writes last_seen_at. Both require explicit correction before read-only claims.
+  Existing provider_usage writes need an explicit assistant-telemetry accounting
+  interpretation under section 2.2; no parallel ledger/table is proposed.
+- Historical guide metrics describe 15 fallback cases; JD Recall/NDCG numbers
+  belong to a different corpus/task. No new live-provider quality or release
+  approval is claimed. OCR/STT are teammate product paths; TTS is missing and
+  cut. Existing obsolete artifacts are inventoried only, never deleted.
+
+Validation:
+
+- Read-only document check: 62 explicit file references exist, 102 table rows
+  have four columns, all 34 Next.js pages are inventoried. Python AST parsing
+  passes for all 156 files in src/tests. Diff whitespace check passes.
+- `.venv/Scripts/ruff.exe check --no-cache src tests`: exit 1, three existing
+  errors: undefined get_roadmap_info at src/api/analysis.py:41 and :349, unused
+  datetime.date at src/db/seed.py:2. No autofix was run.
+- Isolated offline `.venv/Scripts/python.exe` invoking
+  `pytest.main(['tests/', '-q', '-x', '-p', 'no:cacheprovider'])`: **20 passed,
+  1 failed** in 47.36s. Existing failure:
+  tests/test_api/test_accounts_api.py::test_register_signs_in_with_normalized_profile
+  (:71), /me returned the seeded student rather than the newly registered user.
+  Provider keys were explicitly blanked inside Python, dotenv loading disabled,
+  paid live probes disabled, HF/transformers offline, temporary test DB enforced
+  by conftest. This is not a full-suite pass.
+- The initial broad pytest attempt was interrupted after failures to harden
+  credential isolation: empty PowerShell environment assignments do not reliably
+  override Pydantic dotenv fallback. Only the restarted Python-cleared process
+  supplies the final pytest result above. No provider quality evaluation is
+  claimed from either run.
+- Commit-policy deviation: the requested docs-only commit cannot pass the
+  existing Ruff/pytest baseline. T0 does not authorize source repairs. Record
+  the failures instead of expanding scope or claiming green checks. No new
+  tests are added for this documentation-only task.
+
+Existing user edits in this notes file are preserved separately from the T0
+commit. T0 creates REUSE_MAP.md because it was absent and explicitly requested;
+it creates no source module and changes no protected hooks/logs.
