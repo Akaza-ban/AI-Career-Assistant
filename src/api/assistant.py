@@ -40,7 +40,7 @@ from src.models.assistant import (
     route_allowed,
 )
 from src.services.assistant import runs
-from src.services.assistant.agent import ASSISTANT_INDEX_LOCK, AssistantAgent, get_assistant_agent
+from src.services.assistant.agent import ASSISTANT_INDEX_LOCK, AssistantAgent, get_assistant_agent, normalized
 from src.services.assistant.indexer import build_assistant_index
 from src.services.llm import check_llm_health
 
@@ -217,7 +217,7 @@ async def chat(
         raise AppError(403, "Ngữ cảnh không khớp với tài khoản đang đăng nhập.", "forbidden")
     # The authenticated identity is authoritative, not context sent by the browser.
     context = context.model_copy(update={"user_id": user.id, "user_role": user.role})
-    if (
+    selected_cv_unavailable = (
         context.selected_cv_id is not None
         and db.scalar(
             select(CvVersion.id).where(
@@ -226,7 +226,8 @@ async def chat(
             )
         )
         is None
-    ):
+    )
+    if selected_cv_unavailable:
         context = context.model_copy(update={"selected_cv_id": None})
     body = body.model_copy(update={"context": context})
     if body.conversation_id:
@@ -267,7 +268,7 @@ async def chat(
         from src.db.database import SessionLocal
 
         with SessionLocal() as work_db:
-            return await _respond(body, user, work_db, agent, run.id, conversation.id, history)
+            return await _respond(body, user, work_db, agent, run.id, conversation.id, history, selected_cv_unavailable)
 
     return await runs.execute(run.id, body, request, respond)
 
@@ -280,6 +281,7 @@ async def _respond(
     run_id: str,
     conversation_id: str,
     history: list[dict[str, str]],
+    selected_cv_unavailable: bool,
 ) -> ChatResponse:
     context = body.context
     conversation = _owned_conversation(db, conversation_id, user)
@@ -299,9 +301,10 @@ async def _respond(
         result = await agent.respond(body.message, context, history=history, allowed_student_ids=students)
     actions = _resource_actions(db, user, result.actions, students)
     message = result.message
-    if any(action.action_type == "START_ANALYSIS" for action in result.actions) and not any(
-        action.action_type == "START_ANALYSIS" for action in actions
-    ):
+    if (
+        any(action.action_type == "START_ANALYSIS" for action in result.actions)
+        and not any(action.action_type == "START_ANALYSIS" for action in actions)
+    ) or (selected_cv_unavailable and result.intent != "qa" and "bat dau phan tich" in normalized(body.message)):
         message = "CV hoặc JD đã chọn chưa khả dụng cho tài khoản này. Hãy chọn lại trước khi bắt đầu phân tích."
     run = runs.owned_run(db, run_id, user)
     if run.status != "running":
