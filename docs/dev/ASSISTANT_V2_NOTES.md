@@ -282,3 +282,62 @@ Expanded offline assistant/cross-user compatibility: 374 passed, 1 failed. All
 assistant cases passed; the remaining JD recommendation test returns a private
 vector candidate. Details are in the implementation report. Existing user edits
 are preserved and excluded from the implementation commits.
+
+## Router evaluation foundation — 2026-10-15
+
+Approved data-first plan: freeze and test the corpus, then add a pluggable
+evaluation harness, then document counts/protocol. Commits `e366e21` (data) and
+`a66a3d0` (harness) implement the router portion of sections 5.5 and 11. Tests
+ship alongside the code they cover. No router/training/classifier, resolver,
+provider call, production database/configuration change or dependency install.
+
+The synthetic v1 corpus has 420 rows, 252/84/84 train/dev/heldout. Every
+route-language cell is 12/4/4; every route totals 60, every language 140.
+All 60 navigate and 60 result rows have raw gold NavSlots. Required subsets:
+42 no-diacritic, 63 typo, 36 adversarial, 60 ambiguous, 18 follow-up (heldout
+only). Follow-up targets live in an independently pinned context fixture.
+Heldout was frozen before harness implementation or candidate tuning:
+`d4fa196f50cc51dedaa28cb32acabb42d0bdc84109133e57daf696382a6efaa6`.
+
+Assumptions: evaluation-only `student_home`/`advisor_home` context IDs map to
+the real `/student` and `/advisor` pages pending the registry task. Advisor
+static/how-to/locate requests are permitted; record/result requests and all
+assistant writes are deny/out_of_role. Result metrics use tags, leaving the
+section 5.1 slot shape unchanged. Comparison phrases use raw free_ref; dates
+remain raw and are not resolved in routing. Contextual follow-ups are included
+in overall metrics and separately reported, never tuning/training data.
+
+`eval.run` loads registered names, entry points or module:factory adapters;
+no gold annotation enters inference. Decision cache reset precedes every timed
+predict; model load/warmup/reset are excluded, stages 0–3 plus slot extraction
+belong inside predict. Errors remain in accuracy/recall/slot denominators and
+cache hits fail. Default `local` intentionally exits 2 until the separate router
+task supplies create_eval_backend. Synthetic/recorded scores are not model
+quality; release_ready remains false without 100 real heldout utterances.
+`--require-real` enforces that extra collection gate. Other section 11 suites
+and `--suite all` remain outside this task, explicitly documented.
+
+The real-utterance PR protocol preserves the synthetic 60/20/20 partitions,
+appends 100+ independently reviewed teammate/student-interview examples only
+to heldout, updates version/hash pins under review, and forbids training or
+tuning on real or follow-up heldout rows. No real collection was manufactured.
+See `eval/router/README.md` for all split/route/language/subset counts and the
+backend protocol. Small synthetic safety denominator (6 heldout cases) limits
+any interpretation of the recall gate.
+
+Validation: 61 focused evaluation tests passed; changed-file Ruff, formatting,
+diff whitespace and Git LF attributes passed. Default command's missing-router
+exit and a failing recorded backend's metrics/JSON/exit are regression tested;
+no production router candidate or live provider was benchmarked. Full backend
+suite attempt was interrupted after reporting three failures in unchanged
+backend tests; it was not a passing full-suite run. Repository Ruff still finds
+the three existing errors in src/api/analysis.py and src/db/seed.py. Existing
+user edits are preserved and excluded from these commits.
+
+Additional compatibility run `python -m pytest eval/ -q`: 72 passed, 3 failed.
+All 61 router tests passed. The three failures are existing RAG judge tests
+(`test_judge_cannot_count_invented_evidence_or_reference_as_actual_answer`,
+`test_judge_omission_of_reference_points_is_an_error`,
+`test_judge_retries_transient_failure`) raising GatewayError in the current
+provider/privacy setup. No RAG or provider code was changed to hide those
+failures. Changed-file checks are green; repository-wide checks are not.

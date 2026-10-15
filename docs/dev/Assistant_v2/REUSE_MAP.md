@@ -171,3 +171,23 @@ Source/migration inventory only; no production SQLite contents were inspected. A
 - Recorded guide metrics are 15 fallback examples, not a fresh source baseline or current model quality. Required router/navigation/results evaluation datasets and message-style privacy gate remain missing. Offline tests cannot establish live-provider behavior or DPA acceptance.
 - Single worker is required for cache/cancellation. Only bare open-intent after exactly one persisted card target is resolved. Mask-only privacy is the assistant contract. Record these limitations in notes; add no replay/checkpointer or proactive features.
 - Existing working-tree edits predate T0. Validation failures are reported separately; no source repair or dependency installation is authorized by this documentation task.
+
+## Router evaluation foundation (sections 5.5 / 11, 2026-10-15)
+
+Implemented the data/harness portion only; no router, classifier, training,
+resolver, business query, provider call or production configuration was added.
+
+| Component | Reuse / extend / new | Reason |
+|---|---|---|
+| `eval/router/{train,dev,heldout}.jsonl`, seed, hash, real template and contexts | new | The audit found no seven-route labeled corpus. 420 authored synthetic cases are jointly stratified by route/language; 18 contextual follow-ups remain heldout-only. |
+| `eval/router/dataset.py` | new | Independent evaluation annotations use existing Pydantic v2, pathlib/hashlib and the repository's stdlib Unicode-fold convention. No seven-route/NavSlots production schema exists yet; the legacy qa/action/hybrid model would mislabel the new routes. This is not a second production router or registry. |
+| `eval/router/backends.py`, `metrics.py`, `eval/run.py` | new | Existing RAG and PII runners evaluate different contracts. Their task-specific metrics cannot supply classification confusion, exact slots or local cache-miss timing. Keep those entry points intact; add the section 11 entry point with only the authorized router suite. Factory adapters permit later candidates on identical files. |
+| `eval/test_router_{dataset,runner}.py` | new | Reuse pytest/Pydantic and offline recorded-stub conventions; test annotation/freeze integrity and harness arithmetic/exit behavior, not candidate quality. No real DB or fake resolver was introduced. |
+| Existing RAG/retrieval/privacy evaluation | reuse | Left intact. Section 11 nav/results/howto/isolation/provider suites belong to their separate tasks; `--suite all` is not represented as implemented. |
+
+See [the dataset and runner protocol](../../../eval/router/README.md) for complete
+counts, raw slot conventions, backend API, thresholds and reviewed real-data PR
+workflow. The `local` name reserves the later production adapter
+`src.services.assistant.router:create_eval_backend`; it currently fails clearly
+instead of substituting a dummy router. No router benchmark/model quality is
+claimed, and the missing 100+ real utterances remain a release-evidence gap.
