@@ -54,6 +54,7 @@ class RouterBackend(Protocol):
 BackendFactory = Callable[[], RouterBackend]
 BACKENDS: dict[str, str | BackendFactory] = {
     "local": "src.services.assistant.router:create_eval_backend",
+    "rules": "src.services.assistant.router:create_eval_backend",
 }
 
 

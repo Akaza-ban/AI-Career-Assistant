@@ -1,4 +1,4 @@
-"""Router benchmark: python -m eval.run --suite router --backend local.
+"""Router benchmark: python -m eval.run --suite router --backend rules --split dev.
 
 Other section 11 suites remain owned by their respective implementation tasks.
 This module neither implements nor trains a router, and never supplies gold

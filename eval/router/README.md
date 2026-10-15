@@ -194,3 +194,13 @@ changed-file Ruff and formatting. A broader `pytest eval/ -q` run yields 72 pass
 and three failures in the existing RAG judge/provider tests (GatewayError).
 Repository-wide Ruff also retains three findings in unchanged backend files.
 These are not passing whole-repository checks; see the development notes.
+
+## Rules-only implementation baseline
+
+The `rules` backend now runs the production local stages 0–2 and fallback.
+The `local` name currently aliases the same implementation; no classifier is loaded.
+Run `python -m eval.run --suite router --backend rules --split dev`.
+The [2026-10-15 dev report](rules_dev_report.md) records 50% accuracy, failed
+quality gates, per-route metrics, slot exact match, deny recall and latency.
+No heldout inference was run for this task. The prior missing-backend statements
+above describe the T2.1 foundation snapshot.

@@ -341,3 +341,28 @@ All 61 router tests passed. The three failures are existing RAG judge tests
 `test_judge_retries_transient_failure`) raising GatewayError in the current
 provider/privacy setup. No RAG or provider code was changed to hide those
 failures. Changed-file checks are green; repository-wide checks are not.
+
+## T2.2 — local router stages 0–2 (2026-10-15)
+
+Implemented `src/services/assistant/router/`: typed raw slots/decisions, NFC/folded text,
+language detection, wrapped existing guards/greetings/role terms, bounded LRU+TTL,
+JSON lexicons, capability precedence, raw qualifier extraction, fast/agent hints,
+semantic clarify chips and exactly-one-card bare-open follow-ups. No classifier,
+LLM/network/DB call or date interpretation. The old graph/API is not migrated here.
+
+[Implementation assumptions, reuse and measured dev report](../../eval/router/rules_dev_report.md)
+record the undefined LocateSlots shape, typed chip/card extensions, raw-date mode
+heuristic, default vi language, empty/oversized denial choices and cache spelling
+rebinding. Clear lexical conflicts use the requested precedence; uncertain partial
+vocabulary clarifies. Prior cards are trusted owner-checked server inputs; contextual
+follow-ups bypass caching. Single-worker deployment remains an accepted limitation.
+
+Dev: 42/84 correct (50%), navigate/result slot EM 75% each, unsafe/injection deny
+recall 33.33%, all-deny recall 41.67%, cache-miss p50/p95 1.1929/2.1228 ms,
+zero backend errors. Synthetic dev evidence only; accuracy/safety/slot gates fail.
+Dev has no followup rows; heldout inference was not run or tuned. The separate
+classifier task must measure the remaining gap; no acceptance claim is made.
+
+Validation: 453 integrated router/guard/eval tests and 8 legacy classification
+tests passed. Changed-scope Ruff and formatting passed. Three pre-existing
+repository-wide Ruff findings remain in analysis.py (2) and db/seed.py (1).
