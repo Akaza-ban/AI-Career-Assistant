@@ -27,6 +27,7 @@ from eval.router.dataset import (
     load_rows,
     verify_heldout,
 )
+from eval.router.diagnostics import diagnostics
 from eval.router.metrics import Observation, metrics, threshold_gates
 
 
@@ -85,6 +86,7 @@ def evaluate(
     real_count = subsets["real"]["count"]
     return {
         "metrics": aggregate,
+        "diagnostics": diagnostics(observations),
         "gates": gates,
         "subsets": subsets,
         "passed": all(gate["passed"] for gate in gates.values()),

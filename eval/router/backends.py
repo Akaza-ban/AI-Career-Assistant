@@ -5,7 +5,7 @@ from importlib import import_module
 from importlib.metadata import entry_points
 from typing import Any, Literal, Protocol
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from eval.router.dataset import CardTarget, DenyReason, NavSlots, Route
 
@@ -21,13 +21,14 @@ class RouterInput(BaseModel):
 
 
 class RouterPrediction(BaseModel):
-    # Production RouterDecision includes confidence/language/nav_mode, which
-    # need not be duplicated by this evaluation-only output adapter.
+    # Retain confidence for selective coverage; language/nav_mode remain outside
+    # the evaluation output contract. Gold annotations never enter inference.
     model_config = ConfigDict(extra="ignore", strict=True)
     route: Route
     source: Literal["stage0", "cache", "rules", "classifier", "fallback"]
     deny_reason: DenyReason | None = None
     slots: dict[str, Any] | None = None
+    confidence: float | None = Field(default=None, ge=0, le=1, allow_inf_nan=False)
 
     @model_validator(mode="after")
     def validate_nav_slots(self) -> "RouterPrediction":

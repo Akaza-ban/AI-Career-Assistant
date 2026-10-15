@@ -1,7 +1,18 @@
 """Real rules backend integration with T2.1's annotation-independent harness."""
 
+import pytest
+
 from eval.router.backends import RouterInput, RouterPrediction, load_backend
 from eval.router.dataset import CardTarget
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["Hello CareerX assistant", "Chào trợ lý CareerX nhé", "xin chao, minh moi vao day", "Thanks bạn đã hướng dẫn"],
+)
+def test_adapter_preserves_stage_zero_smalltalk_provenance(text: str) -> None:
+    decision = load_backend("rules").predict(RouterInput(text=text, role="student", page_route_id="student_home"))
+    assert (decision.route, decision.source) == ("smalltalk", "stage0")
 
 
 def test_registered_rules_backend_has_real_sources_and_resettable_cache() -> None:
