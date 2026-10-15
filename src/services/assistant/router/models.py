@@ -53,6 +53,7 @@ class RouterDecision(RouterModel):
     source: Literal["stage0", "cache", "rules", "classifier", "fallback"]
     confidence: float = Field(ge=0, le=1, allow_inf_nan=False)
     language: Language
+    hint: Route | None = None
     deny_reason: Literal["off_topic", "unsafe", "injection", "out_of_role"] | None = None
     slots: NavSlots | LocateSlots | None = None
     nav_mode: Literal["fast", "agent"] | None = None

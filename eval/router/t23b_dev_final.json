@@ -1,0 +1,3018 @@
+{
+  "metrics": {
+    "count": 84,
+    "correct": 75,
+    "accuracy": 0.8928571428571429,
+    "per_route": {
+      "smalltalk": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "support": 12,
+        "predicted": 12
+      },
+      "howto": {
+        "precision": 0.7692307692307693,
+        "recall": 0.8333333333333334,
+        "support": 12,
+        "predicted": 13
+      },
+      "locate": {
+        "precision": 1.0,
+        "recall": 1.0,
+        "support": 12,
+        "predicted": 12
+      },
+      "result": {
+        "precision": 0.9230769230769231,
+        "recall": 1.0,
+        "support": 12,
+        "predicted": 13
+      },
+      "navigate": {
+        "precision": 0.9090909090909091,
+        "recall": 0.8333333333333334,
+        "support": 12,
+        "predicted": 11
+      },
+      "clarify": {
+        "precision": 0.8,
+        "recall": 0.6666666666666666,
+        "support": 12,
+        "predicted": 10
+      },
+      "deny": {
+        "precision": 0.8461538461538461,
+        "recall": 0.9166666666666666,
+        "support": 12,
+        "predicted": 13
+      }
+    },
+    "confusion_matrix": {
+      "smalltalk": {
+        "smalltalk": 12,
+        "howto": 0,
+        "locate": 0,
+        "result": 0,
+        "navigate": 0,
+        "clarify": 0,
+        "deny": 0,
+        "<error>": 0
+      },
+      "howto": {
+        "smalltalk": 0,
+        "howto": 10,
+        "locate": 0,
+        "result": 1,
+        "navigate": 0,
+        "clarify": 0,
+        "deny": 1,
+        "<error>": 0
+      },
+      "locate": {
+        "smalltalk": 0,
+        "howto": 0,
+        "locate": 12,
+        "result": 0,
+        "navigate": 0,
+        "clarify": 0,
+        "deny": 0,
+        "<error>": 0
+      },
+      "result": {
+        "smalltalk": 0,
+        "howto": 0,
+        "locate": 0,
+        "result": 12,
+        "navigate": 0,
+        "clarify": 0,
+        "deny": 0,
+        "<error>": 0
+      },
+      "navigate": {
+        "smalltalk": 0,
+        "howto": 0,
+        "locate": 0,
+        "result": 0,
+        "navigate": 10,
+        "clarify": 2,
+        "deny": 0,
+        "<error>": 0
+      },
+      "clarify": {
+        "smalltalk": 0,
+        "howto": 2,
+        "locate": 0,
+        "result": 0,
+        "navigate": 1,
+        "clarify": 8,
+        "deny": 1,
+        "<error>": 0
+      },
+      "deny": {
+        "smalltalk": 0,
+        "howto": 1,
+        "locate": 0,
+        "result": 0,
+        "navigate": 0,
+        "clarify": 0,
+        "deny": 11,
+        "<error>": 0
+      }
+    },
+    "confusion_pairs": {
+      "navigate<->howto": {
+        "navigate_to_howto": 0,
+        "howto_to_navigate": 0,
+        "total": 0,
+        "support": 24,
+        "rate": 0.0
+      },
+      "locate<->howto": {
+        "locate_to_howto": 0,
+        "howto_to_locate": 0,
+        "total": 0,
+        "support": 24,
+        "rate": 0.0
+      },
+      "result<->navigate": {
+        "result_to_navigate": 0,
+        "navigate_to_result": 0,
+        "total": 0,
+        "support": 24,
+        "rate": 0.0
+      }
+    },
+    "slots": {
+      "navigate": {
+        "correct": 10,
+        "support": 12,
+        "exact_match": 0.8333333333333334
+      },
+      "result": {
+        "correct": 10,
+        "support": 12,
+        "exact_match": 0.8333333333333334
+      }
+    },
+    "deny_unsafe_injection": {
+      "correct": 9,
+      "support": 9,
+      "recall": 1.0
+    },
+    "latency_ms": {
+      "p50": 2.5949,
+      "p95": 17.2658,
+      "support": 84,
+      "cache_miss": true
+    },
+    "errors": {}
+  },
+  "gates": {
+    "accuracy": {
+      "value": 0.8928571428571429,
+      "operator": ">=",
+      "threshold": 0.93,
+      "passed": false
+    },
+    "deny_unsafe_injection_recall": {
+      "value": 1.0,
+      "operator": ">=",
+      "threshold": 0.97,
+      "passed": true
+    },
+    "navigate_slot_exact_match": {
+      "value": 0.8333333333333334,
+      "operator": ">=",
+      "threshold": 0.9,
+      "passed": false
+    },
+    "cache_miss_p95_ms": {
+      "value": 17.2658,
+      "operator": "<",
+      "threshold": 30.0,
+      "passed": true
+    },
+    "backend_errors": {
+      "value": 0,
+      "operator": "==",
+      "threshold": 0,
+      "passed": true
+    }
+  },
+  "diagnostics": {
+    "coverage": {
+      "threshold": 0.9,
+      "decided": 43,
+      "total": 84,
+      "share": 0.5119047619047619,
+      "by_stage": {
+        "stage0": 7,
+        "rules": 36
+      }
+    },
+    "decided_only": {
+      "count": 43,
+      "correct": 40,
+      "precision_micro": 0.9302325581395349,
+      "recall_micro": 0.9302325581395349,
+      "correct_share_all": 0.47619047619047616,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "howto": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 4
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 10,
+          "predicted": 10
+        },
+        "result": {
+          "precision": 0.9090909090909091,
+          "recall": 1.0,
+          "support": 10,
+          "predicted": 11
+        },
+        "navigate": {
+          "precision": 0.9090909090909091,
+          "recall": 1.0,
+          "support": 10,
+          "predicted": 11
+        },
+        "clarify": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 1,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": 1.0,
+          "recall": 0.8333333333333334,
+          "support": 6,
+          "predicted": 5
+        }
+      }
+    },
+    "deny_by_reason": {
+      "unsafe": {
+        "support": 3,
+        "route_correct": 3,
+        "recall": 1.0,
+        "reason_correct": 3,
+        "reason_exact_recall": 1.0
+      },
+      "injection": {
+        "support": 6,
+        "route_correct": 6,
+        "recall": 1.0,
+        "reason_correct": 0,
+        "reason_exact_recall": 0.0
+      },
+      "out_of_role": {
+        "support": 0,
+        "route_correct": 0,
+        "recall": null,
+        "reason_correct": 0,
+        "reason_exact_recall": null
+      },
+      "off_topic": {
+        "support": 3,
+        "route_correct": 2,
+        "recall": 0.6666666666666666,
+        "reason_correct": 2,
+        "reason_exact_recall": 0.6666666666666666
+      }
+    },
+    "slot_miss_categories": {
+      "navigate": {
+        "support": 12,
+        "misses": 2,
+        "gold_convention_mismatch": 0,
+        "extractor_bug": 0,
+        "upstream_route_miss": 2
+      },
+      "result": {
+        "support": 12,
+        "misses": 2,
+        "gold_convention_mismatch": 0,
+        "extractor_bug": 2,
+        "upstream_route_miss": 0
+      }
+    }
+  },
+  "by_source": {
+    "stage0": {
+      "count": 7,
+      "correct": 7,
+      "accuracy": 1.0,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "howto": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 5,
+          "predicted": 5
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 2,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 5,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 3,
+        "support": 3,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 0.249,
+        "p95": 0.4916,
+        "support": 7,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "cache": {
+      "count": 0,
+      "correct": 0,
+      "accuracy": null,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": null,
+        "p95": null,
+        "support": 0,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "rules": {
+      "count": 36,
+      "correct": 33,
+      "accuracy": 0.9166666666666666,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 4
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 10,
+          "predicted": 10
+        },
+        "result": {
+          "precision": 0.9090909090909091,
+          "recall": 1.0,
+          "support": 10,
+          "predicted": 11
+        },
+        "navigate": {
+          "precision": 0.9090909090909091,
+          "recall": 1.0,
+          "support": 10,
+          "predicted": 11
+        },
+        "clarify": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 1,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 1,
+          "predicted": 0
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 3,
+          "locate": 0,
+          "result": 1,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 10,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 10,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 10,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 14,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 14,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 20,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 10,
+          "support": 10,
+          "exact_match": 1.0
+        },
+        "result": {
+          "correct": 10,
+          "support": 10,
+          "exact_match": 1.0
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": 2.0737,
+        "p95": 3.7223,
+        "support": 36,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "classifier": {
+      "count": 27,
+      "correct": 25,
+      "accuracy": 0.9259259259259259,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 9,
+          "predicted": 9
+        },
+        "howto": {
+          "precision": 0.8571428571428571,
+          "recall": 0.8571428571428571,
+          "support": 7,
+          "predicted": 7
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "navigate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 1,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": 0.8571428571428571,
+          "recall": 1.0,
+          "support": 6,
+          "predicted": 7
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 9,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 6,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 1,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 2,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 2,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 6,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 7,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 9,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 2,
+          "exact_match": 0.0
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 6,
+        "support": 6,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 13.4402,
+        "p95": 17.911,
+        "support": 27,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "fallback": {
+      "count": 14,
+      "correct": 10,
+      "accuracy": 0.7142857142857143,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "howto": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 2
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 2,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": 0.8,
+          "recall": 0.8,
+          "support": 10,
+          "predicted": 10
+        },
+        "deny": {
+          "precision": 0.0,
+          "recall": null,
+          "support": 0,
+          "predicted": 1
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 1,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 2,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 8,
+          "deny": 1,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 3,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 1,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 2,
+          "exact_match": 0.0
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": 11.4488,
+        "p95": 21.6995,
+        "support": 14,
+        "cache_miss": true
+      },
+      "errors": {}
+    }
+  },
+  "typo_by_source": {
+    "stage0": {
+      "count": 3,
+      "correct": 3,
+      "accuracy": 1.0,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 3,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 3,
+        "support": 3,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 0.249,
+        "p95": 0.2814,
+        "support": 3,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "cache": {
+      "count": 0,
+      "correct": 0,
+      "accuracy": null,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": null,
+        "p95": null,
+        "support": 0,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "rules": {
+      "count": 5,
+      "correct": 4,
+      "accuracy": 0.8,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "navigate": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 2
+        },
+        "clarify": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 1,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 2,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 1,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 1,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 1,
+          "support": 1,
+          "exact_match": 1.0
+        },
+        "result": {
+          "correct": 1,
+          "support": 1,
+          "exact_match": 1.0
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": 1.9819,
+        "p95": 2.1601,
+        "support": 5,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "classifier": {
+      "count": 8,
+      "correct": 8,
+      "accuracy": 1.0,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        },
+        "howto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 2
+        },
+        "navigate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "deny": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 3,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 2,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 1,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 2,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 3,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 2,
+          "exact_match": 0.0
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": 12.7592,
+        "p95": 18.6906,
+        "support": 8,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "fallback": {
+      "count": 5,
+      "correct": 3,
+      "accuracy": 0.6,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": null,
+          "recall": 0.0,
+          "support": 2,
+          "predicted": 0
+        },
+        "clarify": {
+          "precision": 0.5,
+          "recall": 1.0,
+          "support": 2,
+          "predicted": 4
+        },
+        "deny": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 2,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 2,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 3,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 1,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 2,
+          "exact_match": 0.0
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": 13.7109,
+        "p95": 21.6995,
+        "support": 5,
+        "cache_miss": true
+      },
+      "errors": {}
+    }
+  },
+  "wrong_clarify_by_source": {
+    "fallback": 2
+  },
+  "wrong_clarify_origin": {
+    "stage4_candidate_ambiguity": 2
+  },
+  "subsets": {
+    "typo": {
+      "count": 21,
+      "correct": 18,
+      "accuracy": 0.8571428571428571,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        },
+        "howto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        },
+        "navigate": {
+          "precision": 0.5,
+          "recall": 0.3333333333333333,
+          "support": 3,
+          "predicted": 2
+        },
+        "clarify": {
+          "precision": 0.5,
+          "recall": 0.6666666666666666,
+          "support": 3,
+          "predicted": 4
+        },
+        "deny": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 3,
+          "predicted": 3
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 3,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 3,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 3,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 3,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 2,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 2,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 3,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 6,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 6,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 6,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 1,
+          "support": 3,
+          "exact_match": 0.3333333333333333
+        },
+        "result": {
+          "correct": 1,
+          "support": 3,
+          "exact_match": 0.3333333333333333
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 3,
+        "support": 3,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 12.491,
+        "p95": 18.6906,
+        "support": 21,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "no_diacritics": {
+      "count": 7,
+      "correct": 7,
+      "accuracy": 1.0,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "howto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "navigate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "clarify": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        },
+        "deny": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 1,
+          "predicted": 1
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 1,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 1,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 1,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 1,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 1,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 2,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 1,
+          "support": 1,
+          "exact_match": 1.0
+        },
+        "result": {
+          "correct": 1,
+          "support": 1,
+          "exact_match": 1.0
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 1,
+        "support": 1,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 2.0737,
+        "p95": 16.5603,
+        "support": 7,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "ambiguous": {
+      "count": 12,
+      "correct": 8,
+      "accuracy": 0.6666666666666666,
+      "per_route": {
+        "smalltalk": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "howto": {
+          "precision": 0.0,
+          "recall": null,
+          "support": 0,
+          "predicted": 2
+        },
+        "locate": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "result": {
+          "precision": null,
+          "recall": null,
+          "support": 0,
+          "predicted": 0
+        },
+        "navigate": {
+          "precision": 0.0,
+          "recall": null,
+          "support": 0,
+          "predicted": 1
+        },
+        "clarify": {
+          "precision": 1.0,
+          "recall": 0.6666666666666666,
+          "support": 12,
+          "predicted": 8
+        },
+        "deny": {
+          "precision": 0.0,
+          "recall": null,
+          "support": 0,
+          "predicted": 1
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 2,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 8,
+          "deny": 1,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 0,
+          "rate": null
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        },
+        "result": {
+          "correct": 0,
+          "support": 0,
+          "exact_match": null
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 0,
+        "support": 0,
+        "recall": null
+      },
+      "latency_ms": {
+        "p50": 2.276,
+        "p95": 21.6995,
+        "support": 12,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "vi": {
+      "count": 28,
+      "correct": 25,
+      "accuracy": 0.8928571428571429,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "howto": {
+          "precision": 0.6666666666666666,
+          "recall": 0.5,
+          "support": 4,
+          "predicted": 3
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "result": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 5
+        },
+        "navigate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "clarify": {
+          "precision": 1.0,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 3
+        },
+        "deny": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 5
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 4,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 2,
+          "locate": 0,
+          "result": 1,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 1,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 4,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 4,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 4,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 3,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 4,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 4,
+          "support": 4,
+          "exact_match": 1.0
+        },
+        "result": {
+          "correct": 4,
+          "support": 4,
+          "exact_match": 1.0
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 3,
+        "support": 3,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 2.4112,
+        "p95": 16.5603,
+        "support": 28,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "en": {
+      "count": 28,
+      "correct": 24,
+      "accuracy": 0.8571428571428571,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "howto": {
+          "precision": 0.6666666666666666,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 6
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "navigate": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 4
+        },
+        "clarify": {
+          "precision": 0.6666666666666666,
+          "recall": 0.5,
+          "support": 4,
+          "predicted": 3
+        },
+        "deny": {
+          "precision": 1.0,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 3
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 4,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 4,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 4,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 4,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 3,
+          "clarify": 1,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 1,
+          "clarify": 2,
+          "deny": 0,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 1,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 3,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 3,
+          "support": 4,
+          "exact_match": 0.75
+        },
+        "result": {
+          "correct": 3,
+          "support": 4,
+          "exact_match": 0.75
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 3,
+        "support": 3,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 2.276,
+        "p95": 17.3692,
+        "support": 28,
+        "cache_miss": true
+      },
+      "errors": {}
+    },
+    "mixed": {
+      "count": 28,
+      "correct": 26,
+      "accuracy": 0.9285714285714286,
+      "per_route": {
+        "smalltalk": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "howto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "locate": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "result": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 4
+        },
+        "navigate": {
+          "precision": 1.0,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 3
+        },
+        "clarify": {
+          "precision": 0.75,
+          "recall": 0.75,
+          "support": 4,
+          "predicted": 4
+        },
+        "deny": {
+          "precision": 0.8,
+          "recall": 1.0,
+          "support": 4,
+          "predicted": 5
+        }
+      },
+      "confusion_matrix": {
+        "smalltalk": {
+          "smalltalk": 4,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "howto": {
+          "smalltalk": 0,
+          "howto": 4,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "locate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 4,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "result": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 4,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 0,
+          "<error>": 0
+        },
+        "navigate": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 3,
+          "clarify": 1,
+          "deny": 0,
+          "<error>": 0
+        },
+        "clarify": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 3,
+          "deny": 1,
+          "<error>": 0
+        },
+        "deny": {
+          "smalltalk": 0,
+          "howto": 0,
+          "locate": 0,
+          "result": 0,
+          "navigate": 0,
+          "clarify": 0,
+          "deny": 4,
+          "<error>": 0
+        }
+      },
+      "confusion_pairs": {
+        "navigate<->howto": {
+          "navigate_to_howto": 0,
+          "howto_to_navigate": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        },
+        "locate<->howto": {
+          "locate_to_howto": 0,
+          "howto_to_locate": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        },
+        "result<->navigate": {
+          "result_to_navigate": 0,
+          "navigate_to_result": 0,
+          "total": 0,
+          "support": 8,
+          "rate": 0.0
+        }
+      },
+      "slots": {
+        "navigate": {
+          "correct": 3,
+          "support": 4,
+          "exact_match": 0.75
+        },
+        "result": {
+          "correct": 3,
+          "support": 4,
+          "exact_match": 0.75
+        }
+      },
+      "deny_unsafe_injection": {
+        "correct": 3,
+        "support": 3,
+        "recall": 1.0
+      },
+      "latency_ms": {
+        "p50": 3.1249,
+        "p95": 17.2658,
+        "support": 28,
+        "cache_miss": true
+      },
+      "errors": {}
+    }
+  },
+  "heldout_accessed": false,
+  "split": "dev",
+  "threshold": 0.2,
+  "margin": 0.0,
+  "train_sha256": "25dfa7a47266a9ad2530cea1b272ff28592a649f390ec495e1ea6042e69366b2",
+  "artifact_sha256": "597e76617598b599c418a19241a2966448f6aa4a0a8d52c6f0b9fa7fddda23ec",
+  "dev_sha256": "c37a0ac6b9dbd866348b2ba5818fcad2a218e020d80693be563d8cd49220c544"
+}

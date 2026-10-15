@@ -40,6 +40,9 @@ def extract_slots(message: str) -> NavSlots:
             [match for found in entities.values() for match in found] + page_words, key=lambda m: m.start()
         )
         start = content[0].start() if content else (generic_pages[0].end() if generic_pages else 0)
+        role_prefix = PATTERNS["role_page_prefix"].search(text[:start])
+        if role_prefix:
+            start = role_prefix.start()
         if generic_pages and generic_pages[0].start() <= start:
             start = generic_pages[0].end()
         end = len(text)
@@ -65,12 +68,21 @@ def extract_slots(message: str) -> NavSlots:
             stop = PATTERNS["ref_stop"].search(text, start, end)
             if stop:
                 end = stop.start()
+            if marker["kind"] == "cv" and target == "analysis":
+                boundaries = [m.start() for m in entities["analysis"] if start <= m.start() < end]
+                if boundaries:
+                    end = min(boundaries)
+            if PATTERNS["result_went"].search(text) and text[start:end].rstrip(" ?!.").endswith(" go"):
+                end = text.rfind(" go", start, end)
             for qualifier in [*dates, *latest, *([free] if free else [])]:
                 if start <= qualifier.start() < end:
                     end = qualifier.start()
             value = surface.span(start, end).strip(" .!?;,:")
             if value:
                 refs[marker["kind"] + "_ref"] = value
+        for suffix in PATTERNS["suffix_ref"].finditer(text):
+            if refs[suffix["kind"] + "_ref"] is None:
+                refs[suffix["kind"] + "_ref"] = surface.span(suffix.start("value"), suffix.end("value"))
         # Preserve a record/position qualifier the later resolver might need.
         if target in {"analysis", "interview", "report"} and not markers and free_ref is None:
             start = entities[target][0].end()

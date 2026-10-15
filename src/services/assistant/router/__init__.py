@@ -1,4 +1,4 @@
-"""Offline assistant capability router (stages 0–2)."""
+"""Offline assistant capability router (stages 0–4)."""
 
 from src.services.assistant.router.engine import LocalRouter
 from src.services.assistant.router.evaluation import RulesEvalBackend
@@ -8,5 +8,5 @@ __all__ = ["CardTarget", "LocalRouter", "LocateSlots", "NavSlots", "RouterDecisi
 
 
 def create_eval_backend() -> RulesEvalBackend:
-    """The local backend currently implements rules only; stage 3 is separate."""
+    """Create a local router and load its optional stage-3 artifact once."""
     return RulesEvalBackend()

@@ -183,6 +183,9 @@ class Settings(BaseSettings):
     router_cache_max: int = Field(default=1024, ge=1)
     router_cache_threshold: float = Field(default=0.9, ge=0, le=1)
     router_max_input_chars: int = Field(default=8000, ge=1)
+    router_clf_threshold: float = Field(default=0.20, ge=0, le=1)
+    router_clf_margin: float = Field(default=0.0, ge=0, le=1)
+    router_classifier_artifact: str = "eval/router/artifacts/router-v2-25dfa7a47266.joblib"
 
     # Deployment-specific tariff overrides. None means price unknown, not free.
     provider_input_usd_per_million: float | None = Field(default=None, ge=0)
