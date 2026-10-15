@@ -226,7 +226,7 @@ class AssistantAgent:
             for chunk in selected
         ]
         corpus = getattr(retriever, "chunks", None)
-        if not isinstance(corpus, list):
+        if not isinstance(corpus, list) or any(not isinstance(chunk, DocChunk) for chunk in corpus):
             corpus = [DocChunk.model_validate(chunk) for chunk in selected]
         return {
             "sources": sources,
