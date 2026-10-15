@@ -312,6 +312,18 @@ class AssistantRunResponse(StrictModel):
     updated_at: datetime
 
 
+class AssistantHistoryMessage(StrictModel):
+    id: str
+    sender: Literal["user", "assistant"]
+    content: str
+    created_at: datetime
+    turn_id: str
+    run_id: str | None = None
+    interrupted: bool = False
+    intent: Intent
+    sources: list[SourceCitation] = Field(default_factory=list)
+
+
 class AssistantStatusResponse(StrictModel):
     is_live: bool
     status: Literal["live", "offline"]

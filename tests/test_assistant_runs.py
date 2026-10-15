@@ -119,8 +119,6 @@ async def test_dedup_completed_and_first_message_without_conversation(assistant_
 
 @pytest.mark.asyncio
 async def test_running_duplicate_and_concurrent_guard_then_cancel(assistant_accounts, assistant_stub, monkeypatch):
-    from src.services.assistant import runs
-
     client, headers, ids = assistant_accounts
     entered = asyncio.Event()
     cancelled = asyncio.Event()
@@ -145,14 +143,24 @@ async def test_running_duplicate_and_concurrent_guard_then_cancel(assistant_acco
         assert again.status_code == 200 and again.json()["status"] == "running"
         conflict = await client.post("/api/v1/assistant/chat", headers=headers["a"], json=payload(conversation_id))
         assert conflict.status_code == 409, conflict.text
-        await runs.cancel(again.json()["id"])
+        run_id = again.json()["id"]
+        with SessionLocal() as db:
+            turn = db.query(AssistantTurn).filter_by(run_id=run_id).one()
+            turn.assistant_message = "partial answer"
+            db.commit()
+        stopped = await client.post(f"/api/v1/assistant/runs/{run_id}/cancel", headers=headers["a"])
+        assert stopped.status_code == 200 and stopped.json()["status"] == "cancelled"
+        assert (
+            await client.post(f"/api/v1/assistant/runs/{run_id}/cancel", headers=headers["a"])
+        ).json() == stopped.json()
         assert cancelled.is_set()
         result = await asyncio.wait_for(first, 5)
         assert result.json()["status"] == "cancelled"
         with SessionLocal() as db:
             run = db.get(AssistantRun, again.json()["id"])
             assert run.status == "cancelled"
-            assert db.query(AssistantTurn).filter_by(run_id=run.id).one().interrupted
+            turn = db.query(AssistantTurn).filter_by(run_id=run.id).one()
+            assert turn.interrupted and turn.assistant_message == "partial answer"
     finally:
         if not first.done():
             first.cancel()
@@ -197,7 +205,7 @@ async def test_disconnect_cancels_upstream(assistant_accounts, assistant_stub, m
     assert response.json()["status"] == "cancelled" and cancelled.is_set()
 
 
-def test_startup_sweep_preserves_terminal_runs_and_text(assistant_accounts=None):
+def test_startup_sweep_preserves_terminal_runs_and_text():
     from src.db.database import init_db
 
     user_id, conversation_id = uuid4().hex, uuid4().hex
@@ -235,3 +243,32 @@ def test_startup_sweep_preserves_terminal_runs_and_text(assistant_accounts=None)
             turn = db.query(AssistantTurn).filter_by(run_id=run.id).one()
             assert turn.assistant_message == "partial"
             assert turn.interrupted == (status == "running")
+
+
+@pytest.mark.asyncio
+async def test_run_and_history_owner_scope_in_both_directions(assistant_accounts, assistant_stub):
+    client, headers, _ = assistant_accounts
+    for caller, other in (("a", "b"), ("b", "a")):
+        first = await client.post("/api/v1/assistant/chat", headers=headers[caller], json=payload())
+        assert first.status_code == 200, first.text
+        run_id, conversation_id = first.json()["run_id"], first.json()["conversation_id"]
+        own = await client.get(f"/api/v1/assistant/runs/{run_id}", headers=headers[caller])
+        assert own.status_code == 200 and own.json()["status"] == "done"
+        stopped = await client.post(f"/api/v1/assistant/runs/{run_id}/cancel", headers=headers[caller])
+        assert stopped.json() == own.json()
+        for method, suffix in (("GET", ""), ("POST", "/cancel")):
+            foreign = await client.request(method, f"/api/v1/assistant/runs/{run_id}{suffix}", headers=headers[other])
+            missing = await client.request(
+                method, f"/api/v1/assistant/runs/{uuid4().hex}{suffix}", headers=headers[other]
+            )
+            assert foreign.status_code == missing.status_code == 404
+            assert foreign.json() == missing.json() == {"code": "NOT_FOUND", "detail": "Không tìm thấy lượt chạy."}
+        history = await client.get(
+            f"/api/v1/assistant/conversations/{conversation_id}/history", headers=headers[caller]
+        )
+        assert history.status_code == 200
+        assert [(m["sender"], m["content"]) for m in history.json()] == [("user", "Hello"), ("assistant", "Hello")]
+        assert len({m["id"] for m in history.json()}) == 2
+        for target in (conversation_id, uuid4().hex):
+            denied = await client.get(f"/api/v1/assistant/conversations/{target}/history", headers=headers[other])
+            assert denied.status_code == 404 and "Hello" not in denied.text

@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 
 from src.api.deps import CurrentAdvisor, CurrentUser, DbSession
 from src.api.errors import AppError
@@ -16,6 +16,7 @@ from src.db.models import (
     AgentActionLog,
     AssistantConversation,
     AssistantFeedback,
+    AssistantRun,
     AssistantTurn,
     CvVersion,
     GapAnalysis,
@@ -30,6 +31,7 @@ from src.models.assistant import (
     AgentAction,
     AssistantFeedbackRequest,
     AssistantFeedbackResponse,
+    AssistantHistoryMessage,
     AssistantRunResponse,
     AssistantStatusResponse,
     ChatRequest,
@@ -45,6 +47,66 @@ from src.services.llm import check_llm_health
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/assistant", tags=["Assistant"])
 AgentDependency = Annotated[AssistantAgent, Depends(get_assistant_agent)]
+
+
+@router.get("/runs/{run_id}", response_model=AssistantRunResponse)
+def get_run(run_id: str, user: CurrentUser, db: DbSession) -> AssistantRunResponse:
+    return runs.run_response(runs.owned_run(db, run_id, user))
+
+
+@router.post("/runs/{run_id}/cancel", response_model=AssistantRunResponse)
+async def cancel_run(run_id: str, user: CurrentUser, db: DbSession) -> AssistantRunResponse:
+    run = runs.owned_run(db, run_id, user)
+    if run.status == "running":
+        # Release the read transaction before the worker persists cancellation.
+        db.commit()
+        await runs.cancel(run_id)
+        changed = db.execute(
+            update(AssistantRun)
+            .where(
+                AssistantRun.id == run_id,
+                AssistantRun.user_id == user.id,
+                AssistantRun.status == "running",
+            )
+            .values(status="cancelled", updated_at=utcnow())
+        ).rowcount
+        if changed:
+            db.execute(update(AssistantTurn).where(AssistantTurn.run_id == run_id).values(interrupted=True))
+        db.commit()
+        db.expire_all()
+    return runs.run_response(runs.owned_run(db, run_id, user))
+
+
+@router.get("/conversations/{conversation_id}/history", response_model=list[AssistantHistoryMessage])
+def get_conversation_history(conversation_id: str, user: CurrentUser, db: DbSession) -> list[AssistantHistoryMessage]:
+    _owned_conversation(db, conversation_id, user)
+    turns = db.scalars(
+        select(AssistantTurn)
+        .join(AssistantConversation)
+        .where(
+            AssistantTurn.conversation_id == conversation_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+        .order_by(AssistantTurn.created_at, AssistantTurn.id)
+    ).all()
+    messages: list[AssistantHistoryMessage] = []
+    for turn in turns:
+        for sender, content in (("user", turn.user_message), ("assistant", turn.assistant_message)):
+            messages.append(
+                AssistantHistoryMessage(
+                    id=f"{turn.id}:{sender}",
+                    sender=sender,
+                    content=content,
+                    created_at=turn.created_at,
+                    turn_id=turn.id,
+                    run_id=turn.run_id,
+                    intent=turn.intent,
+                    interrupted=turn.interrupted if sender == "assistant" else False,
+                    sources=turn.sources_json if sender == "assistant" else [],
+                )
+            )
+    return messages
 
 
 @router.get("/status", response_model=AssistantStatusResponse)
