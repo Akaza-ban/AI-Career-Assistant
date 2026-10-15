@@ -382,6 +382,20 @@ export const api = {
       () => mockApi.getInterviewReport(sessionId),
       () => request(`/interviews/${encodeURIComponent(sessionId)}/report`),
     ),
+  /** Trả lời phỏng vấn bằng giọng nói: đoạn ghi âm → văn bản (Groq Whisper, src/services/groq_stt.py). */
+  transcribeAudio: (file: Blob, sessionId?: string, previous?: string): Promise<{ text: string }> =>
+    via(
+      "interview",
+      () => mockApi.transcribeAudio(),
+      () => {
+        const form = new FormData()
+        form.append("file", file, file.type.includes("mp4") ? "recording.mp4" : "recording.webm")
+        // Chữ của các đoạn trước trong cùng lần nói: Whisper nối câu liền mạch giữa các đoạn
+        if (previous) form.append("previous", previous.slice(-500))
+        const url = sessionId ? `/interviews/transcribe?session_id=${encodeURIComponent(sessionId)}` : "/interviews/transcribe"
+        return request<{ text: string }>(url, { method: "POST", body: form })
+      },
+    ),
 
   // ---- Phản hồi (B3) ----
   sendFeedback: (body: FeedbackRequest): Promise<FeedbackResponse> =>

@@ -64,7 +64,7 @@ Chi tiết phạm vi và guardrail được mô tả trong [Product Requirements
 | **Gap Analysis** (US-SV-02) | Upload CV (PDF/DOCX, PDF scan được đọc bằng OCR) + chọn JD → AI phân tích khoảng cách, chấm Match Score 0–100, trả về danh sách kỹ năng thiếu + bằng chứng từ CV gốc, kèm link lộ trình học trên roadmap.sh cho kỹ năng CNTT |
 | **CV Optimizer** (US-SV-03) | Gợi ý viết lại từng đoạn CV (accept / edit / reject), xuất file DOCX, audit trail đầy đủ |
 | **Kỹ năng đang học** (US-SV-05) | Đánh dấu kỹ năng đang phát triển, hiển thị riêng trong CV xuất |
-| **Mock Interview** (US-SV-04) | 4 câu hỏi do AI sinh theo vị trí (theo CV hoặc không dùng CV), trả lời bằng cách gõ hoặc nói (Soniox), bộ đếm giờ, chấm điểm S/T/A/R 0–5, báo cáo chi tiết |
+| **Mock Interview** (US-SV-04) | 4 câu hỏi do AI sinh theo vị trí (theo CV hoặc không dùng CV), trả lời bằng cách gõ hoặc nói (Groq Whisper), bộ đếm giờ, chấm điểm S/T/A/R 0–5, báo cáo chi tiết |
 | **Lịch sử & Tiến bộ** | Xem lại tất cả lượt phân tích, phỏng vấn, biểu đồ tiến bộ theo thời gian |
 | **Chia sẻ với Cố vấn** | Bật/tắt chia sẻ CV và báo cáo phỏng vấn per-item |
 | **Phản hồi AI** (US-SV-06) | Thumb up/down + CSAT 1–5 sao cho từng gợi ý |
@@ -181,12 +181,9 @@ Giao diện sẽ mở tại: **http://localhost:3000**
 - **OpenAI:** `gpt-4o-mini`, `gpt-4o`
 - **Gemini** (qua OpenAI-compat): đặt `LLM_PROVIDER=openai`, `OPENAI_API_KEY=<gemini_key>`, `LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/`, `MODEL_NAME=gemini-2.5-flash`
 
-#### Soniox — Trả lời phỏng vấn bằng giọng nói (tùy chọn)
+#### Trả lời phỏng vấn bằng giọng nói
 
-| Biến | Mặc định | Mô tả |
-|---|---|---|
-| `SONIOX_API_KEY` | *(để trống)* | Key từ [console.soniox.com](https://console.soniox.com). Để trống thì phòng phỏng vấn ẩn nút "Nói câu trả lời" |
-| `SONIOX_MODEL` | `stt-rt-v5` | Model nhận diện giọng nói thời gian thực |
+Dùng **Groq Whisper** (`whisper-large-v3-turbo`) qua chính `GROQ_API_KEY` ở trên, không cần key riêng. Sinh viên bấm **Nói câu trả lời**, nói xong bấm **Dừng nói**, đoạn ghi âm được chuyển thành chữ trong ô trả lời. Không có key Groq thật thì phòng phỏng vấn ẩn nút này.
 
 **Đọc CV dạng scan (OCR):** chỉ nhận file PDF hoặc DOCX. PDF không có lớp chữ (bản scan, ảnh chụp lưu thành PDF) được đọc tự động bằng RapidOCR, đã có trong `requirements.txt`, không cần cài thêm phần mềm. Mô hình mặc định có thể làm mất dấu tiếng Việt, nên khi tải bản scan giao diện sẽ nhắc sinh viên kiểm tra lại hoặc dùng PDF xuất từ Word / Canva.
 

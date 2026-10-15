@@ -519,8 +519,8 @@ CSAT_TAGS = {
 
 # Cố vấn khác (chưa đặt mật khẩu nên không đăng nhập được) và SV mới đăng ký đang chờ phân công
 EXTRA_ADVISORS = [
-    {"id": "cv-008", "full_name": "Lê Thu Hà", "email": "ha.le@careerx.vn", "title": "Cố vấn hướng nghiệp"},
-    {"id": "cv-009", "full_name": "Võ Minh Đức", "email": "duc.vo@careerx.vn", "title": "Cố vấn ngành CNTT"},
+    {"id": "cv-008", "full_name": "Lê Thu Hà", "email": "ha.le@careerv.vn", "title": "Cố vấn hướng nghiệp"},
+    {"id": "cv-009", "full_name": "Võ Minh Đức", "email": "duc.vo@careerv.vn", "title": "Cố vấn ngành CNTT"},
 ]
 UNASSIGNED_STUDENTS = [
     {

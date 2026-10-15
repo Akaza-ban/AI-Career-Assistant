@@ -48,14 +48,6 @@ class Settings(BaseSettings):
         description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng",
     )
 
-    # Soniox Speech-to-Text (Voice Transcribe)
-    soniox_api_key: str = Field(default="", description="API key cho Soniox Speech-to-Text")
-    soniox_model: str = Field(default="stt-rt-v5", description="Model Soniox STT mặc định")
-    soniox_ws_url: str = Field(
-        default="wss://stt-rt.soniox.com/transcribe-websocket",
-        description="Soniox WebSocket endpoint",
-    )
-
     # LangSmith Tracing (AI Logs - Deliverable #4)
     langchain_tracing_v2: bool = Field(default=True, description="Bật tracing LangSmith")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")
@@ -75,7 +67,7 @@ class Settings(BaseSettings):
     seed_demo_cohort: bool = True
 
     # Tài khoản: phiên đăng nhập lưu trong cookie HttpOnly
-    session_cookie_name: str = "careerx_session"
+    session_cookie_name: str = "careerv_session"
     session_days: int = Field(default=30, ge=1, le=365)
     # Bật trên môi trường HTTPS (cookie chỉ gửi qua kết nối an toàn)
     session_cookie_secure: bool = False
@@ -83,7 +75,7 @@ class Settings(BaseSettings):
     # kể cả tài khoản demo, nên mặc định tắt.
     demo_login_enabled: bool = False
     # Mật khẩu đặt cho 2 tài khoản demo (để thử trang Đăng nhập). Để trống thì không đăng nhập được bằng mật khẩu.
-    demo_account_password: str = "careerx123"
+    demo_account_password: str = "careerv123"
     # Nhập sai mật khẩu quá số lần này thì tạm khoá trong login_lock_minutes phút
     login_max_attempts: int = 5
     login_lock_minutes: int = 15
@@ -96,7 +88,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_username: str = ""
     smtp_password: str = ""
-    smtp_from: str = "CareerV <no-reply@careerx.vn>"
+    smtp_from: str = "CareerV <no-reply@careerv.vn>"
     smtp_starttls: bool = True
 
     # Dung lượng lưu CV cho mỗi sinh viên

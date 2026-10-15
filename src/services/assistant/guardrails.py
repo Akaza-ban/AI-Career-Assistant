@@ -30,7 +30,7 @@ _CHITCHAT_PATTERN = re.compile(
     r"thanks(?:\s+you)?|thank\s+you|goodbye|bye|how\s+are\s+you|who\s+are\s+you)"
 )
 
-_CAREERX_TOPIC_PATTERN = re.compile(
+_CAREERV_TOPIC_PATTERN = re.compile(
     r"\b(?:careerv|careerx|edu\s*17|cv|jd|star|phong van|interview|sinh vien|student|advisor|"
     r"ky nang|skill|tai lieu|lich su|history|diem|score|match|phan tich|analysis|"
     r"ho so|tai len|upload|chia se|co van|bo loc|filter|cai dat|settings|"
@@ -94,9 +94,9 @@ def is_chitchat(message: str) -> tuple[bool, str]:
     return True, CHITCHAT_MESSAGE
 
 
-def has_careerx_topic(message: str) -> bool:
+def has_careerv_topic(message: str) -> bool:
     """Topic evidence for filtering short, coincidental lexical matches."""
-    return bool(_CAREERX_TOPIC_PATTERN.search(_inspection_text(message)))
+    return bool(_CAREERV_TOPIC_PATTERN.search(_inspection_text(message)))
 
 
 def is_out_of_scope(message: str) -> tuple[bool, str]:

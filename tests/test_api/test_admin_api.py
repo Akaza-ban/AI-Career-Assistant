@@ -18,10 +18,10 @@ from tests.test_api.test_advisor_api import (  # noqa: F401  (clean_data: dọn 
 )
 
 API = "/api/v1"
-TEMP_PASSWORD = "Careerx-7Q4M2"
+TEMP_PASSWORD = "Careerv-7Q4M2"
 NEW_ADVISOR = {
     "full_name": "  Nguyễn  Bảo Châu ",
-    "email": "Chau.Nguyen@careerx.vn",
+    "email": "Chau.Nguyen@careerv.vn",
     "title": "Cố vấn hướng nghiệp",
     "temporary_password": TEMP_PASSWORD,
 }
@@ -82,7 +82,7 @@ async def test_admin_pages_require_admin(client, path):
 
 @pytest.mark.asyncio
 async def test_demo_admin_logs_in(client):
-    res = await login(client, "admin@careerx.vn", "careerx123")
+    res = await login(client, "admin@careerv.vn", "careerv123")
     assert res.status_code == 200
     body = res.json()
     assert (body["role"], body["must_change_password"], body["profile"]["id"]) == ("admin", False, DEMO_ADMIN_ID)
@@ -142,7 +142,7 @@ async def test_create_advisor_requires_password_change(client):
     advisor = await create_advisor(client)
     assert (advisor["full_name"], advisor["email"], advisor["status"]) == (
         "Nguyễn Bảo Châu",
-        "chau.nguyen@careerx.vn",
+        "chau.nguyen@careerv.vn",
         "password_pending",
     )
     assert advisor["student_count"] == 0 and advisor["last_active_at"] is None
@@ -150,12 +150,12 @@ async def test_create_advisor_requires_password_change(client):
     assert (taken.status_code, taken.json()["code"]) == (409, "email_taken")
     weak = await client.post(
         f"{API}/admin/advisors",
-        json={**NEW_ADVISOR, "email": "x@careerx.vn", "temporary_password": "abc"},
+        json={**NEW_ADVISOR, "email": "x@careerv.vn", "temporary_password": "abc"},
         headers=ADMIN,
     )
     assert weak.status_code == 422
 
-    res = await login(client, "chau.nguyen@careerx.vn", TEMP_PASSWORD)
+    res = await login(client, "chau.nguyen@careerv.vn", TEMP_PASSWORD)
     assert (res.status_code, res.json()["must_change_password"]) == (200, True)
     blocked = await client.get(f"{API}/advisor/overview")
     assert (blocked.status_code, blocked.json()["code"]) == (403, "password_change_required")

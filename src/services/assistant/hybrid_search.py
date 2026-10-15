@@ -10,7 +10,7 @@ from rank_bm25 import BM25Okapi
 from src.config import get_settings
 from src.services.assistant.chunker import DocChunk
 from src.services.assistant.embedding import tokenize
-from src.services.assistant.guardrails import has_careerx_topic
+from src.services.assistant.guardrails import has_careerv_topic
 from src.services.assistant.vector_store import AssistantVectorStore
 
 logger = logging.getLogger(__name__)
@@ -100,7 +100,7 @@ class AssistantHybridRetriever:
         query_terms = set(tokenize(query)) - QUERY_STOP_WORDS
         if limit <= 0 or not query_terms:
             return []
-        has_topic = has_careerx_topic(query)
+        has_topic = has_careerv_topic(query)
         candidates = max(limit * 4, 20)
         dense = self.vector_store.search_vector(query, role, candidates)
         chunks, bm25 = self._role_index(role)

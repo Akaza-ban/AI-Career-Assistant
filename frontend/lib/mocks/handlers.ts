@@ -310,7 +310,7 @@ function interviewView(iv: MockInterview): InterviewSession {
     seconds_left: active ? Math.max(0, Math.round((iv.deadline - reference) / 1000)) : null,
     paused: iv.pausedAt !== null,
     pause_seconds_left: iv.pausedAt !== null ? Math.max(0, PAUSE_MAX_SECONDS - Math.round((now - iv.pausedAt) / 1000)) : null,
-    // Bản demo luôn có nút giọng nói (lib/use-soniox-stt.ts giả lập lời nói)
+    // Bản demo luôn có nút giọng nói (lib/use-groq-whisper.ts giả lập lời nói, không cần micro)
     voice_input: true,
   })
 }
@@ -525,7 +525,7 @@ const advisorReviews: Record<string, AdvisorReviewInfo> = isNewStudent
       }),
     )
 /** Mật khẩu hiện tại ở chế độ mock (để thử luồng đổi mật khẩu). */
-let mockPassword = "careerx123"
+let mockPassword = "careerv123"
 
 // ---------- Tài khoản ----------
 // Tài khoản demo SV và quản trị viên (mật khẩu chung với mockPassword) và các tài khoản SV tạo mới trong phiên.
@@ -533,7 +533,7 @@ let mockPassword = "careerx123"
 const LOGIN_MAX_ATTEMPTS = 5
 const accounts = new Map<string, { role: Role; password: () => string }>([
   ["minhanh.nguyen@gmail.com", { role: "student", password: () => mockPassword }],
-  ["admin@careerx.vn", { role: "admin", password: () => mockPassword }],
+  ["admin@careerv.vn", { role: "admin", password: () => mockPassword }],
 ])
 let failedLogins = 0
 /** Cố vấn đang đăng nhập ở chế độ mock (để đổi mật khẩu tạm và hiện đúng tên). */
@@ -1440,6 +1440,12 @@ export const mockApi = {
     }
     interviews[id] = iv
     return interviewView(iv)
+  },
+
+  /** Chỉ để đủ API; ở chế độ mock, lib/use-groq-whisper.ts tự điền câu trả lời mẫu, không gửi ghi âm. */
+  async transcribeAudio(): Promise<{ text: string }> {
+    await delay(700)
+    return { text: "Em có kinh nghiệm lập trình backend với Python và FastAPI." }
   },
 
   async getInterview(id: string): Promise<InterviewSession> {
