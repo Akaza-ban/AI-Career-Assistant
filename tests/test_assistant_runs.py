@@ -161,6 +161,13 @@ async def test_running_duplicate_and_concurrent_guard_then_cancel(assistant_acco
             assert run.status == "cancelled"
             turn = db.query(AssistantTurn).filter_by(run_id=run.id).one()
             assert turn.interrupted and turn.assistant_message == "partial answer"
+        monkeypatch.setattr(
+            assistant_stub,
+            "respond",
+            lambda *args, **kwargs: asyncio.sleep(0, result=AssistantResponse(message="Next answer", intent="qa")),
+        )
+        next_run = await client.post("/api/v1/assistant/chat", headers=headers["a"], json=payload(conversation_id))
+        assert next_run.status_code == 200 and next_run.json()["message"] == "Next answer"
     finally:
         if not first.done():
             first.cancel()
@@ -272,3 +279,19 @@ async def test_run_and_history_owner_scope_in_both_directions(assistant_accounts
         for target in (conversation_id, uuid4().hex):
             denied = await client.get(f"/api/v1/assistant/conversations/{target}/history", headers=headers[other])
             assert denied.status_code == 404 and "Hello" not in denied.text
+
+
+@pytest.mark.asyncio
+async def test_selected_record_hint_cannot_grant_access(assistant_accounts, assistant_stub, monkeypatch):
+    seen = []
+
+    async def respond(message, context, **kwargs):
+        seen.append(context.selected_cv_id)
+        return AssistantResponse(message="Hello", intent="qa")
+
+    monkeypatch.setattr(assistant_stub, "respond", respond)
+    client, headers, _ = assistant_accounts
+    body = payload()
+    body["context"]["selected_cv_id"] = uuid4().hex
+    response = await client.post("/api/v1/assistant/chat", headers=headers["a"], json=body)
+    assert response.status_code == 200 and seen == [None]

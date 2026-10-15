@@ -217,6 +217,17 @@ async def chat(
         raise AppError(403, "Ngữ cảnh không khớp với tài khoản đang đăng nhập.", "forbidden")
     # The authenticated identity is authoritative, not context sent by the browser.
     context = context.model_copy(update={"user_id": user.id, "user_role": user.role})
+    if (
+        context.selected_cv_id is not None
+        and db.scalar(
+            select(CvVersion.id).where(
+                CvVersion.id == context.selected_cv_id,
+                CvVersion.owner_id == user.id,
+            )
+        )
+        is None
+    ):
+        context = context.model_copy(update={"selected_cv_id": None})
     body = body.model_copy(update={"context": context})
     if body.conversation_id:
         _owned_conversation(db, body.conversation_id, user)
@@ -228,7 +239,9 @@ async def chat(
         conversation = _owned_conversation(db, body.conversation_id, user)
         recent = db.scalars(
             select(AssistantTurn)
+            .join(AssistantConversation)
             .where(AssistantTurn.conversation_id == conversation.id)
+            .where(AssistantConversation.user_id == user.id, AssistantConversation.role == user.role)
             .where(AssistantTurn.assistant_message != "")
             .order_by(AssistantTurn.created_at.desc(), AssistantTurn.id.desc())
             .limit(get_settings().assistant_history_turns)
@@ -293,7 +306,15 @@ async def _respond(
     run = runs.owned_run(db, run_id, user)
     if run.status != "running":
         raise AppError(409, "Lượt chạy đã kết thúc.", "run_finished")
-    turn = db.scalar(select(AssistantTurn).where(AssistantTurn.run_id == run_id))
+    turn = db.scalar(
+        select(AssistantTurn)
+        .join(AssistantConversation)
+        .where(
+            AssistantTurn.run_id == run_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+    )
     turn.assistant_message = message
     turn.intent = result.intent
     turn.sources_json = [source.model_dump(mode="json") for source in result.sources]
@@ -356,7 +377,16 @@ def confirm_action(body: ActionConfirmationRequest, user: CurrentUser, db: DbSes
 @router.post("/feedback", response_model=AssistantFeedbackResponse)
 def submit_feedback(body: AssistantFeedbackRequest, user: CurrentUser, db: DbSession) -> AssistantFeedbackResponse:
     _owned_turn(db, body.turn_id, user)
-    feedback = db.scalar(select(AssistantFeedback).where(AssistantFeedback.turn_id == body.turn_id))
+    feedback = db.scalar(
+        select(AssistantFeedback)
+        .join(AssistantTurn)
+        .join(AssistantConversation)
+        .where(
+            AssistantFeedback.turn_id == body.turn_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+    )
     if feedback is None:
         feedback = AssistantFeedback(id=str(uuid4()), turn_id=body.turn_id, rating=body.rating)
         db.add(feedback)
@@ -370,7 +400,16 @@ def submit_feedback(body: AssistantFeedbackRequest, user: CurrentUser, db: DbSes
 def delete_feedback(turn_id: str, user: CurrentUser, db: DbSession) -> None:
     """Bấm lại nút thích / không thích đã chọn để huỷ đánh giá (khi bấm nhầm)."""
     _owned_turn(db, turn_id, user)
-    feedback = db.scalar(select(AssistantFeedback).where(AssistantFeedback.turn_id == turn_id))
+    feedback = db.scalar(
+        select(AssistantFeedback)
+        .join(AssistantTurn)
+        .join(AssistantConversation)
+        .where(
+            AssistantFeedback.turn_id == turn_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+    )
     if feedback is not None:
         db.delete(feedback)
         db.commit()
