@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("")
     llm_model_agent: str = "deepseek-flash"
     llm_model_router: str = "deepseek-flash"
-    llm_thinking_agent: Literal["enabled", "disabled"] = "enabled"
+    llm_thinking_agent: Literal["enabled", "disabled"] = "disabled"
     llm_reasoning_effort: Literal["low", "high", "max"] = "high"
     llm_timeout_s: float = Field(default=60, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=8)

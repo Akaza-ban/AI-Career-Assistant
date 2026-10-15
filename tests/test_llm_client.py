@@ -73,7 +73,7 @@ async def test_verbatim_thinking_and_non_thinking(tmp_path):
         "provider_extension": {"a": 1},
     }
     client = LlmClient(
-        settings=settings(llm_reasoning_effort="max"),
+        settings=settings(llm_reasoning_effort="max", llm_thinking_agent="enabled"),
         recorded=record(
             tmp_path,
             [

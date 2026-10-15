@@ -25,7 +25,7 @@ def test_llm_environment_configuration_and_bounds(monkeypatch):
 def test_section_14_defaults():
     config = Settings(_env_file=None)
     assert (config.llm_model_agent, config.llm_model_router) == ("deepseek-flash", "deepseek-flash")
-    assert (config.llm_thinking_agent, config.llm_reasoning_effort) == ("enabled", "high")
+    assert (config.llm_thinking_agent, config.llm_reasoning_effort) == ("disabled", "high")
     assert (config.agent_max_steps, config.agent_max_tool_calls, config.agent_confirm_ttl_min) == (8, 12, 30)
     assert config.ui_ack_timeout_s == 5 and config.workers == 1
     assert config.trace_backend == "none"
