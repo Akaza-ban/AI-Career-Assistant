@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useCallback, useEffect, useRef, type KeyboardEvent } from "react"
 import { Check, ChevronRight, Info, Loader2, Mic, Square, TimerOff } from "lucide-react"
 
+import { plainText } from "@/components/common/interview-feedback"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -167,8 +168,8 @@ export function InterviewChat(props: InterviewChatProps) {
                     : stt.isTranscribing
                       ? "Đang chuyển giọng nói thành chữ…"
                       : voiceInput
-                        ? "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả, gõ hoặc bấm Nói câu trả lời…"
-                        : "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả…"
+                        ? "Gõ câu trả lời hoặc bấm Nói câu trả lời…"
+                        : "Gõ câu trả lời của bạn…"
               }
               className="block min-h-32 w-full resize-y rounded-xl border border-line-strong bg-card px-4 py-3.5 text-base leading-[26px] text-ink transition-[border-color,box-shadow] outline-none placeholder:text-ink-3 focus:border-ink focus:shadow-[0_0_0_4px_var(--surface)] disabled:bg-panel disabled:opacity-70"
             />
@@ -256,7 +257,7 @@ function QuestionBubble({ index, total, theme, text }: { index: number; total: n
           <p className="text-[13px] font-semibold text-ink-3">
             Câu {index} / {total} · {theme}
           </p>
-          <p className="text-lg leading-7 font-semibold tracking-[-0.01em] text-ink">{text}</p>
+          <p className="text-lg leading-7 font-semibold tracking-[-0.01em] text-ink">{plainText(text)}</p>
         </div>
       </div>
     </div>

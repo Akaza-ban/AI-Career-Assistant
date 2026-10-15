@@ -8,8 +8,8 @@ import { Loader2, ShieldCheck } from "lucide-react"
 import { AuthCard, AuthHeading } from "@/components/auth/auth-shell"
 import {
   CheckField,
+  DobField,
   dobToIso,
-  formatDob,
   FormAlert,
   PasswordField,
   TextField,
@@ -29,9 +29,9 @@ import { cn } from "@/lib/utils"
 
 /** Tuổi tối thiểu 15; ngày sinh không ở tương lai. */
 function dobError(v: string): string | null {
-  if (!v) return "Hãy nhập ngày sinh."
+  if (!v) return "Hãy chọn đủ ngày, tháng và năm sinh."
   const iso = dobToIso(v)
-  if (!iso) return "Ngày sinh cần có dạng dd/mm/yyyy."
+  if (!iso) return "Ngày sinh chưa đúng."
   const d = new Date(`${iso}T00:00:00`)
   const now = new Date()
   if (d > now) return "Ngày sinh không thể ở tương lai."
@@ -121,17 +121,8 @@ export function RegisterForm() {
           <AuthHeading title="Tạo tài khoản" description="Miễn phí cho sinh viên, dùng được ngay sau khi tạo." />
           {formError && <FormAlert>{formError}</FormAlert>}
           <TextField label="Họ và tên" autoComplete="name" value={form.fullName} onChange={set("fullName")} hint={show("fullName")} disabled={busy} autoFocus />
+          <DobField label="Ngày sinh" value={form.dob} onChange={set("dob")} hint={show("dob")} disabled={busy} />
           <div className="grid gap-5 sm:grid-cols-2 sm:gap-3.5">
-            <TextField
-              label="Ngày sinh"
-              inputMode="numeric"
-              autoComplete="bday"
-              value={form.dob}
-              onChange={(v) => set("dob")(formatDob(v))}
-              hint={show("dob")}
-              disabled={busy}
-              className="tabular-nums"
-            />
             <TextField
               label="Số điện thoại"
               type="tel"
@@ -143,8 +134,8 @@ export function RegisterForm() {
               disabled={busy}
               className="tabular-nums"
             />
+            <TextField label="Email" type="email" autoComplete="email" inputMode="email" value={form.email} onChange={set("email")} hint={emailHint} disabled={busy} />
           </div>
-          <TextField label="Email" type="email" autoComplete="email" inputMode="email" value={form.email} onChange={set("email")} hint={emailHint} disabled={busy} />
           <div className="grid gap-2.5">
             <PasswordField label="Mật khẩu" autoComplete="new-password" value={form.password} onChange={set("password")} hint={show("password")} disabled={busy} />
             <PasswordRuleList password={form.password} showErrors={submitted} />

@@ -9,6 +9,7 @@ Phần chấm theo quy tắc ở đây dùng khi không có LLM và để kiểm
 """
 
 import re
+import unicodedata
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -25,13 +26,47 @@ MAX_REQUIREMENTS = 20
 EVIDENCE_SECTIONS = {"experience", "projects", "education", "activities"}
 
 # Thứ tự quan trọng: từ khoá dài/cụ thể đặt trước để không bị từ khoá ngắn bắt nhầm.
+# So khớp sau khi bỏ dấu và khoảng trắng (fold): CV quét OCR hay mất dấu, dính chữ ("KINHNGHIEMLAMVIEC").
 _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
-    ("experience", ("kinh nghiệm", "quá trình làm việc", "experience", "work history", "employment")),
-    ("projects", ("dự án", "academic projects", "project")),
-    ("education", ("học vấn", "trình độ học vấn", "education", "đào tạo")),
-    ("activities", ("hoạt động", "ngoại khóa", "ngoại khoá", "tình nguyện", "volunteer", "activities", "câu lạc bộ")),
-    ("skills", ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies")),
-    ("certifications", ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award")),
+    (
+        "experience",
+        (
+            "kinh nghiệm",
+            "quá trình làm việc",
+            "experience",
+            "work experience",
+            "professional experience",
+            "relevant experience",
+            "working experience",
+            "internship experience",
+            "work history",
+            "employment",
+        ),
+    ),
+    ("projects", ("dự án", "academic projects", "personal projects", "selected projects", "side projects", "project")),
+    ("education", ("học vấn", "trình độ học vấn", "education", "academic background", "đào tạo")),
+    (
+        "activities",
+        (
+            "hoạt động",
+            "ngoại khóa",
+            "ngoại khoá",
+            "tình nguyện",
+            "volunteer",
+            "activities",
+            "leadership",
+            "extracurricular",
+            "câu lạc bộ",
+        ),
+    ),
+    (
+        "skills",
+        ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies", "ngoại ngữ", "language"),
+    ),
+    (
+        "certifications",
+        ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award", "honors", "achievements"),
+    ),
     (
         "summary",
         (
@@ -46,6 +81,18 @@ _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
             "about",
         ),
     ),
+    (
+        "other",
+        (
+            "sở thích",
+            "người tham chiếu",
+            "thông tin khác",
+            "interests",
+            "hobbies",
+            "references",
+            "additional information",
+        ),
+    ),
 ]
 
 SECTION_LABELS: dict[str, str] = {
@@ -57,28 +104,40 @@ SECTION_LABELS: dict[str, str] = {
     "skills": "Kỹ năng",
     "certifications": "Chứng chỉ & giải thưởng",
     "summary": "Giới thiệu",
+    "other": "Thông tin khác",
 }
 
 
 # ---------- Tách CV thành dòng có gắn mục ----------
 
 # Ký tự đầu dòng bị bỏ khi tách dòng (số dòng chỉ đếm dòng có nội dung)
-BULLET_PREFIX = re.compile(r"^[#*\-•●▪+\s]+")
+BULLET_PREFIX = re.compile(r"^[#*\-•●▪+·◦■➢►✓–\s]+")
+
+
+def fold(text: str) -> str:
+    """Bỏ dấu, chữ thường, bỏ khoảng trắng và dấu câu: "KINH NGHIỆM" ≈ "KINHNGHIEM" (OCR mất dấu, dính chữ)."""
+    plain = unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D"))
+    return "".join(c for c in plain if c.isalnum() and not unicodedata.combining(c)).lower()
+
+
+_FOLDED_KEYWORDS = [(section, tuple(fold(kw) for kw in keywords)) for section, keywords in _SECTION_KEYWORDS]
+_YEAR = re.compile(r"(?:19|20)\d{2}")
 
 
 def _match_section(clean: str) -> tuple[str | None, bool]:
     """(mục, là tiêu đề riêng một dòng?) nếu dòng mở đầu một mục CV; ngược lại (None, False)."""
-    lower = clean.lower()
-    for section, keywords in _SECTION_KEYWORDS:
+    folded = fold(clean)
+    for section, keywords in _FOLDED_KEYWORDS:
         for kw in keywords:
-            if not lower.startswith(kw):
+            if not folded.startswith(kw):
                 continue
             colon = clean.find(":")
             # "Kỹ năng: Python, SQL" — mục viết cùng dòng với nội dung
             if 0 < colon <= 40 and clean[colon + 1 :].strip():
                 return section, False
-            # "KINH NGHIỆM LÀM VIỆC", "Dự án cá nhân:" — tiêu đề ngắn đứng riêng
-            if len(clean) <= 40 and not clean.rstrip().endswith("."):
+            # "KINH NGHIỆM LÀM VIỆC", "Dự án cá nhân:" — tiêu đề ngắn đứng riêng; dòng có năm là tên một mục con
+            # ("Project Manager Intern 06/2024 - 08/2024"), không phải tiêu đề
+            if len(clean) <= 40 and not clean.rstrip().endswith(".") and not _YEAR.search(clean):
                 return section, True
     return None, False
 
@@ -97,6 +156,10 @@ def split_cv_lines(text: str) -> list[dict[str, Any]]:
         if not clean:
             continue
         section, is_heading = _match_section(clean)
+        # Dòng đầu tiên chỉ khớp khi bỏ dấu thường là họ tên ("Duan Nguyen" ≠ mục "Dự án")
+        lower = clean.lower()
+        if not lines and is_heading and not any(lower.startswith(kw) for _, kws in _SECTION_KEYWORDS for kw in kws):
+            section, is_heading = None, False
         # "Technologies: React.js, Git" trong một mục Kinh nghiệm / Dự án là dòng liệt kê của mục đó,
         # không mở mục mới: các dòng mô tả phía sau vẫn là bằng chứng của mục đang có.
         if section and (is_heading or current not in EVIDENCE_SECTIONS):

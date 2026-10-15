@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Clock, Copy, Lightbulb, ShieldCheck } from "lucide-react"
+import { Copy, Lightbulb, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
@@ -126,12 +126,6 @@ export function ResultSuggestions({ analysis }: { analysis: GapAnalysis }) {
               <ShieldCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden />
               Gợi ý chỉ diễn đạt lại nội dung bạn đã viết, không thêm số liệu hay thành tích.
             </p>
-            {analysis.pending_review_count > 0 && (
-              <p className="flex items-start gap-2 text-ink-2">
-                <Clock className="mt-0.5 size-3.5 shrink-0 text-warn" aria-hidden />
-                {analysis.pending_review_count} gợi ý đang chờ cố vấn xem lại do chưa đủ căn cứ trong CV.
-              </p>
-            )}
           </div>
         </ResultWidget>
 

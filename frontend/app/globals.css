@@ -375,6 +375,20 @@
     box-shadow: none !important;
     padding: 0 !important;
   }
+  /* Phần bị ẩn không chiếm chỗ, để không in thêm trang trắng sau bản CV */
+  body:has([data-print-root]) *:not(:has([data-print-root])):not([data-print-root]):not([data-print-root] *) {
+    display: none;
+  }
+  /* Mẫu CV in như file DOCX: chữ đen trên nền trắng kể cả khi app đang ở giao diện tối */
+  [data-print-root],
+  [data-print-root] * {
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+  @page {
+    size: A4;
+    margin: 15mm 17mm;
+  }
 }
 
 /* Edge / IE tự thêm nút xem mật khẩu; app đã có nút riêng (PasswordField) nên ẩn nút của trình duyệt */

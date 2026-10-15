@@ -271,7 +271,7 @@ async def create_session(
 def _blocked_reason(text: str) -> str | None:
     """Guardrail đầu vào (tạm dùng quy tắc; kiểm tra lạc đề bằng LLM sẽ thêm khi hoàn thiện agent)."""
     if len(text) < MIN_ANSWER_CHARS:
-        return f"Câu trả lời quá ngắn. Hãy trả lời ít nhất {MIN_ANSWER_CHARS} ký tự theo khung STAR."
+        return f"Câu trả lời quá ngắn. Hãy trả lời ít nhất {MIN_ANSWER_CHARS} ký tự."
     if len(text) > MAX_ANSWER_CHARS:
         return f"Câu trả lời quá dài. Hãy rút gọn trong {MAX_ANSWER_CHARS} ký tự."
     safe, _ = check_input_safety(text)

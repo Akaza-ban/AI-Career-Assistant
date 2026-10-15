@@ -143,3 +143,34 @@ async def test_interview_agent_final_round_termination():
     # Vòng cuối cùng: next_question BẮT BUỘC là None (null) và is_finished = True
     assert result.get("next_question") is None
     assert result.get("is_finished") is True
+
+
+def test_question_style_checks_and_cleanup():
+    """Câu hỏi ngắn, không tự nhắc khung STAR, không markdown; viết hoa chữ đầu câu."""
+    from src.agents.interview.question_generator import MAX_QUESTION_CHARS, clean_question, question_problems
+
+    short = clean_question("trong dự án **Maintenance Platform**, phần nào bạn trực tiếp làm?")
+    assert short == "Trong dự án Maintenance Platform, phần nào bạn trực tiếp làm?"
+    assert question_problems(short) == []
+    assert question_problems("Hãy kể Situation và Result của dự án.") != []
+    assert question_problems("x" * (MAX_QUESTION_CHARS + 1)) != []
+
+
+def test_feedback_is_plain_text_with_three_parts():
+    """Nhận xét bỏ markdown, giữ 3 dòng Điểm tốt / Cần cải thiện / Gợi ý trả lời (kể cả khi chấm dự phòng)."""
+    validated = STARScoreOutput.model_validate(
+        {
+            "situation_score": 3,
+            "task_score": 3,
+            "action_score": 3,
+            "result_score": 3,
+            "feedback_text": "**Điểm tốt:** rõ dự án\n- **Cần cải thiện:** thiếu số liệu\nGợi ý trả lời: nêu `p95`",
+        }
+    )
+    assert validated.feedback_text == "Điểm tốt: rõ dự án\nCần cải thiện: thiếu số liệu\nGợi ý trả lời: nêu p95"
+    fallback = evaluate_answer_fallback("Trong dự án thư viện em viết API bằng FastAPI.", "Backend Intern", 1, 4)
+    assert [line.split(":")[0] for line in fallback.feedback_text.splitlines()] == [
+        "Điểm tốt",
+        "Cần cải thiện",
+        "Gợi ý trả lời",
+    ]

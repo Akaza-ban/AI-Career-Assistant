@@ -11,6 +11,7 @@ có cơ chế fallback sang PyTesseract hoặc Vision LLM khi cần.
 
 import io
 import logging
+import re
 from typing import Any
 
 import numpy as np
@@ -19,6 +20,9 @@ from PIL import Image
 logger = logging.getLogger(__name__)
 
 _RAPID_OCR_INSTANCE = None
+
+# Ký hiệu đầu dòng hay bị OCR đọc thành "·", ".", "«"... (".NET" giữ nguyên: sau dấu chấm là hai chữ hoa)
+_MISREAD_BULLET = re.compile(r"^(?:[·•●∙◦‧«»▪■]\s*|\.\s*(?=[A-ZĐ][a-zà-ỹ])|\.\s+|[eo]\s+(?=[A-ZĐ]))")
 
 
 def get_ocr_engine():
@@ -110,7 +114,7 @@ def _group_and_sort_lines(items: list[dict[str, Any]]) -> str:
     for line in lines:
         # Sắp xếp các từ/cụm trong cùng một dòng từ trái sang phải
         line.sort(key=lambda it: it["xmin"])
-        line_text = " ".join(it["text"] for it in line).strip()
+        line_text = _MISREAD_BULLET.sub("• ", " ".join(it["text"] for it in line).strip())
         if not line_text:
             continue
 
@@ -169,8 +173,14 @@ def format_ocr_boxes(boxes: list[Any], width: float, height: float) -> str:
         return ""
 
     # Kiểm tra bố cục 2 cột
+    from src.services.cv_layout import is_real_column_split
+
     split_x = _check_column_split(items, width)
-    if split_x is not None:
+    boxes = [
+        {"x0": it["xmin"], "x1": it["xmax"], "top": it["ymin"], "bottom": it["ymax"], "text": it["text"]}
+        for it in items
+    ]
+    if split_x is not None and is_real_column_split(boxes, split_x):
         from src.services.skill_matching import _match_section
 
         left_items = [it for it in items if it["xmax"] <= split_x]
@@ -187,7 +197,7 @@ def format_ocr_boxes(boxes: list[Any], width: float, height: float) -> str:
 
         for line in right_lines:
             sec, is_heading = _match_section(line)
-            if (sec or is_heading) and len(header_lines) > 0:
+            if is_heading or (sec and header_lines):
                 found_section = True
             if not found_section and len(header_lines) < 3:
                 header_lines.append(line)

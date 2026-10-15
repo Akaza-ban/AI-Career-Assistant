@@ -35,6 +35,8 @@ import type {
   AppNotification,
   AssignedStudent,
   CapabilityAnswerRequest,
+  CapabilityDraftRequest,
+  CapabilityLineDecisionRequest,
   ChangePasswordRequest,
   LoginRequest,
   LoginResponse,
@@ -50,6 +52,7 @@ import type {
   CreateGapAnalysisRequest,
   CreateInterviewRequest,
   CreatePastedJdRequest,
+  CvPreviewInfo,
   CvVersion,
   ExportCvRequest,
   ExportCvResponse,
@@ -243,6 +246,12 @@ export const api = {
   /** File gốc của một phiên bản CV; null ở chế độ mock (không có file thật). */
   getCvFile: (id: string): Promise<Blob | null> =>
     via("cv", async () => null, async () => (await send(`/cv/${encodeURIComponent(id)}/file`)).blob()),
+  /** Cách xem CV trong app (ảnh trang PDF / nội dung theo mẫu CV); null ở chế độ mock. */
+  getCvPreview: (id: string): Promise<CvPreviewInfo | null> =>
+    via("cv", async () => null, () => request<CvPreviewInfo>(`/cv/${encodeURIComponent(id)}/preview`)),
+  /** Ảnh PNG một trang của CV PDF (đếm từ 1); null ở chế độ mock. */
+  getCvPage: (id: string, page: number): Promise<Blob | null> =>
+    via("cv", async () => null, async () => (await send(`/cv/${encodeURIComponent(id)}/pages/${page}`)).blob()),
   /** Văn bản đã trích từ CV, dùng xem nhanh file DOCX (và PDF khi không có file, ví dụ ở chế độ mock). */
   getCvText: (id: string): Promise<string | null> =>
     via(
@@ -326,6 +335,19 @@ export const api = {
       "optimizer",
       () => mockApi.answerCapabilityCheck(analysisId, id, body),
       () => request(`${optimizerPath(analysisId)}/capability-checks/${encodeURIComponent(id)}`, json(body)),
+    ),
+  /** "Có, đã dùng": AI viết lời kể của SV thành một câu cho CV (chưa thêm, chờ SV duyệt). */
+  draftCapabilityLine: (analysisId: string, id: string, body: CapabilityDraftRequest): Promise<OptimizerSession> =>
+    via(
+      "optimizer",
+      () => mockApi.draftCapabilityLine(analysisId, id, body),
+      () => request(`${optimizerPath(analysisId)}/capability-checks/${encodeURIComponent(id)}/draft`, json(body)),
+    ),
+  decideCapabilityLine: (analysisId: string, id: string, body: CapabilityLineDecisionRequest): Promise<OptimizerSession> =>
+    via(
+      "optimizer",
+      () => mockApi.decideCapabilityLine(analysisId, id, body),
+      () => request(`${optimizerPath(analysisId)}/capability-checks/${encodeURIComponent(id)}/decision`, json(body)),
     ),
   /** "Hoàn tất": tạo đúng một phiên bản CV mới từ bản nháp rồi khoá trình tối ưu. */
   finalizeOptimization: (analysisId: string): Promise<OptimizerSession> =>
@@ -494,6 +516,17 @@ export const api = {
       "advisor",
       () => mockApi.getAdvisorCvText(studentId, cvId),
       async () => (await request<{ text: string }>(`${advisorStudentPath(studentId)}/cvs/${encodeURIComponent(cvId)}/text`)).text,
+    ),
+  /** Cách xem CV SV đã chia sẻ trong app; null ở chế độ mock. */
+  getAdvisorCvPreview: (studentId: string, cvId: string): Promise<CvPreviewInfo | null> =>
+    via("advisor", async () => null, () =>
+      request<CvPreviewInfo>(`${advisorStudentPath(studentId)}/cvs/${encodeURIComponent(cvId)}/preview`),
+    ),
+  getAdvisorCvPage: (studentId: string, cvId: string, page: number): Promise<Blob | null> =>
+    via(
+      "advisor",
+      async () => null,
+      async () => (await send(`${advisorStudentPath(studentId)}/cvs/${encodeURIComponent(cvId)}/pages/${page}`)).blob(),
     ),
   /** File phiên bản CV SV đã chia sẻ; null ở chế độ mock. */
   getAdvisorCvFile: (studentId: string, cvId: string): Promise<Blob | null> =>

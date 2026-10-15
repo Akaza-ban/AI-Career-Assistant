@@ -7,7 +7,18 @@ from src.services.skill_matching import EVIDENCE_SECTIONS
 
 _DATE = re.compile(r"\b\d{1,2}/\d{4}\b|\b(?:19|20)\d{2}\b")
 # "Maintenance Management Platform 07/2023 - 11/2023" → bỏ phần ngày ở cuối dòng tiêu đề
-_TRAILING_DATES = re.compile(r"[\s|,–-]*\(?\s*(?:\d{1,2}/)?(?:19|20)\d{2}.*$")
+_TRAILING_DATES = re.compile(
+    r"[\s|,–-]*\(?\s*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|tháng)[a-z]*\.?\s*)?"
+    r"(?:\d{1,2}/)?(?:19|20)\d{2}.*$",
+    re.IGNORECASE,
+)
+
+
+def entry_title(text: str) -> str | None:
+    """Dòng tiêu đề một mục Dự án / Kinh nghiệm ("Maintenance Platform 07/2023 - 11/2023") → tên, bỏ phần ngày."""
+    if not _DATE.search(text):
+        return None
+    return _TRAILING_DATES.sub("", text).strip(" |,-–") or None
 
 
 def _join(items: list[str]) -> str:
@@ -25,7 +36,7 @@ def _entry_of(line_no: int, lines: list[dict[str, Any]]) -> str | None:
         if above is None or above.get("is_heading") or above.get("block") != line["block"]:
             return None
         if _DATE.search(above["text"]):
-            title = _TRAILING_DATES.sub("", above["text"]).strip(" |,-–")
+            title = entry_title(above["text"])
             if not title:
                 return None
             return f"dự án {title}" if line["block"] == "projects" else f"phần kinh nghiệm tại {title}"

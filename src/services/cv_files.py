@@ -142,8 +142,10 @@ def _extract_pdfplumber_page(page: Any) -> str:
     if not words:
         return (page.extract_text() or "").strip()
 
+    from src.services.cv_layout import is_real_column_split
+
     split_x = _find_column_gutter(words, page.width)
-    if split_x is None:
+    if split_x is None or not is_real_column_split(words, split_x):
         return _words_to_lines(words)
 
     left_words = [w for w in words if w["x1"] <= split_x]
@@ -160,7 +162,7 @@ def _extract_pdfplumber_page(page: Any) -> str:
 
     for line in right_lines:
         sec, is_heading = _match_section(line)
-        if (sec or is_heading) and len(header_lines) > 0:
+        if is_heading or (sec and header_lines):
             found_section = True
         if not found_section and len(header_lines) < 3:
             header_lines.append(line)
@@ -257,37 +259,167 @@ def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
     return ExtractedCv(file_type=file_type, text=text, page_count=page_count, read_by_ocr=read_by_ocr)
 
 
-def build_docx(document: dict, developing_title: str) -> bytes:
+def merge_wrapped(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ghép nửa sau của câu bị xuống dòng (cont) vào dòng trước, để mỗi câu là một đoạn."""
+    merged: list[dict[str, Any]] = []
+    for line in lines:
+        if line.get("cont") and merged:
+            merged[-1] = {**merged[-1], "text": f"{merged[-1]['text']} {line['text']}"}
+        else:
+            merged.append(line)
+    return merged
+
+
+def build_docx(document: dict, developing_title: str | None = None) -> bytes:
     """
-    File DOCX bố cục đơn giản cho phiên bản CV đã tối ưu (không giữ được thiết kế của file gốc):
-    phần đầu, tiêu đề từng mục, mỗi dòng nội dung là một gạch đầu dòng, cuối cùng là kỹ năng đang phát triển.
+    File DOCX cho phiên bản CV đã tối ưu, bố cục gọn kiểu Harvard (không giữ thiết kế của file gốc; chữ giữ nguyên):
+    họ tên và liên hệ căn giữa, tiêu đề mục in hoa có kẻ dưới, tên mục con in đậm với thời gian căn phải,
+    câu mô tả là gạch đầu dòng, cuối cùng là kỹ năng đang phát triển. Loại từng dòng: src/services/cv_layout.py.
     """
     from docx import Document
-    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Inches, Pt
+
+    from src.services.cv_layout import DEVELOPING_TITLES
 
     doc = Document()
-    for index, line in enumerate(document["header"]):
-        run = doc.add_paragraph().add_run(line["text"])
-        if index == 0:
-            run.bold = True
-            run.font.size = Pt(16)
+    page = doc.sections[0]
+    page.page_width, page.page_height = Inches(8.27), Inches(11.69)  # A4
+    page.left_margin = page.right_margin = Inches(0.7)
+    page.top_margin = page.bottom_margin = Inches(0.6)
+    text_width = page.page_width - page.left_margin - page.right_margin
+
+    normal = doc.styles["Normal"]
+    normal.font.name = "Times New Roman"
+    normal.font.size = Pt(11)
+    normal.element.rPr.rFonts.set(qn("w:eastAsia"), "Times New Roman")
+    normal.paragraph_format.space_after = Pt(0)
+    normal.paragraph_format.line_spacing = 1.08
+
+    def para(style: str | None = None, *, before: float = 0, align: Any = None):
+        p = doc.add_paragraph(style=style)
+        p.paragraph_format.space_before = Pt(before)
+        p.paragraph_format.space_after = Pt(0)
+        if align is not None:
+            p.alignment = align
+        return p
+
+    def run(p: Any, text: str, *, bold: bool = False, italic: bool = False, size: float | None = None):
+        r = p.add_run(text)
+        r.bold, r.italic = bold or None, italic or None
+        if size:
+            r.font.size = Pt(size)
+        return r
 
     def heading(title: str) -> None:
-        run = doc.add_paragraph().add_run(title.upper())
-        run.bold = True
+        p = para(before=10)
+        p.paragraph_format.space_after = Pt(3)
+        p.paragraph_format.keep_with_next = True
+        r = run(p, title, bold=True, size=12)
+        r.font.all_caps = True
+        border = OxmlElement("w:pBdr")
+        bottom = OxmlElement("w:bottom")
+        for key, value in (("w:val", "single"), ("w:sz", "6"), ("w:space", "1"), ("w:color", "000000")):
+            bottom.set(qn(key), value)
+        border.append(bottom)
+        p._p.get_or_add_pPr().append(border)
+
+    def labelled(p: Any, text: str) -> None:
+        label, _, rest = text.partition(":")
+        run(p, f"{label}:", bold=True)
+        run(p, rest)
+
+    def line_paragraph(line: dict[str, Any]) -> None:
+        kind, text = line.get("kind", "bullet"), line["text"]
+        if kind == "entry":
+            p = para(before=4)
+            p.paragraph_format.keep_with_next = True
+            p.paragraph_format.tab_stops.add_tab_stop(text_width, WD_TAB_ALIGNMENT.RIGHT)
+            date = line.get("date")
+            title = _without_date(text, date) if date else text
+            run(p, title, bold=True)
+            if date and title != text:
+                run(p, f"\t{date}")
+        elif kind in ("role", "tech"):
+            run(para(), text, italic=True, bold=kind == "tech")
+        elif kind == "label":
+            labelled(para(), text)
+        elif kind == "bullet":
+            p = para("List Bullet")
+            p.paragraph_format.left_indent = Inches(0.35)
+            run(p, text)
+        else:
+            p = para(align=WD_ALIGN_PARAGRAPH.JUSTIFY)
+            run(p, text)
+
+    header = merge_wrapped(document["header"])
+    name = next((line for line in header if line.get("kind") == "name"), header[0] if header else None)
+    if name:
+        run(para(align=WD_ALIGN_PARAGRAPH.CENTER), name["text"], bold=True, size=18).font.all_caps = True
+    contacts = [line["text"] for line in header if line is not name and line.get("kind", "contact") == "contact"]
+    if contacts:
+        run(para(align=WD_ALIGN_PARAGRAPH.CENTER, before=2), " | ".join(contacts), size=10.5)
+    for line in header:
+        if line is not name and line.get("kind") == "text":
+            run(para(align=WD_ALIGN_PARAGRAPH.JUSTIFY, before=6), line["text"])
 
     for section in document["sections"]:
         heading(section["title"])
-        for line in section["lines"]:
-            doc.add_paragraph(line["text"], style="List Bullet")
+        for line in merge_wrapped(section["lines"]):
+            line_paragraph(line)
     if document["developing_skills"]:
-        heading(developing_title)
+        heading(developing_title or DEVELOPING_TITLES.get(document.get("lang", "vi"), DEVELOPING_TITLES["vi"]))
         for skill in document["developing_skills"]:
-            doc.add_paragraph(f"{skill['name']}: {skill['note']}", style="List Bullet")
+            labelled(para(), f"{skill['name']}: {skill['note']}")
 
     buffer = io.BytesIO()
     doc.save(buffer)
     return buffer.getvalue()
+
+
+def _without_date(text: str, date: str) -> str:
+    """Tên của dòng entry: bỏ phần thời gian (ở cuối hoặc đầu dòng) cùng dấu ngăn."""
+    at = text.rfind(date)
+    if at < 0:
+        return text
+    title = (text[:at] + text[at + len(date) :]).strip(" \t|,–—-:")
+    # "(2022 – 2024)" → bỏ cả cặp ngoặc quanh thời gian
+    title = title.removesuffix("(").removeprefix(")").replace("()", "").strip(" \t|,–—-:")
+    return title or text
+
+
+# Ảnh trang PDF để xem CV ngay trong app (không dùng trình xem PDF của trình duyệt): ~150 dpi với khổ A4
+PAGE_IMAGE_WIDTH = 1240
+MAX_PREVIEW_PAGES = 10
+
+
+def pdf_page_count(path: Path) -> int:
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(path)
+    try:
+        return len(pdf)
+    finally:
+        pdf.close()
+
+
+def render_pdf_page(path: Path, page: int) -> bytes:
+    """Ảnh PNG của trang `page` (đếm từ 1), rộng PAGE_IMAGE_WIDTH px."""
+    import pypdfium2 as pdfium
+
+    pdf = pdfium.PdfDocument(path)
+    try:
+        if not 1 <= page <= min(len(pdf), MAX_PREVIEW_PAGES):
+            raise AppError(404, "Không có trang này trong CV.", "cv_page_not_found")
+        sheet = pdf[page - 1]
+        image = sheet.render(scale=PAGE_IMAGE_WIDTH / sheet.get_width()).to_pil()
+        buffer = io.BytesIO()
+        image.save(buffer, format="PNG", optimize=True)
+        return buffer.getvalue()
+    finally:
+        pdf.close()
 
 
 def stored_path(owner_id: str, cv_id: str, file_type: str) -> Path:

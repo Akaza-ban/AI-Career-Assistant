@@ -21,6 +21,9 @@ from sqlalchemy.orm import Session
 from src.api.errors import AppError
 from src.db.models import CvEditAudit, CvExport, CvOptimization, CvVersion, GapAnalysis, JobDescription, User
 from src.services import cv_files, cv_versions, llm
+from src.services.cv_layout import SECTION_LABELS_EN, cv_language, layout_lines
+from src.services.fit_summary import entry_title
+from src.services.roadmap import get_roadmap_info
 from src.services.skill_matching import (
     BULLET_PREFIX,
     IMPORTANCE_LABELS,
@@ -34,6 +37,10 @@ from src.services.skill_matching import (
 MAX_EDIT_CHARS = 600
 MAX_CONTEXT_CHARS = 500
 MAX_LEARNING_NOTE_CHARS = 120
+# Câu AI viết từ kinh nghiệm SV kể (kỹ năng còn thiếu, chọn "Có, đã dùng")
+MAX_SKILL_LINE_CHARS = 300
+# Mục có thể chèn câu kinh nghiệm mới
+ENTRY_BLOCKS = ("projects", "experience", "activities")
 IMPORTANCE_ORDER = {"required": 0, "preferred": 1, "additional": 2}
 STATUS_OF_ACTION = {"accept": "accepted", "edit": "edited", "reject": "rejected"}
 DEVELOPING_TITLE = "Kỹ năng đang phát triển"
@@ -43,43 +50,89 @@ DEVELOPING_TITLE = "Kỹ năng đang phát triển"
 
 
 def cv_document(cv: CvVersion) -> dict[str, Any]:
-    """Tách văn bản CV thành phần đầu (họ tên, liên hệ) và các mục; mỗi dòng giữ số dòng như lúc phân tích."""
+    """
+    Tách văn bản CV thành phần đầu (họ tên, liên hệ) và các mục; mỗi dòng giữ số dòng như lúc phân tích
+    và mang loại dòng (kind, date, cont) để trình bày theo mẫu CV (src/services/cv_layout.py).
+    """
     header: list[dict[str, Any]] = []
     sections: list[dict[str, Any]] = []
     current: dict[str, Any] | None = None
     current_key = "header"
-    for line in split_cv_lines(cv.content_text):
-        item = {"id": f"l{line['line_no']}", "line_no": line["line_no"], "text": line["text"]}
+    lines = split_cv_lines(cv.content_text)
+    layout = layout_lines(cv.content_text)
+    lang = cv_language(cv.content_text, lines)
+    labels = SECTION_LABELS_EN if lang == "en" else SECTION_LABELS
+    for line in lines:
+        item = {
+            "id": f"l{line['line_no']}",
+            "line_no": line["line_no"],
+            "text": line["text"],
+            **layout[line["line_no"]],
+        }
         if line["is_heading"]:
             current = {"id": f"s{line['line_no']}", "title": line["text"], "lines": []}
             sections.append(current)
             current_key = line["block"]
         elif line["block"] == "header":
-            header.append(item)
+            if item["kind"] != "heading":
+                header.append(item)
         else:
             # Mục viết cùng dòng với nội dung ("Kỹ năng: Python, SQL") không có dòng tiêu đề riêng
             if current is None or line["block"] != current_key:
-                title = SECTION_LABELS.get(line["block"], line["block"])
+                title = labels.get(line["block"], line["block"])
                 current = {"id": f"s{line['line_no']}", "title": title, "lines": []}
                 sections.append(current)
                 current_key = line["block"]
             current["lines"].append(item)
-    return {"header": header, "sections": sections, "developing_skills": cv.developing_skills or []}
+    return {"header": header, "sections": sections, "developing_skills": cv.developing_skills or [], "lang": lang}
 
 
-def apply_changes(text: str, replacements: dict[int, str]) -> str:
-    """Thay các dòng theo số dòng (đếm như split_cv_lines), giữ nguyên ký tự đầu dòng và các dòng còn lại."""
+def apply_changes(text: str, replacements: dict[int, str], insertions: dict[int, list[str]] | None = None) -> str:
+    """
+    Thay các dòng theo số dòng (đếm như split_cv_lines), giữ nguyên ký tự đầu dòng và các dòng còn lại.
+    insertions: thêm dòng mới ngay sau một dòng (câu kinh nghiệm SV xác nhận), cùng ký tự đầu dòng với dòng đó.
+    """
+    insertions = insertions or {}
     out: list[str] = []
     line_no = 0
     for raw in text.splitlines():
-        if strip_bullet(raw):
-            line_no += 1
-            if line_no in replacements:
-                prefix = BULLET_PREFIX.match(raw)
-                out.append((prefix.group(0) if prefix else "") + replacements[line_no])
-                continue
-        out.append(raw)
+        if not strip_bullet(raw):
+            out.append(raw)
+            continue
+        line_no += 1
+        prefix = BULLET_PREFIX.match(raw)
+        out.append((prefix.group(0) if prefix else "") + replacements[line_no] if line_no in replacements else raw)
+        # Câu mới theo đúng kiểu đầu dòng của dòng phía trên (có gạch đầu dòng hay không)
+        out.extend((prefix.group(0) if prefix else "") + extra for extra in insertions.get(line_no, []))
     return "\n".join(out)
+
+
+def cv_entries(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """
+    Chỗ có thể thêm câu kinh nghiệm mới: từng dự án / công việc (dòng tiêu đề có ngày tháng) trong các mục Dự án,
+    Kinh nghiệm, Hoạt động; mục không có dòng tiêu đề như vậy thì thêm vào cuối mục. after_line_no = dòng cuối của
+    phần đó (câu mới chèn ngay sau).
+    """
+    entries: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for line in lines:
+        block = line.get("block")
+        if line["is_heading"] or block not in ENTRY_BLOCKS:
+            current = None
+            continue
+        title = entry_title(line["text"]) if line["section"] == block else None
+        if title or current is None or current["block"] != block:
+            label = SECTION_LABELS.get(block, block)
+            current = {
+                "id": f"l{line['line_no']}",
+                "label": f"{label} · {title}" if title else f"{label} (cuối mục)",
+                "block": block,
+                "after_line_no": line["line_no"],
+            }
+            entries.append(current)
+        else:
+            current["after_line_no"] = line["line_no"]
+    return entries
 
 
 def _optimized_file_name(file_name: str, version_label: str) -> str:
@@ -217,7 +270,14 @@ def _check_out(requirement: dict[str, Any], jd: JobDescription, answer: dict[str
     if answer:
         status = "has_experience" if answer["has_experience"] else "no_experience"
     level = IMPORTANCE_LABELS.get(requirement["importance"], "").lower()
+    roadmap = get_roadmap_info(requirement["skill"])
+    decision = (answer or {}).get("decision")
     return {
+        "entry_id": (answer or {}).get("entry_id"),
+        "draft_text": (answer or {}).get("draft_text"),
+        "final_text": (answer or {}).get("final_text"),
+        "line_status": {"accept": "accepted", "edit": "edited", "reject": "rejected"}.get(decision or "", "pending"),
+        "roadmap_url": roadmap["roadmap_url"] if roadmap["is_it_supported"] else None,
         "id": requirement["id"],
         "skill": requirement["skill"],
         "importance": requirement["importance"],
@@ -298,6 +358,9 @@ def session(db: Session, user: User, analysis_id: str) -> dict[str, Any]:
             for s in _with_context(_suggestions(analysis, lines), optimization)
         ],
         "capability_checks": [_check_out(r, jd, answers.get(r["id"])) for r in _missing(analysis)],
+        "entries": [
+            {"id": e["id"], "label": e["label"], "after_line_id": f"l{e['after_line_no']}"} for e in cv_entries(lines)
+        ],
         "finalized_at": optimization.finalized_at,
     }
 
@@ -403,6 +466,135 @@ def answer_check(
     db.commit()
 
 
+def _line_from_context(context: str) -> str:
+    """Không có AI: câu SV kể (bỏ khoảng trắng thừa, viết hoa chữ đầu, có dấu chấm), cắt gọn nếu quá dài."""
+    text = " ".join(context.split())[:MAX_SKILL_LINE_CHARS].rstrip(" ,;")
+    text = text[:1].upper() + text[1:]
+    return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+async def _line_with_llm(skill: str, context: str, entry_label: str, sample: list[str], lang: str = "vi") -> str | None:
+    """Câu CV viết từ đúng lời SV kể; trả None nếu câu thêm số / không nhắc kỹ năng / quá dài (dùng câu của SV)."""
+    examples = "\n".join(f"- {line}" for line in sample[:4]) or "- (chưa có)"
+    prompt = (
+        "Bạn viết MỘT gạch đầu dòng cho CV của sinh viên, đặt trong phần: " + entry_label + ".\n"
+        f"Kỹ năng cần thể hiện: {skill}\n"
+        f"Sinh viên kể: {context}\n"
+        f"Các gạch đầu dòng hiện có trong CV (để viết cùng giọng văn, cùng ngôn ngữ):\n{examples}\n\n"
+        "Quy tắc: CHỈ dùng thông tin sinh viên kể; không thêm số liệu, công cụ, thành tích hay quy mô không có trong lời "
+        "kể. Bắt đầu bằng động từ, nêu rõ đã dùng kỹ năng để làm gì, kết quả nếu sinh viên có nói. "
+        f'Tối đa khoảng 35 từ, phải nhắc tên kỹ năng {skill}. Không dùng ngôi "tôi", "em", "mình".\n'
+        # CV tiếng Anh thì câu mới cũng bằng tiếng Anh, dù SV kể bằng tiếng Việt
+        f"Viết bằng {'tiếng Anh' if lang == 'en' else 'tiếng Việt'}, cùng ngôn ngữ với CV.\n"
+        'Trả về JSON: {"text": "<câu cho CV>"}'
+    )
+    try:
+        data = await llm.invoke_json(prompt, temperature=0.0, timeout=30.0)
+    except Exception:
+        return None
+    text = " ".join(str(data.get("text", "")).split()).lstrip("-•* ").strip()
+    if not text or len(text) > MAX_SKILL_LINE_CHARS or _PLACEHOLDER.search(text):
+        return None
+    # Chống bịa: số trong câu phải có trong lời kể; câu phải nói tới đúng kỹ năng
+    allowed = set(re.findall(r"\d+", context))
+    if any(n not in allowed for n in re.findall(r"\d+", text)) or not contains_term(skill, text):
+        return None
+    # Cùng cách kết câu với các dòng khác trong mục
+    if sample and sum(line.endswith(".") for line in sample) * 2 > len(sample) and not text.endswith((".", "!", "?")):
+        text += "."
+    return text
+
+
+async def draft_capability_line(
+    db: Session, user: User, analysis_id: str, requirement_id: str, context: str, entry_id: str, now: datetime
+) -> None:
+    """SV chọn "Có, đã dùng", kể kinh nghiệm và chọn chỗ thêm: AI viết thành một câu cho CV để SV duyệt."""
+    analysis, cv, optimization = _load(db, user, analysis_id)
+    _require_draft(optimization)
+    requirement = next((r for r in _missing(analysis) if r["id"] == requirement_id), None)
+    if requirement is None:
+        raise AppError(404, "Không tìm thấy kỹ năng cần xác nhận.", "check_not_found")
+    text = " ".join(context.split())
+    if not text:
+        raise AppError(422, "Hãy kể ngắn bạn đã dùng kỹ năng này ở đâu, làm những gì.", "context_required")
+    if len(text) > MAX_CONTEXT_CHARS:
+        raise AppError(422, f"Mô tả kinh nghiệm tối đa {MAX_CONTEXT_CHARS} ký tự.", "context_too_long")
+    lines = split_cv_lines(cv.content_text)
+    entry = next((e for e in cv_entries(lines) if e["id"] == entry_id), None)
+    if entry is None:
+        raise AppError(422, "Hãy chọn phần của CV để thêm câu này.", "entry_required")
+    sample = [x["text"] for x in lines if x["block"] == entry["block"] and x["section"] == entry["block"]]
+    lang = cv_language(cv.content_text, lines)
+    drafted = (
+        await _line_with_llm(requirement["skill"], text, entry["label"], sample, lang) if llm.llm_configured() else None
+    )
+    answers = dict(optimization.capability_answers or {})
+    answers[requirement_id] = {
+        "has_experience": True,
+        "context": text,
+        "learning_note": None,
+        "entry_id": entry_id,
+        "draft_text": drafted or _line_from_context(text),
+        "draft_source": "ai" if drafted else "student",
+        "decision": None,
+        "final_text": None,
+        "answered_at": now.isoformat(),
+    }
+    optimization.capability_answers = answers
+    db.commit()
+
+
+def decide_capability_line(
+    db: Session,
+    user: User,
+    analysis_id: str,
+    requirement_id: str,
+    decision: str,
+    edited_text: str | None,
+    now: datetime,
+) -> None:
+    """Áp dụng / sửa / bỏ qua câu kinh nghiệm cho kỹ năng còn thiếu, hoặc hoàn tác; ghi Audit Trail như gợi ý AI."""
+    analysis, cv, optimization = _load(db, user, analysis_id)
+    _require_draft(optimization)
+    answers = dict(optimization.capability_answers or {})
+    answer = answers.get(requirement_id)
+    if not answer or not answer.get("draft_text"):
+        raise AppError(404, "Chưa có câu đề xuất cho kỹ năng này.", "draft_not_found")
+    if decision == "edit":
+        final = " ".join((edited_text or "").split())
+        if not final:
+            raise AppError(422, "Hãy nhập nội dung chỉnh sửa.", "edited_text_required")
+        if len(final) > MAX_EDIT_CHARS:
+            raise AppError(422, f"Nội dung chỉnh sửa tối đa {MAX_EDIT_CHARS} ký tự.", "edited_text_too_long")
+    else:
+        final = answer["draft_text"] if decision == "accept" else None
+    answers[requirement_id] = {
+        **answer,
+        "decision": None if decision == "undo" else decision,
+        "final_text": final if decision in ("accept", "edit") else None,
+    }
+    optimization.capability_answers = answers
+    entry = next((e for e in cv_entries(split_cv_lines(cv.content_text)) if e["id"] == answer.get("entry_id")), None)
+    db.add(
+        CvEditAudit(
+            id=f"au_{uuid.uuid4().hex[:12]}",
+            owner_id=user.id,
+            analysis_id=analysis.id,
+            suggestion_id=f"cap:{requirement_id}",
+            cv_version_id=cv.id,
+            original_content="",
+            ai_suggestion=answer["draft_text"],
+            evidence_line_no=entry["after_line_no"] if entry else 0,
+            evidence_text=answer.get("context") or "",
+            reason="Kỹ năng JD cần, SV xác nhận đã có kinh nghiệm (câu thêm mới vào CV)",
+            action=decision,
+            final_content=final or "",
+            created_at=now,
+        )
+    )
+    db.commit()
+
+
 def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
     """Tạo một phiên bản CV mới từ bản nháp (câu đã chấp nhận / sửa tay, kỹ năng đang học) rồi khoá phiên."""
     analysis, cv, optimization = _load(db, user, analysis_id)
@@ -420,7 +612,13 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
         for rid, a in (optimization.capability_answers or {}).items()
         if rid in missing and not a["has_experience"] and a.get("learning_note")
     ]
-    if not replacements and not learning:
+    entries = {e["id"]: e for e in cv_entries(split_cv_lines(cv.content_text))}
+    insertions: dict[int, list[str]] = {}
+    for rid, a in (optimization.capability_answers or {}).items():
+        entry = entries.get(a.get("entry_id") or "")
+        if rid in missing and a.get("final_text") and entry:
+            insertions.setdefault(entry["after_line_no"], []).append(a["final_text"])
+    if not replacements and not learning and not insertions:
         raise AppError(
             422,
             "Chưa có thay đổi nào để lưu. Hãy áp dụng ít nhất một gợi ý hoặc ghi một kỹ năng bạn đang học.",
@@ -435,7 +633,7 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
         file_type="docx",
         size_bytes=0,
         page_count=None,
-        content_text=apply_changes(cv.content_text, replacements),
+        content_text=apply_changes(cv.content_text, replacements, insertions),
         origin="optimized",
         is_active=False,
         is_draft=False,
@@ -445,7 +643,7 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
     )
     cv_versions.append(db, cv, new_cv, new_major=False)
     new_cv.file_name = _optimized_file_name(cv.file_name, cv_versions.label(new_cv))
-    data = cv_files.build_docx(cv_document(new_cv), DEVELOPING_TITLE)
+    data = cv_files.build_docx(cv_document(new_cv))
     new_cv.size_bytes = len(data)
     cv_files.save_file(user.id, new_cv.id, "docx", data)
     db.add(new_cv)
@@ -470,6 +668,26 @@ def record_export(db: Session, user: User, cv: CvVersion, format_: str, integrit
     db.add(export)
     db.commit()
     return export
+
+
+def cv_preview(cv: CvVersion) -> dict[str, Any]:
+    """Xem CV trong app: PDF gốc còn file → ảnh từng trang; còn lại (DOCX, bản đã tối ưu) → nội dung theo mẫu CV."""
+    path = cv_files.stored_path(cv.owner_id, cv.id, cv.file_type)
+    if cv.file_type == "pdf" and path.exists():
+        try:
+            pages = cv_files.pdf_page_count(path)
+        except Exception:
+            pages = 0
+        if pages:
+            return {"kind": "pages", "page_count": min(pages, cv_files.MAX_PREVIEW_PAGES)}
+    return {"kind": "document", "document": cv_document(cv)}
+
+
+def page_image(cv: CvVersion, page: int) -> bytes:
+    path = cv_files.stored_path(cv.owner_id, cv.id, cv.file_type)
+    if cv.file_type != "pdf" or not path.exists():
+        raise AppError(404, "Không tìm thấy file gốc của CV này.", "cv_file_missing")
+    return cv_files.render_pdf_page(path, page)
 
 
 def display_text(cv: CvVersion) -> str:

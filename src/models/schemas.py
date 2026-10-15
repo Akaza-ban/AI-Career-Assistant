@@ -464,6 +464,13 @@ class CvDocLine(BaseModel):
     id: str = Field(..., description="Mã dòng, dạng 'l{line_no}'")
     line_no: int = Field(..., description="Số dòng trong CV (đếm các dòng không rỗng), khớp Evidence.line_no")
     text: str
+    kind: Literal["name", "contact", "text", "entry", "role", "tech", "label", "bullet"] = Field(
+        default="bullet", description="Cách trình bày dòng trong mẫu CV (src/services/cv_layout.py)"
+    )
+    date: str | None = Field(default=None, description="Thời gian của dòng entry, căn phải; tên là phần còn lại")
+    cont: bool = Field(
+        default=False, description="Nửa sau của câu bị xuống dòng khi trích PDF/OCR, ghép vào dòng trước"
+    )
 
 
 class CvDocSection(BaseModel):
@@ -478,6 +485,18 @@ class CvDocument(BaseModel):
     header: list[CvDocLine] = Field(default_factory=list, description="Các dòng trước mục đầu tiên (họ tên, liên hệ)")
     sections: list[CvDocSection] = Field(default_factory=list)
     developing_skills: list[DevelopingSkill] = Field(default_factory=list)
+    lang: Literal["vi", "en"] = Field(default="vi", description="Ngôn ngữ CV, đặt tiêu đề mục do hệ thống thêm")
+
+
+class CvPreviewResponse(BaseModel):
+    """
+    Cách xem một phiên bản CV: "pages" = PDF gốc, tải từng trang dạng ảnh (GET .../pages/{n});
+    "document" = DOCX / bản đã tối ưu, trình bày theo mẫu CV (giống trang Xuất CV và file DOCX).
+    """
+
+    kind: Literal["pages", "document"]
+    page_count: int | None = Field(default=None, description="Số trang hiển thị (kind = pages)")
+    document: CvDocument | None = None
 
 
 class EvidenceSpan(BaseModel):
@@ -521,6 +540,19 @@ class CapabilityCheck(BaseModel):
     status: Literal["pending", "has_experience", "no_experience"]
     context: str | None = Field(default=None, description="Mô tả kinh nghiệm SV cung cấp khi chọn 'đã có'")
     learning_note: str | None = Field(default=None, description="Ghi chú đang học khi chọn 'chưa có'")
+    entry_id: str | None = Field(default=None, description="Phần CV sẽ thêm câu kinh nghiệm (một mục trong entries)")
+    draft_text: str | None = Field(default=None, description="Câu cho CV viết từ lời kể của SV, chờ SV duyệt")
+    final_text: str | None = Field(default=None, description="Câu sẽ thêm vào CV khi Hoàn tất (đã áp dụng / sửa)")
+    line_status: Literal["pending", "accepted", "edited", "rejected"] = "pending"
+    roadmap_url: str | None = Field(default=None, description="Lộ trình học trên roadmap.sh (kỹ năng CNTT)")
+
+
+class CvEntry(BaseModel):
+    """Một chỗ có thể thêm câu kinh nghiệm mới: dự án / công việc trong CV, hoặc cuối một mục."""
+
+    id: str
+    label: str
+    after_line_id: str = Field(..., description="Câu mới chèn ngay sau dòng này (id dòng trong document)")
 
 
 class OptimizerSessionResponse(BaseModel):
@@ -543,6 +575,7 @@ class OptimizerSessionResponse(BaseModel):
     )
     suggestions: list[OptimizerSuggestion]
     capability_checks: list[CapabilityCheck]
+    entries: list[CvEntry] = Field(default_factory=list, description="Chỗ có thể thêm câu kinh nghiệm mới")
     finalized_at: UtcDatetime | None = None
 
 
@@ -551,6 +584,16 @@ class SuggestionDecisionRequest(BaseModel):
 
     decision: Literal["accept", "edit", "reject", "undo"]
     edited_text: str | None = None
+
+
+class CapabilityDraftRequest(BaseModel):
+    context: str = Field(..., description="SV kể đã dùng kỹ năng ở đâu, làm những gì")
+    entry_id: str = Field(..., description="Phần CV sẽ thêm câu (id trong entries)")
+
+
+class CapabilityLineDecisionRequest(BaseModel):
+    decision: Literal["accept", "edit", "reject", "undo"]
+    edited_text: str | None = Field(default=None, description="Bắt buộc khi decision = edit")
 
 
 class CapabilityAnswerRequest(BaseModel):

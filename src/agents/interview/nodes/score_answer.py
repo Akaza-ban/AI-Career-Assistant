@@ -38,6 +38,13 @@ class STARScoreOutput(BaseModel):
         except (ValueError, TypeError):
             return 3.0
 
+    @field_validator("feedback_text")
+    @classmethod
+    def plain_feedback(cls, v: str) -> str:
+        """Nhận xét hiển thị dạng văn bản thường: bỏ markdown (**, `), giữ xuống dòng giữa các phần."""
+        lines = (" ".join(re.sub(r"\*\*|__|`", "", line).split()).lstrip("-• ") for line in v.splitlines())
+        return "\n".join(line for line in lines if line)
+
 
 def evaluate_answer_fallback(
     user_answer: str,
@@ -75,15 +82,24 @@ def evaluate_answer_fallback(
     result_matches = sum(1 for k in result_keywords if k in ans_lower)
     result_score = min(5.0, 2.0 + (1.5 if has_numbers else 0.5) + (0.5 * result_matches))
 
-    feedback = (
-        f"Đánh giá sơ bộ vòng {current_round}/{total_rounds} cho vị trí {job_role}: "
-        f"Câu trả lời dài {word_count} từ. "
-        + (
-            "Bạn đã nêu được các con số minh chứng định lượng. "
-            if has_numbers
-            else "Nên bổ sung thêm số liệu cụ thể (%) để làm nổi bật kết quả (Result). "
-        )
-        + "Cần nhấn mạnh rõ hơn các hành động kỹ thuật cá nhân (Action) đã thực hiện để giải quyết bài toán."
+    # Cùng 3 phần như nhận xét của AI: Điểm tốt / Cần cải thiện / Gợi ý trả lời
+    feedback = "\n".join(
+        [
+            "Điểm tốt: "
+            + (
+                "Bạn đã nêu được con số minh chứng cho kết quả."
+                if has_numbers
+                else f"Câu trả lời có {word_count} từ, đã nêu được trải nghiệm liên quan tới vị trí {job_role}."
+            ),
+            "Cần cải thiện: "
+            + (
+                "Làm rõ hơn những việc chính bạn trực tiếp làm (Hành động)."
+                if has_numbers
+                else "Phần Kết quả còn thiếu số liệu cụ thể."
+            ),
+            "Gợi ý trả lời: Nói rõ vai trò của riêng bạn, các bước đã làm theo thứ tự và một con số thật cho kết quả "
+            "(thời gian, %, số người dùng).",
+        ]
     )
 
     next_q = None
@@ -155,6 +171,13 @@ async def score_answer_with_llm(
         "2. task_score (0.0 - 5.0): Trách nhiệm cá nhân và mục tiêu cần giải quyết có rành mạch không?\n"
         "3. action_score (0.0 - 5.0): Các giải pháp kỹ thuật, công nghệ đã sử dụng và tư duy xử lý có chi tiết không?\n"
         "4. result_score (0.0 - 5.0): Kết quả đạt được có đo lường được bằng số liệu định lượng (%, ms, throughput) không?\n\n"
+        "=== YÊU CẦU NHẬN XÉT (feedback_text) ===\n"
+        "Viết bằng tiếng Việt, văn bản thường (KHÔNG markdown: không **, không `, không gạch đầu dòng), "
+        "tối đa khoảng 120 từ, đúng 3 dòng ngăn bằng ký tự xuống dòng \\n, mỗi dòng bắt đầu bằng nhãn sau:\n"
+        "Điểm tốt: <điều ứng viên đã làm tốt, cụ thể theo câu trả lời>\n"
+        "Cần cải thiện: <phần STAR còn thiếu hoặc yếu nhất, nói rõ thiếu gì>\n"
+        "Gợi ý trả lời: <2–3 ý cụ thể nên kể thêm cho ĐÚNG câu hỏi này, ví dụ vai trò cá nhân, "
+        "các bước đã làm, kết quả đo được; chỉ gợi ý, không bịa sự việc thay ứng viên>\n\n"
         "=== YÊU CẦU CÂU HỎI TIẾP THEO ===\n"
         + (
             "Đây là vòng cuối cùng (Vòng kết thúc), trường 'next_question' BẮT BUỘC là null.\n"
@@ -167,7 +190,7 @@ async def score_answer_with_llm(
         '  "task_score": 3.5,\n'
         '  "action_score": 4.5,\n'
         '  "result_score": 3.0,\n'
-        '  "feedback_text": "Nhận xét chi tiết điểm mạnh và điểm cần cải thiện theo từng tiêu chí STAR...",\n'
+        '  "feedback_text": "Điểm tốt: ...\\nCần cải thiện: ...\\nGợi ý trả lời: ...",\n'
         f'  "next_question": {example_next_q}\n'
         "}"
     )

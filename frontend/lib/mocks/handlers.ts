@@ -63,6 +63,9 @@ import type {
   AppNotification,
   AssignedStudent,
   CapabilityAnswerRequest,
+  CvEntry,
+  CapabilityLineDecisionRequest,
+  CapabilityDraftRequest,
   CapabilityCheck,
   ChangePasswordRequest,
   UpdateProfileRequest,
@@ -121,7 +124,7 @@ import type {
 import { COMPARE_MAX_JDS, COMPARE_MIN_JDS, JD_MIN_WORDS } from "@/lib/types"
 import { ApiError } from "@/lib/api-error"
 import { MOCK_SCENARIO } from "@/lib/config"
-import { withRoadmap } from "@/lib/mocks/roadmap"
+import { roadmapUrlOf, withRoadmap } from "@/lib/mocks/roadmap"
 
 const delay = (ms = 400) => new Promise((resolve) => setTimeout(resolve, ms))
 const clone = <T>(value: T): T => structuredClone(value)
@@ -229,7 +232,18 @@ interface MockOptimization {
   /** Quyết định hiện tại theo mã gợi ý (bản nháp). */
   decisions: Record<string, { action: "accept" | "edit" | "reject"; final_text: string }>
   /** Trả lời kiểm tra kỹ năng thiếu theo mã yêu cầu JD. */
-  answers: Record<string, { has_experience: boolean; context: string | null; learning_note: string | null }>
+  answers: Record<
+    string,
+    {
+      has_experience: boolean
+      context: string | null
+      learning_note: string | null
+      entry_id?: string
+      draft_text?: string
+      decision?: "accept" | "edit" | "reject"
+      final_text?: string | null
+    }
+  >
   /** US-SV-03 AC2 (chỉ có ở mock): ngữ cảnh SV bổ sung theo mã gợi ý. */
   contexts: Record<string, string>
   result_cv_id: string | null
@@ -669,6 +683,21 @@ function missingRequirements(analysis: GapAnalysis) {
     .sort((a, b) => IMPORTANCE_ORDER[a.importance] - IMPORTANCE_ORDER[b.importance])
 }
 
+/** Như cv_entries ở backend: dự án / công việc (dòng có tháng/năm) trong mục Kinh nghiệm, Dự án, Hoạt động. */
+function mockEntries(): CvEntry[] {
+  const entries: CvEntry[] = []
+  for (const section of mockCvDocument.sections) {
+    if (!/kinh nghiệm|dự án|hoạt động/i.test(section.title)) continue
+    const label = section.title.charAt(0) + section.title.slice(1).toLocaleLowerCase("vi")
+    for (const line of section.lines) {
+      const title = /\d{2}\/\d{4}/.test(line.text) ? line.text.replace(/\s*\(?\d{2}\/\d{4}.*$/, "").trim() : null
+      if (title || entries.length === 0) entries.push({ id: line.id, label: `${label} · ${title ?? "cuối mục"}`, after_line_id: line.id })
+      else entries[entries.length - 1].after_line_id = line.id
+    }
+  }
+  return entries
+}
+
 function optimizerView(analysisId: string): OptimizerSession {
   const { analysis, cv, opt } = optimizerAnalysis(analysisId)
   const suggestions: Suggestion[] = mockSuggestions.map((base) => {
@@ -694,6 +723,11 @@ function optimizerView(analysisId: string): OptimizerSession {
       status: a ? (a.has_experience ? "has_experience" : "no_experience") : "pending",
       context: a?.context ?? null,
       learning_note: a?.learning_note ?? null,
+      entry_id: a?.entry_id ?? null,
+      draft_text: a?.draft_text ?? null,
+      final_text: a?.final_text ?? null,
+      line_status: a?.decision ? ({ accept: "accepted", edit: "edited", reject: "rejected" } as const)[a.decision] : "pending",
+      roadmap_url: roadmapUrlOf(r.skill),
     } satisfies CapabilityCheck
   })
   const resultCv = opt.result_cv_id ? (cvVersions.find((c) => c.id === opt.result_cv_id) ?? null) : null
@@ -711,6 +745,7 @@ function optimizerView(analysisId: string): OptimizerSession {
     result_document: resultCv ? opt.result_document : null,
     suggestions,
     capability_checks,
+    entries: mockEntries(),
     finalized_at: opt.finalized_at,
   })
 }
@@ -1349,6 +1384,42 @@ export const mockApi = {
     return optimizerView(analysisId)
   },
 
+  /** Mock: không gọi AI, câu là lời kể của SV làm gọn (thêm tên kỹ năng nếu lời kể chưa nhắc). */
+  async draftCapabilityLine(analysisId: string, id: string, body: CapabilityDraftRequest): Promise<OptimizerSession> {
+    await delay(1200)
+    const { analysis, opt } = optimizerAnalysis(analysisId)
+    requireDraft(opt)
+    const requirement = missingRequirements(analysis).find((r) => r.id === id)
+    if (!requirement) throw new ApiError(404, "Không tìm thấy kỹ năng cần xác nhận.", "check_not_found")
+    const context = body.context.split(/\s+/).filter(Boolean).join(" ")
+    if (!context) throw new ApiError(422, "Hãy kể ngắn bạn đã dùng kỹ năng này ở đâu, làm những gì.", "context_required")
+    if (!mockEntries().some((e) => e.id === body.entry_id)) {
+      throw new ApiError(422, "Hãy chọn phần của CV để thêm câu này.", "entry_required")
+    }
+    let text = context.charAt(0).toLocaleUpperCase("vi") + context.slice(1).replace(/[.\s]+$/, "")
+    if (!text.toLowerCase().includes(requirement.skill.toLowerCase())) text = `Sử dụng ${requirement.skill}: ${text.charAt(0).toLocaleLowerCase("vi")}${text.slice(1)}`
+    opt.answers[id] = { has_experience: true, context, learning_note: null, entry_id: body.entry_id, draft_text: `${text}.` }
+    return optimizerView(analysisId)
+  },
+
+  async decideCapabilityLine(analysisId: string, id: string, body: CapabilityLineDecisionRequest): Promise<OptimizerSession> {
+    await delay(300)
+    const { opt } = optimizerAnalysis(analysisId)
+    requireDraft(opt)
+    const answer = opt.answers[id]
+    if (!answer?.draft_text) throw new ApiError(404, "Chưa có câu đề xuất cho kỹ năng này.", "draft_not_found")
+    if (body.decision === "undo") {
+      opt.answers[id] = { ...answer, decision: undefined, final_text: null }
+    } else if (body.decision === "edit") {
+      const text = (body.edited_text ?? "").split(/\s+/).filter(Boolean).join(" ")
+      if (!text) throw new ApiError(422, "Hãy nhập nội dung chỉnh sửa.", "edited_text_required")
+      opt.answers[id] = { ...answer, decision: "edit", final_text: text }
+    } else {
+      opt.answers[id] = { ...answer, decision: body.decision, final_text: body.decision === "accept" ? answer.draft_text : null }
+    }
+    return optimizerView(analysisId)
+  },
+
   /** "Hoàn tất": thêm đúng một phiên bản mới vào cùng CV (số phụ +1, không ghi đè bản cũ) rồi khoá phiên. */
   async finalizeOptimization(analysisId: string): Promise<OptimizerSession> {
     await delay(700)
@@ -1356,7 +1427,8 @@ export const mockApi = {
     requireDraft(opt)
     const view = optimizerView(analysisId)
     const doc = draftDocument(view)
-    if (!view.suggestions.some((s) => s.final_text !== null) && doc.developing_skills.length === 0) {
+    const added = view.capability_checks.some((c) => c.final_text)
+    if (!view.suggestions.some((s) => s.final_text !== null) && doc.developing_skills.length === 0 && !added) {
       throw new ApiError(
         422,
         "Chưa có thay đổi nào để lưu. Hãy áp dụng ít nhất một gợi ý hoặc ghi một kỹ năng bạn đang học.",
@@ -1473,7 +1545,7 @@ export const mockApi = {
     const text = body.text.trim()
     const blocked =
       text.length < MIN_ANSWER_CHARS
-        ? `Câu trả lời quá ngắn. Hãy trả lời ít nhất ${MIN_ANSWER_CHARS} ký tự theo khung STAR.`
+        ? `Câu trả lời quá ngắn. Hãy trả lời ít nhất ${MIN_ANSWER_CHARS} ký tự.`
         : /(bỏ qua|ignore).{0,20}(hướng dẫn|instruction)|system prompt|đóng vai/i.test(text)
           ? BLOCKED_REASON
           : null
