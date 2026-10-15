@@ -13,8 +13,8 @@ from eval.router.seed import build_seed, write_seed
 
 # Update only in a reviewed benchmark-version PR; changing the manifest alone
 # must not make a modified benchmark pass. Real additions also version this pin.
-HELDOUT_V1_SHA256 = "d4fa196f50cc51dedaa28cb32acabb42d0bdc84109133e57daf696382a6efaa6"
-CONTEXT_V1_SHA256 = "56310912494fb8fb28b63522485aaf486430f350ebe698384aa581e1f6bbe97d"
+FROZEN_HELDOUT_SHA256 = "d4fa196f50cc51dedaa28cb32acabb42d0bdc84109133e57daf696382a6efaa6"
+FROZEN_CONTEXT_SHA256 = "56310912494fb8fb28b63522485aaf486430f350ebe698384aa581e1f6bbe97d"
 
 
 def all_splits() -> dict[str, list[RouterRow]]:
@@ -108,18 +108,18 @@ def test_followups_are_complete_heldout_only_context_fixtures() -> None:
     followups = {row.id: row for row in splits["heldout"] if "followup" in row.tags}
     contexts = load_contexts()
     assert set(contexts) == set(followups)
-    assert len(contexts) == 18
-    assert {len(value.previous_targets) for value in contexts.values()} == {0, 1, 2}
+    assert sum("synthetic" in row.tags for row in followups.values()) == 18
+    assert {len(value.previous_targets) for value in contexts.values()} >= {0, 1, 2}
     for key, row in followups.items():
         if row.label == "navigate":
             assert len(contexts[key].previous_targets) == 1
         else:
             assert row.label == "clarify"
-    assert hashlib.sha256((ROOT / "followup_contexts.json").read_bytes()).hexdigest() == CONTEXT_V1_SHA256
+    assert hashlib.sha256((ROOT / "followup_contexts.json").read_bytes()).hexdigest() == FROZEN_CONTEXT_SHA256
 
 
 def test_frozen_heldout_hash() -> None:
-    assert verify_heldout() == HELDOUT_V1_SHA256
+    assert verify_heldout() == FROZEN_HELDOUT_SHA256
 
 
 def test_integrity_check_detects_mutation(tmp_path: Path) -> None:
@@ -131,8 +131,14 @@ def test_integrity_check_detects_mutation(tmp_path: Path) -> None:
 
 def test_seed_is_reproducible_and_refuses_overwrite(tmp_path: Path) -> None:
     write_seed(tmp_path)
-    for name in ("train.jsonl", "dev.jsonl", "heldout.jsonl", "heldout.sha256", "followup_contexts.json"):
+    for name in ("train.jsonl", "dev.jsonl"):
         assert (tmp_path / name).read_bytes() == (ROOT / name).read_bytes()
+    # Real-data PRs append only heldout. The authored synthetic benchmark and
+    # its contexts stay unchanged; reviewed real additions need not be seeded.
+    heldout = load_rows(ROOT / "heldout.jsonl")
+    assert [row for row in heldout if "synthetic" in row.tags] == load_rows(tmp_path / "heldout.jsonl")
+    actual_contexts = load_contexts()
+    assert {key: actual_contexts[key] for key in load_contexts(tmp_path)} == load_contexts(tmp_path)
     with pytest.raises(FileExistsError, match="overwrite"):
         write_seed(tmp_path)
     assert sum(len(rows) for rows in build_seed()[0].values()) == 420
