@@ -1,0 +1,50 @@
+{
+  "language": {
+    "vi": [
+      "mo",
+      "trang",
+      "toi",
+      "minh",
+      "cua",
+      "di",
+      "o",
+      "dau",
+      "cam",
+      "on",
+      "xin",
+      "chao",
+      "nut",
+      "cach",
+      "huong",
+      "dan",
+      "diem",
+      "qua",
+      "ngay",
+      "phong",
+      "van"
+    ],
+    "en": [
+      "open",
+      "the",
+      "my",
+      "where",
+      "how",
+      "is",
+      "are",
+      "do",
+      "go",
+      "show",
+      "please",
+      "thanks",
+      "thank",
+      "hello",
+      "hi",
+      "it",
+      "score",
+      "status",
+      "yesterday",
+      "latest"
+    ],
+    "vi_characters": "[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]"
+  }
+}

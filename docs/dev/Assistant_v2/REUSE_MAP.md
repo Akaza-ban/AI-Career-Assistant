@@ -198,3 +198,5 @@ claimed, and the missing 100+ real utterances remain a release-evidence gap.
 - **Move:** existing greeting/topic/out-of-scope/injection regexes now live unchanged in `src/services/assistant/resources/guardrails.json`, consumed by the same guard functions. No second injection or greeting engine.
 - **Extract:** `guardrails.is_role_forbidden` preserves the student terms and sharing exception from `AssistantAgent._target_route`.
 - New helper/data files avoid importing the LangGraph, provider and retrieval stack into the offline router; no equivalent lightweight shared module existed.
+
+- **New contracts/text preparation:** `assistant/router/models.py` supplies the seven-route decision, raw navigation/UI slots, semantic chips and trusted prior-card input. Existing qa/action/hybrid models cannot represent these capabilities. `router/text.py` reuses the shared Unicode fold; language stopwords live in packaged JSON. No new dependency.
