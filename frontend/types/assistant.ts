@@ -37,6 +37,10 @@ export interface ChatMessage {
   actions?: AgentAction[]
   sources?: SourceCitation[]
   is_streaming?: boolean
+  run_id?: string | null
+  turn_id?: string
+  interrupted?: boolean
+  intent?: "qa" | "action" | "hybrid"
 }
 
 export interface ClientPageContext {
@@ -51,14 +55,26 @@ export interface ClientPageContext {
 export interface ChatRequestPayload {
   message: string
   conversation_id?: string
+  client_request_id: string
   context: ClientPageContext
 }
 
 export interface ChatResponsePayload {
   conversation_id: string
   turn_id: string
+  run_id?: string
   message: string
   intent: "qa" | "action" | "hybrid"
   actions: AgentAction[]
   sources: SourceCitation[]
+}
+
+export interface AssistantRunPayload {
+  id: string
+  conversation_id: string
+  client_request_id: string
+  route: string
+  status: "running" | "done" | "failed" | "cancelled" | "interrupted"
+  created_at: string
+  updated_at: string
 }

@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api-error"
 import { API_BASE_URL } from "@/lib/config"
-import type { ActionStatus, ChatMessage, ChatRequestPayload, ChatResponsePayload } from "@/types/assistant"
+import type { ActionStatus, AssistantRunPayload, ChatMessage, ChatRequestPayload, ChatResponsePayload } from "@/types/assistant"
 
 export interface AssistantStatusResponse {
   is_live: boolean
@@ -51,7 +51,21 @@ export async function sendMessage(payload: ChatRequestPayload, signal?: AbortSig
     "/chat",
     { method: "POST", body: JSON.stringify(payload), signal },
   )
-  return (await response.json()) as ChatResponsePayload
+  const body = (await response.json()) as ChatResponsePayload | AssistantRunPayload
+  if ("turn_id" in body) return body
+  if (body.status === "done") {
+    const history = await getConversationHistory(body.conversation_id, signal)
+    const answer = history.find((message) => message.sender === "assistant" && message.run_id === body.id)
+    if (answer?.turn_id && answer.intent) {
+      return {
+        conversation_id: body.conversation_id, turn_id: answer.turn_id, run_id: body.id,
+        message: answer.content, intent: answer.intent, sources: answer.sources ?? [], actions: [],
+      }
+    }
+  }
+  throw new ApiError(409, body.status === "running"
+    ? "Lượt trả lời đang chạy. Hãy chờ rồi thử lại."
+    : "Lượt trả lời đã kết thúc. Hãy gửi một tin nhắn mới.", `run_${body.status}`)
 }
 
 export async function getAssistantStatus(signal?: AbortSignal): Promise<AssistantStatusResponse> {
@@ -80,8 +94,9 @@ export async function deleteFeedback(turnId: string): Promise<void> {
   await request(`/feedback/${encodeURIComponent(turnId)}`, { method: "DELETE" })
 }
 
-/** Proposed history route; the current backend does not expose this endpoint yet. */
-export async function getConversationHistory(conversationId: string): Promise<ChatMessage[]> {
-  const response = await request(`/conversations/${encodeURIComponent(conversationId)}/messages`)
+export async function getConversationHistory(conversationId: string, signal?: AbortSignal): Promise<ChatMessage[]> {
+  const response = await request(`/conversations/${encodeURIComponent(conversationId)}/history`, {
+    method: "GET", cache: "no-store", signal,
+  })
   return (await response.json()) as ChatMessage[]
 }

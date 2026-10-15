@@ -105,6 +105,7 @@ function AssistantSession({ children, pathname, userRole }: {
   const [highlight, setHighlight] = useState<{ id: string; selector: string; tooltip?: string; durationMs?: number } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pendingRequest = useRef<AbortController | null>(null)
+  const lastRequestId = useRef<string | null>(null)
 
   const toggleChat = useCallback(() => setIsOpen((open) => !open), [])
   const openChat = useCallback(() => setIsOpen(true), [])
@@ -149,6 +150,7 @@ function AssistantSession({ children, pathname, userRole }: {
   const clearChat = useCallback(() => {
     pendingRequest.current?.abort()
     pendingRequest.current = null
+    lastRequestId.current = null
     runner.reset()
     conversation.set(null)
     setMessages([])
@@ -162,11 +164,13 @@ function AssistantSession({ children, pathname, userRole }: {
     void runner.enqueue([action], true).catch(() => toast.error("Không thể thực hiện hành động tự động."))
   }, [runner])
 
-  const sendMessage = useCallback(async (text: string): Promise<void> => {
+  const sendMessage = useCallback(async (text: string, requestId?: string): Promise<void> => {
     const content = text.trim()
     if (!content || pendingRequest.current || runner.activeAction || runner.isBusy) return
 
     const controller = new AbortController()
+    const clientRequestId = requestId ?? crypto.randomUUID()
+    lastRequestId.current = clientRequestId
     pendingRequest.current = controller
     setIsThinking(true)
     setError(null)
@@ -190,6 +194,7 @@ function AssistantSession({ children, pathname, userRole }: {
       const currentConversationId = conversation.getSnapshot()
       const response = await sendAssistantMessage({
         message: content,
+        client_request_id: clientRequestId,
         ...(currentConversationId ? { conversation_id: currentConversationId } : {}),
         context,
       }, controller.signal)
@@ -221,7 +226,7 @@ function AssistantSession({ children, pathname, userRole }: {
     const last = messages.at(-1)
     if (!last || last.sender !== "user") return
     setMessages((previous) => previous.slice(0, -1))
-    void sendMessage(last.content)
+    void sendMessage(last.content, lastRequestId.current ?? undefined)
   }, [messages, sendMessage])
 
   const highlightSelector = highlight?.selector ?? null
