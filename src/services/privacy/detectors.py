@@ -75,6 +75,47 @@ def _fold(text: str) -> tuple[str, list[int]]:
     return "".join(folded), indices
 
 
+def _one_edit_apart(left: str, right: str) -> bool:
+    """Bounded Levenshtein distance <= 1, without an unbounded DP matrix."""
+    if abs(len(left) - len(right)) > 1:
+        return False
+    if len(left) > len(right):
+        left, right = right, left
+    i = j = edits = 0
+    while i < len(left) and j < len(right):
+        if left[i] == right[j]:
+            i += 1
+            j += 1
+        else:
+            edits += 1
+            if edits > 1:
+                return False
+            if len(left) == len(right):
+                i += 1
+            j += 1
+    return edits + (len(right) - j) <= 1
+
+
+def _fuzzy_name_spans(folded: str, indices: list[int], needle: str) -> list[Span]:
+    # Only authenticated multi-word names, never fuzzy emails/phones or short
+    # names. One edit across the whole name bounds accidental matches. Restrict
+    # windows to word boundaries on one line; never merge separate CV fields.
+    words = needle.split()
+    if len(words) < 2 or len(needle) < 8:
+        return []
+    tokens = list(re.finditer(r"\w+", folded))
+    result: list[Span] = []
+    for first in range(len(tokens) - len(words) + 1):
+        window = tokens[first : first + len(words)]
+        start, end = window[0].start(), window[-1].end()
+        if any(not re.fullmatch(r"[ \t]+", folded[a.end() : b.start()]) for a, b in zip(window, window[1:])):
+            continue
+        candidate = " ".join(token.group() for token in window)
+        if candidate != needle and _one_edit_apart(candidate, needle):
+            result.append(Span(indices[start], indices[end - 1] + 1, "PERSON", 1))
+    return result
+
+
 def identity_spans(text: str, identities: Iterable[Identity]) -> list[Span]:
     folded, indices = _fold(text)
     spans: list[Span] = []
@@ -90,7 +131,9 @@ def identity_spans(text: str, identities: Iterable[Identity]) -> list[Span]:
                 needle, _ = _fold(value)
                 for match in re.finditer(r"(?<!\w)" + re.escape(needle) + r"(?!\w)", folded):
                     spans.append(Span(indices[match.start()], indices[match.end() - 1] + 1, kind, 1))
-    return sorted(spans, key=lambda span: (span.start, span.end))
+                if kind == "PERSON":
+                    spans.extend(_fuzzy_name_spans(folded, indices, " ".join(needle.split())))
+    return sorted(set(spans), key=lambda span: (span.start, span.end))
 
 
 def regex_spans(text: str) -> list[Span]:

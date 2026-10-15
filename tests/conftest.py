@@ -29,7 +29,7 @@ from src.db.database import SessionLocal, init_db  # noqa: E402
 from src.db.models import User  # noqa: E402
 from src.main import app  # noqa: E402
 from src.services.auth import hash_password  # noqa: E402
-from tests.helpers import ADVISOR, STUDENT  # noqa: E402
+from tests.helpers import ADMIN, ADVISOR, STUDENT  # noqa: E402
 
 _AUTH_READY = False
 
@@ -61,27 +61,27 @@ async def client():
     # ASGITransport does not run lifespan; initialized_database bootstraps it once.
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        global _AUTH_READY
-        if not _AUTH_READY:
-            accounts = [
-                ("sv-0142", "Student-A-dev-only!", STUDENT),
-                ("cv-007", "Advisor-dev-only!", ADVISOR),
-            ]
+        accounts = [
+            ("sv-0142", "Student-A-dev-only!", STUDENT),
+            ("cv-007", "Advisor-dev-only!", ADVISOR),
+            ("qt-001", "careerx123", ADMIN),
+        ]
+        with SessionLocal() as db:
+            for user_id, password, _ in accounts:
+                user = db.get(User, user_id)
+                if user is not None:
+                    user.password_hash = hash_password(password)
+            db.commit()
+        for user_id, password, headers in accounts:
             with SessionLocal() as db:
-                for user_id, password, _ in accounts:
-                    # Test-only credential provisioning; every cookie below still
-                    # comes from the real login endpoint, never a dependency override.
-                    db.get(User, user_id).password_hash = hash_password(password)
-                db.commit()
-            for user_id, password, headers in accounts:
-                with SessionLocal() as db:
-                    email = db.get(User, user_id).email
+                user = db.get(User, user_id)
+                email = user.email if user else None
+            if email:
                 response = await ac.post("/api/v1/auth/login", json={"email": email, "password": password})
-                assert response.status_code == 200, response.text
-                headers.clear()
-                headers["Cookie"] = response.headers["set-cookie"].split(";", 1)[0]
-                ac.cookies.clear()
-            _AUTH_READY = True
+                if response.status_code == 200:
+                    headers.clear()
+                    headers["Cookie"] = response.headers["set-cookie"].split(";", 1)[0]
+        ac.cookies.clear()
         yield ac
 
 

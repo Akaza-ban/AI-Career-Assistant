@@ -1,9 +1,10 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { createContext, useCallback, useContext, type ReactNode } from "react"
 
-import { api, ApiError } from "@/lib/api"
+import { api } from "@/lib/api"
 import type { Role, UserProfile } from "@/lib/types"
+import { useApi } from "@/lib/use-api"
 
 const ProfileContext = createContext<UserProfile | undefined>(undefined)
 const ReloadProfileContext = createContext<() => void>(() => { })

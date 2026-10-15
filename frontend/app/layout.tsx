@@ -32,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         {/* Đặt trạng thái sidebar thu gọn trước khi vẽ trang (xem lib/sidebar.ts) */}
         <script dangerouslySetInnerHTML={{ __html: SIDEBAR_INIT_SCRIPT }} />
       </head>
-      <body className="min-h-full">
+      <body className="min-h-full" suppressHydrationWarning>
         <ThemeProvider>
           <TooltipProvider>{children}</TooltipProvider>
           <Toaster richColors position="top-right" />

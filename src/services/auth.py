@@ -31,23 +31,42 @@ _EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$")
 # ---------- Mật khẩu ----------
 
 
+SCRYPT_N = 32_768
+SCRYPT_R = 8
+SCRYPT_P = 3
+
+
 def hash_password(password: str) -> str:
-    salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), PBKDF2_ITERATIONS).hex()
-    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${salt}${digest}"
+    salt = secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=SCRYPT_N, r=SCRYPT_R, p=SCRYPT_P, maxmem=67108864).hex()
+    return f"scrypt${SCRYPT_N}${SCRYPT_R}${SCRYPT_P}${salt.hex()}${digest}"
 
 
 def verify_password(password: str, stored: str | None) -> bool:
     if not stored:
         return False
-    try:
-        algorithm, iterations, salt, digest = stored.split("$")
-    except ValueError:
-        return False
-    if algorithm != "pbkdf2_sha256":
-        return False
-    candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), int(iterations)).hex()
-    return hmac.compare_digest(candidate, digest)
+    parts = stored.split("$")
+    if len(parts) == 6 and parts[0] == "scrypt":
+        _, n_str, r_str, p_str, salt_hex, digest = parts
+        try:
+            n, r, p = int(n_str), int(r_str), int(p_str)
+            if n <= 1 or (n & (n - 1)) != 0:
+                return False
+            salt = bytes.fromhex(salt_hex)
+            candidate = hashlib.scrypt(password.encode(), salt=salt, n=n, r=r, p=p, maxmem=67108864).hex()
+            return hmac.compare_digest(candidate, digest)
+        except Exception:
+            return False
+    elif len(parts) == 4 and parts[0] == "pbkdf2_sha256":
+        _, iterations_str, salt_hex, digest = parts
+        try:
+            iterations = int(iterations_str)
+            salt = bytes.fromhex(salt_hex)
+            candidate = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, iterations).hex()
+            return hmac.compare_digest(candidate, digest)
+        except Exception:
+            return False
+    return False
 
 
 def check_password_rules(password: str) -> None:

@@ -14,12 +14,14 @@ from src.services.auth import hash_password
 DEMO_STUDENT_ID = "sv-0142"
 SECOND_STUDENT_ID = "sv-0143"
 DEMO_ADVISOR_ID = "cv-007"
+DEMO_ADMIN_ID = "qt-001"
 
 # Public development-only passwords, never used to provision production accounts.
 DEV_PASSWORDS = {
     DEMO_STUDENT_ID: "Student-A-dev-only!",
     SECOND_STUDENT_ID: "Student-B-dev-only!",
     DEMO_ADVISOR_ID: "Advisor-dev-only!",
+    DEMO_ADMIN_ID: "careerx123",
 }
 
 DEMO_USERS = [
@@ -29,9 +31,6 @@ DEMO_USERS = [
         "full_name": "Nguyễn Minh Anh",
         "subtitle": "KDQT - K2021",
         "email": "minhanh.k21@student.university.edu.vn",
-        "student_code": "21125430",
-        "major": "Kinh doanh quốc tế",
-        "cohort": "K2021",
     },
     {
         "id": SECOND_STUDENT_ID,
@@ -39,9 +38,6 @@ DEMO_USERS = [
         "full_name": "Lê Thu Hà",
         "subtitle": "HTTT - K2022",
         "email": "thuha.k22@student.university.edu.vn",
-        "student_code": "22125431",
-        "major": "Hệ thống thông tin",
-        "cohort": "K2022",
     },
     {
         "id": DEMO_ADVISOR_ID,
@@ -72,6 +68,7 @@ def seed_demo_users(db: Session) -> None:
         DEMO_STUDENT_ID: settings.seed_student_a_password.get_secret_value() or DEV_PASSWORDS[DEMO_STUDENT_ID],
         SECOND_STUDENT_ID: settings.seed_student_b_password.get_secret_value() or DEV_PASSWORDS[SECOND_STUDENT_ID],
         DEMO_ADVISOR_ID: settings.seed_advisor_password.get_secret_value() or DEV_PASSWORDS[DEMO_ADVISOR_ID],
+        DEMO_ADMIN_ID: DEV_PASSWORDS[DEMO_ADMIN_ID],
     }
     for data in DEMO_USERS:
         user = db.get(User, data["id"])

@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Any, Literal
 
 from dotenv import load_dotenv
-from pydantic import Field, SecretStr, model_validator
+from pydantic import Field, PrivateAttr, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load .env file explicitly so os.environ is populated early
@@ -27,6 +27,38 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
     auth_secret_key: SecretStr = SecretStr("")
     auth_session_ttl_seconds: int = Field(default=28800, ge=300, le=86400)
+    session_cookie_name: str = "careerx_session"
+    _session_cookie_secure: bool | None = PrivateAttr(default=None)
+    session_days: int = 30
+    password_reset_minutes: int = 30
+    login_max_attempts: int = 5
+    login_lock_minutes: int = 15
+    frontend_url: str = "http://localhost:3000"
+    demo_login_enabled: bool = False
+    demo_account_password: str = "careerx123"
+
+    @property
+    def session_cookie_secure(self) -> bool:
+        if self._session_cookie_secure is not None:
+            return self._session_cookie_secure
+        return self.app_env == "production"
+
+    @session_cookie_secure.setter
+    def session_cookie_secure(self, value: bool | None) -> None:
+        self._session_cookie_secure = value
+
+    # SMTP Mailer
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "CareerX <no-reply@careerx.vn>"
+    smtp_starttls: bool = True
+
+    # Soniox Speech-to-Text
+    soniox_api_key: str = ""
+    soniox_model: str = "vi_v2"
+    soniox_ws_url: str = "wss://api.soniox.com/transcribe-websocket"
 
     # Local privacy extraction (no cloud OCR).
     pii_ocr_command: str = "tesseract"
