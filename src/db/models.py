@@ -2,7 +2,22 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.database import Base
@@ -484,16 +499,49 @@ class AssistantConversation(Base):
     )
 
 
+class AssistantRun(Base):
+    """One deduplicated request; only one running request per conversation."""
+
+    __tablename__ = "assistant_runs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "conversation_id", "client_request_id", name="uq_assistant_run_request"),
+        CheckConstraint(
+            "status IN ('running', 'done', 'failed', 'cancelled', 'interrupted')", name="ck_assistant_run_status"
+        ),
+        Index(
+            "uq_assistant_running_conversation",
+            "conversation_id",
+            unique=True,
+            sqlite_where=text("status = 'running'"),
+            postgresql_where=text("status = 'running'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    client_request_id: Mapped[str] = mapped_column(String(64))
+    route: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class AssistantTurn(Base):
     """Một lượt hỏi đáp, kèm ngữ cảnh giao diện và nguồn trích dẫn."""
 
     __tablename__ = "assistant_turns"
+    __table_args__ = (Index("uq_assistant_turn_run", "run_id", unique=True),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     conversation_id: Mapped[str] = mapped_column(
         ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
     )
     user_message: Mapped[str] = mapped_column(Text)
+    run_id: Mapped[str | None] = mapped_column(ForeignKey("assistant_runs.id"), nullable=True)
+    interrupted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     assistant_message: Mapped[str] = mapped_column(Text)
     intent: Mapped[str] = mapped_column(String(16))
     context_json: Mapped[dict[str, Any] | list[Any]] = mapped_column(JSON, default=dict)
