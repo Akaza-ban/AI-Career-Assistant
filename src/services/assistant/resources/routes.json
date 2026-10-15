@@ -1,0 +1,322 @@
+{
+  "student_home": {
+    "path_template": "/student",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "student home"
+    ],
+    "labels_en": [
+      "student home"
+    ],
+    "aliases": [
+      "/student/overview"
+    ],
+    "params": []
+  },
+  "cv_list": {
+    "path_template": "/student/cv",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "cv list"
+    ],
+    "labels_en": [
+      "cv list"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "analysis_new": {
+    "path_template": "/student/analysis/new",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "analysis new"
+    ],
+    "labels_en": [
+      "analysis new"
+    ],
+    "aliases": [
+      "/student/analysis"
+    ],
+    "params": []
+  },
+  "interview_home": {
+    "path_template": "/student/interview/new",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "interview home"
+    ],
+    "labels_en": [
+      "interview home"
+    ],
+    "aliases": [
+      "/student/interview"
+    ],
+    "params": []
+  },
+  "interview_lobby": {
+    "path_template": "/student/interview/start",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "interview lobby"
+    ],
+    "labels_en": [
+      "interview lobby"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "interview_history": {
+    "path_template": "/student/history",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "interview history"
+    ],
+    "labels_en": [
+      "interview history"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "jd_list": {
+    "path_template": "/student/library",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "jd list"
+    ],
+    "labels_en": [
+      "jd list"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "sharing": {
+    "path_template": "/student/share",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "sharing"
+    ],
+    "labels_en": [
+      "sharing"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "student_settings": {
+    "path_template": "/student/settings",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "student settings"
+    ],
+    "labels_en": [
+      "student settings"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "advisor_home": {
+    "path_template": "/advisor",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "advisor home"
+    ],
+    "labels_en": [
+      "advisor home"
+    ],
+    "aliases": [
+      "/advisor/dashboard"
+    ],
+    "params": []
+  },
+  "advisor_students": {
+    "path_template": "/advisor/students",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "advisor students"
+    ],
+    "labels_en": [
+      "advisor students"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "cv_detail": {
+    "path_template": "/student/cv/{cv_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "cv detail"
+    ],
+    "labels_en": [
+      "cv detail"
+    ],
+    "aliases": [],
+    "params": [
+      "cv_id"
+    ]
+  },
+  "jd_detail": {
+    "path_template": "/student/library/{jd_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "jd detail"
+    ],
+    "labels_en": [
+      "jd detail"
+    ],
+    "aliases": [],
+    "params": [
+      "jd_id"
+    ]
+  },
+  "analysis_compare": {
+    "path_template": "/student/analysis/compare",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "analysis compare"
+    ],
+    "labels_en": [
+      "analysis compare"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "analysis_comparison": {
+    "path_template": "/student/analysis/compare/{comparison_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "analysis comparison"
+    ],
+    "labels_en": [
+      "analysis comparison"
+    ],
+    "aliases": [],
+    "params": [
+      "comparison_id"
+    ]
+  },
+  "analysis_detail": {
+    "path_template": "/student/analysis/{analysis_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "analysis detail"
+    ],
+    "labels_en": [
+      "analysis detail"
+    ],
+    "aliases": [],
+    "params": [
+      "analysis_id"
+    ]
+  },
+  "analysis_optimize": {
+    "path_template": "/student/analysis/{analysis_id}/optimize",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "analysis optimize"
+    ],
+    "labels_en": [
+      "analysis optimize"
+    ],
+    "aliases": [],
+    "params": [
+      "analysis_id"
+    ]
+  },
+  "analysis_export": {
+    "path_template": "/student/analysis/{analysis_id}/export",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "analysis export"
+    ],
+    "labels_en": [
+      "analysis export"
+    ],
+    "aliases": [],
+    "params": [
+      "analysis_id"
+    ]
+  },
+  "interview_session": {
+    "path_template": "/student/interview/{session_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "interview session"
+    ],
+    "labels_en": [
+      "interview session"
+    ],
+    "aliases": [],
+    "params": [
+      "session_id"
+    ]
+  },
+  "interview_report": {
+    "path_template": "/student/interview/{session_id}/report",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "interview report"
+    ],
+    "labels_en": [
+      "interview report"
+    ],
+    "aliases": [],
+    "params": [
+      "session_id"
+    ]
+  },
+  "advisor_student": {
+    "path_template": "/advisor/students/{student_id}",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "advisor student"
+    ],
+    "labels_en": [
+      "advisor student"
+    ],
+    "aliases": [],
+    "params": [
+      "student_id"
+    ]
+  }
+}

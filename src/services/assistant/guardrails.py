@@ -9,7 +9,10 @@ import re
 import unicodedata
 from html import unescape
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from src.models.assistant import UIAction
 
 from src.services.assistant.text import fold_diacritics
 
@@ -128,3 +131,19 @@ def sanitize_and_inspect_prompt(message: str) -> tuple[bool, str]:
     if inspect_prompt_reason(message) is not None:
         return False, SAFETY_REFUSAL_MESSAGE
     return True, message.strip()
+
+
+def validate_ui_actions(actions: list[object], role: str) -> list["UIAction"]:
+    """Reject the entire payload when any target is unknown or outside the session role."""
+    from pydantic import TypeAdapter
+
+    from src.models.assistant import UIAction
+    from src.services.assistant.ui_registry import require_element, resolve_route
+
+    validated = TypeAdapter(list[UIAction]).validate_python(actions)
+    for action in validated:
+        if action.type == "highlight":
+            require_element(action.element_id, role)
+        else:
+            resolve_route(action.route_id, action.params, role)
+    return validated

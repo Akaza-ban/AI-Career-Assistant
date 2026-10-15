@@ -18,6 +18,15 @@ from pydantic import (
     model_validator,
 )
 
+from src.services.assistant.ui_registry import (
+    load_routes,
+    load_ui_registry,
+    route_whitelists,
+)
+from src.services.assistant.ui_registry import (
+    route_allowed as route_allowed,
+)
+
 Role = Literal["student", "advisor"]
 Intent = Literal["qa", "action", "hybrid"]
 Identifier = Annotated[str, Field(min_length=1, max_length=64, pattern=r"^[\w-]+$")]
@@ -26,50 +35,43 @@ Selector = Annotated[
     Field(pattern=r"^(?:\[data-agent-target=(?:\"[\w-]+\"|'[\w-]+')\]|#[A-Za-z][\w-]*)$", max_length=160),
 ]
 
-ROUTES: dict[str, set[str]] = {
-    "student": {
-        "/student",
-        "/student/overview",
-        "/student/cv",
-        "/student/analysis",
-        "/student/analysis/new",
-        "/student/interview",
-        "/student/interview/new",
-        "/student/interview/start",
-        "/student/history",
-        "/student/library",
-        "/student/share",
-        "/student/settings",
-    },
-    "advisor": {
-        "/advisor",
-        "/advisor/dashboard",
-        "/advisor/students",
-        "/advisor/reviews",
-        "/advisor/analytics",
-        "/advisor/settings",
-    },
-}
-
-
-def route_allowed(route: str, role: str) -> bool:
-    if route in ROUTES.get(role, set()):
-        return True
-    if role == "student":
-        return any(
-            re.fullmatch(pattern, route)
-            for pattern in (
-                r"/student/cv/[\w-]{1,64}",
-                r"/student/analysis/[\w-]{1,64}(?:/(?:optimize|export))?",
-                r"/student/interview/[\w-]{1,64}(?:/report)?",
-                r"/student/library/[\w-]{1,64}",
-            )
-        )
-    return role == "advisor" and bool(re.fullmatch(r"/advisor/students/[\w-]{1,64}", route))
+# Compatibility exports derive from the single route registry.
+ROUTES = route_whitelists()
 
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, str_strip_whitespace=True)
+
+
+class UIHighlight(StrictModel):
+    type: Literal["highlight"] = "highlight"
+    element_id: str
+
+    @field_validator("element_id")
+    @classmethod
+    def registered_element(cls, value: str) -> str:
+        if value not in load_ui_registry():
+            raise ValueError("Unknown element_id")
+        return value
+
+
+class UINavigate(StrictModel):
+    type: Literal["navigate"] = "navigate"
+    route_id: str
+    params: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def registered_route(self) -> Self:
+        from src.services.assistant.ui_registry import resolve_route
+
+        entry = load_routes().get(self.route_id)
+        if entry is None:
+            raise ValueError("Unknown route_id")
+        resolve_route(self.route_id, self.params, entry.roles[0])
+        return self
+
+
+UIAction = Annotated[UIHighlight | UINavigate, Field(discriminator="type")]
 
 
 class NavigateParams(StrictModel):
@@ -290,6 +292,7 @@ class SourceCitation(StrictModel):
 
 
 class AssistantResponse(StrictModel):
+    ui_actions: list[UIAction] = Field(default_factory=list, max_length=2)
     message: str = Field(min_length=1, max_length=16000)
     intent: Intent
     actions: list[AgentAction] = Field(default_factory=list, max_length=8)
