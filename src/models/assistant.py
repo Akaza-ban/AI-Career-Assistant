@@ -264,11 +264,25 @@ class ClientPageContext(StrictModel):
     page_state: dict[str, Any] = Field(default_factory=dict)
 
 
+class AssistantChip(StrictModel):
+    label: str = Field(min_length=1, max_length=200)
+    route: Literal["navigate", "locate", "howto"]
+    slots: dict[str, str | bool | None]
+
+
+class AssistantCard(StrictModel):
+    ref: str
+    label: str = Field(min_length=1, max_length=200)
+    route_id: str
+    params: dict[str, str] = Field(default_factory=dict)
+
+
 class ChatRequest(StrictModel):
     message: str = Field(min_length=1, max_length=8000)
     conversation_id: str | None = Field(default=None, max_length=64)
     client_request_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=64)
     context: ClientPageContext
+    chip: AssistantChip | None = None
 
 
 def clean_citation_snippet(value: str) -> str:
@@ -292,6 +306,9 @@ class SourceCitation(StrictModel):
 
 
 class AssistantResponse(StrictModel):
+    route: Literal["smalltalk", "howto", "locate", "navigate", "result", "clarify", "deny"] | None = None
+    cards: list[AssistantCard] = Field(default_factory=list, max_length=4)
+    chips: list[AssistantChip] = Field(default_factory=list, max_length=4)
     ui_actions: list[UIAction] = Field(default_factory=list, max_length=2)
     message: str = Field(min_length=1, max_length=16000)
     intent: Intent
@@ -325,6 +342,9 @@ class AssistantHistoryMessage(StrictModel):
     interrupted: bool = False
     intent: Intent
     sources: list[SourceCitation] = Field(default_factory=list)
+    cards: list[AssistantCard] = Field(default_factory=list)
+    chips: list[AssistantChip] = Field(default_factory=list)
+    ui_actions: list[UIAction] = Field(default_factory=list)
 
 
 class AssistantStatusResponse(StrictModel):

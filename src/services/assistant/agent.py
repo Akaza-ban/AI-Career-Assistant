@@ -3,6 +3,8 @@
 import json
 import logging
 import re
+from collections.abc import Callable
+from contextvars import ContextVar
 from functools import lru_cache
 from html import escape
 from threading import RLock
@@ -18,6 +20,7 @@ from src.models.assistant import (
     ROUTES,
     AgentAction,
     AnalysisAction,
+    AssistantChip,
     AssistantLlmOutput,
     AssistantResponse,
     ClientPageContext,
@@ -35,10 +38,8 @@ from src.services.assistant.chunker import DocChunk
 from src.services.assistant.guardrails import (
     has_careerx_topic,
     is_chitchat,
-    is_out_of_scope,
     is_refusal_response,
     is_role_forbidden,
-    sanitize_and_inspect_prompt,
 )
 from src.services.assistant.howto import (
     AnswerCache,
@@ -54,7 +55,7 @@ from src.services.assistant.howto import (
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
 from src.services.assistant.locate import locate_actions
 from src.services.assistant.router import LocalRouter
-from src.services.assistant.router.rules import decide_rules
+from src.services.assistant.router.models import LocateSlots, NavSlots, RouterDecision
 from src.services.assistant.text import fold_diacritics as normalized
 from src.services.llm import assistant_llm_configured as llm_configured
 from src.services.llm import get_assistant_llm
@@ -64,6 +65,13 @@ from src.services.providers.llm_client import ContentDelta, Done, LlmClient
 
 logger = logging.getLogger(__name__)
 ASSISTANT_INDEX_LOCK = RLock()
+_event_sink: ContextVar[Callable[[str, dict[str, Any]], None] | None] = ContextVar("assistant_events", default=None)
+
+
+def emit_event(name: str, data: dict[str, Any]) -> None:
+    sink = _event_sink.get()
+    if sink is not None:
+        sink(name, data)
 
 
 def classify_intent(message: str) -> Intent:
@@ -91,6 +99,8 @@ def _selector_key(selector: str) -> str:
 
 class AssistantState(TypedDict, total=False):
     message: str
+    decision: RouterDecision
+    chip: AssistantChip | None
     locate_fallback: bool
     input_allowed: bool
     context: ClientPageContext
@@ -128,51 +138,75 @@ class AssistantAgent:
         self.graph = builder.compile()
 
     def _inspect(self, state: AssistantState) -> dict[str, Any]:
-        allowed, message = sanitize_and_inspect_prompt(state["message"])
-        if allowed:
-            out_of_scope, refusal = is_out_of_scope(message)
-            if out_of_scope:
-                allowed, message = False, refusal
-            else:
-                chitchat, reply = is_chitchat(message)
-                if chitchat:
-                    # End before classification/retrieval; keep the public QA contract.
-                    allowed, message = False, reply
-        if not allowed:
-            return {
-                "input_allowed": False,
-                "sources": [],
-                "confidence": "low",
-                "response": AssistantResponse(message=message, intent="qa", actions=[], sources=[]),
-            }
+        context = state["context"]
         if self._ui_router is None:
             self._ui_router = LocalRouter()
-        decision = self._ui_router.decide(message, role=state["context"].user_role)
-        # During legacy migration, a classifier-only locate label must not
-        # intercept an imperative that carries no locate evidence.
-        rules = decide_rules(message, role=state["context"].user_role, language=decision.language)
-        if decision.route == "locate" and (rules.route == "locate" or classify_intent(message) != "action"):
-            context = state["context"]
-            actions = locate_actions(message, context.user_role, context.route)
+        decision = self._ui_router.decide(state["message"], role=context.user_role, page_route_id=context.route)
+        chip = state.get("chip")
+        if chip is not None:
+            slots = (
+                LocateSlots.model_validate(chip.slots)
+                if chip.route == "locate"
+                else NavSlots.model_validate(chip.slots)
+            )
+            decision = RouterDecision(
+                route=chip.route,
+                source="rules",
+                confidence=1.0,
+                language=decision.language,
+                slots=slots,
+                nav_mode="fast" if chip.route == "navigate" else None,
+            )
+        emit_event("route", decision.model_dump(mode="json"))
+        language = "en" if decision.language == "en" else "vi"
+        response = None
+        if decision.route == "smalltalk":
+            response = AssistantResponse(
+                message="Hello! How can I help you use CareerV?"
+                if language == "en"
+                else "Chào bạn! Tôi có thể giúp bạn sử dụng CareerV như thế nào?",
+                intent="qa",
+            )
+        elif decision.route == "deny":
+            response = AssistantResponse(
+                message="I can only help with permitted CareerV features. Please choose a feature from the usage guide."
+                if language == "en"
+                else "Tôi chỉ hỗ trợ các tính năng CareerV được phép. Bạn hãy chọn tính năng cần hướng dẫn.",
+                intent="qa",
+            )
+        elif decision.route == "clarify":
+            response = AssistantResponse(
+                message=decision.clarify_question,
+                intent="qa",
+                chips=[chip.model_dump(mode="json") for chip in decision.chips],
+            )
+        elif decision.route in {"navigate", "result"}:
+            response = AssistantResponse(message=capability_menu(language, context.user_role), intent="qa")
+        elif decision.route == "locate":
+            actions = locate_actions(state["message"], context.user_role, context.route)
             if actions:
-                return {
-                    "input_allowed": False,
-                    "response": AssistantResponse(
-                        message="Here is the control you are looking for."
-                        if decision.language == "en"
-                        else "Đây là nút bạn cần tìm.",
-                        intent="action",
-                        ui_actions=actions,
-                    ),
-                }
-            return {"input_allowed": True, "message": message, "locate_fallback": True, "howto": True}
-        return {"input_allowed": True, "message": message, "howto": decision.route == "howto"}
+                response = AssistantResponse(
+                    message="Here is the control you are looking for."
+                    if language == "en"
+                    else "Đây là nút bạn cần tìm.",
+                    intent="action",
+                    ui_actions=actions,
+                )
+        return {
+            "decision": decision,
+            "input_allowed": response is None,
+            "response": response,
+            "howto": True,
+            "locate_fallback": decision.route == "locate",
+            "intent": "qa",
+        }
 
     def _classify(self, state: AssistantState) -> dict[str, Any]:
-        return {"intent": "qa" if state.get("locate_fallback") else classify_intent(state["message"])}
+        return {"intent": "qa"}
 
     def _retrieve(self, state: AssistantState) -> dict[str, Any]:
         context = state["context"]
+        emit_event("status", {"status": "searching"})
         try:
             # A fresh retriever observes rebuilt collections and BM25 corpora.
             with ASSISTANT_INDEX_LOCK:
@@ -582,18 +616,35 @@ class AssistantAgent:
         context: ClientPageContext,
         history: list[dict[str, str]] | None = None,
         allowed_student_ids: list[str] | None = None,
+        event_sink: Callable[[str, dict[str, Any]], None] | None = None,
+        chip: AssistantChip | None = None,
+    ) -> AssistantResponse:
+        token = _event_sink.set(event_sink)
+        try:
+            return await self._respond_graph(message, context, history, allowed_student_ids, chip)
+        finally:
+            _event_sink.reset(token)
+
+    async def _respond_graph(
+        self,
+        message: str,
+        context: ClientPageContext,
+        history: list[dict[str, str]] | None,
+        allowed_student_ids: list[str] | None,
+        chip: AssistantChip | None,
     ) -> AssistantResponse:
         with provider_scope(mask_only=True):
             result = await self.graph.ainvoke(
                 {
                     "message": message,
+                    "chip": chip,
                     "context": context,
                     "history": history or [],
                     "allowed_student_ids": allowed_student_ids or [],
                 },
                 config={"callbacks": []},
             )
-        return result["response"]
+        return result["response"].model_copy(update={"route": result["decision"].route})
 
 
 @lru_cache(maxsize=1)

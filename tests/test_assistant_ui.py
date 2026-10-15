@@ -214,7 +214,7 @@ def test_registered_comparison_routes_keep_owner_scoping() -> None:
     engine.dispose()
 
 
-def test_classifier_only_locate_does_not_intercept_legacy_imperatives() -> None:
+def test_classifier_locate_abstains_to_howto_without_registered_target() -> None:
     from unittest.mock import MagicMock
 
     from src.models.assistant import ClientPageContext
@@ -232,5 +232,6 @@ def test_classifier_only_locate_does_not_intercept_legacy_imperatives() -> None:
     )
     context = ClientPageContext(current_url="/student/cv", route="/student/cv", user_role="student")
     result = agent._inspect({"message": "Hãy bắt đầu phân tích CV", "context": context})
-    assert result["input_allowed"] is True
-    assert "response" not in result
+    # The v2 router is authoritative; only registered read-only actions can run.
+    assert result["input_allowed"] is False
+    assert all(action.type in {"navigate", "highlight"} for action in result["response"].ui_actions)
