@@ -45,13 +45,16 @@ def get_current_user(
     session_token: SessionToken = None,
     x_demo_role: Annotated[str | None, Header()] = None,
 ) -> User:
-    user = _session_user(db, session_token, x_demo_role)
+    assistant_request = request.url.path.startswith("/api/v1/assistant/")
+    # Reuse session verification and account restrictions, but never the demo
+    # identity fallback or activity writes on the assistant boundary.
+    user = _session_user(db, session_token, None if assistant_request else x_demo_role)
     if user.disabled_at is not None:
         raise AppError(401, "Tài khoản đã bị tạm khoá. Hãy liên hệ quản trị viên.", "account_disabled")
     if user.must_change_password and not request.url.path.startswith(_ALLOWED_WITH_TEMP_PASSWORD):
         raise AppError(403, "Hãy đổi mật khẩu tạm trước khi tiếp tục.", "password_change_required")
     now = utcnow()
-    if user.last_seen_at is None or now - user.last_seen_at >= _SEEN_EVERY:
+    if not assistant_request and (user.last_seen_at is None or now - user.last_seen_at >= _SEEN_EVERY):
         user.last_seen_at = now
         db.commit()
     return user

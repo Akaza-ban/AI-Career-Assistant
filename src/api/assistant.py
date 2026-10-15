@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from src.api.deps import CurrentAdvisor, CurrentUser, DbSession
 from src.api.errors import AppError
@@ -55,17 +55,30 @@ async def get_assistant_status(user: CurrentUser) -> AssistantStatusResponse:
 
 
 def _owned_conversation(db: DbSession, conversation_id: str, user: User) -> AssistantConversation:
-    conversation = db.get(AssistantConversation, conversation_id)
-    if conversation is None or conversation.user_id != user.id or conversation.role != user.role:
+    conversation = db.scalar(
+        select(AssistantConversation).where(
+            AssistantConversation.id == conversation_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+    )
+    if conversation is None:
         raise AppError(404, "Không tìm thấy hội thoại.", "conversation_not_found")
     return conversation
 
 
 def _owned_turn(db: DbSession, turn_id: str, user: User) -> AssistantTurn:
-    turn = db.get(AssistantTurn, turn_id)
+    turn = db.scalar(
+        select(AssistantTurn)
+        .join(AssistantConversation)
+        .where(
+            AssistantTurn.id == turn_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+    )
     if turn is None:
         raise AppError(404, "Không tìm thấy lượt trả lời.", "turn_not_found")
-    _owned_conversation(db, turn.conversation_id, user)
     return turn
 
 
@@ -74,8 +87,13 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
     safe: list[AgentAction] = []
     for action in actions:
         if action.action_type == "START_ANALYSIS":
-            cv = db.get(CvVersion, action.params.cv_id)
-            jd = db.get(JobDescription, action.params.jd_id)
+            cv = db.scalar(select(CvVersion).where(CvVersion.id == action.params.cv_id, CvVersion.owner_id == user.id))
+            jd = db.scalar(
+                select(JobDescription).where(
+                    JobDescription.id == action.params.jd_id,
+                    or_(JobDescription.source == "library", JobDescription.owner_id == user.id),
+                )
+            )
             if (
                 user.role != "student"
                 or cv is None
@@ -98,7 +116,12 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
                 continue
             if user.role == "student" and len(parts) >= 4 and parts[2] == "library":
                 # Chi tiết JD: JD thư viện đang hiển thị hoặc JD sinh viên tự thêm
-                jd = db.get(JobDescription, parts[3])
+                jd = db.scalar(
+                    select(JobDescription).where(
+                        JobDescription.id == parts[3],
+                        or_(JobDescription.source == "library", JobDescription.owner_id == user.id),
+                    )
+                )
                 visible = jd is not None and (
                     (jd.source == "library" and jd.status in (None, "published"))
                     or (jd.owner_id == user.id and jd.status != "deleted")
@@ -107,7 +130,9 @@ def _resource_actions(db: DbSession, user: User, actions: list[AgentAction], stu
                     continue
             elif user.role == "student" and len(parts) >= 4 and parts[3] not in ("new", "start", "compare"):
                 model = {"cv": CvVersion, "analysis": GapAnalysis, "interview": InterviewSession}.get(parts[2])
-                resource = db.get(model, parts[3]) if model else None
+                resource = (
+                    db.scalar(select(model).where(model.id == parts[3], model.owner_id == user.id)) if model else None
+                )
                 if resource is None or resource.owner_id != user.id:
                     continue
         safe.append(action)
@@ -206,7 +231,16 @@ async def chat(body: ChatRequest, user: CurrentUser, db: DbSession, agent: Agent
 
 @router.post("/action/confirm", response_model=ActionConfirmationResponse)
 def confirm_action(body: ActionConfirmationRequest, user: CurrentUser, db: DbSession) -> ActionConfirmationResponse:
-    action = db.get(AgentActionLog, body.action_id)
+    action = db.scalar(
+        select(AgentActionLog)
+        .join(AssistantTurn)
+        .join(AssistantConversation)
+        .where(
+            AgentActionLog.id == body.action_id,
+            AssistantConversation.user_id == user.id,
+            AssistantConversation.role == user.role,
+        )
+    )
     if action is None:
         raise AppError(404, "Không tìm thấy hành động.", "action_not_found")
     _owned_turn(db, action.turn_id, user)
