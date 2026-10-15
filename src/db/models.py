@@ -540,7 +540,9 @@ class AssistantTurn(Base):
         ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
     )
     user_message: Mapped[str] = mapped_column(Text)
-    run_id: Mapped[str | None] = mapped_column(ForeignKey("assistant_runs.id"), nullable=True)
+    # An indexed correlation ID keeps SQLite DROP COLUMN reversible on both
+    # fresh and legacy databases; turns survive a run-metadata downgrade.
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     interrupted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     assistant_message: Mapped[str] = mapped_column(Text)
     intent: Mapped[str] = mapped_column(String(16))

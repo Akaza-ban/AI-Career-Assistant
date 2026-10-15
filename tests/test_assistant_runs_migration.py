@@ -1,5 +1,7 @@
 from sqlalchemy import create_engine, inspect, text
 
+import src.db.models  # noqa: F401
+from src.db.database import Base
 from src.db.migrations.assistant_runs import downgrade, upgrade
 
 
@@ -21,4 +23,14 @@ def test_run_migration_roundtrip_preserves_legacy_turns() -> None:
     with engine.connect() as conn:
         assert tuple(conn.execute(text("SELECT * FROM assistant_turns")).one()) == ("old", "preserved")
     upgrade(engine)
+    engine.dispose()
+
+
+def test_fresh_database_can_downgrade_and_upgrade() -> None:
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    upgrade(engine)
+    downgrade(engine)
+    upgrade(engine)
+    assert inspect(engine).has_table("assistant_runs")
     engine.dispose()

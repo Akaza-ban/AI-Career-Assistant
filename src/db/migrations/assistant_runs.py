@@ -16,7 +16,7 @@ def upgrade(engine: Engine) -> None:
         with engine.begin() as connection:
             if "run_id" not in columns:
                 connection.execute(
-                    text("ALTER TABLE assistant_turns ADD COLUMN run_id VARCHAR(64) REFERENCES assistant_runs(id)")
+                    text("ALTER TABLE assistant_turns ADD COLUMN run_id VARCHAR(64)")
                 )
             if "interrupted" not in columns:
                 connection.execute(
