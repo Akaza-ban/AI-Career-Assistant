@@ -14,7 +14,7 @@ import {
 import { usePathname, useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { confirmAction, sendMessage as sendAssistantMessage } from "@/lib/assistant-api"
-import { dispatchAgentAction } from "@/lib/action-dispatcher"
+import { dispatchAgentAction, dispatchUIActions } from "@/lib/action-dispatcher"
 import { AgentActionRunner } from "@/lib/agent-action-runner"
 import type { AgentPageContext } from "@/lib/use-agent-actions"
 import { ActionConfirmationDialog } from "@/components/assistant/action-confirmation-dialog"
@@ -155,6 +155,7 @@ function AssistantSession({ children, pathname, userRole }: {
     conversation.set(null)
     setMessages([])
     setIsThinking(false)
+    setIsExecutingAction(false)
     setActiveAction(null)
     setHighlight(null)
     setError(null)
@@ -208,9 +209,19 @@ function AssistantSession({ children, pathname, userRole }: {
         content: response.message,
         created_at: new Date().toISOString(),
         actions: response.actions,
+        ui_actions: response.ui_actions,
         sources: response.sources,
       }])
-      await runner.enqueue(response.actions)
+      if (response.ui_actions?.length) {
+        setIsExecutingAction(true)
+        try {
+          await dispatchUIActions(response.ui_actions, router, setHighlightSelector, { role: userRole, signal: controller.signal })
+        } finally {
+          if (pendingRequest.current === controller) setIsExecutingAction(false)
+        }
+      } else {
+        await runner.enqueue(response.actions)
+      }
     } catch (cause) {
       if (pendingRequest.current !== controller || controller.signal.aborted) return
       setError(cause instanceof Error ? cause.message : "Không thể gửi tin nhắn. Vui lòng thử lại.")
@@ -220,7 +231,7 @@ function AssistantSession({ children, pathname, userRole }: {
         setIsThinking(false)
       }
     }
-  }, [conversation, pathname, runner, userRole])
+  }, [conversation, pathname, router, runner, setHighlightSelector, userRole])
 
   const retryLast = useCallback(() => {
     const last = messages.at(-1)

@@ -44,8 +44,11 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
       return selector === "#missing" || (delayMount && !mounted) ? null : element
     },
   }
-  const navigation = load("lib/assistant-navigation.ts")
-  const { dispatchAgentAction } = load("lib/action-dispatcher.ts", {
+  const navigation = load("lib/assistant-navigation.ts", {
+    "../../src/services/assistant/resources/routes.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../../src/services/assistant/resources/routes.json"), "utf8")) },
+    "../../src/services/assistant/resources/ui_registry.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../../src/services/assistant/resources/ui_registry.json"), "utf8")) },
+  })
+  const { dispatchAgentAction, dispatchUIActions } = load("lib/action-dispatcher.ts", {
     "sonner": { toast: { error() {}, info() {}, success() {} } },
     "@/lib/api": { api: {
       createGapAnalysis: async (body) => { requests.push({ ...body }); return { id: "analysis-1" } },
@@ -67,7 +70,7 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
     mounted = false
   } }
   return {
-    reports, pushes, highlights, events, requests, scrolls, window, router, dispatchAgentAction,
+    reports, pushes, highlights, events, requests, scrolls, window, router, dispatchAgentAction, dispatchUIActions, navigation,
     delayMount: () => { delayMount = true },
     run: (type, params = {}, options = {}, requires_confirmation = false) => dispatchAgentAction(
       { id: "action-1", action_type: type, params, requires_confirmation, description_vi: "Hướng dẫn" },
@@ -102,7 +105,7 @@ function hooksFixture() {
   return { react, jsxRuntime: { jsx, jsxs: jsx }, render: (callback) => { cursor = 0; return callback() } }
 }
 
-function providerFixture(actions) {
+function providerFixture(actions, ui_actions = []) {
   const f = fixture()
   const hooks = hooksFixture()
   f.window.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
@@ -113,9 +116,9 @@ function providerFixture(actions) {
     "next/navigation": { usePathname: () => f.window.location.pathname, useRouter: () => f.router },
     "sonner": { toast: { error() {} } },
     "@/lib/agent-action-runner": { AgentActionRunner },
-    "@/lib/action-dispatcher": { dispatchAgentAction: f.dispatchAgentAction },
+    "@/lib/action-dispatcher": { dispatchAgentAction: f.dispatchAgentAction, dispatchUIActions: f.dispatchUIActions },
     "@/lib/assistant-api": {
-      sendMessage: async (input) => { inputs.push(input); return { conversation_id: "conv-1", turn_id: "turn-1", message: "Hướng dẫn", actions, sources: [] } },
+      sendMessage: async (input) => { inputs.push(input); return { conversation_id: "conv-1", turn_id: "turn-1", message: "Hướng dẫn", actions, ui_actions, sources: [] } },
       confirmAction: async (id, status) => { f.reports.push([id, status]) },
     },
     "@/components/assistant/action-confirmation-dialog": { ActionConfirmationDialog: "confirmation-dialog" },
@@ -499,4 +502,65 @@ test("spotlight scrolls offscreen targets, dismisses on click/5s, and releases r
   assert.equal(f.listeners.size, 0)
   assert.equal(f.elementListeners.size, 0)
   assert.equal(f.observerDisconnected(), true)
+})
+
+
+test("v2 provider navigates then highlights a registered target without acknowledgement", async () => {
+  const f = providerFixture([], [
+    { type: "navigate", route_id: "analysis_new", params: {} },
+    { type: "highlight", element_id: "btn-start-analysis" },
+  ])
+  f.delayMount()
+  await f.render().props.value.sendMessage("Nút bắt đầu phân tích ở đâu?")
+  assert.equal(f.window.location.pathname, "/student/analysis/new")
+  assert.equal(f.render().props.children[1].props.selector, '[data-assistant-id="btn-start-analysis"]')
+  assert.equal(f.reports.length, 0)
+  assert.equal(f.requests.length, 0)
+})
+
+test("v2 rejects unknown IDs, bad params, and targets outside the role without acknowledgements", async () => {
+  for (const action of [
+    { type: "highlight", element_id: "unknown" },
+    { type: "highlight", element_id: "advisor-student-search" },
+    { type: "navigate", route_id: "advisor_students", params: {} },
+    { type: "navigate", route_id: "cv_list", params: { url: "https://evil.test" } },
+    { type: "navigate", route_id: "cv_detail", params: { cv_id: "../other" } },
+    { type: "navigate", route_id: "__proto__", params: {} },
+  ]) {
+    const f = fixture()
+    assert.equal(await f.dispatchAgentAction(action, f.router, (...args) => f.highlights.push(args), { role: "student" }), false)
+    assert.equal(f.reports.length, 0)
+    assert.equal(f.pushes.length, 0)
+    assert.equal(f.highlights.length, 0)
+  }
+})
+
+test("v2 stops before highlight when navigation fails and honours cancellation", async () => {
+  const f = fixture()
+  const actions = [{ type: "navigate", route_id: "advisor_students", params: {} }, { type: "highlight", element_id: "btn-upload-cv" }]
+  assert.equal(await f.dispatchUIActions(actions, f.router, (...args) => f.highlights.push(args), { role: "student" }), false)
+  assert.equal(f.highlights.length, 0)
+  const controller = new AbortController()
+  controller.abort()
+  assert.equal(await f.dispatchUIActions([{ type: "navigate", route_id: "cv_list", params: {} }], f.router, () => {}, { role: "student", signal: controller.signal }), false)
+  assert.equal(f.pushes.length, 0)
+  assert.equal(f.reports.length, 0)
+})
+
+
+test("v2 navigation card retains a manual link on the destination page", () => {
+  const f = fixture()
+  const jsx = (type, props) => ({ type, props })
+  const { ActionBadges } = load("components/assistant/action-badges.tsx", {
+    "react/jsx-runtime": { jsx, jsxs: jsx },
+    "lucide-react": {},
+    "@/components/assistant/assistant-provider": { useAssistant: () => ({ userRole: "student", pathname: "/student/cv" }) },
+    "@/components/shell/nav-config": { shellOf: () => "student", getBreadcrumb: () => [{ label: "CV" }] },
+    "@/lib/assistant-navigation": f.navigation,
+    "@/lib/utils": { cn: () => "" },
+  })
+  const tree = ActionBadges({ actions: [], uiActions: [{ type: "navigate", route_id: "cv_list", params: {} }] })
+  const link = tree.props.children[0][0]
+  assert.equal(link.type, "a")
+  assert.equal(link.props.href, "/student/cv")
 })

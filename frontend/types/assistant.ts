@@ -1,4 +1,8 @@
 export type UserRole = "student" | "advisor"
+export type UIAction =
+  | { type: "highlight"; element_id: string }
+  | { type: "navigate"; route_id: string; params: Record<string, string> }
+
 export type ActionStatus = "confirmed" | "executed" | "rejected" | "failed"
 
 export type ActionType =
@@ -34,6 +38,7 @@ export interface ChatMessage {
   sender: "user" | "assistant"
   content: string
   created_at: string
+  ui_actions?: UIAction[]
   actions?: AgentAction[]
   sources?: SourceCitation[]
   is_streaming?: boolean
@@ -65,6 +70,7 @@ export interface ChatResponsePayload {
   run_id?: string
   message: string
   intent: "qa" | "action" | "hybrid"
+  ui_actions?: UIAction[]
   actions: AgentAction[]
   sources: SourceCitation[]
 }

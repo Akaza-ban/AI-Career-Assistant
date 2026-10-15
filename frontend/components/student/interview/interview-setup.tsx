@@ -271,7 +271,7 @@ export function InterviewSetup({ initialJdId, initialCvId }: { initialJdId: stri
                     }
                   />
                 ) : (
-                  <div data-agent-target="select-jd" role="radiogroup" aria-labelledby="pick-position-title">
+                  <div data-agent-target="select-jd" data-assistant-id="interview-select-jd" role="radiogroup" aria-labelledby="pick-position-title">
                     {rows.map((row, i) => (
                       <PositionRow key={row.jd.id} row={row} first={i === 0} checked={row.jd.id === jd?.id} onPick={setJdId} />
                     ))}
@@ -392,7 +392,7 @@ function CvPicker({ cvs, value, onChange }: { cvs: CvVersion[]; value: CvVersion
     <div>
       <Select items={items} value={value?.id ?? null} onValueChange={(v) => v && onChange(String(v))}>
         <SelectTrigger
-          data-agent-target="select-cv"
+          data-agent-target="select-cv" data-assistant-id="interview-select-cv"
           aria-labelledby="cv-pick-title"
           className="h-11 w-full max-w-[420px] min-w-0 rounded-[10px] border-line-strong bg-card px-3.5 text-[15px] font-medium text-ink"
         >
@@ -469,7 +469,7 @@ function SessionCard({ jd, cv, quota, starting, onStart }: SessionCardProps) {
         ))}
       </dl>
       <Button
-        data-agent-target="btn-start-interview"
+        data-agent-target="btn-start-interview" data-assistant-id="btn-start-interview"
         size="brand"
         className="mt-[18px] w-full"
         disabled={starting || !jd || cv === undefined || !quota || exhausted}

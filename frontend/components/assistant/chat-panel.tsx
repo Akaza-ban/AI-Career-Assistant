@@ -268,7 +268,7 @@ export function ChatPanel() {
                     <span className="sr-only">Trợ lý: </span>
                     <AssistantMarkdown content={message.content} userRole={userRole} />
                   </div>
-                  {message.actions && <ActionBadges actions={message.actions} />}
+                  {(message.actions || message.ui_actions) && <ActionBadges actions={message.actions ?? []} uiActions={message.ui_actions} />}
                   {message.sources && !isAssistantRefusal(message.content) && <SourceAccordion sources={message.sources} userRole={userRole} />}
                   {!message.is_streaming && (
                     <div role="group" aria-label="Đánh giá câu trả lời" className="-ml-1.5 flex items-center gap-0.5">

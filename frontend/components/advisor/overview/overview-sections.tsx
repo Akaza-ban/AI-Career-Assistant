@@ -77,6 +77,7 @@ export function AdvisorGreeting({ data }: { data: AdvisorOverview }) {
             size="brand"
             className="glass text-ink shadow-xs hover:bg-card"
             nativeButton={false}
+            data-assistant-id="advisor-students-link"
             render={<Link href="/advisor/students" />}
           >
             Sinh viên phụ trách
