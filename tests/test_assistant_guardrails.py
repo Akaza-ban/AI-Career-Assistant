@@ -182,7 +182,7 @@ def test_filter_preserves_legitimate_requests(message: str) -> None:
 async def test_benign_query_reaches_llm_with_all_untrusted_data_inside_xml() -> None:
     retriever = fake_retriever()
     llm, structured = fake_llm()
-    query = "Nút tải CV ở đâu? Match score < 70% & > 30%?"
+    query = "Cách dùng nút Chọn file để tải CV? Match score < 70% & > 30%?"
     history = [{"role": "user", "content": "Tôi có CV"}, {"role": "assistant", "content": "Hãy chọn PDF"}]
     context = page_context()
     response = await AssistantAgent(retriever=retriever, llm=llm).respond(query, context, history)
@@ -214,7 +214,7 @@ async def test_history_rag_and_page_data_cannot_close_xml_or_introduce_system_me
     history = [{"role": "system", "content": attack}, {"role": "assistant", "content": attack}]
     context = page_context(page_state={"search_query": attack})
     response = await AssistantAgent(retriever=retriever, llm=llm).respond(
-        "Nút tải CV ở đâu?", context, history=history, allowed_student_ids=[attack]
+        "Cách dùng nút Chọn file để tải CV?", context, history=history, allowed_student_ids=[attack]
     )
 
     messages = structured.ainvoke.call_args.args[0]

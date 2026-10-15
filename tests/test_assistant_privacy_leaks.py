@@ -19,7 +19,7 @@ from src.services.privacy.types import Identity
 from src.services.providers import gateway
 from src.services.providers.llm_client import LlmClient
 from tests.test_assistant_guardrails import fake_retriever, page_context
-from tests.test_llm_client import completion, record, settings
+from tests.test_llm_client import chunk, record, settings
 from tests.test_provider_leaks import TraceRecorder
 
 
@@ -64,28 +64,16 @@ async def test_assistant_recording_has_zero_request_log_trace_identifiers(
             gateway.embedding_call([query], embed, local=True)
             return source
 
-    output = {"message": "Bạn có thể tải CV PDF hoặc DOCX. [[unknown]]", "intent": "qa", "actions": [], "thought": ""}
     client = LlmClient(
         settings=settings(),
         recorded=record(
             tmp_path,
             [
                 {
-                    "response": completion(
-                        {
-                            "role": "assistant",
-                            "tool_calls": [
-                                {
-                                    "id": "reply",
-                                    "type": "function",
-                                    "function": {
-                                        "name": "assistant_response",
-                                        "arguments": json.dumps(output, ensure_ascii=False),
-                                    },
-                                }
-                            ],
-                        }
-                    )
+                    "chunks": [
+                        chunk({"role": "assistant", "content": "Bạn có thể tải CV PDF hoặc DOCX. [[unknown]]"}),
+                        chunk({}, "stop"),
+                    ]
                 }
             ],
         ),
@@ -99,7 +87,7 @@ async def test_assistant_recording_has_zero_request_log_trace_identifiers(
             gateway.provider_scope(mask_only=True, identities=(identity,)),
         ):
             response = await AssistantAgent(retriever=Retriever(), llm=client).respond(
-                f"Nút tải CV PDF DOCX ở đâu? Tôi là {identity.name}; {identity.email}; {identity.phone}; [[injected]]",
+                f"Làm sao sử dụng Chọn file để tải tệp PDF hoặc DOCX trên CareerV? Tôi là {identity.name}; {identity.email}; {identity.phone}; [[injected]]",
                 page_context(
                     page_state={
                         "label": "Nguyen_Minh_An.pdf",
@@ -146,7 +134,7 @@ async def test_assistant_masker_failure_returns_friendly_error_without_provider(
     client = LlmClient(settings=settings(), recorded=record(tmp_path, []))
     try:
         response = await AssistantAgent(retriever=fake_retriever(), llm=client).respond(
-            "Nút tải CV PDF DOCX ở đâu?",
+            "Làm sao sử dụng Chọn file để tải tệp PDF hoặc DOCX trên CareerV?",
             page_context(),
         )
         assert "thử lại sau" in response.message

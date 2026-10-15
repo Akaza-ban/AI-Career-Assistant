@@ -142,11 +142,15 @@ class AssistantHybridRetriever:
             # Generic queries need lexical coverage as well as a dense score.
             relevance = max(cosine if has_topic else cosine * coverage, sparse_relevance)
             record["score"] = record["rrf_score"] / MAX_RRF_SCORE * relevance
+            # Confidence must not rise just because an unrelated question was
+            # asked on the document's page. Keep ranking/boosting unchanged.
+            record["abstain_score"] = record["score"]
             if route is not None and record.get("route") == route:
                 record["rrf_score"] *= 1.15
                 record["score"] *= 1.15
             if not matched_terms or (len(query_terms) <= 3 and len(matched_terms) <= 1 and not has_topic):
                 record["score"] = 0.0
+                record["abstain_score"] = 0.0
         return select_citation_chunks(list(fused.values()), limit)
 
     def retrieve(

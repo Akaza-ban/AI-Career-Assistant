@@ -2,13 +2,17 @@
 
 import hashlib
 import json
+import re
 
 from pydantic import BaseModel, Field
 
-from src.models.assistant import SourceCitation
+from src.config import get_settings
+from src.models.assistant import SourceCitation, UIAction, UIHighlight, UINavigate
 from src.services.assistant.chunker import DocChunk
+from src.services.assistant.guardrails import validate_ui_actions
 from src.services.assistant.router.cache import ModelCache
 from src.services.assistant.router.text import detect_language, normalize
+from src.services.assistant.ui_registry import require_element, resolve_route
 
 
 class AttachmentMetadata(BaseModel):
@@ -68,4 +72,46 @@ def capability_menu(language: str, role: str) -> str:
         "Tài liệu hướng dẫn chưa có thông tin phù hợp cho câu hỏi này. Tôi có thể hướng dẫn "
         + topics
         + ", chỉ vị trí nút hoặc mở trang được phép. Bạn cần hỗ trợ tính năng nào?"
+    )
+
+
+def attached_actions(metadata: AttachmentMetadata, role: str, current_route: str) -> list[UIAction]:
+    """Only the top retrieved chunk can authorize a static registered target."""
+    if metadata.score < get_settings().rag_ui_threshold:
+        return []
+    try:
+        if metadata.ui_targets:
+            element = require_element(metadata.ui_targets[0], role)
+            if metadata.route_id and metadata.route_id != element.route_id:
+                return []
+            destination = resolve_route(element.route_id, {}, role)
+            actions: list[UIAction] = []
+            if current_route != destination:
+                actions.append(UINavigate(route_id=element.route_id))
+            actions.append(UIHighlight(element_id=element.element_id))
+        elif metadata.route_id:
+            resolve_route(metadata.route_id, {}, role)
+            actions = [UINavigate(route_id=metadata.route_id)]
+        else:
+            return []
+        return validate_ui_actions(actions, role)
+    except ValueError:
+        return []
+
+
+def safe_guide_output(message: str) -> bool:
+    """Conservative backstop for personal assertions/forged links, before caching.
+
+    The grounding prompt is primary; this is not a semantic truth verifier.
+    Impersonal instructions avoid ambiguous personal claims in either language.
+    """
+    text = normalize(message).folded
+    return bool(message.strip()) and not re.search(
+        r"\b(?:your|yours|my|mine)\b|\bcua\s+(?:rieng\s+)?(?:ban|toi)\b"
+        r"|\byou\s+(?:have|uploaded|scored|completed|lack|are missing)\b"
+        r"|\bban\s+(?:da|dang)\b|\bban\s+co\s+\d"
+        r"|\bi\s+(?:checked|read|reviewed|accessed|found|see|can see)\b"
+        r"|\btoi\s+(?:da\s+)?(?:doc|xem|thay|kiem tra|phan tich)\b"
+        r"|https?://|\]\s*\(|\[\^?\d+\]|data-(?:agent-target|assistant-id)",
+        text,
     )

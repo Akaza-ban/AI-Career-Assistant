@@ -177,6 +177,7 @@ class Settings(BaseSettings):
     assistant_locate_margin: float = Field(default=0.10, ge=0.0, le=1.0)
     assistant_top_k: int = 5
     rag_abstain_threshold: float = Field(default=0.42, ge=0.0, le=1.0)
+    rag_semantic_abstain_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
     rag_ui_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
     rag_answer_cache_ttl_s: float = Field(default=300.0, gt=0.0)
     rag_answer_cache_maxsize: int = Field(default=256, ge=1)

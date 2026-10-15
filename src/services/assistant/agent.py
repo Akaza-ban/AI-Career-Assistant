@@ -30,7 +30,8 @@ from src.models.assistant import (
     route_allowed,
     validate_llm_actions,
 )
-from src.prompts.assistant_prompts import ASSISTANT_SYSTEM_PROMPT
+from src.prompts.assistant_prompts import ASSISTANT_SYSTEM_PROMPT, HOWTO_SYSTEM_PROMPT
+from src.services.assistant.chunker import DocChunk
 from src.services.assistant.guardrails import (
     has_careerx_topic,
     is_chitchat,
@@ -39,7 +40,17 @@ from src.services.assistant.guardrails import (
     is_role_forbidden,
     sanitize_and_inspect_prompt,
 )
-from src.services.assistant.howto import answer_language, capability_menu
+from src.services.assistant.howto import (
+    AnswerCache,
+    AttachmentMetadata,
+    GuideAnswer,
+    answer_cache_key,
+    answer_language,
+    attached_actions,
+    capability_menu,
+    corpus_version,
+    safe_guide_output,
+)
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
 from src.services.assistant.locate import locate_actions
 from src.services.assistant.router import LocalRouter
@@ -49,7 +60,7 @@ from src.services.llm import assistant_llm_configured as llm_configured
 from src.services.llm import get_assistant_llm
 from src.services.privacy.types import MaskingError
 from src.services.providers.gateway import GatewayError, provider_scope, wrap_chat
-from src.services.providers.llm_client import LlmClient
+from src.services.providers.llm_client import ContentDelta, Done, LlmClient
 
 logger = logging.getLogger(__name__)
 ASSISTANT_INDEX_LOCK = RLock()
@@ -89,6 +100,10 @@ class AssistantState(TypedDict, total=False):
     sources: list[SourceCitation]
     confidence: Literal["low", "high"]
     response: AssistantResponse
+    retrieved_chunks: list[dict[str, Any]]
+    masked_query: str
+    docs_version: str
+    howto: bool
 
 
 class AssistantAgent:
@@ -96,6 +111,10 @@ class AssistantAgent:
         self._retriever = retriever
         self._llm = llm
         self._ui_router: LocalRouter | None = None
+        settings = get_settings()
+        self.answer_cache = AnswerCache(
+            maxsize=settings.rag_answer_cache_maxsize, ttl_s=settings.rag_answer_cache_ttl_s
+        )
         builder = StateGraph(AssistantState)
         builder.add_node("inspect", self._inspect)
         builder.add_node("classify", self._classify)
@@ -146,8 +165,8 @@ class AssistantAgent:
                         ui_actions=actions,
                     ),
                 }
-            return {"input_allowed": True, "message": message, "locate_fallback": True}
-        return {"input_allowed": True, "message": message}
+            return {"input_allowed": True, "message": message, "locate_fallback": True, "howto": True}
+        return {"input_allowed": True, "message": message, "howto": decision.route == "howto"}
 
     def _classify(self, state: AssistantState) -> dict[str, Any]:
         return {"intent": "qa" if state.get("locate_fallback") else classify_intent(state["message"])}
@@ -158,7 +177,11 @@ class AssistantAgent:
             # A fresh retriever observes rebuilt collections and BM25 corpora.
             with ASSISTANT_INDEX_LOCK:
                 retriever = self._retriever or AssistantHybridRetriever()
-                chunks = retriever.search(state["message"], context.user_role, route=context.route)
+                with provider_scope(mask_only=True) as scope:
+                    # The masker escapes ampersands for wire/XML safety. Search
+                    # keeps their original meaning, without restoring any PII.
+                    query = scope.mask_text(state["message"]).replace("&amp;", "&")
+                chunks = retriever.search(query, context.user_role, route=context.route)
         except (MaskingError, GatewayError):
             return {
                 "sources": [],
@@ -179,6 +202,18 @@ class AssistantAgent:
             if chunk.get("role") in (context.user_role, "all")
             and route_allowed(chunk.get("route", ""), context.user_role)
         ]
+        selected = select_citation_chunks(usable)
+        embedding = getattr(getattr(retriever, "vector_store", None), "embedding_service", None)
+        embedding_id = getattr(embedding, "embedding_id", "")
+        # E5 cosine confidence and the hashing fallback have different scales.
+        # Gate only the top result here; leave citation ranking/cutoffs intact.
+        if (
+            isinstance(embedding_id, str)
+            and embedding_id.startswith("e5:")
+            and selected
+            and selected[0].get("abstain_score", selected[0]["score"]) < get_settings().rag_semantic_abstain_threshold
+        ):
+            selected = []
         sources = [
             SourceCitation(
                 chunk_id=chunk["chunk_id"],
@@ -188,9 +223,18 @@ class AssistantAgent:
                 snippet=clean_citation_snippet(chunk["content"])[:500],
                 selector=chunk.get("selector"),
             )
-            for chunk in select_citation_chunks(usable)
+            for chunk in selected
         ]
-        return {"sources": sources, "confidence": "high" if sources else "low"}
+        corpus = getattr(retriever, "chunks", None)
+        if not isinstance(corpus, list):
+            corpus = [DocChunk.model_validate(chunk) for chunk in selected]
+        return {
+            "sources": sources,
+            "confidence": "high" if sources else "low",
+            "retrieved_chunks": selected,
+            "masked_query": query,
+            "docs_version": corpus_version(corpus),
+        }
 
     def _target_route(self, state: AssistantState) -> str | None:
         text = normalized(state["message"])
@@ -311,7 +355,105 @@ class AssistantAgent:
             message=response.message, intent=state["intent"], actions=safe, sources=response.sources
         )
 
+    async def _generate_howto(self, state: AssistantState) -> AssistantResponse:
+        context = state["context"]
+        language = answer_language(state["message"])
+        fallback = AssistantResponse(message=capability_menu(language, context.user_role), intent="qa")
+        if state.get("response"):
+            return state["response"]
+        if not state["sources"]:
+            return fallback
+        key = answer_cache_key(state["masked_query"], context.user_role, language, state["docs_version"])
+        cached = self.answer_cache.get(key)
+        if cached is not None:
+            return AssistantResponse(
+                message=cached.message,
+                intent="qa",
+                sources=cached.sources,
+                ui_actions=attached_actions(cached.attachment, context.user_role, context.route),
+            )
+        if self._llm is None and not llm_configured():
+            # Keep the existing offline excerpt fallback, with no legacy actions.
+            return self._fallback(state).model_copy(update={"intent": "qa", "actions": [], "ui_actions": []})
+        client = self._llm if self._llm is not None else get_assistant_llm()
+        stream = None
+        try:
+            with provider_scope(mask_only=True) as scope:
+                data = scope.mask_payload(
+                    {
+                        "question": state["message"],
+                        "history": json.dumps(state["history"][-4:], ensure_ascii=False),
+                        "documents": [clean_citation_snippet(chunk["content"]) for chunk in state["retrieved_chunks"]],
+                    }
+                )
+                prompt = (
+                    f"<untrusted_user_query>{escape(data['question'], quote=False)}</untrusted_user_query>\n"
+                    f"<untrusted_chat_history>{escape(data['history'], quote=False)}</untrusted_chat_history>\n"
+                    + "\n".join(
+                        f"<untrusted_document>{escape(doc, quote=False)}</untrusted_document>"
+                        for doc in data["documents"]
+                    )
+                )
+                messages = [
+                    {
+                        "role": "system",
+                        "content": scope.mask_text(
+                            HOWTO_SYSTEM_PROMPT.format(language="English" if language == "en" else "Vietnamese"),
+                            wire=True,
+                            detect_names=False,
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+                text, done = "", False
+                stream = client.chat_stream(
+                    scope.prepared(messages), thinking=False, model=get_settings().llm_model_agent, temperature=0
+                )
+                async for event in stream:
+                    if isinstance(event, ContentDelta):
+                        text += event.text
+                    elif isinstance(event, Done):
+                        if event.message.get("tool_calls"):
+                            raise GatewayError("Unexpected how-to tool call")
+                        done = True
+                if not done:
+                    raise GatewayError("Incomplete how-to response")
+                text = scope.sanitize_output(text)
+                if not safe_guide_output(text):
+                    return fallback
+                if is_refusal_response(text):
+                    return AssistantResponse(message=text, intent="qa")
+                top = state["retrieved_chunks"][0]
+                answer = GuideAnswer(
+                    message=text,
+                    sources=state["sources"],
+                    attachment=AttachmentMetadata.model_validate(top),
+                )
+                self.answer_cache.put(key, answer)
+                return AssistantResponse(
+                    message=answer.message,
+                    intent="qa",
+                    sources=answer.sources,
+                    ui_actions=attached_actions(answer.attachment, context.user_role, context.route),
+                )
+        except (MaskingError, GatewayError) as error:
+            if isinstance(error, MaskingError) or error.stage in {"mask", "egress", "response_mask"}:
+                return AssistantResponse(
+                    message="Trợ lý tạm thời chưa thể xử lý an toàn. Bạn vui lòng thử lại sau.", intent="qa"
+                )
+            return fallback
+        except Exception:
+            logger.warning("Assistant how-to generation unavailable")
+            return fallback
+        finally:
+            if stream is not None:
+                await stream.aclose()
+            if self._llm is None:
+                await client.aclose()
+
     async def _generate(self, state: AssistantState) -> dict[str, Any]:
+        if (state["intent"] == "qa" or state.get("howto")) and (self._llm is None or isinstance(self._llm, LlmClient)):
+            return {"response": await self._generate_howto(state)}
         if not state.get("response") and not state["sources"] and state["intent"] == "qa":
             return {
                 "response": AssistantResponse(
