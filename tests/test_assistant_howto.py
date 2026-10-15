@@ -1,6 +1,7 @@
 """How-to contracts use the existing guide index and gateway, never a live provider."""
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -388,5 +389,123 @@ async def test_e5_gate_ignores_page_boost_before_any_generation(tmp_path, guide_
         assert "usage guide does not cover" in response.message
         assert response.sources == response.ui_actions == []
         assert client.recorded_requests == []
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "knowledge_base",
+    [
+        "hashing",
+        pytest.param(
+            "e5",
+            marks=pytest.mark.skipif(
+                os.getenv("HOWTO_E5_EVAL") != "1" or os.getenv("HF_HUB_OFFLINE") != "1",
+                reason="Opt-in evaluation requires cached E5 weights and HF_HUB_OFFLINE=1",
+            ),
+        ),
+    ],
+    indirect=True,
+)
+async def test_out_of_corpus_abstention_precision_and_retrieval_regression(knowledge_base, tmp_path) -> None:
+    from statistics import mean
+
+    from eval.run_rag_eval import guide_rank_metrics
+    from src.services.assistant.agent import AssistantAgent
+    from src.services.providers.gateway import provider_scope
+
+    rows = json.loads(Path("eval/howto/out_of_corpus.json").read_text(encoding="utf-8"))
+    assert len(rows) >= 30
+    assert len({r["question"] for r in rows}) == len(rows)
+    assert {r["language"] for r in rows} == {"vi", "en"}
+    embedding_id = knowledge_base.vector_store.embedding_service.embedding_id
+    baseline_file = "retrieval_e5_baseline.json" if embedding_id.startswith("e5:") else "retrieval_baseline.json"
+    baseline = json.loads((Path("eval/howto") / baseline_file).read_text(encoding="utf-8"))
+    corpus = [chunk.model_dump() for chunk in knowledge_base.chunks]
+    by_id = {chunk["chunk_id"]: chunk for chunk in corpus}
+    samples = json.loads(Path("eval/rag_golden_dataset.json").read_text(encoding="utf-8"))
+    client = recorded_howto_client(tmp_path, [])
+    agent = AssistantAgent(knowledge_base, client)
+    true_abstentions, false_abstentions = 0, 0
+    misses, before_metrics, after_metrics = [], [], []
+    try:
+        with provider_scope(mask_only=True):
+            for row in rows:
+                state = {
+                    "message": row["question"],
+                    "context": howto_context(row["role"]),
+                    "intent": "qa",
+                    "history": [],
+                    "allowed_student_ids": [],
+                }
+                state.update(agent._retrieve(state))
+                if not state["sources"]:
+                    true_abstentions += 1
+                    response = (await agent._generate(state))["response"]
+                    assert response.sources == response.ui_actions == []
+                else:
+                    misses.append(row["id"])
+            for row, before in zip(samples, baseline, strict=True):
+                sample = GoldenSample.model_validate(row)
+                assert sample.question == before["question"]
+                state = {
+                    "message": sample.question,
+                    "context": howto_context(sample.role, sample.current_route),
+                    "intent": "qa",
+                }
+                result = agent._retrieve(state)
+                chunks = result["retrieved_chunks"]
+                if not chunks:
+                    false_abstentions += 1
+                assert [chunk["chunk_id"] for chunk in chunks] == before["chunk_ids"]
+                reference = [by_id[chunk_id] for chunk_id in before["chunk_ids"]]
+                old = {**before["metrics"], **guide_rank_metrics(sample, reference, corpus)}
+                new = {**retrieval_metrics(sample, chunks), **guide_rank_metrics(sample, chunks, corpus)}
+                for key in (
+                    "context_recall",
+                    "context_precision",
+                    "Recall@1",
+                    "Recall@3",
+                    "Precision@1",
+                    "Precision@3",
+                    "NDCG@1",
+                    "NDCG@3",
+                ):
+                    assert new[key] >= old[key] - 1e-8, (sample.question, key, old[key], new[key])
+                before_metrics.append(old)
+                after_metrics.append(new)
+        precision = true_abstentions / (true_abstentions + false_abstentions)
+        recall = true_abstentions / len(rows)
+        assert precision >= 0.9, (precision, false_abstentions)
+        assert recall >= 0.9, (recall, misses)
+        assert client.recorded_requests == []
+        keys = [
+            "context_recall",
+            "context_precision",
+            "Recall@1",
+            "Recall@3",
+            "Precision@1",
+            "Precision@3",
+            "NDCG@1",
+            "NDCG@3",
+        ]
+        print(
+            "HOWTO_EVALUATION "
+            + json.dumps(
+                {
+                    "embedding_id": embedding_id,
+                    "negative_count": len(rows),
+                    "positive_count": len(samples),
+                    "true_abstentions": true_abstentions,
+                    "false_abstentions": false_abstentions,
+                    "abstention_precision": precision,
+                    "abstention_recall": recall,
+                    "model_calls": len(client.recorded_requests),
+                    "retrieval_before": {key: mean(row[key] for row in before_metrics) for key in keys},
+                    "retrieval_after": {key: mean(row[key] for row in after_metrics) for key in keys},
+                }
+            )
+        )
     finally:
         await client.aclose()

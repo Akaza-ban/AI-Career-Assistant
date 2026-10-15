@@ -59,7 +59,7 @@ def capability_menu(language: str, role: str) -> str:
             else "the advisor overview and assigned students"
         )
         return (
-            "The usage guide does not cover this question. I can explain "
+            "The CareerV usage guide does not cover this question. I can explain "
             + topics
             + ", highlight a registered control, or navigate to an allowed page. Which feature do you need help with?"
         )
@@ -69,7 +69,7 @@ def capability_menu(language: str, role: str) -> str:
         else "trang tổng quan cố vấn và danh sách sinh viên phụ trách"
     )
     return (
-        "Tài liệu hướng dẫn chưa có thông tin phù hợp cho câu hỏi này. Tôi có thể hướng dẫn "
+        "Tài liệu hướng dẫn CareerV chưa có thông tin phù hợp cho câu hỏi này. Tôi có thể hướng dẫn "
         + topics
         + ", chỉ vị trí nút hoặc mở trang được phép. Bạn cần hỗ trợ tính năng nào?"
     )

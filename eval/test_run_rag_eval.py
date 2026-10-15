@@ -201,3 +201,28 @@ async def test_refused_question_does_not_reuse_previous_retrieval(monkeypatch: p
     assert rows[1]["context_recall"] == 0.0
     assert rows[1]["generation_mode"] == "input_refusal"
     assert all(row["faithfulness"] is None and row["relevance"] is None for row in rows)
+
+
+def test_guide_rank_metrics_use_corpus_labels_and_fixed_result_slots() -> None:
+    from eval.run_rag_eval import GoldenSample, guide_rank_metrics
+
+    sample = GoldenSample.model_validate(
+        {
+            "question": "How to upload a CV?",
+            "role": "student",
+            "current_route": "/student/cv",
+            "gold_context_keywords": ["PDF", "DOCX"],
+            "expected_answer": "Choose PDF or DOCX.",
+            "expected_route": "/student/cv",
+        }
+    )
+    corpus = [
+        {"chunk_id": "wrong", "role": "advisor", "route": "/advisor/dashboard", "content": "PDF"},
+        {"chunk_id": "pdf", "role": "student", "route": "/student/cv", "content": "PDF"},
+        {"chunk_id": "docx", "role": "student", "route": "/student/cv", "content": "DOCX"},
+    ]
+    metrics = guide_rank_metrics(sample, corpus[:2], corpus)
+    assert metrics["Recall@1"] == metrics["Precision@1"] == metrics["NDCG@1"] == 0
+    assert metrics["Recall@3"] == 0.5
+    assert metrics["Precision@3"] == pytest.approx(1 / 3)
+    assert metrics["NDCG@3"] == pytest.approx(0.3868528072)

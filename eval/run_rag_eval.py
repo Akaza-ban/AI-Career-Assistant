@@ -25,6 +25,7 @@ from src.models.assistant import AssistantResponse, ClientPageContext, route_all
 from src.services.assistant.agent import AssistantAgent, AssistantState
 from src.services.assistant.embedding import AssistantEmbeddingService
 from src.services.assistant.hybrid_search import AssistantHybridRetriever
+from src.services.benchmark import calculate_ndcg_at_k, calculate_precision_at_k, calculate_recall_at_k
 from src.services.llm import llm_configured
 
 EVAL_DIR = Path(__file__).resolve().parent
@@ -129,6 +130,34 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     if not denominator:
         return 0.0
     return max(0.0, min(1.0, sum(a * b for a, b in zip(left, right)) / denominator))
+
+
+def guide_rank_metrics(
+    sample: GoldenSample, chunks: list[dict[str, Any]], corpus: list[dict[str, Any]]
+) -> dict[str, float]:
+    """Binary keyword/route relevance, using the existing rank metric utilities.
+
+    These deterministic labels measure retrieval regression, not human-judged
+    semantic relevance. Unlike the historical context_precision, these are true
+    rank metrics with a fixed denominator (including missing result slots).
+    """
+    relevant = [
+        chunk["chunk_id"]
+        for chunk in corpus
+        if chunk["role"] in (sample.role, "all")
+        and chunk["route"] == sample.expected_route
+        and any(keyword_present(key, chunk["content"]) for key in sample.gold_context_keywords)
+    ]
+    retrieved = [chunk["chunk_id"] for chunk in chunks]
+    return {
+        f"{name}@{k}": metric(retrieved, relevant, k)
+        for k in (1, 3)
+        for name, metric in (
+            ("Recall", calculate_recall_at_k),
+            ("Precision", calculate_precision_at_k),
+            ("NDCG", calculate_ndcg_at_k),
+        )
+    }
 
 
 class RecordingRetriever(AssistantHybridRetriever):

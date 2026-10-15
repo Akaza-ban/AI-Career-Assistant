@@ -65,19 +65,26 @@ def payload(message: str = "chuyển sang trang phân tích", role: str = "stude
 
 
 @pytest.fixture(scope="module")
-def knowledge_base(tmp_path_factory: pytest.TempPathFactory) -> Iterator[AssistantHybridRetriever]:
+def knowledge_base(
+    tmp_path_factory: pytest.TempPathFactory, request: pytest.FixtureRequest
+) -> Iterator[AssistantHybridRetriever]:
     patch = pytest.MonkeyPatch()
     settings = get_settings()
     patch.setattr(settings, "assistant_chroma_persist_dir", str(tmp_path_factory.mktemp("assistant-index")))
     patch.setattr(settings, "assistant_docs_dir", str(Path("docs/user-guide").resolve()))
     patch.setattr(settings, "assistant_chroma_collection", "assistant_test_knowledge")
-    service = object.__new__(AssistantEmbeddingService)
-    service._initialized = True
-    service._model = None
-    service._used_model = False
-    service.model_name = settings.assistant_embedding_model
-    service.dimension = 384
-    patch.setattr(AssistantEmbeddingService, "_instance", service)
+    if getattr(request, "param", "hashing") == "e5":
+        patch.setattr(AssistantEmbeddingService, "_instance", None)
+        service = AssistantEmbeddingService()
+        assert service.embedding_id.startswith("e5:"), "Cached E5 weights are required for this explicit evaluation"
+    else:
+        service = object.__new__(AssistantEmbeddingService)
+        service._initialized = True
+        service._model = None
+        service._used_model = False
+        service.model_name = settings.assistant_embedding_model
+        service.dimension = 384
+        patch.setattr(AssistantEmbeddingService, "_instance", service)
     assert build_assistant_index() > 0
     try:
         yield AssistantHybridRetriever()
@@ -262,7 +269,8 @@ async def test_unrelated_question_is_refused_without_sources(
     assert state["confidence"] == "low" and state["sources"] == []
     response = await agent.respond(message, context())
     assert response.sources == []
-    assert response.message.startswith("Xin lỗi,") and "CareerV" in response.message
+    assert "CareerV" in response.message
+    assert response.message.startswith("Xin lỗi,") or "Tài liệu hướng dẫn" in response.message
     assert response.actions == []
     structured.ainvoke.assert_not_called()
 
@@ -696,7 +704,9 @@ async def test_navigate_to_jd_detail_only_for_visible_jds(
         {
             "message": "Mở chi tiết vị trí trong Thư viện JD.",
             "intent": "action",
-            "actions": [{"action_type": "NAVIGATE_PAGE", "params": {"route": route}, "description_vi": "Mở chi tiết JD"}],
+            "actions": [
+                {"action_type": "NAVIGATE_PAGE", "params": {"route": route}, "description_vi": "Mở chi tiết JD"}
+            ],
         }
     )
     monkeypatch.setattr(api_agent, "_llm", llm)
@@ -805,7 +815,12 @@ async def test_feedback_persists_and_updates_without_duplicate(client: AsyncClie
         undo = await client.delete(f"{API}/feedback/{chat['turn_id']}", headers=STUDENT)
         assert undo.status_code == 204
     with SessionLocal() as db:
-        assert db.scalar(select(func.count()).select_from(AssistantFeedback).where(AssistantFeedback.turn_id == chat["turn_id"])) == 0
+        assert (
+            db.scalar(
+                select(func.count()).select_from(AssistantFeedback).where(AssistantFeedback.turn_id == chat["turn_id"])
+            )
+            == 0
+        )
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,242 @@
+[
+  {
+    "id": "ooc-001",
+    "language": "vi",
+    "role": "advisor",
+    "question": "Cách nấu phở bò bằng nồi áp suất?"
+  },
+  {
+    "id": "ooc-002",
+    "language": "vi",
+    "role": "student",
+    "question": "Giải thích sự hình thành lỗ đen trong vũ trụ."
+  },
+  {
+    "id": "ooc-003",
+    "language": "vi",
+    "role": "student",
+    "question": "Thời tiết ở Hà Nội cuối tuần này thế nào?"
+  },
+  {
+    "id": "ooc-004",
+    "language": "vi",
+    "role": "student",
+    "question": "Ai vô địch World Cup năm 1998?"
+  },
+  {
+    "id": "ooc-005",
+    "language": "vi",
+    "role": "advisor",
+    "question": "Cách trồng hoa lan trong căn hộ?"
+  },
+  {
+    "id": "ooc-006",
+    "language": "vi",
+    "role": "student",
+    "question": "Tính tích phân của hàm sin bình phương."
+  },
+  {
+    "id": "ooc-007",
+    "language": "vi",
+    "role": "student",
+    "question": "Mua vé máy bay đi Đà Nẵng ở đâu?"
+  },
+  {
+    "id": "ooc-008",
+    "language": "vi",
+    "role": "student",
+    "question": "Tóm tắt truyện Dế Mèn phiêu lưu ký."
+  },
+  {
+    "id": "ooc-009",
+    "language": "vi",
+    "role": "advisor",
+    "question": "Viết bài thơ về hoàng hôn trên biển."
+  },
+  {
+    "id": "ooc-010",
+    "language": "vi",
+    "role": "student",
+    "question": "Cách sửa máy giặt bị rò nước?"
+  },
+  {
+    "id": "ooc-011",
+    "language": "vi",
+    "role": "student",
+    "question": "Tại sao lá cây chuyển màu vào mùa thu?"
+  },
+  {
+    "id": "ooc-012",
+    "language": "vi",
+    "role": "student",
+    "question": "Lập thực đơn chay cho bảy ngày."
+  },
+  {
+    "id": "ooc-013",
+    "language": "vi",
+    "role": "advisor",
+    "question": "Giải thích luật việt vị trong bóng đá."
+  },
+  {
+    "id": "ooc-014",
+    "language": "vi",
+    "role": "student",
+    "question": "Cách chăm sóc mèo con mới sinh?"
+  },
+  {
+    "id": "ooc-015",
+    "language": "vi",
+    "role": "student",
+    "question": "Làm sao chơi hợp âm đàn guitar?"
+  },
+  {
+    "id": "ooc-016",
+    "language": "en",
+    "role": "student",
+    "question": "How do I bake sourdough bread?"
+  },
+  {
+    "id": "ooc-017",
+    "language": "en",
+    "role": "advisor",
+    "question": "Explain quantum entanglement."
+  },
+  {
+    "id": "ooc-018",
+    "language": "en",
+    "role": "student",
+    "question": "What is the capital of Iceland?"
+  },
+  {
+    "id": "ooc-019",
+    "language": "en",
+    "role": "student",
+    "question": "How do I repair a bicycle chain?"
+  },
+  {
+    "id": "ooc-020",
+    "language": "en",
+    "role": "student",
+    "question": "Write a fantasy story about a dragon."
+  },
+  {
+    "id": "ooc-021",
+    "language": "en",
+    "role": "advisor",
+    "question": "Calculate the surface area of a sphere."
+  },
+  {
+    "id": "ooc-022",
+    "language": "en",
+    "role": "student",
+    "question": "How can I grow tomatoes on a balcony?"
+  },
+  {
+    "id": "ooc-023",
+    "language": "en",
+    "role": "student",
+    "question": "What caused the fall of the Roman Empire?"
+  },
+  {
+    "id": "ooc-024",
+    "language": "en",
+    "role": "student",
+    "question": "Recommend a hiking trail in Patagonia."
+  },
+  {
+    "id": "ooc-025",
+    "language": "en",
+    "role": "advisor",
+    "question": "Translate this recipe into Spanish."
+  },
+  {
+    "id": "ooc-026",
+    "language": "en",
+    "role": "student",
+    "question": "How do I tune a violin?"
+  },
+  {
+    "id": "ooc-027",
+    "language": "en",
+    "role": "student",
+    "question": "Explain the migration patterns of whales."
+  },
+  {
+    "id": "ooc-028",
+    "language": "en",
+    "role": "student",
+    "question": "How can I remove coffee stains from cotton?"
+  },
+  {
+    "id": "ooc-029",
+    "language": "en",
+    "role": "advisor",
+    "question": "What are the rules of chess castling?"
+  },
+  {
+    "id": "ooc-030",
+    "language": "en",
+    "role": "student",
+    "question": "Describe the life cycle of a butterfly."
+  },
+  {
+    "id": "ooc-031",
+    "language": "vi",
+    "role": "student",
+    "question": "CareerV có thể đặt vé tàu hỏa và chọn ghế không?"
+  },
+  {
+    "id": "ooc-032",
+    "language": "vi",
+    "role": "student",
+    "question": "Cách dùng CareerV để dự báo động đất và sóng thần?"
+  },
+  {
+    "id": "ooc-033",
+    "language": "vi",
+    "role": "advisor",
+    "question": "CareerV hỗ trợ điều khiển máy in ba chiều từ xa như thế nào?"
+  },
+  {
+    "id": "ooc-034",
+    "language": "vi",
+    "role": "student",
+    "question": "Cách thanh toán tiền điện bằng ví tiền mã hóa trong CareerV?"
+  },
+  {
+    "id": "ooc-035",
+    "language": "vi",
+    "role": "student",
+    "question": "Làm sao bói vận mệnh từ tệp CV bằng cung hoàng đạo?"
+  },
+  {
+    "id": "ooc-036",
+    "language": "en",
+    "role": "student",
+    "question": "How do I order groceries for delivery in CareerV?"
+  },
+  {
+    "id": "ooc-037",
+    "language": "en",
+    "role": "advisor",
+    "question": "How do I book a hotel using CareerV?"
+  },
+  {
+    "id": "ooc-038",
+    "language": "en",
+    "role": "student",
+    "question": "Can CareerV remotely unlock a car?"
+  },
+  {
+    "id": "ooc-039",
+    "language": "en",
+    "role": "student",
+    "question": "How do I mint a CV as a blockchain token?"
+  },
+  {
+    "id": "ooc-040",
+    "language": "en",
+    "role": "student",
+    "question": "Can CareerV diagnose a broken arm from a JD?"
+  }
+]
