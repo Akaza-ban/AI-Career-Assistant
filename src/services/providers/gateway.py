@@ -6,6 +6,7 @@ business fields inside an authorized provider_scope; telemetry stays masked.
 """
 
 import asyncio
+import copy
 import json
 import logging
 import math
@@ -15,6 +16,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from langchain_core.embeddings import Embeddings
@@ -22,8 +24,8 @@ from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
 from src.config import Settings, get_settings
-from src.services.privacy.detectors import Detector, identity_spans, merge_spans, regex_spans
-from src.services.privacy.masker import mask, unmask
+from src.services.privacy.detectors import Detector, _fold, identity_spans, merge_spans, regex_spans
+from src.services.privacy.masker import mask, mask_only, neutralize_placeholders, unmask
 from src.services.privacy.transient import TransientVault
 from src.services.privacy.types import KINDS, PLACEHOLDER_RE, Identity, MaskingError, Span
 
@@ -160,12 +162,21 @@ class PreparedPayload:
 
 class ProviderScope:
     def __init__(
-        self, user_id: str = "system", identities: tuple[Identity, ...] = (), origins: tuple[str, ...] = ("message",)
+        self,
+        user_id: str = "system",
+        identities: tuple[Identity, ...] = (),
+        origins: tuple[str, ...] = ("message",),
+        *,
+        mask_only: bool = False,
     ) -> None:
         self.user_id = user_id
         self.identities = identities
         self.origins = frozenset(("message", *origins))
-        self.vault = TransientVault(get_settings().pii_vault_ttl_hours * 3600)
+        self.mask_only = mask_only
+        self.vault = None if mask_only else TransientVault(get_settings().pii_vault_ttl_hours * 3600)
+        # Detection dictionary only: no placeholder-to-original mapping, storage,
+        # encryption, resolution or restoration on the assistant path.
+        self._identifiers: dict[str, Any] = {}
         self._detection_cache: dict[tuple[str, str], list[Span]] | None = None
 
     def _detector(self) -> Detector:
@@ -174,7 +185,6 @@ class ProviderScope:
         if not get_settings().pii_masking_enabled:
             raise MaskingError("Local privacy protection unavailable; please try again later")
         active = get_detector()
-        vault = self.vault
         scope = self
 
         class DictionaryDetector(Detector):
@@ -187,9 +197,36 @@ class ProviderScope:
                     if key not in cache:
                         cache[key] = active.detect(text, **kwargs)
                     spans = cache[key]
-                return merge_spans([*spans, *vault.dictionary_spans(text)], len(text))
+                if scope.mask_only:
+                    for span in spans:
+                        scope._identifiers[text[span.start : span.end]] = span.kind
+                return merge_spans([*spans, *scope.dictionary_spans(text)], len(text))
 
         return DictionaryDetector()
+
+    def dictionary_spans(self, text: str) -> list[Span]:
+        if self.vault is not None:
+            return self.vault.dictionary_spans(text)
+        folded, offsets = _fold(text)
+        folded = re.sub(r"(?<=\w)[_-](?=\w)", " ", folded)
+        spans = []
+        for original, kind in self._identifiers.items():
+            needle, _ = _fold(original)
+            for match in re.finditer(r"(?<!\w)" + re.escape(needle) + r"(?!\w)", folded):
+                spans.append(Span(offsets[match.start()], offsets[match.end() - 1] + 1, kind, 1))
+        return merge_spans(spans, len(text))
+
+    def sanitize_output(self, value: Any) -> Any:
+        """Server-owned labels never pass here; only model-produced values do."""
+        if isinstance(value, str):
+            return neutralize_placeholders(value) if self.mask_only else value
+        if isinstance(value, BaseModel):
+            return type(value).model_validate(self.sanitize_output(value.model_dump()))
+        if isinstance(value, Mapping):
+            return {key: self.sanitize_output(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self.sanitize_output(item) for item in value]
+        return value
 
     def prime(self, text: str, origin: str, *, document_type: str | None = None) -> None:
         """Detect a document before prompt decoration/truncation loses its header."""
@@ -203,12 +240,17 @@ class ProviderScope:
         # span can include "Applicant" plus a name; that broader original alone
         # would not catch the bare name later in the document/prompt.
         for span in [*spans, *regex_spans(text), *identity_spans(text, self.identities)]:
-            self.vault.store(text[span.start : span.end], span.kind, origin)
+            if self.vault is None:
+                self._identifiers[text[span.start : span.end]] = span.kind
+            else:
+                self.vault.store(text[span.start : span.end], span.kind, origin)
 
     def mask_text(self, text: str, *, origin: str = "message", wire: bool = False, detect_names: bool = True) -> str:
         if origin not in self.origins:
             raise MaskingError("Document outside the authorized privacy scope")
         detector = self._detector()
+        if self.mask_only:
+            return mask_only(text, detector=detector, identities=self.identities, wire=wire)
         if not wire:
             return mask(text, self.vault, origin=origin, detector=detector, identities=self.identities)
         # Only gateway-produced wire data may preserve a token. Raw inbound data
@@ -251,9 +293,13 @@ class ProviderScope:
         if isinstance(value, str):
             probe = PLACEHOLDER_RE.sub(lambda m: " " * len(m.group()), value)
             chunks, cursor = [], 0
-            for span in self.vault.dictionary_spans(probe):
+            for span in self.dictionary_spans(probe):
                 chunks.append(value[cursor : span.start])
-                chunks.append(self.vault.store(value[span.start : span.end], span.kind, "message"))
+                chunks.append(
+                    f"[[{span.kind}]]"
+                    if self.vault is None
+                    else self.vault.store(value[span.start : span.end], span.kind, "message")
+                )
                 cursor = span.end
             chunks.append(value[cursor:])
             return "".join(chunks)
@@ -317,6 +363,8 @@ class ProviderScope:
 
         Never restore reasoning_content, thought, telemetry, or checkpoints.
         """
+        if self.mask_only:
+            raise MaskingError("Assistant privacy scopes do not support restoration")
         origins = frozenset(allowed_origins) if allowed_origins is not None else self.origins
         if not origins.issubset(self.origins):
             raise MaskingError("Resolution outside the authorized privacy scope")
@@ -336,14 +384,28 @@ class ProviderScope:
 
 @contextmanager
 def provider_scope(
-    *, user_id: str | None = None, identities: tuple[Identity, ...] = (), origins: tuple[str, ...] = ()
+    *,
+    user_id: str | None = None,
+    identities: tuple[Identity, ...] = (),
+    origins: tuple[str, ...] = (),
+    mask_only: bool | None = None,
 ) -> Iterator[ProviderScope]:
     existing = _scope.get()
-    if existing is not None and user_id is None and not origins and not identities:
+    if (
+        existing is not None
+        and user_id is None
+        and not origins
+        and not identities
+        and (mask_only is None or mask_only == existing.mask_only)
+    ):
         with telemetry_policy():
             yield existing
         return
-    if user_id is not None and not identities:
+    if existing is not None and user_id is None:
+        user_id = existing.user_id
+        identities = identities or existing.identities
+        origins = origins or tuple(existing.origins)
+    if user_id is not None and user_id != "system" and not identities:
         from src.db.database import SessionLocal
         from src.db.models import User
 
@@ -351,15 +413,17 @@ def provider_scope(
             user = db.get(User, user_id)
             if user is None:
                 raise GatewayError("Provider user scope unavailable")
-            identities = (Identity(name=user.full_name, email=user.email),)
-    scope = ProviderScope(user_id or "system", identities, origins)
+            identities = (Identity(name=user.full_name, email=user.email, phone=user.phone or ""),)
+    scope = ProviderScope(user_id or "system", identities, origins, mask_only=bool(mask_only))
     token = _scope.set(scope)
     try:
         with telemetry_policy():
             yield scope
     finally:
         _scope.reset(token)
-        scope.vault.clear()
+        if scope.vault is not None:
+            scope.vault.clear()
+        scope._identifiers.clear()
 
 
 def egress_scan(payload: Any, scope: ProviderScope) -> None:
@@ -372,11 +436,15 @@ def egress_scan(payload: Any, scope: ProviderScope) -> None:
 
     text = json.dumps(payload, ensure_ascii=False, default=serialize)
     # Nonces/counters are opaque; do not mistake their digits for IDs/phones.
-    text = PLACEHOLDER_RE.sub("", text)
+    text = (
+        re.sub(r"\[\[(?:PERSON|EMAIL|PHONE|ID|URL|HANDLE|DOB|ADDRESS)\]\]", "", text)
+        if scope.mask_only
+        else PLACEHOLDER_RE.sub("", text)
+    )
     if (
         any(span.kind in {"EMAIL", "PHONE", "ID"} for span in regex_spans(text))
         or identity_spans(text, scope.identities)
-        or scope.vault.dictionary_spans(text)
+        or scope.dictionary_spans(text)
     ):
         raise MaskingError("Privacy egress guard blocked provider dispatch")
 
@@ -487,11 +555,85 @@ def _chat_backend(settings: Settings, options: dict[str, Any]) -> Any:
 
 
 def _retryable(error: Exception) -> bool:
+    from httpx import TransportError
     from openai import APIConnectionError, APIStatusError
 
-    return isinstance(error, APIConnectionError) or (
+    return isinstance(error, (APIConnectionError, TransportError)) or (
         isinstance(error, APIStatusError) and (error.status_code in {408, 409, 429} or error.status_code >= 500)
     )
+
+
+def provider_error_status(error: Exception) -> int | None:
+    from openai import APIStatusError
+
+    return error.status_code if isinstance(error, APIStatusError) else None
+
+
+def validate_chat_message(message: dict[str, Any]) -> dict[str, Any]:
+    from openai.types.chat import ChatCompletionMessage
+
+    return ChatCompletionMessage.model_validate(message).model_dump(exclude_none=True)
+
+
+class RawChatTransport:
+    """Gateway-owned SDK transport, including offline HTTP protocol recordings.
+
+    LlmClient owns accumulation/retry orchestration; every physical dispatch
+    crosses this boundary and is scanned immediately before the SDK sees it.
+    """
+
+    def __init__(self, settings: Settings, *, recorded: str | Path | None = None, http_client: Any = None) -> None:
+        import httpx
+        from openai import AsyncOpenAI
+
+        self.recorded_requests: list[dict[str, Any]] = []
+        self._exchanges: list[dict[str, Any]] = []
+        if recorded is not None:
+            if http_client is not None:
+                raise GatewayError("Recorded mode cannot use a live transport")
+            try:
+                self._exchanges = json.loads(Path(recorded).read_text(encoding="utf-8"))["exchanges"]
+            except Exception:
+                raise GatewayError("Recorded responses unavailable") from None
+            http_client = httpx.AsyncClient(transport=httpx.MockTransport(self._recorded_response))
+        self._client = AsyncOpenAI(
+            api_key="recorded" if recorded is not None else settings.llm_api_key.get_secret_value() or "unconfigured",
+            base_url=settings.llm_base_url or "https://api.deepseek.com",
+            timeout=settings.llm_timeout_s,
+            max_retries=0,
+            http_client=http_client,
+        )
+
+    async def _recorded_response(self, request: Any) -> Any:
+        import httpx
+
+        payload = json.loads(request.content)
+        self.recorded_requests.append(copy.deepcopy(payload))
+        if not self._exchanges:
+            raise GatewayError("Recorded response exhausted")
+        exchange = self._exchanges.pop(0)
+        if "request" in exchange and payload != exchange["request"]:
+            raise GatewayError("Recorded request mismatch")
+        if exchange.get("delay_s"):
+            await asyncio.sleep(exchange["delay_s"])
+        if "chunks" in exchange:
+            body = "".join("data: " + json.dumps(chunk) + "\n\n" for chunk in exchange["chunks"])
+            return httpx.Response(200, text=body + "data: [DONE]\n\n", headers={"content-type": "text/event-stream"})
+        return httpx.Response(exchange.get("status", 200), json=exchange["response"])
+
+    async def create(self, payload: dict[str, Any]) -> Any:
+        scope = _scope.get()
+        if scope is None:
+            raise GatewayError("Provider dispatch requires privacy scope")
+        egress_scan(payload, scope)
+        return await self._client.chat.completions.create(**payload)
+
+    async def close(self) -> None:
+        await self._client.close()
+
+    def assert_recording_consumed(self) -> None:
+        if self._exchanges:
+            raise AssertionError("Unused recorded exchanges")
 
 
 async def _chat_attempts(
@@ -598,16 +740,18 @@ class GatewayChat:
                     response = self._schema.model_validate(response)
                 if isinstance(response, BaseMessage):
                     # Provider diagnostics cannot escape as response metadata.
-                    return response.model_copy(
-                        update={
-                            "content": scope.mask_response_content(response.content),
-                            "additional_kwargs": scope.mask_payload(response.additional_kwargs, wire=True),
-                            "tool_calls": scope.mask_payload(response.tool_calls, wire=True),
-                            "invalid_tool_calls": scope.mask_payload(response.invalid_tool_calls, wire=True),
-                            "response_metadata": {},
-                        }
+                    return scope.sanitize_output(
+                        response.model_copy(
+                            update={
+                                "content": scope.mask_response_content(response.content),
+                                "additional_kwargs": scope.mask_payload(response.additional_kwargs, wire=True),
+                                "tool_calls": scope.mask_payload(response.tool_calls, wire=True),
+                                "invalid_tool_calls": scope.mask_payload(response.invalid_tool_calls, wire=True),
+                                "response_metadata": {},
+                            }
+                        )
                     )
-                return scope.mask_payload(response, wire=True)
+                return scope.sanitize_output(scope.mask_payload(response, wire=True))
             except TimeoutError:
                 timed_out = True
             except asyncio.CancelledError:

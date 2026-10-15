@@ -12,21 +12,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import httpx
-from openai import APIStatusError, AsyncOpenAI
-from openai.types.chat import ChatCompletionMessage
-
 from src.config import Settings, get_settings
 from src.services.privacy.types import MaskingError
 from src.services.providers.gateway import (
     GatewayError,
     GatewayTimeoutError,
     PreparedPayload,
+    RawChatTransport,
     _finish,
     _retryable,
     _start,
     egress_scan,
+    provider_error_status,
     provider_scope,
+    validate_chat_message,
 )
 
 
@@ -70,46 +69,18 @@ class LlmClient:
         *,
         settings: Settings | None = None,
         recorded: str | Path | None = None,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: Any = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.recorded = recorded is not None
-        self.recorded_requests: list[dict[str, Any]] = []
-        self._exchanges: list[dict[str, Any]] = []
-        if recorded is not None:
-            if http_client is not None:
-                raise ValueError("Recorded mode cannot use a live transport")
-            self._exchanges = json.loads(Path(recorded).read_text(encoding="utf-8"))["exchanges"]
-            http_client = httpx.AsyncClient(transport=httpx.MockTransport(self._recorded_response))
-        self._client = AsyncOpenAI(
-            api_key="recorded" if self.recorded else self.settings.llm_api_key.get_secret_value() or "unconfigured",
-            base_url=self.settings.llm_base_url or "https://api.deepseek.com",
-            timeout=self.settings.llm_timeout_s,
-            max_retries=0,
-            http_client=http_client,
-        )
-
-    async def _recorded_response(self, request: httpx.Request) -> httpx.Response:
-        payload = json.loads(request.content)
-        self.recorded_requests.append(copy.deepcopy(payload))
-        if not self._exchanges:
-            raise GatewayError("Recorded response exhausted")
-        exchange = self._exchanges.pop(0)
-        if "request" in exchange and payload != exchange["request"]:
-            raise GatewayError("Recorded request mismatch")
-        if exchange.get("delay_s"):
-            await asyncio.sleep(exchange["delay_s"])
-        if "chunks" in exchange:
-            body = "".join("data: " + json.dumps(chunk) + "\n\n" for chunk in exchange["chunks"])
-            return httpx.Response(200, text=body + "data: [DONE]\n\n", headers={"content-type": "text/event-stream"})
-        return httpx.Response(exchange.get("status", 200), json=exchange["response"])
+        self._transport = RawChatTransport(self.settings, recorded=recorded, http_client=http_client)
+        self.recorded_requests = self._transport.recorded_requests
 
     async def aclose(self) -> None:
-        await self._client.close()
+        await self._transport.close()
 
     def assert_recording_consumed(self) -> None:
-        if self._exchanges:
-            raise AssertionError("Unused recorded exchanges")
+        self._transport.assert_recording_consumed()
 
     @staticmethod
     def parse_tool_arguments(message: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -258,7 +229,7 @@ class LlmClient:
                 retry = False
                 try:
                     async with asyncio.timeout(self.settings.llm_timeout_s):
-                        upstream = await self._client.chat.completions.create(**payload)
+                        upstream = await self._transport.create(payload)
                         if not options["stream"]:
                             usage = upstream.usage.model_dump(exclude_none=True) if upstream.usage else None
                             message = upstream.choices[0].message.model_dump(exclude_none=True)
@@ -308,7 +279,7 @@ class LlmClient:
                                 raise GatewayError("Provider stream ended without a finish marker")
                             if calls:
                                 accumulated["tool_calls"] = [calls[index] for index in sorted(calls)]
-                            message = ChatCompletionMessage.model_validate(accumulated).model_dump(exclude_none=True)
+                            message = validate_chat_message(accumulated)
                         egress_scan(message, scope)
                         status = "success"
                     # Finish accounting and close transport BEFORE publishing Done.
@@ -323,13 +294,9 @@ class LlmClient:
                 except (GatewayError, MaskingError):
                     raise
                 except Exception as error:
-                    retry = (
-                        not emitted
-                        and (_retryable(error) or isinstance(error, httpx.TransportError))
-                        and attempt < self.settings.llm_max_retries
-                    )
+                    retry = not emitted and _retryable(error) and attempt < self.settings.llm_max_retries
                     if not retry:
-                        code = error.status_code if isinstance(error, APIStatusError) else None
+                        code = provider_error_status(error)
                         reasoning = code == 400 and "reasoning" in str(error).lower()
                         raise LlmProviderError(code, reasoning_contract=reasoning) from None
                 finally:

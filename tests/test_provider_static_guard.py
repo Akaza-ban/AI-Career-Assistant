@@ -9,7 +9,6 @@ import json
 from pathlib import Path
 
 GATEWAY = "src/services/providers/gateway.py"
-LLM_CLIENT = "src/services/providers/llm_client.py"
 ROOT = Path(__file__).resolve().parents[1]
 ALLOWLIST = json.loads((Path(__file__).with_name("provider_import_allowlist.json")).read_text())
 PROVIDERS = {
@@ -77,7 +76,7 @@ def violations(source: str, path: str) -> list[str]:
                 elif isinstance(node.args[0].value, str):
                     modules = [node.args[0].value]
             # Catch model REST surfaces even when an HTTP client is injected.
-            if path != LLM_CLIENT and any(
+            if any(
                 part in name for part in ("chat.completions", "embeddings.create", "responses.create", "invoke_model")
             ):
                 found.append(f"{path}:{node.lineno}: outbound model call")
@@ -88,8 +87,6 @@ def violations(source: str, path: str) -> list[str]:
                     ):
                         found.append(f"{path}:{node.lineno}: model HTTP endpoint")
         for module in modules:
-            if path == LLM_CLIENT and (module == "httpx" or module == "openai" or module.startswith("openai.")):
-                continue
             if not any(module == prefix or module.startswith(prefix + ".") for prefix in PROVIDERS):
                 continue
             exceptions = ALLOWLIST.get(path, {})
