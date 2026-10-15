@@ -44,8 +44,9 @@ class AssistantVectorStore:
             batch = chunks[offset : offset + batch_size]
             metadatas = []
             for chunk in batch:
-                item = chunk.model_dump(exclude={"chunk_id", "content", "tags", "selector"})
+                item = chunk.model_dump(exclude={"chunk_id", "content", "tags", "selector", "ui_targets"})
                 item["tags"] = json.dumps(chunk.tags, ensure_ascii=False)
+                item["ui_targets"] = json.dumps(chunk.ui_targets, ensure_ascii=False)
                 if chunk.selector is not None:
                     item["selector"] = chunk.selector
                 metadatas.append(item)
@@ -81,6 +82,7 @@ class AssistantVectorStore:
             "chunk_id": chunk_id,
             "content": content,
             "tags": json.loads(metadata.get("tags", "[]")),
+            "ui_targets": json.loads(metadata.get("ui_targets", "[]")),
             "selector": metadata.get("selector"),
         }
 

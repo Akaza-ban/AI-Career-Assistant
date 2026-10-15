@@ -227,3 +227,9 @@ claimed, and the missing 100+ real utterances remain a release-evidence gap.
 - Added 14 literal frontend IDs, role/registry/owner rejection tests, bidirectional attribute drift, actual-page route drift, and 44 authored matcher fixtures. Provider/RAG tests now use a howto question about the actual Chọn file label, since locate no longer needs a provider.
 
 See [registered targets, matching results and validation](UI_LOCATE_IMPLEMENTATION.md).
+
+## Architecture 6.1 ingestion metadata
+
+Extended the existing MarkdownDocChunker, indexer, and Chroma serialization; BM25 continues to persist the same DocChunk models. Static route IDs come from the T3.1 registry (including legacy route aliases); registered selector IDs become per-chunk ui_targets. Optional frontmatter targets are validated against the guide role/route before index replacement. A deterministic corpus-wide content/metadata hash stamps docs_version. Existing chunks remain readable and require reindexing to acquire attachment metadata.
+
+The 15-case pre-change retrieval snapshot in `eval/howto/retrieval_baseline.json` uses the existing deterministic hashing fixture, temporary Chroma/BM25, and existing keyword metrics. It is a reproducible regression baseline, distinct from T0's historical E5/fallback evaluation.
