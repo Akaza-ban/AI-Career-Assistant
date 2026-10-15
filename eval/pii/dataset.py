@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.services.privacy.types import KINDS, Span
+from src.services.privacy.types import KINDS, Identity, Span
 
 ROOT = Path(__file__).parent
 
@@ -24,6 +24,7 @@ class Sample:
     filename: str = ""
     filename_entities: tuple[Span, ...] = ()
     document: Path | None = None
+    identities: tuple[Identity, ...] = ()
 
 
 def _spans(values: list[dict[str, Any]], text: str) -> tuple[Span, ...]:
@@ -63,6 +64,7 @@ def parse_sample(value: dict[str, Any], root: Path) -> Sample:
         filename=filename,
         filename_entities=_spans(value.get("filename_entities", []), filename),
         document=document,
+        identities=tuple(Identity(**identity) for identity in value.get("identities", [])),
     )
 
 
@@ -71,6 +73,16 @@ def load_synthetic(root: Path = ROOT) -> list[Sample]:
         samples = [parse_sample(json.loads(line), root) for line in stream if line.strip()]
     if len({sample.id for sample in samples}) != len(samples):
         raise ValueError("Duplicate golden sample IDs")
+    return samples
+
+
+def load_messages(root: Path = ROOT) -> list[Sample]:
+    with (root / "messages.jsonl").open(encoding="utf-8") as stream:
+        samples = [parse_sample(json.loads(line), root) for line in stream if line.strip()]
+    if not samples or len({sample.id for sample in samples}) != len(samples):
+        raise ValueError("Empty message dataset or duplicate sample IDs")
+    if any(sample.category != "message" for sample in samples):
+        raise ValueError("Expected message-style privacy fixtures")
     return samples
 
 

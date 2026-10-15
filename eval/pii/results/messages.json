@@ -1,0 +1,137 @@
+{
+  "scope": "assistant_messages",
+  "review_status": "needs_human_review",
+  "dataset_sha256": "81b86f58c9dac73c11ed01fb8dca0b5e6af90a58734c6e71a7324d9938d87005",
+  "measured_at": "2026-10-15T05:38:47.336849+00:00",
+  "source_sha256": {
+    "src/services/privacy/detectors.py": "6fb740570103fdacad41bcf3054835485533e64d2c9f328532a6952df5988a6f",
+    "src/services/privacy/masker.py": "832973935741de8d96c1e7d24abb05972122289355cd201e7363b1383df0f816",
+    "src/services/providers/gateway.py": "1fd9240b90362d52cfda3ffe406b4a1b0a3cdff3b6e68d9906d1bf4eff050b28",
+    "src/services/providers/llm_client.py": "ffbe318ea0e4cbfa37b0e4d40c5fe540fba12c04eebb72562cf076bda6d7d90e",
+    "eval/pii/dataset.py": "c5c6073f53ddefd7a9d6c8b62ad1f42c782921fedae34647aef737b327dbe88f",
+    "eval/pii/generate_messages.py": "3fbe6a48f008c523972f942568faa9e4c355caff2b84644171f3295d58dc065e",
+    "eval/pii/run.py": "6c9e3bcad9a8f8bf2adced7a8e01264084b9208593408d255d60fe410ccfe383"
+  },
+  "results": {
+    "underthesea": {
+      "model": {
+        "backend": "underthesea",
+        "version": "9.5.0",
+        "model": "packaged CRF ner_crf_2017_10_12",
+        "device": "cpu"
+      },
+      "metrics": {
+        "samples": 724,
+        "entities": {
+          "ADDRESS": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "DOB": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "EMAIL": {
+            "tp": 73,
+            "fp": 0,
+            "fn": 0,
+            "covered": 73,
+            "gold": 73,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "HANDLE": {
+            "tp": 74,
+            "fp": 0,
+            "fn": 0,
+            "covered": 74,
+            "gold": 74,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "ID": {
+            "tp": 90,
+            "fp": 0,
+            "fn": 0,
+            "covered": 90,
+            "gold": 90,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "PERSON": {
+            "tp": 432,
+            "fp": 12,
+            "fn": 0,
+            "covered": 432,
+            "gold": 432,
+            "recall": 1.0,
+            "precision": 0.972972972972973,
+            "coverage_recall": 1.0
+          },
+          "PHONE": {
+            "tp": 73,
+            "fp": 0,
+            "fn": 0,
+            "covered": 73,
+            "gold": 73,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "URL": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 144,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "EMPLOYER": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "SCHOOL": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          }
+        },
+        "micro_precision": 0.9876288659793815,
+        "failed_inputs": [],
+        "elapsed_seconds": 8.531
+      },
+      "gate_failures": []
+    }
+  },
+  "passed": true
+}

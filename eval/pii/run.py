@@ -17,8 +17,8 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any
 
-from eval.pii.dataset import ROOT, Sample, load_real, load_synthetic
-from src.services.privacy.detectors import Detector
+from eval.pii.dataset import ROOT, Sample, load_messages, load_real, load_synthetic
+from src.services.privacy.detectors import Detector, filename_probe
 from src.services.privacy.extract import extract
 from src.services.privacy.masker import escape_inbound
 from src.services.privacy.types import KINDS, Span
@@ -70,6 +70,7 @@ def measure(
     ner_only: bool = False,
     documents: dict[str, str | None] | None = None,
     filenames: bool = True,
+    assistant: bool = False,
 ) -> dict[str, Any]:
     counts = {kind: Counter(tp=0, fp=0, fn=0, covered=0, gold=0) for kind in sorted(KINDS)}
     keeps = {kind: Counter(total=0, masked=0) for kind in ("SKILL", "EMPLOYER", "SCHOOL", "CITY")}
@@ -96,6 +97,8 @@ def measure(
             else:
                 normalized_original = original
             wire = escape_inbound(observed) if not ner_only else observed
+            if assistant:
+                wire = filename_probe(wire)
             mapping = _boundaries(normalized_original, wire)
             expected = [
                 (span.kind, _mapped(span, mapping) if not missing_document else None) for span in expected_original
@@ -106,7 +109,9 @@ def measure(
                 if ner_only:
                     predicted = list(detector.ner.detect(wire))
                 else:
-                    predicted = detector.detect(wire, document_type="cv" if is_filename else sample.category)
+                    predicted = detector.detect(
+                        wire, document_type="cv" if is_filename else sample.category, identities=sample.identities
+                    )
             except Exception:
                 # This id is evaluator-controlled synthetic metadata, not a path.
                 errors.append(sample.id + (":filename" if is_filename else ":text"))
@@ -202,11 +207,62 @@ def select_backend(results: dict[str, Any]) -> str | None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--backends", nargs="+", default=["underthesea", "phobert", "spacy"])
+    parser.add_argument("--backends", nargs="+")
     parser.add_argument("--output", type=Path, default=ROOT / "results" / "benchmark.json")
     parser.add_argument("--documents", action="store_true", help="Also evaluate actual text PDFs and local OCR scans")
+    parser.add_argument(
+        "--messages", action="store_true", help="Assistant message gate; no CV/real-document shipping gate"
+    )
     args = parser.parse_args()
+    from src.config import get_settings
     from src.services.privacy.ner import load_ner
+
+    args.backends = args.backends or (
+        [get_settings().pii_ner_backend] if args.messages else ["underthesea", "phobert", "spacy"]
+    )
+
+    if args.messages:
+        samples = load_messages()
+        report = {
+            "scope": "assistant_messages",
+            "review_status": "needs_human_review",
+            "dataset_sha256": hashlib.sha256((ROOT / "messages.jsonl").read_bytes()).hexdigest(),
+            "measured_at": datetime.now(UTC).isoformat(),
+            "source_sha256": {
+                relative: hashlib.sha256((ROOT.parents[1] / relative).read_bytes()).hexdigest()
+                for relative in (
+                    "src/services/privacy/detectors.py",
+                    "src/services/privacy/masker.py",
+                    "src/services/providers/gateway.py",
+                    "src/services/providers/llm_client.py",
+                    "eval/pii/dataset.py",
+                    "eval/pii/generate_messages.py",
+                    "eval/pii/run.py",
+                )
+            },
+            "results": {},
+        }
+        for backend in args.backends:
+            try:
+                model = load_ner(backend)
+                result = measure(samples, Detector(model), assistant=True)
+                report["results"][backend] = {
+                    "model": model.metadata,
+                    "metrics": result,
+                    "gate_failures": gate_failures(result),
+                }
+            except Exception as error:
+                report["results"][backend] = {"status": "failed", "error_type": type(error).__name__}
+        report["passed"] = all(
+            "gate_failures" in result and not result["gate_failures"] for result in report["results"].values()
+        )
+        output = (
+            args.output if args.output != ROOT / "results" / "benchmark.json" else ROOT / "results" / "messages.json"
+        )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+        return 0 if report["passed"] else 1
 
     samples = load_synthetic()
     real = load_real()

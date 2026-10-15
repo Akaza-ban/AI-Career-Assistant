@@ -119,3 +119,10 @@ def test_static_guard_rejects_aliases_dynamic_imports_and_injected_http():
         "from langchain.chat_models import ChatOpenAI",
     ):
         assert violations(source, "src/services/bypass.py")
+
+
+def test_raw_client_has_no_sdk_or_http_exemption():
+    path = "src/services/providers/llm_client.py"
+    assert violations("from openai import AsyncOpenAI", path)
+    assert violations("import httpx", path)
+    assert violations("client.chat.completions.create(messages=[])", path)
