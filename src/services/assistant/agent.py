@@ -40,6 +40,8 @@ from src.services.assistant.guardrails import (
     sanitize_and_inspect_prompt,
 )
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
+from src.services.assistant.locate import locate_actions
+from src.services.assistant.router import LocalRouter
 from src.services.assistant.text import fold_diacritics as normalized
 from src.services.llm import assistant_llm_configured as llm_configured
 from src.services.llm import get_assistant_llm
@@ -76,6 +78,7 @@ def _selector_key(selector: str) -> str:
 
 class AssistantState(TypedDict, total=False):
     message: str
+    locate_fallback: bool
     input_allowed: bool
     context: ClientPageContext
     history: list[dict[str, str]]
@@ -90,6 +93,7 @@ class AssistantAgent:
     def __init__(self, retriever: AssistantHybridRetriever | None = None, llm: Any = None) -> None:
         self._retriever = retriever
         self._llm = llm
+        self._ui_router: LocalRouter | None = None
         builder = StateGraph(AssistantState)
         builder.add_node("inspect", self._inspect)
         builder.add_node("classify", self._classify)
@@ -120,10 +124,28 @@ class AssistantAgent:
                 "confidence": "low",
                 "response": AssistantResponse(message=message, intent="qa", actions=[], sources=[]),
             }
+        if self._ui_router is None:
+            self._ui_router = LocalRouter()
+        decision = self._ui_router.decide(message, role=state["context"].user_role)
+        if decision.route == "locate":
+            context = state["context"]
+            actions = locate_actions(message, context.user_role, context.route)
+            if actions:
+                return {
+                    "input_allowed": False,
+                    "response": AssistantResponse(
+                        message="Here is the control you are looking for."
+                        if decision.language == "en"
+                        else "Đây là nút bạn cần tìm.",
+                        intent="action",
+                        ui_actions=actions,
+                    ),
+                }
+            return {"input_allowed": True, "message": message, "locate_fallback": True}
         return {"input_allowed": True, "message": message}
 
     def _classify(self, state: AssistantState) -> dict[str, Any]:
-        return {"intent": classify_intent(state["message"])}
+        return {"intent": "qa" if state.get("locate_fallback") else classify_intent(state["message"])}
 
     def _retrieve(self, state: AssistantState) -> dict[str, Any]:
         context = state["context"]
@@ -238,6 +260,8 @@ class AssistantAgent:
         return AssistantResponse(message=message, intent=state["intent"], actions=actions, sources=sources)
 
     def _guard(self, response: AssistantResponse, state: AssistantState) -> AssistantResponse:
+        if state.get("locate_fallback"):
+            return response.model_copy(update={"actions": [], "ui_actions": [], "intent": "qa"})
         if is_refusal_response(response.message):
             return AssistantResponse(message=response.message, intent=state["intent"], actions=[], sources=[])
         context = state["context"]

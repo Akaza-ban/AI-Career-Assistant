@@ -173,6 +173,8 @@ class Settings(BaseSettings):
     assistant_embedding_model: str = "intfloat/multilingual-e5-small"
     assistant_embedding_device: str = "cpu"
     assistant_docs_dir: str = "./docs/user-guide"
+    assistant_locate_threshold: float = Field(default=0.78, ge=0.0, le=1.0)
+    assistant_locate_margin: float = Field(default=0.10, ge=0.0, le=1.0)
     assistant_top_k: int = 5
     assistant_similarity_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
     assistant_llm_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)

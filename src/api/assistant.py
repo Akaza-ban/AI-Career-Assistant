@@ -299,6 +299,21 @@ async def _respond(
         mask_only=True,
     ):
         result = await agent.respond(body.message, context, history=history, allowed_student_ids=students)
+    from src.models.assistant import NavigateAction
+    from src.services.assistant.guardrails import validate_ui_actions
+    from src.services.assistant.ui_registry import resolve_route
+
+    try:
+        ui_actions = validate_ui_actions(result.ui_actions, user.role)
+    except ValueError as exc:
+        raise AppError(422, "Hành động giao diện không hợp lệ.", "invalid_ui_action") from exc
+    for action in ui_actions:
+        if action.type == "navigate":
+            legacy = NavigateAction(
+                description_vi="Mở trang", params={"route": resolve_route(action.route_id, action.params, user.role)}
+            )
+            if not _resource_actions(db, user, [legacy], students):
+                raise AppError(403, "Trang chưa khả dụng cho tài khoản này.", "forbidden")
     actions = _resource_actions(db, user, result.actions, students)
     message = result.message
     if (
@@ -348,6 +363,7 @@ async def _respond(
         message=message,
         intent=result.intent,
         actions=actions,
+        ui_actions=ui_actions,
         sources=result.sources,
     )
 

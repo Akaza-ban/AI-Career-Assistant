@@ -56,3 +56,99 @@ def test_ui_action_variants_and_role_whitelist() -> None:
                 with pytest.raises(ValueError):
                     validate_ui_actions([payload], role)
 
+
+def test_locate_eval_rows() -> None:
+    import json
+    from pathlib import Path
+
+    from src.services.assistant.locate import match_element
+
+    rows = json.loads((Path(__file__).resolve().parents[1] / "eval/locate/rows.json").read_text(encoding="utf-8"))
+    errors = []
+    for row in rows:
+        found = match_element(row["message"], row["role"])
+        actual = found.element_id if found else None
+        if actual != row["element_id"]:
+            errors.append((row["message"], row["element_id"], actual))
+    assert not errors, errors
+
+
+def test_locate_navigation_order_and_howto_fallback() -> None:
+    from src.services.assistant.locate import locate_actions
+
+    actions = locate_actions("Where is upload CV?", "student", "/student/history")
+    assert [action.type for action in actions] == ["navigate", "highlight"]
+    assert actions[0].route_id == "cv_list"
+    assert actions[1].element_id == "btn-upload-cv"
+    assert [action.type for action in locate_actions("Where is upload CV?", "student", "/student/cv")] == ["highlight"]
+    assert locate_actions("Where is choose CV?", "student", "/student/cv") == []
+
+
+@pytest.mark.asyncio
+async def test_locate_graph_bypasses_retrieval_and_provider() -> None:
+    from unittest.mock import MagicMock
+
+    from src.models.assistant import ClientPageContext
+    from src.services.assistant.agent import AssistantAgent
+
+    retriever = MagicMock()
+    llm = MagicMock()
+    context = ClientPageContext(current_url="/student/history", route="/student/history", user_role="student")
+    result = await AssistantAgent(retriever, llm).respond("Nút tải lên CV ở đâu?", context)
+    assert [action.type for action in result.ui_actions] == ["navigate", "highlight"]
+    assert result.message == "Đây là nút bạn cần tìm."
+    assert result.actions == []
+    retriever.search.assert_not_called()
+    llm.with_structured_output.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_unmatched_locate_uses_howto_without_legacy_actions() -> None:
+    from unittest.mock import MagicMock
+
+    from src.models.assistant import ClientPageContext
+    from src.services.assistant.agent import AssistantAgent
+
+    retriever = MagicMock()
+    retriever.search.return_value = []
+    context = ClientPageContext(current_url="/student/cv", route="/student/cv", user_role="student")
+    result = await AssistantAgent(retriever).respond("Nút đổi màu biểu đồ CV ở đâu?", context)
+    retriever.search.assert_called_once()
+    assert result.intent == "qa"
+    assert result.ui_actions == []
+    assert result.actions == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("element_id", ["unknown-target", "advisor-student-search"])
+async def test_api_rejects_invalid_server_ui_payload(client, element_id: str) -> None:
+    from src.main import app
+    from src.models.assistant import AssistantResponse, UIHighlight
+    from src.services.assistant.agent import get_assistant_agent
+    from tests.helpers import STUDENT
+
+    class InvalidAgent:
+        async def respond(self, *args, **kwargs) -> AssistantResponse:
+            # Simulate a forged internal payload that bypassed Pydantic construction.
+            return AssistantResponse(
+                message="Target",
+                intent="action",
+                ui_actions=[UIHighlight.model_construct(type="highlight", element_id=element_id)],
+            )
+
+    app.dependency_overrides[get_assistant_agent] = InvalidAgent
+    try:
+        response = await client.post(
+            "/api/v1/assistant/chat",
+            headers=STUDENT,
+            json={
+                "message": "Where is upload CV?",
+                "context": {"current_url": "/student/cv", "route": "/student/cv", "user_role": "student"},
+            },
+        )
+        assert response.status_code == 503
+        assert response.json()["code"] == "assistant_unavailable"
+        assert "ui_actions" not in response.json()
+    finally:
+        app.dependency_overrides.pop(get_assistant_agent, None)
+
