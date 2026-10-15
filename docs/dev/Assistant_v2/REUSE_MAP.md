@@ -200,3 +200,5 @@ claimed, and the missing 100+ real utterances remain a release-evidence gap.
 - New helper/data files avoid importing the LangGraph, provider and retrieval stack into the offline router; no equivalent lightweight shared module existed.
 
 - **New contracts/text preparation:** `assistant/router/models.py` supplies the seven-route decision, raw navigation/UI slots, semantic chips and trusted prior-card input. Existing qa/action/hybrid models cannot represent these capabilities. `router/text.py` reuses the shared Unicode fold; language stopwords live in packaged JSON. No new dependency.
+
+- **Wrap/new cache:** `router/guards.py` calls the existing sanitizer, scope, student-role and whole-utterance greeting functions. Packaged additive safety/explicit cross-role-path terms cover v2. `router/cache.py` is new because no bounded TTL decision cache existed; uses stdlib OrderedDict/RLock and stores copies of accepted decisions only. Settings are in the existing `get_settings()` boundary.
