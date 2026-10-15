@@ -839,6 +839,11 @@ class InterviewRow(BaseModel):
     label: InterviewLabel
     star: StarScores
     timed_out_count: int
+    interview_mode: Literal["jd_only", "with_cv"] = Field(default="with_cv", description="Có dùng CV khi hỏi không")
+    cv_file_name: str | None = Field(default=None, description="Tên file CV đã dùng (with_cv)")
+    cv_label: str | None = Field(
+        default=None, description="Phiên bản CV đã dùng, ví dụ 'v1.0'; null nếu bản đó đã bị xoá"
+    )
 
 
 class ScorePoint(BaseModel):

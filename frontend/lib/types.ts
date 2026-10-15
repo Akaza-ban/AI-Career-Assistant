@@ -792,6 +792,11 @@ export interface InterviewRow {
   label: InterviewLabel
   star: StarScores
   timed_out_count: number
+  /** jd_only: hỏi chỉ dựa trên JD, không dùng CV. */
+  interview_mode?: "jd_only" | "with_cv"
+  cv_file_name?: string | null
+  /** Ví dụ "v1.0"; null khi phiên bản đó đã bị xoá. */
+  cv_label?: string | null
 }
 
 /** Điểm tổng (0–5) của một buổi, dùng để vẽ biểu đồ. */

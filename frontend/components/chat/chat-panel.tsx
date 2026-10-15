@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   Check,
   CheckCheck,
-  Clock,
   MessageCircle,
   Search,
   SendHorizontal,
@@ -253,12 +252,6 @@ function ChatThread({ studentId, onBack }: { studentId: string; onBack?: () => v
   return (
     <>
       <ThreadHeader counterpart={counterpart} studentId={studentId} onBack={onBack} />
-      {counterpart?.office_hours && (
-        <p className="flex items-center gap-2 border-b border-line bg-panel px-4 py-2.5 text-[13px] text-ink-2">
-          <Clock className="size-3.5 shrink-0 text-ink-3" aria-hidden />
-          Giờ tư vấn: {counterpart.office_hours}. Tin nhắn ngoài giờ sẽ được trả lời sau.
-        </p>
-      )}
       <div
         ref={scrollRef}
         onScroll={(e) => {

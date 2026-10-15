@@ -130,12 +130,20 @@ async def test_password_reset_flow(client):
     assert (await register(client)).status_code == 201
     client.cookies.clear()
     sent: list[str] = []
-    with patch("src.services.auth.send_email", side_effect=lambda to, subject, body: sent.append(body)):
+    htmls: list[str] = []
+
+    def capture(to: str, subject: str, body: str, html: str | None = None) -> None:
+        sent.append(body)
+        htmls.append(html or "")
+
+    with patch("src.services.auth.send_email", side_effect=capture):
         # Email không có tài khoản: vẫn 204, không gửi gì
         assert (await client.post(f"{API}/auth/password-reset", json={"email": "ai@gmail.com"})).status_code == 204
         assert (await client.post(f"{API}/auth/password-reset", json={"email": NEW_EMAIL})).status_code == 204
     [body] = sent
     token = body.split("token=")[1].split()[0]
+    # Bản HTML: nút "Đặt lại mật khẩu" trỏ cùng link; chạy localhost thì không chèn ảnh logo
+    assert f"token={token}" in htmls[0] and "Đặt lại mật khẩu</a>" in htmls[0] and "<img" not in htmls[0]
 
     bad = await client.post(f"{API}/auth/password-reset/confirm", json={"token": "x", "new_password": "moi123456"})
     assert (bad.status_code, bad.json()["code"]) == (400, "invalid_token")
@@ -242,3 +250,19 @@ async def test_create_pasted_jd_detects_skills(client):
     assert jd["source"] == "pasted" and jd["company"] == "Công ty Y"
     assert {"SQL", "Excel"} <= {s["name"] for s in jd["skills"]}
     assert jd["id"] in {j["id"] for j in (await client.get(f"{API}/jd", headers=STUDENT)).json()}
+
+
+def test_reset_email_template_logo_and_escaping():
+    """Logo chỉ chèn khi frontend là tên miền công khai; tên người dùng được escape trong HTML."""
+    from src.services import email_templates
+
+    assert email_templates.logo_url("http://localhost:3000") is None
+    assert email_templates.logo_url("http://127.0.0.1:3000") is None
+    assert email_templates.logo_url("https://careerv.vn/") == "https://careerv.vn/brand/careerv/email-logo.png"
+
+    text, html = email_templates.password_reset(
+        "An <b>", "an@example.com", "https://careerv.vn/reset-password?token=abc&x=1", 30, "https://careerv.vn/logo.png"
+    )
+    assert "An &lt;b&gt;" in html and "<b>," not in html
+    assert 'src="https://careerv.vn/logo.png"' in html and "token=abc&amp;x=1" in html
+    assert "https://careerv.vn/reset-password?token=abc&x=1" in text and "30 phút" in text

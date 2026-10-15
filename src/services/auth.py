@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from src.api.errors import AppError
 from src.config import get_settings
 from src.db.models import AuthSession, PasswordResetToken, User, utcnow
-from src.services import notifications
+from src.services import email_templates, notifications
 from src.services.mailer import send_email
 
 PBKDF2_ITERATIONS = 390_000
@@ -251,21 +251,14 @@ def request_password_reset(db: Session, email: str) -> None:
     )
     db.commit()
     link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={token}"
-    send_email(
+    text, html = email_templates.password_reset(
+        user.full_name,
         user.email,
-        "Đặt lại mật khẩu CareerV",
-        "\n".join(
-            [
-                f"Chào {user.full_name},",
-                "",
-                "Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản CareerV.",
-                f"Mở link sau trong {settings.password_reset_minutes} phút để đặt mật khẩu mới:",
-                link,
-                "",
-                "Nếu không phải bạn yêu cầu, hãy bỏ qua email này. Mật khẩu hiện tại vẫn giữ nguyên.",
-            ]
-        ),
+        link,
+        settings.password_reset_minutes,
+        email_templates.logo_url(settings.frontend_url),
     )
+    send_email(user.email, "Đặt lại mật khẩu CareerV", text, html=html)
 
 
 def confirm_password_reset(db: Session, token: str, new_password: str) -> User:
