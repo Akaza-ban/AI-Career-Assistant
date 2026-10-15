@@ -105,6 +105,11 @@ Construct bounded output **from these fields**, never serialize a report/result 
 
 ## 7. Existing LLM, privacy and configuration layers
 
+The table records the T0 audit snapshot. The implementation now extends these
+same components; see [the privacy/gateway report](PRIVACY_GATEWAY_REPORT.md) for
+mask-only scopes, raw-client migration, strict SDK boundary, message metrics,
+reused versus added behavior, and remaining release decisions.
+
 | Capability | Existing code | Decision (reuse / extend / new) | Reason |
 |---|---|---|---|
 | Existing outbound gateway | `src/services/providers/gateway.py`: `ProviderScope`, `provider_scope`, `PreparedPayload`, `GatewayChat`, `wrap_chat`, `embedding_call`, `encode_e5`, `load_e5_model`, `egress_scan`. `src/services/llm.py`: `get_llm`, `llm_configured`, `invoke_json`, `check_llm_health`; `Settings.get_chat_model` returns GatewayChat. `PROVIDER_GATEWAY.md` documents historical migration. | extend | **Exists**, and assistant chat/status/reindex + embeddings already use it. Reuse this one boundary. Local embedding calls also write accounting rows. No second SDK wrapper/gateway. Keep health calls under the same policy. |

@@ -75,3 +75,32 @@ To regenerate draft PDFs with a Unicode TrueType font:
 Generation never writes to `real/`. Review regenerated annotations and render
 representative pages before replacing the golden set. Source PDFs were visually
 checked with Poppler across VI/EN/mixed, text/scan and several layouts.
+
+## Assistant message fixtures (rev 4.1)
+
+`messages.jsonl` contains 724 synthetic message-style cases, reusing identities,
+contacts and preservation annotations from the existing golden CV set. It adds
+diacritic/reversed-order names, no-diacritic names, filenames with both spellings,
+international phone formats and email/handle punctuation. Authenticated identities
+are explicit fixture inputs; annotations are built independently of detectors.
+These drafts still need annotation review. They are not held-out real messages.
+
+```powershell
+.venv/Scripts/python.exe -m eval.pii.generate_messages
+.venv/Scripts/python.exe -m eval.pii.run --messages --backends underthesea
+.venv/Scripts/python.exe -m pytest tests/test_assistant_privacy_leaks.py tests/test_assistant_provider_contracts.py tests/test_provider_static_guard.py
+```
+
+The message mode reuses the existing strict metrics/thresholds, the configured
+local NER and known-identity detector. Its default backend is the configured one;
+the original CV benchmark still defaults to all three adapters. Results go to
+`results/messages.json`, including dataset/source hashes. It exits nonzero on
+any numeric gate failure. Tests also exercise the actual one-way masker on every
+message, and the assistant graph with a recording provider, embeddings, logs and
+inherited tracing. Contracts (1), (4), (5) use `v41_*.json` HTTP fixtures; historical
+thinking/checkpoint tests remain separate legacy coverage.
+
+The assistant message gate does not run extraction, OCR, a vault or unmasking.
+It does not replace the stricter reviewed-real-CV gate above for product features
+that send CV text. Recorded fixtures verify our code, not current vendor/model
+behavior. See [the implementation report](../../docs/dev/Assistant_v2/PRIVACY_GATEWAY_REPORT.md).

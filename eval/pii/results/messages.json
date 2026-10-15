@@ -2,11 +2,11 @@
   "scope": "assistant_messages",
   "review_status": "needs_human_review",
   "dataset_sha256": "81b86f58c9dac73c11ed01fb8dca0b5e6af90a58734c6e71a7324d9938d87005",
-  "measured_at": "2026-10-15T05:38:47.336849+00:00",
+  "measured_at": "2026-10-15T05:50:08.894132+00:00",
   "source_sha256": {
     "src/services/privacy/detectors.py": "6fb740570103fdacad41bcf3054835485533e64d2c9f328532a6952df5988a6f",
     "src/services/privacy/masker.py": "832973935741de8d96c1e7d24abb05972122289355cd201e7363b1383df0f816",
-    "src/services/providers/gateway.py": "1fd9240b90362d52cfda3ffe406b4a1b0a3cdff3b6e68d9906d1bf4eff050b28",
+    "src/services/providers/gateway.py": "9bcb52d45f2689fd10f7057903286f174296a9c7f54da3845c2d752437d8d553",
     "src/services/providers/llm_client.py": "ffbe318ea0e4cbfa37b0e4d40c5fe540fba12c04eebb72562cf076bda6d7d90e",
     "eval/pii/dataset.py": "c5c6073f53ddefd7a9d6c8b62ad1f42c782921fedae34647aef737b327dbe88f",
     "eval/pii/generate_messages.py": "3fbe6a48f008c523972f942568faa9e4c355caff2b84644171f3295d58dc065e",
@@ -128,7 +128,7 @@
         },
         "micro_precision": 0.9876288659793815,
         "failed_inputs": [],
-        "elapsed_seconds": 8.531
+        "elapsed_seconds": 13.11
       },
       "gate_failures": []
     }

@@ -1,5 +1,22 @@
 # CareerX Assistant v2 — implementation notes
 
+## Rev 4.1 gateway/privacy implementation (2026-10-15)
+
+Sections 4 and 13 implementation and measured evidence are recorded in
+[the gateway/privacy report](Assistant_v2/PRIVACY_GATEWAY_REPORT.md).
+It covers reused components, all migrated assistant model calls, mask-only
+semantics, 724 synthetic message fixtures, provider contracts and limitations.
+This addendum does not alter the pre-existing review notes below.
+
+Validation: 724 synthetic messages meet all numeric gates (100% strict recall
+for the required categories; 0% skills/employer/school preservation false
+positives). Full offline suite: 685 passed, 17 failed, 7 skipped at `bd0fca7`;
+all 17 failures reproduced at pre-task `c385b50`. Final native-E5 correction:
+33 focused tests passed. Changed-file Ruff passes; three unrelated baseline
+Ruff errors remain. The report records buffering, result-fact/DPA release
+decisions, accounting interpretation, single-worker scope and two corrective
+commits beyond the approved sequence. Existing notes/user edits remain unstaged.
+
 ## T1.1 — tool-to-service matrix (2026-10-13)
 
 - Output-path ambiguity: architecture line 3 names docs/assistant_v2/TOOL_MATRIX.md; the task explicitly requests docs/dev/Assistant_v2/TOOL_MATRIX.md. Use the task path only; no duplicate matrix or architecture edit.
