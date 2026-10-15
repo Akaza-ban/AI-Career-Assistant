@@ -207,3 +207,10 @@ claimed, and the missing 100+ real utterances remain a release-evidence gap.
 - `LocalRouter` wraps stage 0, the shared-key LRU and rules/fallback. Contextual deictics bypass the cache; a single previous server card is carried unchanged in `card_target`. Cache hits rebind raw slots/language for spelling variants of one folded key. No resolver, registry, classifier, LLM, DB or network behavior was added.
 
 - **Reuse eval:** the new `router/evaluation.py` only adapts T2.1's inference-only input to `LocalRouter`. `eval/run.py`, dataset integrity checks and metrics remain authoritative; named `rules`/`local` factories now load real rules. [Measured dev baseline](../../../eval/router/rules_dev_report.md) reports all failed/passed gates, rather than substituting synthetic success.
+
+## T2.2 follow-up — train-only stage-zero repair
+
+- Extended the existing shared `resources/guardrails.json` social/injection patterns from train failures. Moved the existing router-only unsafe/role patterns into that same shared data, then extended them; no parallel production list remains.
+- `inspect_prompt_reason` is the single normalized scanner used by both legacy `sanitize_and_inspect_prompt` and router stage zero. Shared role checks now cover explicit account-console requests and advisor access to unshared CVs, preserving sharing guidance.
+- Fixed the existing greeting preprocessor deleting English article `a`; full-utterance matching still prevents a greeting from swallowing a real request.
+- Added train-wide smalltalk/security regressions and authored benign controls. Navigate/howto/locate rule vocabularies and extractor behavior are unchanged.

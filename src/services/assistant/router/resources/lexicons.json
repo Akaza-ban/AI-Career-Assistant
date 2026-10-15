@@ -43,23 +43,22 @@
       "score",
       "status",
       "yesterday",
-      "latest"
+      "latest",
+      "greetings",
+      "appreciate",
+      "your",
+      "you",
+      "good",
+      "morning",
+      "afternoon",
+      "evening",
+      "nice",
+      "pleased",
+      "meet",
+      "bye",
+      "goodbye"
     ],
     "vi_characters": "[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]"
-  },
-  "guards": {
-    "unsafe": [
-      "\\b(?:phishing|malware|ransomware)\\b",
-      "\\b(?:trom|danh cap)\\s+(?:tai khoan|mat khau)\\b"
-    ],
-    "role_forbidden": {
-      "student": [
-        "/admin(?:/|\\b)"
-      ],
-      "advisor": [
-        "/student(?:/|\\b)"
-      ]
-    }
   },
   "families": {
     "locate": [

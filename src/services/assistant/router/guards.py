@@ -1,16 +1,13 @@
 """Stage zero wraps the current assistant's deterministic guard functions."""
 
-import re
-
 from src.services.assistant.guardrails import (
+    inspect_prompt_reason,
     is_chitchat,
     is_out_of_scope,
     is_role_forbidden,
-    sanitize_and_inspect_prompt,
 )
-from src.services.assistant.router.data import LEXICONS
 from src.services.assistant.router.models import Role, RouterDecision
-from src.services.assistant.router.text import detect_language, normalize
+from src.services.assistant.router.text import detect_language
 
 
 def stage0(message: str, role: Role, *, max_chars: int) -> RouterDecision | None:
@@ -23,15 +20,10 @@ def stage0(message: str, role: Role, *, max_chars: int) -> RouterDecision | None
         return deny("unsafe")
     if not message.strip():
         return deny("off_topic")
-    allowed, _ = sanitize_and_inspect_prompt(message)
-    if not allowed:
-        return deny("injection")
-    text = normalize(message).folded
-    if any(re.search(pattern, text) for pattern in LEXICONS["guards"]["unsafe"]):
-        return deny("unsafe")
-    if is_role_forbidden(text, role):
-        return deny("out_of_role")
-    if any(re.search(pattern, text) for pattern in LEXICONS["guards"]["role_forbidden"].get(role, [])):
+    reason = inspect_prompt_reason(message)
+    if reason is not None:
+        return deny(reason)
+    if is_role_forbidden(message, role):
         return deny("out_of_role")
     out_of_scope, _ = is_out_of_scope(message)
     if out_of_scope:

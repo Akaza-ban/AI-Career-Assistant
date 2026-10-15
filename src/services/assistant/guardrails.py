@@ -9,6 +9,7 @@ import re
 import unicodedata
 from html import unescape
 from pathlib import Path
+from typing import Literal
 
 from src.services.assistant.text import fold_diacritics
 
@@ -32,13 +33,20 @@ _OUT_OF_SCOPE_PATTERNS = tuple(re.compile(pattern) for pattern in _GUARDS["out_o
 
 
 def is_role_forbidden(message: str, role: str) -> bool:
-    """Preserve the student gate formerly embedded in agent._target_route."""
-    text = fold_diacritics(message)
-    return role == "student" and (
-        any(term in text for term in _GUARDS["student_forbidden"])
-        or _GUARDS["student_conditional_forbidden"] in text
-        and _GUARDS["student_sharing_exception"] not in text
-    )
+    """Shared role gate; sharing guidance does not request an advisor resource."""
+    text = _inspection_text(message)
+    if any(re.search(pattern, text) for pattern in _GUARDS["role_forbidden"].get(role, [])):
+        return True
+    if role != "student":
+        return False
+    terms = [term for term in _GUARDS["student_forbidden"] if re.search(rf"\b{re.escape(term)}\b", text)]
+    if _GUARDS["student_conditional_forbidden"] in text:
+        terms.append(_GUARDS["student_conditional_forbidden"])
+    if not terms:
+        return False
+    sharing = re.search(_GUARDS["student_sharing_exception"], text)
+    # A dashboard remains a forbidden destination even in a sharing sentence.
+    return not sharing or any(term not in {"advisor", _GUARDS["student_conditional_forbidden"]} for term in terms)
 
 
 def is_refusal_response(message: str) -> bool:
@@ -68,9 +76,13 @@ def _inspection_text(message: str) -> str:
 def is_chitchat(message: str) -> tuple[bool, str]:
     """Recognize accented/unaccented small talk, including combined greetings."""
     text = re.sub(r"[^\w\s]", " ", _inspection_text(message))
-    text = re.sub(r"\b(?:oi|a|nhe|nhi)\b", " ", text)
+    # Vietnamese particles may be dropped, but English articles inside social
+    # phrases ("have a pleasant afternoon") must survive normalization.
+    text = re.sub(r"\b(?:oi|nhe|nhi)\b", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
-    if not text or not re.fullmatch(rf"(?:{_CHITCHAT_PATTERN.pattern})(?:\s+(?:{_CHITCHAT_PATTERN.pattern}))*", text):
+    if not text or not re.fullmatch(
+        rf"(?:{_CHITCHAT_PATTERN.pattern})(?:\s+(?:{_CHITCHAT_PATTERN.pattern}))*(?:\s+a)?", text
+    ):
         return False, ""
     if re.search(r"\b(?:tam biet|goodbye|bye)\b", text):
         return True, "Tạm biệt bạn! Khi cần hỗ trợ về CareerV, CV/JD hoặc phỏng vấn thử, hãy quay lại nhé."
@@ -93,6 +105,17 @@ def is_out_of_scope(message: str) -> tuple[bool, str]:
 
 
 _ATTACK_PATTERNS = tuple(re.compile(pattern) for pattern in _GUARDS["attacks"])
+_UNSAFE_PATTERNS = tuple(re.compile(pattern) for pattern in _GUARDS["unsafe"])
+
+
+def inspect_prompt_reason(message: str) -> Literal["injection", "unsafe"] | None:
+    """One normalized scan shared by the legacy sanitizer and stage zero."""
+    text = _inspection_text(message)
+    if any(pattern.search(text) for pattern in _ATTACK_PATTERNS):
+        return "injection"
+    if any(pattern.search(text) for pattern in _UNSAFE_PATTERNS):
+        return "unsafe"
+    return None
 
 
 def sanitize_and_inspect_prompt(message: str) -> tuple[bool, str]:
@@ -102,7 +125,6 @@ def sanitize_and_inspect_prompt(message: str) -> tuple[bool, str]:
     characters and invisible formatting. Preserve accepted text for the user.
     XML escaping belongs at the prompt boundary, not in this input sanitizer.
     """
-    text = _inspection_text(message)
-    if any(pattern.search(text) for pattern in _ATTACK_PATTERNS):
+    if inspect_prompt_reason(message) is not None:
         return False, SAFETY_REFUSAL_MESSAGE
     return True, message.strip()
