@@ -3,7 +3,6 @@
 import json
 import logging
 import re
-import unicodedata
 from functools import lru_cache
 from html import escape
 from threading import RLock
@@ -37,9 +36,11 @@ from src.services.assistant.guardrails import (
     is_chitchat,
     is_out_of_scope,
     is_refusal_response,
+    is_role_forbidden,
     sanitize_and_inspect_prompt,
 )
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
+from src.services.assistant.text import fold_diacritics as normalized
 from src.services.llm import assistant_llm_configured as llm_configured
 from src.services.llm import get_assistant_llm
 from src.services.privacy.types import MaskingError
@@ -48,11 +49,6 @@ from src.services.providers.llm_client import LlmClient
 
 logger = logging.getLogger(__name__)
 ASSISTANT_INDEX_LOCK = RLock()
-
-
-def normalized(text: str) -> str:
-    text = unicodedata.normalize("NFD", text.casefold()).replace("đ", "d")
-    return "".join(char for char in text if not unicodedata.combining(char))
 
 
 def classify_intent(message: str) -> Intent:
@@ -177,7 +173,7 @@ class AssistantAgent:
             route = explicit.group(0)
             return route if route_allowed(route, role) else None
         if role == "student":
-            if "advisor" in text or "dashboard" in text or "co van" in text and "chia se" not in text:
+            if is_role_forbidden(text, role):
                 return None
             choices = [
                 (("lich su", "history", "tien bo"), "/student/history"),

@@ -1,0 +1,38 @@
+{
+  "chitchat": "(?:(?:xin\\s+)?chao(?:\\s+ban)?|hello(?:\\s+there)?|hi|hey|ban\\s+(?:la\\s+ai|ten\\s+(?:la\\s+)?gi)|(?:hom\\s+nay\\s+)?(?:ban\\s+)?(?:cam\\s+thay\\s+)?(?:nhu\\s+)?the\\s+nao|(?:hom\\s+nay\\s+)?ban\\s+(?:co\\s+)?khoe\\s+(?:khong|chua)|(?:toi\\s+)?cam\\s+on(?:\\s+ban)?|tam\\s+biet(?:\\s+ban)?|thanks(?:\\s+you)?|thank\\s+you|goodbye|bye|how\\s+are\\s+you|who\\s+are\\s+you)",
+  "topic": "\\b(?:careerv|careerx|edu\\s*17|cv|jd|star|phong van|interview|sinh vien|student|advisor|ky nang|skill|tai lieu|lich su|history|diem|score|match|phan tich|analysis|ho so|tai len|upload|chia se|co van|bo loc|filter|cai dat|settings|dang nhap|dang ky|he thong|nen tang|thong ke|dashboard|nhan xet|feedback|pdf|docx|nghe nghiep|tien bo|readiness|analytics|reviews|dinh dang)\\b",
+  "out_of_scope": [
+    "\\b(?:thoi tiet|weather|weather forecast)\\b",
+    "\\bdu bao\\s+(?:mua|nang|bao|nhiet do|ngay mai|hom nay)\\b",
+    "\\b(?:nau an|nau mon|cong thuc\\s+(?:mon an|nau|lam banh|banh|pizza)|recipe|recipes)\\b",
+    "\\b(?:hom nay|ngay mai|toi nay|trua nay)\\b.{0,30}\\ban\\s+gi\\b",
+    "\\b(?:an gi\\s+(?:hom nay|ngay mai)|goi y\\s+mon an)\\b",
+    "\\b(?:tu vi|boi toan|boi bai|cung hoang dao|horoscope|astrology)\\b",
+    "\\b(?:ket qua|ty so|lich thi dau|xem|tran)\\b.{0,50}\\b(?:bong da|the thao|world cup|premier league|nba)\\b",
+    "\\b(?:bong da|the thao|world cup|premier league|nba)\\b.{0,50}\\b(?:ai thang|ty so|toi nay|hom nay|ket qua)\\b",
+    "\\b(?:tin tuc\\s+(?:tong hop|the gioi|hom nay|moi nhat)|thoi su|general news)\\b",
+    "\\b(?:toan do vui|do vui\\s+(?:toan|toan hoc)|giai\\s+(?:cau do|bai toan)|math puzzle)\\b"
+  ],
+  "attacks": [
+    "\\b(?:ignore|disregard|forget|override|bypass)\\b.{0,80}\\b(?:instructions?|rules?|polic(?:y|ies))\\b",
+    "\\b(?:quen|bo qua|phot lo|vo hieu hoa)\\b.{0,80}\\b(?:chi dan|huong dan|quy tac)\\b",
+    "\\b(?:ban la|you are|act as|pretend to be)\\b.{0,80}\\b(?:khong gioi han|unrestricted|unlimited|uncensored)\\b",
+    "\\b(?:developer mode|jailbreak|do anything now)\\b",
+    "\\b(?:reveal|show|print|read|repeat|expose|display|dump)\\b.{0,80}\\b(?:system|developer)\\s+(?:prompt|instructions?)\\b",
+    "\\b(?:system|developer)\\s+(?:prompt|instructions?)\\b.{0,80}\\b(?:reveal|show|print|read|repeat|expose|display|dump)\\b",
+    "\\b(?:doc|hien thi|tiet lo|in ra|cho xem|cho toi xem)\\b.{0,80}\\b(?:system prompt|prompt he thong|chi dan he thong|loi nhac he thong)\\b",
+    "\\b(?:delete|erase|wipe|destroy|remove|drop|truncate)\\b.{0,80}\\b(?:data|database|tables?|records?|files?)\\b",
+    "\\b(?:xoa|huy|pha huy)\\b.{0,80}\\b(?:du lieu|co so du lieu|bang|tep|tap tin|ho so|cv)\\b",
+    "\\b(?:rm\\s+-[a-z]*r[a-z]*f|rm\\s+-[a-z]*f[a-z]*r|remove-item|del\\s+/[fsq])\\b",
+    "<\\s*/?\\s*[a-z][\\w:.-]*(?:\\s[^<>]*?)?\\s*/?\\s*>",
+    "<!\\s*(?:doctype|--)",
+    "\\b(?:javascript\\s*:|on(?:click|error|load)\\s*=)",
+    "\\[\\s*(?:/?inst|system)\\s*\\]|<\\|(?:im_start|im_end|system)\\|>"
+  ],
+  "student_forbidden": [
+    "advisor",
+    "dashboard"
+  ],
+  "student_conditional_forbidden": "co van",
+  "student_sharing_exception": "chia se"
+}

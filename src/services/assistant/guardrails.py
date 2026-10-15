@@ -4,9 +4,13 @@ Patterns cover common attacks, not every possible semantic jailbreak. Prompt
 serialization must still escape and isolate all untrusted data separately.
 """
 
+import json
 import re
 import unicodedata
 from html import unescape
+from pathlib import Path
+
+from src.services.assistant.text import fold_diacritics
 
 SAFETY_REFUSAL_MESSAGE = "Yêu cầu của bạn vi phạm chính sách an toàn của hệ thống."
 SCOPE_REFUSAL_MESSAGE = (
@@ -20,39 +24,21 @@ CHITCHAT_MESSAGE = (
     "và luyện tập phỏng vấn thử. Hôm nay bạn cần hỗ trợ gì trên hệ thống?"
 )
 
-# Match complete social utterances so a greeting cannot swallow a real request.
-_CHITCHAT_PATTERN = re.compile(
-    r"(?:(?:xin\s+)?chao(?:\s+ban)?|hello(?:\s+there)?|hi|hey|"
-    r"ban\s+(?:la\s+ai|ten\s+(?:la\s+)?gi)|"
-    r"(?:hom\s+nay\s+)?(?:ban\s+)?(?:cam\s+thay\s+)?(?:nhu\s+)?the\s+nao|"
-    r"(?:hom\s+nay\s+)?ban\s+(?:co\s+)?khoe\s+(?:khong|chua)|"
-    r"(?:toi\s+)?cam\s+on(?:\s+ban)?|tam\s+biet(?:\s+ban)?|"
-    r"thanks(?:\s+you)?|thank\s+you|goodbye|bye|how\s+are\s+you|who\s+are\s+you)"
-)
+# The original patterns are data shared by the legacy assistant and v2 router.
+_GUARDS = json.loads((Path(__file__).parent / "resources" / "guardrails.json").read_text(encoding="utf-8"))
+_CHITCHAT_PATTERN = re.compile(_GUARDS["chitchat"])
+_CAREERX_TOPIC_PATTERN = re.compile(_GUARDS["topic"])
+_OUT_OF_SCOPE_PATTERNS = tuple(re.compile(pattern) for pattern in _GUARDS["out_of_scope"])
 
-_CAREERX_TOPIC_PATTERN = re.compile(
-    r"\b(?:careerv|careerx|edu\s*17|cv|jd|star|phong van|interview|sinh vien|student|advisor|"
-    r"ky nang|skill|tai lieu|lich su|history|diem|score|match|phan tich|analysis|"
-    r"ho so|tai len|upload|chia se|co van|bo loc|filter|cai dat|settings|"
-    r"dang nhap|dang ky|he thong|nen tang|thong ke|dashboard|nhan xet|feedback|"
-    r"pdf|docx|nghe nghiep|tien bo|readiness|analytics|reviews|dinh dang)\b"
-)
 
-_OUT_OF_SCOPE_PATTERNS = tuple(
-    re.compile(pattern)
-    for pattern in (
-        r"\b(?:thoi tiet|weather|weather forecast)\b",
-        r"\bdu bao\s+(?:mua|nang|bao|nhiet do|ngay mai|hom nay)\b",
-        r"\b(?:nau an|nau mon|cong thuc\s+(?:mon an|nau|lam banh|banh|pizza)|recipe|recipes)\b",
-        r"\b(?:hom nay|ngay mai|toi nay|trua nay)\b.{0,30}\ban\s+gi\b",
-        r"\b(?:an gi\s+(?:hom nay|ngay mai)|goi y\s+mon an)\b",
-        r"\b(?:tu vi|boi toan|boi bai|cung hoang dao|horoscope|astrology)\b",
-        r"\b(?:ket qua|ty so|lich thi dau|xem|tran)\b.{0,50}\b(?:bong da|the thao|world cup|premier league|nba)\b",
-        r"\b(?:bong da|the thao|world cup|premier league|nba)\b.{0,50}\b(?:ai thang|ty so|toi nay|hom nay|ket qua)\b",
-        r"\b(?:tin tuc\s+(?:tong hop|the gioi|hom nay|moi nhat)|thoi su|general news)\b",
-        r"\b(?:toan do vui|do vui\s+(?:toan|toan hoc)|giai\s+(?:cau do|bai toan)|math puzzle)\b",
+def is_role_forbidden(message: str, role: str) -> bool:
+    """Preserve the student gate formerly embedded in agent._target_route."""
+    text = fold_diacritics(message)
+    return role == "student" and (
+        any(term in text for term in _GUARDS["student_forbidden"])
+        or _GUARDS["student_conditional_forbidden"] in text
+        and _GUARDS["student_sharing_exception"] not in text
     )
-)
 
 
 def is_refusal_response(message: str) -> bool:
@@ -75,8 +61,7 @@ def is_refusal_response(message: str) -> bool:
 def _inspection_text(message: str) -> str:
     text = unicodedata.normalize("NFKC", unescape(message)).casefold()
     text = "".join(char for char in text if unicodedata.category(char) != "Cf")
-    text = unicodedata.normalize("NFD", text).replace("đ", "d")
-    text = "".join(char for char in text if not unicodedata.combining(char))
+    text = fold_diacritics(text)
     return re.sub(r"\s+", " ", text)
 
 
@@ -107,29 +92,7 @@ def is_out_of_scope(message: str) -> tuple[bool, str]:
     return False, ""
 
 
-_ATTACK_PATTERNS = tuple(
-    re.compile(pattern)
-    for pattern in (
-        # Attempts to override instructions, including Vietnamese without accents.
-        r"\b(?:ignore|disregard|forget|override|bypass)\b.{0,80}\b(?:instructions?|rules?|polic(?:y|ies))\b",
-        r"\b(?:quen|bo qua|phot lo|vo hieu hoa)\b.{0,80}\b(?:chi dan|huong dan|quy tac)\b",
-        r"\b(?:ban la|you are|act as|pretend to be)\b.{0,80}\b(?:khong gioi han|unrestricted|unlimited|uncensored)\b",
-        r"\b(?:developer mode|jailbreak|do anything now)\b",
-        # System/developer prompt exfiltration in either word order.
-        r"\b(?:reveal|show|print|read|repeat|expose|display|dump)\b.{0,80}\b(?:system|developer)\s+(?:prompt|instructions?)\b",
-        r"\b(?:system|developer)\s+(?:prompt|instructions?)\b.{0,80}\b(?:reveal|show|print|read|repeat|expose|display|dump)\b",
-        r"\b(?:doc|hien thi|tiet lo|in ra|cho xem|cho toi xem)\b.{0,80}\b(?:system prompt|prompt he thong|chi dan he thong|loi nhac he thong)\b",
-        # Destructive requests are outside the Assistant action protocol.
-        r"\b(?:delete|erase|wipe|destroy|remove|drop|truncate)\b.{0,80}\b(?:data|database|tables?|records?|files?)\b",
-        r"\b(?:xoa|huy|pha huy)\b.{0,80}\b(?:du lieu|co so du lieu|bang|tep|tap tin|ho so|cv)\b",
-        r"\b(?:rm\s+-[a-z]*r[a-z]*f|rm\s+-[a-z]*f[a-z]*r|remove-item|del\s+/[fsq])\b",
-        # Reject markup, including fake XML role/delimiter tags and scripts.
-        r"<\s*/?\s*[a-z][\w:.-]*(?:\s[^<>]*?)?\s*/?\s*>",
-        r"<!\s*(?:doctype|--)",
-        r"\b(?:javascript\s*:|on(?:click|error|load)\s*=)",
-        r"\[\s*(?:/?inst|system)\s*\]|<\|(?:im_start|im_end|system)\|>",
-    )
-)
+_ATTACK_PATTERNS = tuple(re.compile(pattern) for pattern in _GUARDS["attacks"])
 
 
 def sanitize_and_inspect_prompt(message: str) -> tuple[bool, str]:

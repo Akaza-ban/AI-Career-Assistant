@@ -191,3 +191,10 @@ workflow. The `local` name reserves the later production adapter
 `src.services.assistant.router:create_eval_backend`; it currently fails clearly
 instead of substituting a dummy router. No router benchmark/model quality is
 claimed, and the missing 100+ real utterances remain a release-evidence gap.
+
+## Local router implementation — shared helpers
+
+- **Reuse/extract:** `assistant.text.fold_diacritics` is the former `agent.normalized`; the legacy import remains available. `guardrails._inspection_text` shares the fold after its existing security normalization.
+- **Move:** existing greeting/topic/out-of-scope/injection regexes now live unchanged in `src/services/assistant/resources/guardrails.json`, consumed by the same guard functions. No second injection or greeting engine.
+- **Extract:** `guardrails.is_role_forbidden` preserves the student terms and sharing exception from `AssistantAgent._target_route`.
+- New helper/data files avoid importing the LangGraph, provider and retrieval stack into the offline router; no equivalent lightweight shared module existed.
