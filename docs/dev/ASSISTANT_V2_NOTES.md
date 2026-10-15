@@ -397,3 +397,217 @@ repository-wide Ruff findings remain in analysis.py (2) and db/seed.py (1).
 - Final heldout-free selection: 538 passed; task-owned Ruff/format checks pass.
   No classifier, LLM/network/DB/date-parser addition or navigate/howto/locate
   recall tuning. Existing user notes and all gold datasets remain unchanged.
+
+## T2.3b dev-only diagnosis and stop (2026-10-15)
+
+All fixes were derived from train utterances. Five outer stratified folds use seed 20261015; augmentation is generated only from each fitting fold. Original/noisy siblings share a group in the three-fold calibration split. Fixed deterministic rules already derived from train are not re-learned inside folds: this is OOF classifier diagnosis, not an unbiased estimate of end-to-end generalization. No held-out data or context fixture was opened and no held-out evaluation was run.
+
+The baseline dev measurement and final tuning/measurement batch were the only real-dev invocations for their respective groups. Dev output was aggregate-only; no dev text or IDs were printed or used to derive fixes.
+
+### Counts by final decision source
+
+| Population | Source | Correct / support | Accuracy | Typo correct / support | Wrong clarify |
+|---|---|---:|---:|---:|---:|
+| Train OOF baseline | stage0 | 69/69 | 1.0000 | 6/6 | 0 |
+| Train OOF baseline | cache | 0/0 | n/a | 0/0 | 0 |
+| Train OOF baseline | rules | 97/105 | 0.9238 | 4/5 | 0 |
+| Train OOF baseline | classifier | 25/33 | 0.7576 | 2/4 | 0 |
+| Train OOF baseline | fallback | 26/45 | 0.5778 | 2/6 | 15 |
+| Dev baseline | stage0 | 7/7 | 1.0000 | 3/3 | 0 |
+| Dev baseline | cache | 0/0 | n/a | 0/0 | 0 |
+| Dev baseline | rules | 29/32 | 0.9063 | 0/1 | 0 |
+| Dev baseline | classifier | 21/23 | 0.9130 | 4/4 | 0 |
+| Dev baseline | fallback | 10/22 | 0.4545 | 2/13 | 12 |
+| Train OOF final | stage0 | 69/69 | 1.0000 | 6/6 | 0 |
+| Train OOF final | cache | 0/0 | n/a | 0/0 | 0 |
+| Train OOF final | rules | 108/113 | 0.9558 | 3/3 | 0 |
+| Train OOF final | classifier | 28/37 | 0.7568 | 5/8 | 0 |
+| Train OOF final | fallback | 25/33 | 0.7576 | 0/4 | 6 |
+| Dev final | stage0 | 7/7 | 1.0000 | 3/3 | 0 |
+| Dev final | cache | 0/0 | n/a | 0/0 | 0 |
+| Dev final | rules | 33/36 | 0.9167 | 4/5 | 0 |
+| Dev final | classifier | 25/27 | 0.9259 | 8/8 | 0 |
+| Dev final | fallback | 10/14 | 0.7143 | 3/5 | 2 |
+
+Baseline train OOF: 217/252 routes correct; 15 wrong clarifications (13 stage-4 overrides of a classifier prediction, one stage-4 abstention, one context-rule clarification). Seven typo route errors: rules 1, classifier 2, fallback 4. All 12 unsafe, 9 injection and 6 out-of-role train examples already passed stage 0; therefore no shared unsafe/role patterns were expanded from consumed evaluation evidence.
+
+Baseline dev wrong clarify counts were fallback 12: classifier-origin 1, missing-target guard 3, stage-4 abstention 1, classifier overrides 7. Baseline dev typo failures: rules 1 and fallback 11. These aggregate counts were recorded, not used as a source for new wording.
+
+Final train OOF: 230/252 (91.27%), navigate/result slots both 33/36, wrong clarify 6 (stage-4 candidate ambiguity). Typo route accuracy remains 14/21. The unaugmented final-code ablation also has 230/252 and 15/21 typo accuracy: augmentation has no demonstrated overall route gain and loses one typo route relative to that ablation. Retained as the requested seeded training procedure, not presented as an isolated quality improvement.
+
+Final dev: 75/84 (89.29%), unsafe/injection deny recall 9/9, navigate/result slots 10/12 each, typo 18/21, wrong clarify 2 (fallback candidate ambiguity). Remaining nine route errors: rules 3, classifier 2, fallback 4. Both remaining wrong clarifications are gold navigate. Result has two extractor-only misses; navigate has two upstream route misses. Injection reason-exact recall is still 0/6 although all six are routed deny; route recall must not be read as reason classification accuracy.
+
+STOP CONDITION: final dev accuracy is below 0.90. No additional routing rules or extractor changes were made after this measurement. Section 5.5 accuracy (0.93) and navigate slot (0.90) targets remain unmet. The 100+ real-utterance gate remains open.
+
+### Implementation, evidence and limitations
+
+- Candidate counting now represents distinct destinations, collapses CV/JD qualifiers under analysis and interview under report, and distinguishes an ambiguous profile/report destination from two alternative actions on one destination. A single candidate uses the classifier top actionable route; if its top label is clarify, the highest non-clarify label is used. Missing artifacts default to howto for single/no candidates. Broad partial vocabulary can still offer 2–4 distinct destination chips. Explicit record comparisons are not treated as bare deictics.
+- Added train-derived locate/how-to phrases and bounded unambiguous one-edit matching for both observed and lexicon tokens of length >=5. Short tokens are excluded; raw spans are preserved. Shared stage-zero data is unchanged.
+- Slot fixes cover suffix JD/CV refs, CV refs followed by analysis nouns, terminal question clauses, comparison qualifiers, metric noise and page-role prefixes. The implicit JD convention in “for FPT Java” remains unresolved; no gold annotations changed.
+- Artifact v2 retains the train-only SHA-256 25dfa7a47266a9ad2530cea1b272ff28592a649f390ec495e1ea6042e69366b2. Augmentation seed 20261015, two copies per delete/swap/duplicate/fold-then-typo operation, min token length 2, first copy biased to the first token (duplication at its end). Grouped calibration keeps related variants together.
+- Dev tuning grid: probability 0.20..0.90 step 0.05; margin 0..0.30 step 0.05; maximize route accuracy then classifier acceptance coverage, deterministic first tie. Selected ROUTER_CLF_THRESHOLD=0.20 and ROUTER_CLF_MARGIN=0.0. Tuning memoizes only probabilities; the final measured pass uses the actual pipeline and evicts decision and query-dependent lexical caches. Cache-miss p50/p95: 2.5949/17.2658 ms, 84 samples.
+- Latency regression checks the single saved measurement bound to exact model-file and dev-data hashes plus threshold/margin; tests do not repeatedly evaluate dev. Final targeted router/shared-guard suite: 520 passed. Changed-file Ruff/format checks pass.
+- Reused: local router, shared guard functions/data, raw-span extractor, metric and diagnostic arithmetic, installed sklearn/joblib. Created: eval/router/cv_report.py because existing helpers lack fold-local fitting and by-source confusion matrices; augmentation/model-builder helpers live in the existing trainer. No dependency, network, LLM, Jev or kNN addition.
+
+### Source confusion matrices
+
+Rows and columns use: smalltalk, howto, locate, result, navigate, clarify, deny. Cache matrices are zero because every scored request evicts decision caches. Full machine-readable reports: eval/router/t23b_train-cv_baseline.json, eval/router/t23b_dev_baseline.json, eval/router/t23b_train_cv_augmented.json, eval/router/t23b_dev_final.json.
+
+Train OOF baseline
+
+```text
+stage0:
+  smalltalk  36 0 0 0 0 0 0
+  howto      0 0 0 0 0 0 0
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 0 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 0 0 0 0 0 0
+  deny       0 0 0 0 0 0 33
+cache:
+  zero 7x7 matrix
+rules:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 20 0 1 0 0 0
+  locate     0 0 22 3 0 0 0
+  result     0 0 0 24 0 0 0
+  navigate   0 0 0 0 31 0 0
+  clarify    0 0 0 0 4 0 0
+  deny       0 0 0 0 0 0 0
+classifier:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 11 1 0 0 0 0
+  locate     0 0 3 0 0 0 0
+  result     0 1 0 9 0 0 0
+  navigate   0 0 0 2 0 0 0
+  clarify    2 1 0 0 0 0 1
+  deny       0 0 0 0 0 0 2
+fallback:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 1 0 0 0 2 0
+  locate     0 0 0 0 0 8 0
+  result     0 0 0 0 0 2 0
+  navigate   0 0 0 0 0 3 0
+  clarify    0 3 0 0 0 25 0
+  deny       0 1 0 0 0 0 0
+```
+
+Dev baseline
+
+```text
+stage0:
+  smalltalk  2 0 0 0 0 0 0
+  howto      0 0 0 0 0 0 0
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 0 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 0 0 0 0 0 0
+  deny       0 0 0 0 0 0 5
+cache:
+  zero 7x7 matrix
+rules:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 3 0 1 0 0 0
+  locate     0 0 8 0 0 0 0
+  result     0 0 0 9 0 0 0
+  navigate   0 0 0 0 9 0 0
+  clarify    0 0 0 0 1 0 0
+  deny       0 1 0 0 0 0 0
+classifier:
+  smalltalk  10 0 0 0 0 0 0
+  howto      0 5 0 0 0 0 1
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 0 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 0 0 0 0 0 1
+  deny       0 0 0 0 0 0 6
+fallback:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 0 0 0 0 2 0
+  locate     0 0 0 0 0 4 0
+  result     0 0 0 0 0 3 0
+  navigate   0 0 0 0 0 3 0
+  clarify    0 0 0 0 0 10 0
+  deny       0 0 0 0 0 0 0
+```
+
+Train OOF final
+
+```text
+stage0:
+  smalltalk  36 0 0 0 0 0 0
+  howto      0 0 0 0 0 0 0
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 0 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 0 0 0 0 0 0
+  deny       0 0 0 0 0 0 33
+cache:
+  zero 7x7 matrix
+rules:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 21 0 1 0 0 0
+  locate     0 0 30 2 0 0 0
+  result     0 0 0 25 0 0 0
+  navigate   0 0 0 0 32 0 0
+  clarify    0 0 0 0 2 0 0
+  deny       0 0 0 0 0 0 0
+classifier:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 8 1 1 0 0 0
+  locate     0 0 3 1 0 0 0
+  result     0 1 0 8 0 0 0
+  navigate   0 0 0 2 2 0 0
+  clarify    2 0 0 0 0 5 0
+  deny       0 1 0 0 0 0 2
+fallback:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 0 0 0 0 4 0
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 2 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 0 1 0 1 25 0
+  deny       0 0 0 0 0 0 0
+```
+
+Dev final
+
+```text
+stage0:
+  smalltalk  2 0 0 0 0 0 0
+  howto      0 0 0 0 0 0 0
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 0 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 0 0 0 0 0 0
+  deny       0 0 0 0 0 0 5
+cache:
+  zero 7x7 matrix
+rules:
+  smalltalk  0 0 0 0 0 0 0
+  howto      0 3 0 1 0 0 0
+  locate     0 0 10 0 0 0 0
+  result     0 0 0 10 0 0 0
+  navigate   0 0 0 0 10 0 0
+  clarify    0 0 0 0 1 0 0
+  deny       0 1 0 0 0 0 0
+classifier:
+  smalltalk  9 0 0 0 0 0 0
+  howto      0 6 0 0 0 0 1
+  locate     0 0 2 0 0 0 0
+  result     0 0 0 2 0 0 0
+  navigate   0 0 0 0 0 0 0
+  clarify    0 1 0 0 0 0 0
+  deny       0 0 0 0 0 0 6
+fallback:
+  smalltalk  1 0 0 0 0 0 0
+  howto      0 1 0 0 0 0 0
+  locate     0 0 0 0 0 0 0
+  result     0 0 0 0 0 0 0
+  navigate   0 0 0 0 0 2 0
+  clarify    0 1 0 0 0 8 1
+  deny       0 0 0 0 0 0 0
+```
+
+
+T2.3b commit grouping deviation: `6a13a8b` combines the first three approved groups and the previously uncommitted T2.3 baseline needed for a buildable router commit. Documentation is separate; unrelated edits are not included.
