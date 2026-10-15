@@ -67,3 +67,52 @@ def test_retrieval_matches_frozen_prechange_baseline(knowledge_base) -> None:
         after = retrieval_metrics(sample, chunks)
         assert after["context_recall"] >= before["metrics"]["context_recall"]
         assert after["context_precision"] >= before["metrics"]["context_precision"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "message, phrase",
+    [("How do I build a submarine?", "usage guide"), ("Cách chế tạo tàu ngầm?", "Tài liệu hướng dẫn")],
+)
+async def test_abstention_is_before_generation(message: str, phrase: str) -> None:
+    from unittest.mock import MagicMock
+
+    from src.models.assistant import ClientPageContext
+    from src.services.assistant.agent import AssistantAgent
+
+    llm = MagicMock()
+    context = ClientPageContext(current_url="/student/cv", route="/student/cv", user_role="student")
+    result = await AssistantAgent(llm=llm)._generate(
+        {"message": message, "context": context, "sources": [], "confidence": "low", "intent": "qa"}
+    )
+    assert phrase in result["response"].message
+    assert result["response"].sources == result["response"].actions == result["response"].ui_actions == []
+    assert llm.mock_calls == []
+
+
+def test_abstention_threshold_configured_before_generation(monkeypatch) -> None:
+    from src.services.assistant.hybrid_search import select_citation_chunks
+
+    monkeypatch.setattr(get_settings(), "rag_abstain_threshold", 0.6)
+    assert select_citation_chunks([{"chunk_id": "low", "score": 0.599}]) == []
+    assert select_citation_chunks([{"chunk_id": "boundary", "score": 0.6}])
+
+
+def test_answer_cache_key_and_ttl_isolation() -> None:
+    from src.services.assistant.howto import AnswerCache, GuideAnswer, answer_cache_key
+
+    keys = [
+        answer_cache_key("Cách tải CV?", *args)
+        for args in [("student", "vi", "v1"), ("advisor", "vi", "v1"), ("student", "en", "v1"), ("student", "vi", "v2")]
+    ]
+    assert len(set(keys)) == 4
+    assert keys[0] == answer_cache_key("  CACH  tai cv? ", "student", "vi", "v1")
+    now = [0.0]
+    cache = AnswerCache(maxsize=2, ttl_s=10, clock=lambda: now[0])
+    cache.put(keys[0], GuideAnswer(message="Select a PDF.", sources=[]))
+    assert all(cache.get(key) is None for key in keys[1:])
+    cached = cache.get(keys[0])
+    cached.message = "changed"
+    assert cache.get(keys[0]).message == "Select a PDF."
+    now[0] = 10.0
+    assert cache.get(keys[0]) is None

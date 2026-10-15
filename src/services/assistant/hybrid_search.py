@@ -35,9 +35,10 @@ def select_citation_chunks(chunks: list[dict[str, Any]], limit: int = MAX_CITATI
         return []
     ranked = sorted(chunks, key=lambda item: (-item["score"], item["chunk_id"]))
     max_score = ranked[0]["score"]
-    if max_score < MIN_RETRIEVAL_SCORE:
+    threshold = get_settings().rag_abstain_threshold
+    if max_score < threshold:
         return []
-    cutoff = max(MIN_RETRIEVAL_SCORE, CITATION_SCORE_RATIO * max_score)
+    cutoff = max(threshold, CITATION_SCORE_RATIO * max_score)
     return [item for item in ranked if item["score"] >= cutoff][: min(limit, MAX_CITATIONS)]
 
 

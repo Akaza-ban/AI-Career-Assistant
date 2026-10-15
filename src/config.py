@@ -176,6 +176,10 @@ class Settings(BaseSettings):
     assistant_locate_threshold: float = Field(default=0.78, ge=0.0, le=1.0)
     assistant_locate_margin: float = Field(default=0.10, ge=0.0, le=1.0)
     assistant_top_k: int = 5
+    rag_abstain_threshold: float = Field(default=0.42, ge=0.0, le=1.0)
+    rag_ui_threshold: float = Field(default=0.65, ge=0.0, le=1.0)
+    rag_answer_cache_ttl_s: float = Field(default=300.0, gt=0.0)
+    rag_answer_cache_maxsize: int = Field(default=256, ge=1)
     assistant_similarity_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
     assistant_llm_timeout_seconds: float = Field(default=30.0, gt=0.0, le=120.0)
     assistant_history_turns: int = Field(default=6, ge=0, le=20)

@@ -39,6 +39,7 @@ from src.services.assistant.guardrails import (
     is_role_forbidden,
     sanitize_and_inspect_prompt,
 )
+from src.services.assistant.howto import answer_language, capability_menu
 from src.services.assistant.hybrid_search import AssistantHybridRetriever, select_citation_chunks
 from src.services.assistant.locate import locate_actions
 from src.services.assistant.router import LocalRouter
@@ -311,6 +312,13 @@ class AssistantAgent:
         )
 
     async def _generate(self, state: AssistantState) -> dict[str, Any]:
+        if not state.get("response") and not state["sources"] and state["intent"] == "qa":
+            return {
+                "response": AssistantResponse(
+                    message=capability_menu(answer_language(state["message"]), state["context"].user_role),
+                    intent="qa",
+                )
+            }
         response = state.get("response") or self._fallback(state)
         if not response.sources:
             return {"response": response}
