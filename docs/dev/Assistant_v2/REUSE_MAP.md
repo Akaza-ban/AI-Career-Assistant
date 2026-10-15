@@ -214,3 +214,6 @@ claimed, and the missing 100+ real utterances remain a release-evidence gap.
 - `inspect_prompt_reason` is the single normalized scanner used by both legacy `sanitize_and_inspect_prompt` and router stage zero. Shared role checks now cover explicit account-console requests and advisor access to unshared CVs, preserving sharing guidance.
 - Fixed the existing greeting preprocessor deleting English article `a`; full-utterance matching still prevents a greeting from swallowing a real request.
 - Added train-wide smalltalk/security regressions and authored benign controls. Navigate/howto/locate rule vocabularies and extractor behavior are unchanged.
+
+- **Evaluation follow-up:** `diagnostics.py` reuses existing Observation/metrics arithmetic for selective coverage, per-reason safety and slot attribution; scores/gold remain unchanged. `rules_report.py` reuses evaluate() while reading only the selected train/dev file, because the general load_suite() reads heldout even for dev. Added explicit tests for the no-heldout/no-dev-text boundary.
+- The [extended report](../../../eval/router/rules_dev_report.md) distinguishes genuine train extractor bugs, two unresolved slot conventions, remaining multi-family/classifier-handoff ambiguity and targeted-versus-whole-suite validation.

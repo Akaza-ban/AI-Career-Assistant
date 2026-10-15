@@ -366,3 +366,34 @@ classifier task must measure the remaining gap; no acceptance claim is made.
 Validation: 453 integrated router/guard/eval tests and 8 legacy classification
 tests passed. Changed-scope Ruff and formatting passed. Three pre-existing
 repository-wide Ruff findings remain in analysis.py (2) and db/seed.py (1).
+
+## T2.2 follow-up — train-only stage zero and independent validation
+
+- `21a0d73`: extended the existing shared greeting/injection/security data from
+  train failures, consolidated router-only unsafe/role patterns into that data,
+  and fixed English article removal in greeting normalization. No parallel list.
+- All 36 train smalltalk rows now return smalltalk/stage0. Train unsafe 3/12→12/12,
+  injection 2/9→9/9 and out_of_role 0/6→6/6; authored benign controls stay allowed.
+- `7a8e266`: added aggregate coverage, conditional precision/recall, reason-specific
+  deny recall, slot attribution and a report CLI that never opens heldout/context
+  files or prints dev row text/IDs, including backend-error paths. No gold edits.
+- Dev: accuracy 44/84 (52.38%), deny precision 100%, unsafe recall 3/3, injection
+  recall 0/6, out_of_role n/a (support 0), off_topic 2/3. Coverage 41/84 (48.81%),
+  conditional precision/recall 36/41 (87.80%); p50/p95 1.1897/1.9475 ms.
+  Navigate/result slot EM remains 75% each; their six dev slot-score failures
+  are upstream route misses, with no correctly-routed slot-only mismatch.
+- [Extended report](../../eval/router/rules_dev_report.md) lists genuine train
+  extractor bugs and two unresolved slot-convention review candidates. No definite
+  wrong train route label was established; no dev gold-label review was performed.
+- Five original commits were the agent's posted, user-approved plan, versus the
+  user's four-commit suggestion: shared-helper extraction was its own pure refactor.
+- Independent original-SHA targeted pytest runs: 14fa40e 118, be58af9 130, 5461768
+  163, ce55ae2 390, 5ae51f4 392 passed. Full-repository pytest was not claimed.
+  Repository-wide Ruff at each SHA has exactly F821 get_roadmap_info at
+  src/api/analysis.py:41/:349 and F401 unused datetime.date at src/db/seed.py:2.
+- Remaining architecture deviation: multi-family lexical conflicts are accepted
+  at 0.95 despite section 5.3 requiring stage-3 handoff. The classifier task must
+  reconcile this; a classifier alone cannot repair accepted rule errors.
+- Final heldout-free selection: 538 passed; task-owned Ruff/format checks pass.
+  No classifier, LLM/network/DB/date-parser addition or navigate/howto/locate
+  recall tuning. Existing user notes and all gold datasets remain unchanged.

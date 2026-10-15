@@ -204,3 +204,11 @@ The [2026-10-15 dev report](rules_dev_report.md) records 50% accuracy, failed
 quality gates, per-route metrics, slot exact match, deny recall and latency.
 No heldout inference was run for this task. The prior missing-backend statements
 above describe the T2.1 foundation snapshot.
+
+For a train-only repair that must not read heldout/context data, use
+`python -m eval.router.rules_report --split dev --output eval/router/rules_dev_report.json`.
+Use `--split train --print-smalltalk` to inspect train social decisions.
+This entry point emits aggregate dev diagnostics only and does not call
+`load_suite`, verify heldout hashes or load context sidecars.
+The report now includes selective coverage, deny-reason recall, slot attribution
+and the independently checked original five-commit validation scopes.
