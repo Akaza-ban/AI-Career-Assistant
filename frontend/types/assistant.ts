@@ -38,12 +38,15 @@ export interface AssistantCard {
   label: string
   route_id: string
   params: Record<string, string>
+  sublabel?: string | null
 }
 
 export interface AssistantChip {
   label: string
   route: "navigate" | "locate" | "howto"
   slots: Record<string, string | boolean | null>
+  route_id?: string | null
+  params?: Record<string, string>
 }
 
 export interface ChatMessage {

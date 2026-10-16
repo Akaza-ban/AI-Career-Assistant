@@ -273,7 +273,7 @@ export function ChatPanel() {
                   {(message.actions || message.ui_actions) && <ActionBadges actions={message.actions ?? []} uiActions={message.ui_actions} />}
                   {message.sources && !isAssistantRefusal(message.content) && <SourceAccordion sources={message.sources} userRole={userRole} />}
                   {message.cards && <AssistantCards cards={message.cards} role={userRole} />}
-                  {message.chips && <AssistantChips chips={message.chips} disabled={busy || message !== messages.at(-1)} onSelect={(chip) => { void sendMessage(chip.label, chip) }} />}
+                  {message.chips && <AssistantChips chips={message.chips} role={userRole} disabled={busy || message !== messages.at(-1)} onSelect={(chip) => { void sendMessage(chip.label, chip) }} />}
                   {message.notices?.map((notice, index) => <p key={index} className="text-xs text-ink-3">{notice}</p>)}
                   {message.interrupted && <p className="text-xs text-ink-3">Câu trả lời đã bị gián đoạn.</p>}
                   {!message.is_streaming && (
