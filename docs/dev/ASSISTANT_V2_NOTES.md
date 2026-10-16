@@ -17,6 +17,99 @@ Ruff errors remain. The report records buffering, result-fact/DPA release
 decisions, accounting interpretation, single-worker scope and two corrective
 commits beyond the approved sequence. Existing notes/user edits remain unstaged.
 
+## T1.3a — pulled OCR / speech review (2026-10-14)
+
+Read-only implementation review at HEAD `5ff8794`; only this section and the
+[matrix addendum](Assistant_v2/TOOL_MATRIX.md#8-t13a-ocr--speech-outbound-review-2026-10-14)
+were prepared. No source, tests, teammate files or evaluation artifacts changed.
+Originating OCR/voice commit is `562a5f3`, integrated through `0a941ec`,
+`da6e320`, PR #14 (`dfc1cd1`) and `c1e8062`. The user confirmed `dced45c` as the
+comparison baseline; its diff to HEAD and originating commits were inspected
+without assigning unrelated changes to OCR/voice. Full inventory and F01-F16
+findings are in the addendum; its citations refer to this reviewed tree.
+
+| Finding | Severity | File:line | Later task / owner |
+|---|---|---|---|
+| App import fails on duplicate session table; Soniox and cookie/demo settings are MISSING. | blocks release | `src/db/models.py:79,131`; `src/config.py:14-210`; `src/services/interview.py:558` | Teammate merge repair; T1.2 revalidation |
+| RapidOCR offline provisioning proof is MISSING; automatic Tesseract/default-language fallback and incomplete-page acceptance conflict with the required extraction path. | blocks release (verification); should fix (fallback/completeness) | `src/services/ocr.py:24-36,211-254,267-315`; `src/services/privacy/extract.py:32-71` | Teammate; T1.3b adapter |
+| Soniox sends raw voice plus unmasked JD title/skills outside the model gateway. Server-side key handling avoids frontend key exposure, but does not protect audio/context. | blocks release | `src/services/soniox_stt.py:33-56,89-116` | T1.4 text boundary; teammate; team audio decision |
+| WS accepts an optional interview and bypasses disabled/temp-password checks; HTTP Origin middleware does not protect WebSockets. Demo header fallback still exists. | blocks release | `src/api/interviews.py:33-54`; `src/api/deps.py:28-39,48-52`; `src/api/security.py:10-25` | T1.2; teammate WS guards |
+| OCR/STT exceptions and vendor error bodies can escape to logs/UI outside gateway sanitization. Ordinary transcript/OCR text logging was not found. | blocks release | `src/services/ocr.py:247,292,313`; `src/services/soniox_stt.py:151,173,187,191`; `src/services/providers/gateway.py:58-75` | T1.4; teammate |
+| Interview questions now call the masking gateway, but known user identity/full document priming before truncation are MISSING on that path. STAR scoring uses an authorized provider scope and untraced graph. | blocks release (question-path coverage); note (STAR boundary present) | `src/services/interview.py:237-245,336-342`; `src/agents/interview/question_generator.py:77-98`; `src/agents/interview/graph.py:51` | T1.4 leak regressions / scoped inputs |
+| Actual fallback scan experiment: PERSON strict recall 88.89% versus 95.83% reference; DOB coverage 94.44% versus 100%; accentless `Ngay sinh` leaves an unchanged date unmasked. RapidOCR quality remains unmeasured. | blocks release for evaluated path | `src/services/privacy/detectors.py:25-27`; `src/services/ocr.py:211-254`; `eval/pii/run.py:66-160`; `eval/pii/golden.jsonl:6` | T1.3b; teammate RapidOCR verification |
+| TTS and Vbee code/vendor/payload/audio-cache/tests are MISSING. No real vendor key found in inspected tracked source/examples; Soniox example is empty. | note | `src/api/interviews.py:19-54`; `frontend/lib/use-soniox-stt.ts:1-263`; `.env.example:13-16,37,42` | Teammate identify branch/files or confirm deferred |
+| Relay/offline/partial-page/error-leak tests are MISSING; foreign-session WS test uses an absent ID rather than another student's real row. | should fix | `tests/test_api/test_soniox_ws.py:43-50`; `tests/test_api/test_cv.py:275-319` | T1.3b, T1.4, teammate |
+
+Validation with `PYTHON_DOTENV_DISABLED=1`, isolated process credentials and no
+real provider calls: `ruff.exe check --no-cache src tests` exits 1 with six
+existing merge errors; full `python -m pytest tests/ -q -p no:cacheprovider`
+exits 4 in conftest import on duplicate `auth_sessions`, before tests collect.
+No passing full suite is claimed and no commit is made while the architecture's
+lint/full-suite gate is blocked. The planned commit is
+`docs(assistant): record OCR STT and TTS review findings`, limited to these two docs.
+
+The optional experiment used existing evaluator functions in memory on 36
+synthetic scan PDFs, with no filenames/auxiliary samples and no known identities.
+RapidOCR, pypdfium2 and pdfplumber are absent from the venv; no dependencies were
+installed. The teammate's pypdf/pytesseract `vie+eng` fallback was run with the
+already provisioned portable Tesseract. Machine outputs were not saved or
+committed. Scans have no text layer; annotated source transcription is the
+comparison reference. Details and examples are in the matrix addendum.
+
+Privacy shipping gate: **pending-team**, requiring human-reviewed annotations
+and 10+ held-out real-format CVs in `eval/pii/real/`. This blocks release to real
+users, not M2-M4 development. No DPA review, Vbee integration or OCR benchmark
+commit was undertaken. T1.3b remains pending approval of these findings. Team
+decisions still needed: TTS code location/deferred status,
+raw-voice product/privacy decision, and ownership of merge/relay repairs.
+
+## T1.3 revalidation — 2026-10-14
+
+The requested privacy module, golden corpus and standalone migration already
+exist in HEAD (the original T1.3 commits are listed below). This follow-up retains
+them and adds the bounded fuzzy known-identity pass required by architecture
+section 4.4. Diacritic-insensitive authenticated names of at least two words and
+eight characters may differ by one insertion, deletion or substitution across
+the whole name. Matching preserves original character offsets, checks reversed
+name variants and cannot cross a newline or field punctuation. Short names,
+emails and phones do not use fuzzy matching. This conservative pass also applies
+to message/text input because the existing extraction API returns text without
+an OCR provenance flag. As with exact identity matches, a near-identical unrelated
+name may be masked; matching remains bounded to supplied authorized identities.
+
+Regression tests cover all three edit operations, reversed order, multiple-edit
+refusal, short-name refusal, field boundaries, exact-only email/phone identity
+matching and a masking/unmasking round trip preserving the OCR misspelling and a
+literal placeholder. The independent privacy tests pass **56 tests**, with the
+application lifespan test deselected because it imports the broken application
+model graph. Command: `python -m pytest --noconftest
+tests/test_privacy_detectors.py tests/test_privacy_masker.py
+tests/test_privacy_extract.py tests/test_privacy_eval.py
+tests/test_privacy_ner.py -q -k 'not lifespan'`. Privacy/eval Ruff, changed-file
+format checks, compilation and `git diff --check` pass.
+
+**Current repository validation is blocked, not passed.** Normal pytest stops
+in `tests/conftest.py` while importing `src/db/models.py`: `AuthSession` is declared
+twice for the same `auth_sessions` table (lines 79 and 131). Consequently the
+Fernet-vault, migration and application-startup tests cannot be revalidated on
+this HEAD. Full `ruff check src tests` also fails with six existing merge errors:
+the duplicate `AuthSession`, two undefined `get_roadmap_info` references, an unused
+`date` import and two undefined `DEMO_ADMIN_ID` references. These auth/roadmap/seed
+merge defects are outside this privacy correction and are left unchanged.
+No new commit is created while the architecture's full-suite/lint commit gate is
+blocked. The historical passing full-suite counts below are historical evidence,
+not results for this HEAD. The separate migration commit remains `a9c3309`.
+
+Fresh benchmark: all three NERs measured on CPU, all 72 document extractions
+succeeded, and underthesea again won PERSON+ADDRESS micro recall (57.37%, versus
+4.81% PhoBERT and 33.97% spaCy). Selected-pipeline draft raw/document numeric
+targets pass with unchanged scores from the original benchmark. Full per-entity
+and model tables are recorded at the task's explicitly requested path,
+[docs/ASSISTANT_V2_NOTES.md](../ASSISTANT_V2_NOTES.md#t13-revalidation-on-current-head-2026-10-14),
+with machine evidence in [t1_3_current.json](../../eval/pii/results/t1_3_current.json).
+The benchmark exits 1 because review is still `needs_human_review` and held-out
+real count is zero. These team actions remain shipping gates, not waived targets.
+
 ## T1.1 — tool-to-service matrix (2026-10-13)
 
 - Output-path ambiguity: architecture line 3 names docs/assistant_v2/TOOL_MATRIX.md; the task explicitly requests docs/dev/Assistant_v2/TOOL_MATRIX.md. Use the task path only; no duplicate matrix or architecture edit.
@@ -623,6 +716,16 @@ T2.3b commit grouping deviation: `6a13a8b` combines the first three approved gro
 - Validation: all 143 combined backend assistant tests passed (including 21 UI cases). 34 frontend tests, type generation/TypeScript, frontend lint (two existing warnings), and production build passed. The build used real fonts and temporary isolated output because default `.next` refused an unlink; temporary build/tsconfig changes were restored. Ruff passes for changed Python files. Repository-wide Ruff still has three untouched errors in `src/api/analysis.py` and `src/db/seed.py`. Repository pytest fail-fast passes 20 tests then fails the untouched account registration profile test (demo name returned).
 
 See [full registered-element list, matching behavior and checks](Assistant_v2/UI_LOCATE_IMPLEMENTATION.md).
+
+
+## How-to RAG (architecture 6.1 and 6.2, 2026-10-15)
+
+- Reused ingestion, hybrid ranking, LangGraph, LlmClient, mask-only gateway and T3.1 registries. Added corpus-versioned chunk UI metadata, bilingual pre-generation abstention, guide-only role/language/version cache and server-owned attachments. Shared router TTL/LRU storage was extracted in its own refactor commit.
+- E5 requires unboosted top confidence >= 0.85; fallback hashing keeps the existing 0.42 scale. Forty authored negative cases abstain 40/40 with E5 and 39/40 with hashing; precision is 1.000 and 0.975 against 15 positive controls. No model calls occur on abstentions. Both 15-query before/after retrieval snapshots preserve result IDs/order and all measured rank metrics.
+- The historical T0 MRR of 0.867 is not reproduced: current E5 is 0.855556 for both original and updated retrievers on the current guide corpus, while context recall is 1.000 versus historical 0.967. This is no implementation regression, not a claim that the old numeric MRR gate was met.
+- Single-worker in-process caches remain a deployment limitation. Cache hits still retrieve to observe docs_version; UI actions are rebuilt/role-checked for the current page. Upstream streaming remains privacy-buffered by LlmClient; HTTP JSON/browser streaming is unchanged. No new business-data reads, qa_direct or career/CV/JD-content path.
+- Recorded outputs verify masking/grounding contracts, not live model quality or universal semantic enforcement. The authored cases informed confidence calibration and are not independent held-out evidence. No live provider call/model download was used.
+- Detailed configuration, baseline provenance, cache measurements, validation limitations and reproduction: [HOWTO_IMPLEMENTATION.md](Assistant_v2/HOWTO_IMPLEMENTATION.md). Unrelated repository lint/account-test failures remain outside this task.
 
 
 ## 2026-10-16 - architecture 3/9/10 streaming integration

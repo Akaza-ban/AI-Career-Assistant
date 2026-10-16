@@ -1,5 +1,5 @@
 import { ApiError } from "@/lib/api-error"
-import { API_BASE_URL } from "@/lib/config"
+import { API_BASE_URL, isLive } from "@/lib/config"
 import type { ActionStatus, AssistantRunPayload, AssistantStreamEvent, AssistantEventName, ChatMessage, ChatRequestPayload, ChatResponsePayload } from "@/types/assistant"
 
 export interface AssistantStatusResponse {
@@ -27,7 +27,8 @@ async function request(path: string, init?: RequestInit): Promise<Response> {
   }
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+    const shouldRedirect = typeof isLive === "function" ? isLive("auth") : true
+    if (response.status === 401 && shouldRedirect && typeof window !== "undefined" && window.location.pathname !== "/login") {
       window.location.replace("/login")
     }
     let detail = `Yêu cầu thất bại (${response.status}).`

@@ -1,5 +1,69 @@
 # Assistant v2: T1.5 and M1 gate (2026-10-14)
 
+## T1.3 revalidation on current HEAD (2026-10-14)
+
+T1.3's extraction, four detector layers, masking/escaping, scoped Fernet vault,
+TTL/deletion, standalone migration and 72-CV synthetic harness already exist.
+This follow-up adds bounded edit-distance matching of authenticated names for
+OCR corruption, with seven regression cases. See the
+[implementation and validation notes](dev/ASSISTANT_V2_NOTES.md#t13-revalidation--2026-10-14).
+Provider wiring and streaming unmasking are outside this change.
+
+The fresh [CPU benchmark](../eval/pii/results/t1_3_current.json) was started at
+`2026-10-14T12:07:25Z` using local model weights, portable Tesseract 5.5.3 and
+`vie+eng` data. All **72 PDFs extracted successfully**: 36 text PDFs and 36 scans,
+24 CVs per language (VI/EN/mixed), plus 18 auxiliary fixtures and annotated
+filenames. No cloud OCR or hosted inference was used. The report records source
+and dataset hashes; previous reports are retained as historical evidence.
+
+NER-only strict metrics, without the other three layers or preservation filters:
+
+| NER | PERSON recall | PERSON precision | ADDRESS recall | ADDRESS precision | PERSON+ADDRESS micro recall |
+|---|---:|---:|---:|---:|---:|
+| underthesea 9.5.0, packaged CRF | 76.50% | 12.73% | 0.00% | 0.00% | **57.37%** |
+| PhoBERT `Phuc2005/pii-phobert-base-ner`, revision `fc4d654b9906dafb34ea670b9b14c2360e4d3be3` | 6.41% | 18.29% | 0.00% | 0.00% | 4.81% |
+| spaCy 3.8.16, `xx_ent_wiki_sm` 3.8.0 | 45.30% | 38.13% | 0.00% | 0.00% | 33.97% |
+
+**Selected: underthesea**, by the highest measured PERSON+ADDRESS micro recall.
+Its standalone precision is poor; all four layers and preservation filters remain
+required. The model loads once at startup, CPU only; inference/model failures
+raise typed errors rather than silently switching models or returning raw text.
+
+Full selected pipeline, with an empty known-identity dictionary for the benchmark:
+
+| Entity | Raw recall | Raw precision | PDF/OCR recall | PDF/OCR precision |
+|---|---:|---:|---:|---:|
+| EMAIL | 100.00% | 100.00% | 100.00% | 100.00% |
+| PHONE | 100.00% | 100.00% | 100.00% | 100.00% |
+| ID | 100.00% | 100.00% | 100.00% | 100.00% |
+| PERSON | 98.72% | 93.90% | 97.44% | 93.44% |
+| ADDRESS | 100.00% | 100.00% | 100.00% | 100.00% |
+| DOB | 100.00% | 100.00% | 98.61% | 100.00% |
+| URL | 100.00% | 100.00% | 100.00% | 100.00% |
+| HANDLE | 100.00% | 100.00% | 100.00% | 100.00% |
+
+False positives on skills, employers and schools: **0%** in both modes. All
+requested numeric targets pass for the selected pipeline on this draft set;
+the thresholds are unchanged. OCR metrics measure masking of aligned extracted
+text, not perfect transcription. The benchmark has no supplied identities and
+does not measure the new fuzzy identity pass; that pass has regression tests.
+
+**Shipping gate: FAIL**, and benchmark exit code is **1**. The synthetic data
+remain `needs_human_review`; held-out real-format count is **0**, with the required
+empty-directory warning. Team annotation review and 10+ supplied real-format CVs
+remain necessary. No real CVs were invented and no target was waived.
+
+Independent privacy tests: **56 passed, 1 application-lifespan test deselected**;
+privacy/eval Ruff, changed-file formatting, compilation and diff checks pass.
+Normal pytest cannot collect because current HEAD declares `AuthSession` twice
+for `auth_sessions`; vault/migration/startup tests are therefore not revalidated.
+Full Ruff also has six pre-existing auth/roadmap/seed merge errors. These are
+reported rather than counted as passes or changed as part of privacy work.
+No new commits were made because the repository requires full-suite/lint success
+before committing. Original T1.3 commits remain in history, including standalone
+migration `a9c3309`. User architecture/prompt edits and protected hooks/logs were
+left untouched.
+
 Previous foundation notes remain in [the development notes](dev/ASSISTANT_V2_NOTES.md).
 This task explicitly requests this report at `docs/ASSISTANT_V2_NOTES.md`.
 

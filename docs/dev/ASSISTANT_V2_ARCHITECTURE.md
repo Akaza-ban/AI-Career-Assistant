@@ -1,363 +1,281 @@
-# CareerX Assistant v2: Architecture (rev 2)
+# CareerX Assistant v2: Architecture (rev 4.1, reduced scope)
 
-> **For the implementing agent (Codex).** This file supersedes rev 1. Rev 2 cuts scope to four milestones and adds a **Contract (section 2)** that every shipped tool must satisfy. Read this whole file, then `docs/assistant_v2/TOOL_MATRIX.md` (created by task T1.1; it is authoritative for tool names, backing services and business rules), then the code your task names. Where this file conflicts with existing code, follow this file, but keep public API responses backward compatible until the frontend is migrated.
+> **For the implementing agent (Codex).** This file supersedes rev 3. Rev 4 cuts the assistant down to read-only capabilities: usage-guide Q&A, highlight, navigation, and (rev 4.1) short answers about the stored results of analyses and interviews with a link to the page. Everything about write tools, confirmation (HITL), operations, analysis dispatch, CV proposals and thinking-mode replay is removed. Read this whole file, then `docs/dev/Assistant_v2/REUSE_MAP.md` (created by task T0) and `docs/dev/Assistant_v2/TOOL_MATRIX.md` (from rev 3, still authoritative for business rules and which service functions are side-effect free), then the code your task names. Where this file conflicts with existing code, follow this file, but keep public API responses backward compatible until the frontend is migrated.
 
 ## 0. Working rules
 
-1. **Freeze feature scope.** Changes after freeze must address a failing test, a reproducible violation of the existing contract, or a changed external dependency. Add a regression test for each correction. Do not add features, tools, events or invariants that are not in this file. If something is genuinely ambiguous, pick the safer option (read-only, more confirmation, more masking) and record it in `docs/ASSISTANT_V2_NOTES.md`.
-2. **A tool ships only if it meets sections 2, 4 and 10 in full** (ownership, expiry, privacy, budgets, contract). If it cannot, do not ship it; list it in the notes file with the reason. The notes file may hold deferred features and accepted limitations. It never excuses a shipped tool bypassing a requirement.
-3. **Tools call service functions, never HTTP endpoints and never the DOM.** If business logic lives in a route handler, extract it into a service function first (pure refactor, behavior unchanged, tests green, separate commit).
-4. **Commit discipline (every task).**
-   - Before writing code, post a commit plan: the list of commits, each with its scope and the tests it adds.
-   - One logical change per commit. Every commit builds and passes `ruff` and `pytest`. Tests go in the same commit as the code they cover, or immediately before it.
-   - Migrations, pure refactors and docs each get their own commit. No unrelated changes. No secrets in the repo.
-   - Message format: `type(scope): summary` (feat, fix, refactor, test, docs, chore, migrate).
-   - Never rewrite pushed history. Run the full suite after each commit.
-   - At the end of the task, stop and report: commits made, tests run and results, deviations from the task, items added to `docs/ASSISTANT_V2_NOTES.md`.
+1. **Read the repo before writing code, and reuse.** For every piece of work, first search the repo for an existing module, service function, route, component or hook that already does the job (examples: the current hybrid RAG, the `AgentAction` guard whitelists, the frontend action dispatcher, existing list/detail queries for CVs, JDs, analyses and interview sessions, the existing LLM service, the existing privacy module). Extend or wrap it. Add a new module only when no equivalent exists, and say why in the commit message and in `REUSE_MAP.md`. A new file that duplicates existing behavior is a defect.
+2. **Freeze scope.** Build only what this file lists. A change after freeze must fix a failing test, a reproducible violation of the contract, or a changed external dependency, and gets a regression test. If something is ambiguous, pick the safer option (read-only, whitelist, template reply) and record it in `docs/dev/ASSISTANT_V2_NOTES.md`.
+3. **Assistant code calls service functions and queries, never HTTP endpoints and never the DOM.** If the logic lives in a route handler, extract it into a service function first (pure refactor, behavior unchanged, tests green, own commit).
+4. **Commit discipline (every task).** Before code, post a commit plan (commits, scope, tests each adds). One logical change per commit; every commit builds and passes `ruff` and `pytest`; tests ship with the code they cover or just before it. Migrations, pure refactors and docs get their own commits. Message format `type(scope): summary` (feat, fix, refactor, test, docs, chore, migrate). Never rewrite pushed history. No secrets in the repo. At the end, stop and report: commits, tests run and results, deviations, items added to `ASSISTANT_V2_NOTES.md`.
 5. Do not break existing endpoints or tests.
+6. **Paths.** `docs/dev/ASSISTANT_V2_ARCHITECTURE.md` (this file), `docs/dev/ASSISTANT_V2_NOTES.md`, `docs/dev/Assistant_v2/{TOOL_MATRIX,AUTH_NOTES,REUSE_MAP}.md`.
+7. **The model never owns identity, ownership, URLs, selectors or route ids.** The server builds all of them from registries and owner-scoped database queries.
 
 ## 1. Goal and scope
 
-**Goal.** An in-app assistant that answers questions about the user's own CVs, JDs and analyses, and performs a small set of actions through typed tools with human-in-the-loop (HITL) confirmation. PII is masked before any text leaves the server for a provider. The assistant is a product differentiator, so the flagship flow must be reliable.
+**Goal.** An in-app chatbot that (a) answers how-to questions about using the product, from the product guide; (b) shows the user where something is by highlighting a UI element; (c) takes the user to the page they ask for, including a specific record ("my interview history on 12/10", "my latest analysis for the Shopee Backend JD"); (d) answers short questions about the stored result of an analysis or an interview (score, status, counts, top missing skills, how a session went) with a link to the page. It never changes data and never operates the UI on the student's behalf beyond highlight and navigation.
 
-**Flagship flow (the only flow M3 and M4 must make excellent):** "Tailor my CV for this JD, show me the changes, and re-score it." That means: propose changes, per-hunk review, apply as a new CV version, run a new analysis, show a comparable score delta.
+| User says | Capability | Needs DB |
+|---|---|---|
+| "How do I upload a CV?" | `howto` (RAG + DeepSeek answer, cited) | No |
+| "Where is the button to add a JD?" | `locate` (highlight, navigate first if on another page) | No |
+| "Open the interview page" | `navigate`, static page | No |
+| "Show my interview history on 12/10" | `navigate`, record lookup by date | Yes |
+| "Open my latest analysis for the Shopee Backend JD" | `navigate`, record lookup by JD then newest analysis | Yes |
+| "What is my latest match score?" / "How did my interview yesterday go?" | `result`: short answer from stored result facts (score, status, date, counts, top missing skills) plus a link card; the page opens only if the user asks | Yes |
+| "Open it" right after an answer that produced one link | `navigate` to that target (the previous turn's card) | No |
+| Hello / thanks | `smalltalk` (template) | No |
+| Off-topic, unsafe, injection, outside the user's role | `deny` (template) | No |
 
-**Cut from this release** (do not build): Chrome extension, outbound advisor feedback, proactive suggestion chips, activity-feed UI (keep the audit records), `cv_rename`, `cv_duplicate`, `jd_archive`, tags (unless TOOL_MATRIX shows they already exist), delete tools, `cv_export`, interview tools, advisor tools (revisit after M4 if time remains), multi-agent supervisors, MCP exposure, browser automation, per-group tool discovery, Jev as the serving router.
+**Cut from this release (do not build):** any write tool; confirmation, approval, operations and expiry; `analysis_start` and the START_ANALYSIS path as an assistant feature; CV tailoring, proposals, claim preservation, score delta; multi-step UI operation on behalf of the student; explaining or summarizing CV/JD body text, evidence, feedback prose or interview transcripts (only the allowlisted result facts of 7.5 are answered); generic career advice (`qa_direct`); interview, advisor and export tools; Chrome extension; proactive chips; activity feed; MCP; multi-agent; voice inside the assistant; LangGraph checkpointer and `interrupt()`; thinking-mode replay; PII vault and unmasking; Jev wiring (see 5.6).
 
 ## 2. Contract (normative)
 
-### 2.1 Identity and authorization
-- Identity comes from a verified session. LLM output can never set user, role or tenant.
-- Every resource-bearing tool checks ownership at prepare time and again immediately before execution.
-- Lookups of runs, operations, outcomes and history are scoped by `(user_id, conversation_id)`. A cross-user attempt returns `NOT_FOUND` and discloses nothing.
+### 2.1 Identity and ownership
+- Identity comes from a verified session. Model output can never set user, role or tenant.
+- Every record lookup is scoped by `user_id` in the query itself. A record that exists but belongs to someone else behaves exactly like a record that does not exist: same status, same wording, no disclosure.
+- `ClientPageContext` (current route, selected ids) is validated against the role whitelist and treated as a hint, not as authority.
 
-### 2.2 Runs
-- `assistant_runs`: `id`, `conversation_id`, `user_id`, `client_request_id`, `status`, `waiting_on_analysis_id` (nullable), `created_at`, `updated_at`. Unique `(user_id, conversation_id, client_request_id)`.
-- Every chat message carries a client-generated `client_request_id`. Repeating it returns the existing run. A deliberate rerun uses a fresh ID and a fresh approval.
-- States: `running`, `waiting_confirmation`, `waiting_job`, `done`, `failed`, `cancelling`, `cancelled`, `interrupted`.
-- At most one `running` run per conversation. A new message while one is `running` returns 409 (the user presses Stop first).
-- A new message while the latest run is `waiting_confirmation` or `waiting_job` marks that run `cancelled` and its `pending` operations `expired`. A running analysis job continues detached; its completion is recorded on the analysis row and never resumes the old run into new writes.
-- Stop on a `running` run sets `cancelling` then `cancelled`, subject to the cancellation boundary in 2.3.
-- Startup sweep: `running` runs become `interrupted`; stale `waiting_*` runs are reconciled per 2.4.
-- **Stale-run control:** the execution claim (2.3) requires the run to still be `running` and to be the conversation's latest run. A superseded or cancelled run can never start a new write. Operations already `executing` or committed finish, and their real outcome stays visible.
+### 2.2 Read-only invariant
+- No assistant tool or resolver writes a business row. The assistant may write only its own records (`assistant_runs`, `assistant_turns`, traces).
+- Resolvers use list and get queries that are free of side effects. Rev 3 found read-like services that commit (`optimizer.session` may create a draft; `advisor.shared_cv` and `advisor.interview_report` commit viewed timestamps; `interview.build_report` may delete abandoned sessions). The assistant must never call these; it queries tables through side-effect-free functions (extract one if needed, own commit).
+- Opening a page is done by the browser. The destination page enforces its own authorization, and that stays the last line of defense.
 
-### 2.3 Operations and approval
-- `assistant_operations`: `id` (the server-owned `operation_id`), `run_id`, `conversation_id`, `user_id`, `tool`, `call_id` (provider tool_call id, correlation only), `args_digest`, `resolved_params`, `approval_revision`, `status`, `risk`, `request_json`, `result_ref` (resource type and id), `error`, `created_at`, `decided_at`, `executed_at`, `expires_at`. Unique `(run_id, call_id)`.
-- **Persist before executing.** The complete assistant message is checkpointed before any operation is prepared. Prepare derives operations from the persisted message. A crash followed by a new model request cannot produce a second operation for the same intended action, because nothing executed before the checkpoint.
-- Reusing an `operation_id` with different validated arguments returns `CONFLICT`.
-- States: `pending → approved → executing → done | failed`; also `rejected`, `expired`, `cancelled`.
-- **Graph shape.** `llm_step → prepare → approve → execute → llm_step`. `prepare` has side effects and is an upsert on `(run_id, call_id)`. `approve` contains only `interrupt()` and no side effects. `execute` claims and runs. Never put side effects before an `interrupt()` in the same node. The executor never raises to the loop except `GraphInterrupt` and cancellation, which must propagate.
-- **Approve** is one atomic transaction: operation `pending → approved` AND run `waiting_confirmation → running`, only if the caller owns the operation, it has not expired, and `approval_revision` matches. If the run is not `waiting_confirmation`, nothing mutates and the caller gets a conflict.
-- Duplicate approve returns the existing state. An `approved` but unfinished operation can resume: a repeated approve re-opens an `interrupted` run once. Reject after approve returns 409.
-- **Claim:** `UPDATE ... SET status='executing' WHERE id=? AND status='approved'` and the run is `running` and latest. This is the cancellation boundary. Before it, cancel makes the operation `cancelled` and creates nothing. After it, the operation proceeds and stopping narration never relabels it.
-- **Reconcile at startup:** an `executing` operation looks up its business resource by `operation_id`. Found means `done` with `result_ref`. Not found means `failed` and retryable by a new request.
-- **Transactionality.** A UNIQUE field alone is not enough. Where the service commits internally, the business row carries the `operation_id` (UNIQUE) and is the source of truth; the operation record is reconciled from it, and replay returns the same resource. UNIQUE does not protect filesystem changes, job dispatch or outbound delivery; each shipped tool must state how it covers those.
-- Repeated model requests for the same costly action: an executor retry returns its existing operation and consumes no additional logical operation. A different request that meets an open analysis attaches to it (2.4) or returns a defined conflict. Real provider usage always counts toward cost caps.
-- The legacy `POST /assistant/action/confirm` accepts only legacy UI action ids. It must reject any server-tool operation id and must never mark a server operation executed.
+### 2.3 Server-owned outputs
+- Links are built from the route registry (7.1) plus ids returned by an owner-scoped query. Highlight targets come from the UI registry (6.3). Cards and chips are built by the server. The model may only pass back an opaque `ref` that the server issued earlier in the same turn.
+- Tool results and cards contain labels, dates, statuses, ids and the allowlisted result facts of 7.5 (numeric scores, counts, short skill names). **They never contain CV or JD body text, evidence text, feedback prose or transcripts.** A static test asserts the assistant package imports no CV or JD text loader, and the fact-allowlist test (7.5) bounds every field.
 
-### 2.4 Analysis dispatch (the M3 write flow)
-- `analyses` gains: `operation_id` (UNIQUE, nullable) and a status set covering `queued`, `running`, `completed`, `failed` (extend existing values; do not break them).
-- Create the analysis row as `queued` (with `operation_id`), then dispatch. `queued → running` is a compare-and-set and is the single execution claim for initial dispatch and recovery alike.
-- A partial unique index allows at most one open (`queued` or `running`) analysis per `(cv_version_id, jd_id)`. The migration cleans existing duplicate open rows first and reports them. Different CV version ids (baseline and revised) are independent.
-- Startup sweep: `running` analyses become `failed` (`interrupted_by_restart`); `queued` analyses are dispatched once through the same claim. A crash after the claim and before any work is covered by this sweep.
-- **Single worker is a deployment constraint.** Pin one worker in the Dockerfile and compose file, and make startup refuse to boot if the configured worker count is above 1.
-- Keep FastAPI `BackgroundTasks`. This delivers durable approval and recorded job failure, not durable job execution. Say so in the notes.
-- **Waiting for a job.** After `analysis_start`, the run enters `waiting_job` with `waiting_on_analysis_id`. The loop never polls. When the analysis reaches a terminal state, an internal function `on_analysis_terminal(analysis_id)` (idempotent) moves matching runs `waiting_job → running` by compare-and-set and resumes the graph. The resumed node reloads the analysis status from the database. No endpoint accepts a caller-supplied status or resume value. Startup reconciles `waiting_job` runs whose analysis is already terminal. Frontend polling only refreshes the screen.
+### 2.4 Runs (slim)
+- `assistant_runs`: `id`, `conversation_id`, `user_id`, `client_request_id`, `route`, `status` (`running | done | failed | cancelled | interrupted`), `created_at`, `updated_at`. Unique `(user_id, conversation_id, client_request_id)`.
+- Every message carries a client-generated `client_request_id`; repeating it returns the existing run. At most one `running` run per conversation; a new message while one is running returns 409 (the user presses Stop first).
+- Stop cancels the upstream request, persists partial text with `interrupted=true`, and sets `cancelled`. Client disconnect behaves the same.
+- Startup sweep: `running` becomes `interrupted`.
+- Deployment stays single worker (in-process cache and cancel registry). Record it in the notes. No boot-refusal logic is added.
 
-### 2.5 Required outcomes by scenario
-
-| Scenario | Required outcome |
-|---|---|
-| Approved execution, including recovery after a crash | Exactly one analysis for that operation, `completed` or explicitly `failed` |
-| Duplicate approval or duplicate message (same `client_request_id`) | Same run, operation and resource; no additional analysis or card |
-| Different request meeting an open analysis for the same CV version and JD | Attaches to that job (`waiting_job`), no new card, no new analysis |
-| Cross-user attempt or expired approval | No mutation caused by the attempt; no disclosure to the caller |
-| Cancel before the claim | No analysis created |
-| Cancel after the claim | Existing analysis preserved; chat reports its actual state |
-
-Every crash scenario also asserts: operation status, approval status, analysis status, run status, and that the next user message in the conversation is accepted and answered (no stuck conversation).
-
-### 2.6 Reporting rules
-- Outcome vocabulary (server-built, used by cards and narration): `analysis_started`, `analysis_completed`, `analysis_failed`, `cv_version_saved`, `navigation_failed`, `operation_declined`, `operation_expired`, `operation_cancelled`, `operation_failed`.
-- On any turn with a write tool, the model's prose is buffered and released only after the relevant result is known. Outcomes shown to the user come from server-built cards. The model's text is limited to explanation and next steps. Never let the model claim an action completed from its own prose.
-- A declined, expired or cancelled operation returns a tool result to the model with `USER_DECLINED` or `CANCELLED` and the instruction not to retry the same action.
+### 2.5 Failure wording
+Not found, ambiguous, forbidden and upstream failure are answered with server templates (vi/en), never with model prose that could imply success. Router and resolver failures never raise to the client as stack traces.
 
 ## 3. Request lifecycle
 
 ```
 POST /assistant/chat
-  1. auth + context hydrate (identity from session; ClientPageContext validated vs role whitelist)
-  2. run create/dedup by client_request_id (2.2)
-  3. stage 0 deterministic: length cap, injection patterns, role-forbidden terms, greetings/thanks replies
-  4. mask inbound text + history -> vault   (local)
-  5. ROUTER -> RouterDecision
-        |-- deny      -> templated refusal (no LLM)
-        |-- qa_direct -> 1 LLM call, no tools, no retrieval
-        |-- qa_search -> hybrid RAG -> grounded answer + citations
-        '-- agent     -> agent loop (tools, read-only or with HITL)
-  6. output guard (see 7.3)
-  7. rehydrate user-visible text (never logs/traces/checkpoints)
-  8. persist turn; stream final event
+  1. auth + context hydrate (identity from session; ClientPageContext validated)
+  2. run create/dedup by client_request_id (2.4)
+  3. ROUTER (local, no LLM) -> RouterDecision                       [section 5]
+        |-- smalltalk -> template
+        |-- deny      -> template
+        |-- clarify   -> template + chips
+        |-- result    -> fast: resolver -> allowlisted facts -> templated answer + link card | agent: facts tool -> short grounded answer + link card   [section 7.5]
+        |-- howto     -> mask -> hybrid RAG -> abstain | DeepSeek answer (stream) + citations + attached highlight/navigate   [section 6]
+        |-- locate    -> UI registry match -> highlight (+ navigate first)                                                  [section 6.3]
+        '-- navigate  -> fast path: slots -> resolver (DB) -> link card/chips + navigate action
+                         agent path (only when slots are incomplete or compound): DeepSeek with read-only tools             [sections 7, 8]
+  4. output guard (placeholder leakage, forbidden markers, whitelisted events)
+  5. persist turn; stream final event
 ```
 
-Graph nodes: `prefilter → mask_in → route → {deny | direct | rag | agent} → guard_out → unmask → persist`. The `agent` subgraph is `llm_step → prepare → approve → execute → llm_step`. Use an async persistent checkpointer (SQLite saver, `thread_id = conversation_id`). **State is masked before it reaches the checkpointer and before any tracing hook can capture it.**
+The pipeline is a plain async function `handle_turn()`. If the repo already structures the assistant as a LangGraph graph, keep that structure (smaller diff) but add no checkpointer and no `interrupt()`. T0 records which case applies.
 
-## 4. Privacy (`src/services/privacy/` and `src/services/providers/`)
+## 4. Privacy (reduced to what the new scope sends out)
 
-### 4.1 Guarantee wording
-Say: "Direct identifiers are masked locally before provider calls, with measured recall on our evaluation sets and an egress scan as a last line." Do not claim universal protection. A regex scan cannot catch every name or address that NER missed.
+What can leave the server: the user's chat message (and the last 2 exchanges for `howto`), retrieved guide chunks (our own docs), masked resource labels in agent-path tool results, and the allowlisted result facts of 7.5 (scores, counts, dates, short skill names) on the agent path only. CV and JD body text, evidence, feedback prose and transcripts never leave through the assistant (2.3).
 
-### 4.2 One outbound gateway
-Every LLM call and every embedding call reachable from any shipped tool goes through one gateway: masking, egress scan, usage and cost accounting, exception sanitization, tracing policy. This includes existing services, background jobs and embeddings. A static test asserts that no module other than the gateway imports a provider SDK or makes outbound model HTTP calls. If a call site cannot be migrated, the tool that reaches it does not ship.
+- **4.1 Guarantee wording.** "Direct identifiers are masked locally before provider calls, with measured recall on our evaluation sets and an egress scan as a last line." No universal claims; no claims about vendor retention or training beyond what a vendor term says.
+- **4.2 One outbound gateway.** Every LLM call and every embedding call reachable from the assistant goes through one gateway: masking, egress scan, usage and cost accounting, exception sanitization, tracing policy. A static test asserts no other module imports a provider SDK or makes outbound model HTTP calls. Reuse the existing gateway/privacy module if T0 finds one; do not write a second.
+- **4.3 Mask-only.** Masking is one-way for the assistant path: no vault, no placeholder resolution, no unmask, no `StreamUnmasker`. Any `[[...]]` placeholder that appears in model output is replaced by a neutral word (`bạn` / `you`) before emission. Server-built cards and chips use unmasked labels straight from the database and never pass through the model.
+- **4.4 What to mask.** Person names, email, phone (VN and international), street addresses, date of birth, national ID, passport-like numbers, personal profile URLs and handles. Keep employers, schools, job titles, skills, city and country. Detection layers: (1) known identity of the authenticated user (name, email, phone, diacritic-insensitive and reversed-order variants), (2) regex for email, phone, IDs, URLs, handles, labeled DOB and address lines, (3) NER only if the existing privacy module already has it. Resource labels (CV filenames often contain a real name) go through the same masker before the model sees them. Escape literal `[[` in inbound text.
+- **4.5 Fail-safe.** If masking throws, do not call the provider; return a friendly error. `PII_MASKING_ENABLED` defaults true. The egress guard scans the full outbound payload for emails, phones, ID patterns and the known-identity dictionary and blocks the call on a match.
+- **4.6 Telemetry.** Traces, logs and exceptions carry masked data only. Auto-tracing is off on the assistant path.
+- **4.7 Acceptance for releasing the assistant.** Numeric targets on `eval/pii/` message-style fixtures (recall >= 0.99 email, phone, ID; >= 0.92 names and addresses; false positives on skills, employers, schools < 3%) plus the leak test: run the assistant pipeline with a recording provider and assert zero direct identifiers in any recorded request, log line or trace, and that every result fact in a recorded request is on the allowlist. The stricter **privacy shipping gate** from rev 3 (human-reviewed annotations, 10+ hand-anonymized real CVs in `eval/pii/real/`) still governs every feature that sends CV text to a provider (analysis, optimizer, interview). It is not required for releasing this assistant, because the assistant sends no CV text, only allowlisted result facts. If that changes, the gate applies again.
+- **4.8 Uniform provider policy (unchanged in principle).** Every vendor that receives user-derived text gets masked text only and the same bar. Record the DPA review table in the notes (retention, deletion on exit, subprocessors and transfer, training on customer data, ZDR, prompt confidentiality). DeepSeek publishes no retention period or ZDR tier and stores data in China; the residual risk is accepted explicitly and stated in product copy, including that scores and results are sent to the provider when the user asks about them. Prefer ZDR if offered at no extra cost; it is not a gate. Data minimization is the main control: the router sends nothing (it is local), and the model sees one masked message plus compact results.
+- **4.9 Teammate-owned OCR, STT, TTS.** Not part of the assistant. Codex review of that code (T1.3a) continues as a separate task and blocks releasing those features, not the assistant.
 
-### 4.3 What to mask and keep
-- **Mask:** person names, email, phone (VN and international formats), street/home addresses, date of birth, national ID, passport-like numbers, personal profile URLs and handles, photos (strip). Third-party identifiers (referees, recruiters) included.
-- **Keep:** employers, schools, job titles, skills, project names, employment dates, city and country level location. Config lists `PII_KEEP_ENTITY_TYPES` and `PII_MASK_ENTITY_TYPES`. Document the residual re-identification risk in the notes.
-- JD text also gets a person-name pass (recruiter names), not only email/phone/URL.
+## 5. Router (`src/services/assistant/router/`)
 
-### 4.4 Detection layers (run in order, merge spans)
-1. Known-identity exact match: the authenticated user's own name, email and phone from the DB, with variants (diacritics, reversed order).
-2. Regex: email, phone, ID numbers, URLs and handles, DOB and address lines near labels (`Ngày sinh`, `DOB`, `Địa chỉ`, `Address`, `Phường`, `Quận`, `TP.`, `Đường`).
-3. Header heuristic for the candidate name (first 1 to 3 non-empty lines).
-4. NER for PERSON and LOCATION. Benchmark `underthesea`, a PhoBERT-based NER and a spaCy multilingual fallback on the golden set; choose by measured recall; record the choice in the notes.
-OCR for scanned CVs is local only (Tesseract `vie+eng` or PaddleOCR). Never send CV images to any cloud or vision model.
+The router is local Python. It uses no LLM and no network call. DeepSeek is never asked which route a message belongs to.
 
-### 4.5 Placeholders and vault
-- Placeholder format: `[[KIND_<nonce>_<n>]]` with a per-conversation random nonce. The same original gets the same placeholder within a conversation. Define one constant for the maximum placeholder length.
-- **Escape** literal `[[` in inbound user and document text before masking, so a supplied `[[...]]` never resolves.
-- **Field-scoped resolution:** tool argument schemas mark which fields accept which PII kind. A placeholder resolves only into a field that accepts its kind, and only if its recorded origin (message, CV id, JD id) belongs to the call's referenced resources. There is no unrestricted vault lookup. Nonces stop guessing; scoping stops a poisoned document from copying placeholders already visible in context.
-- `pii_vault`: `conversation_id`, `placeholder`, `kind`, `origin`, `ciphertext` (Fernet, key from env), `created_at`. Configurable TTL; deleted with the conversation; access only through the privacy module.
-- The system prompt tells the model to treat placeholders as opaque values and copy them verbatim.
-
-### 4.6 Storage classes
-
-| Class | Content | Policy |
-|---|---|---|
-| Business records | CVs, JDs, analyses, CV versions, proposals, edit audits, confirmation payloads | Unmasked where the product needs it; owner-scoped access; never sent to providers unmasked |
-| Telemetry | Logs, traces, metrics, error reports | Masked only; exception messages must not carry model output or raw text |
-| Checkpoint and vault | Graph state, `reasoning_content`, placeholder map | Checkpoint masked before write; vault encrypted with TTL and deletion rules |
-
-Disable automatic LangChain/LangSmith tracing on the assistant path and on the migrated services. Any tracing receives masked data only.
-
-### 4.7 Fail-safe
-If masking throws or the NER model is unavailable, do not call the provider; return a friendly error. `PII_MASKING_ENABLED` defaults true and the app refuses to start in production without it. The egress guard scans the full outbound payload (including replayed reasoning) for emails, phones, ID patterns and the known-identity dictionary, and blocks the call on a match.
-
-### 4.8 Acceptance
-- Golden set `eval/pii/`: 60+ synthetic CVs (VI, EN, mixed; text PDFs and scans) plus a held-out set of 10+ real-format CVs, hand-anonymized by the team and kept out of the tuning loop (`eval/pii/real/`, skipped with a warning if absent). Include filenames, third-party identifiers, tool-error text and advisor-style student data in the fixtures.
-- Targets: recall >= 0.99 for email, phone, ID; >= 0.92 for names and addresses; precision >= 0.9; false positives on skills, employers, schools < 3%.
-- Leak test: run the pipeline and the migrated analysis service with a recording provider; assert zero direct identifiers in any recorded request, log line or trace.
-- Round trip: `unmask(mask(x)) == x`. Placeholder-injection tests: a literal `[[PERSON_1]]` in a message or document never resolves.
-
-## 5. Router (`src/services/assistant/router.py`)
-
+### 5.1 Decision model
 ```python
 class RouterDecision(BaseModel):
-    route: Literal["qa_search", "qa_direct", "agent", "deny"]
-    confidence: float                      # 0..1
+    route: Literal["smalltalk", "howto", "locate", "navigate", "result", "clarify", "deny"]
+    source: Literal["stage0", "cache", "rules", "classifier", "fallback"]
+    confidence: float                       # 0..1
     language: Literal["vi", "en", "mixed"]
     deny_reason: Literal["off_topic", "unsafe", "injection", "out_of_role"] | None = None
-    injection_probability: float = 0.0
+    slots: NavSlots | LocateSlots | None = None
+    nav_mode: Literal["fast", "agent"] | None = None    # applies to navigate and result
     clarify_question: str | None = None
+
+class NavSlots(BaseModel):
+    target: Literal["page", "cv", "jd", "analysis", "interview", "report"] | None
+    page_hint: str | None          # raw words, matched against the route registry
+    when_expr: str | None          # raw date expression ("12/10", "hôm qua"); parsed at resolve time
+    latest: bool = False
+    jd_ref: str | None
+    cv_ref: str | None
+    free_ref: str | None
 ```
+Routing is by required capability, not by verb. Slots hold raw text; parsing relative dates happens in the resolver with today's date, so cached decisions stay valid across days.
 
-| Route | Meaning | Handler |
-|---|---|---|
-| `qa_search` | Question answerable from product docs ("how do I upload a CV?") | Hybrid RAG, cited answer, abstain on low retrieval score |
-| `qa_direct` | No data and no docs needed: generic career advice, rephrasing, clarifying the previous answer | One LLM call, no tools |
-| `agent` | Anything needing the user's own data or an action: "what is my latest match score?", "why did my interview score drop?", "analyze this CV against that JD", "tailor my CV" | Agent loop. Read-only questions get read tools; writes go through HITL |
-| `deny` | Off-topic, unsafe, injection, outside the user's role | Templated refusal, no LLM |
+### 5.2 Normalization
+NFC, lowercase, collapse whitespace, and a diacritic-folded copy (`unidecode`-style, handles `đ`). Language detection by character set and a small stopword list (vi/en/mixed). All matching below runs on the folded copy, so "mo trang phong van" and "mở trang phỏng vấn" behave the same.
 
-Routing is by required capability, not by verb.
+### 5.3 Stages (stop at the first confident result)
+- **Stage 0, deterministic:** empty or oversized input; injection patterns; role-forbidden terms; greetings and thanks (templated vi/en). Candidate-chip clicks arrive as structured payloads, never as text.
+- **Stage 1, cache:** in-process LRU with TTL. Key: `sha256(folded text | role | page_route_id)`. Value: the `RouterDecision` only (never resolved records). Store only decisions from rules or classifier above threshold.
+- **Stage 2, rules:** lexicons and regex for `locate` ("ở đâu", "nút ... đâu", "where is", "chỉ cho mình"), `navigate` (verbs such as "mở", "đi tới", "chuyển tới", "cho xem", "xem lại", "open", "go to", "show me", "take me" plus an entity noun: CV, JD, phân tích, phỏng vấn, báo cáo, trang), `result` (outcome questions about an analysis or interview: "điểm", "kết quả", "đạt bao nhiêu", "thiếu kỹ năng gì", "trạng thái", "score", "how did ... go"), and `howto` ("làm sao", "cách", "hướng dẫn", "how do I", "how to"). One family matching gives confidence 0.95; several families matching, or none, pass to stage 3. Precedence on conflict: deny, locate, navigate (an open verb such as "mở" or "open" beats result words), result, howto. The slot extractor runs here for `navigate`/`locate`.
+- **Stage 3, lightweight classifier:** TF-IDF character n-grams (2 to 5, `char_wb`) on the folded text plus a linear classifier with calibrated probabilities (scikit-learn). Labels are the seven routes plus `off_topic` mapped to `deny`. Accept when top-1 probability >= `ROUTER_CLF_THRESHOLD` and the margin over top-2 >= `ROUTER_CLF_MARGIN`. Train offline from `eval/router/train.jsonl`; commit the training script and the artifact with version and content hash; load at startup; if the artifact is missing, skip the stage and log once. Challenger (only if this misses the 5.5 thresholds): embedding kNN over labeled exemplars using the embedder the repo already has. Do not build the challenger preemptively.
+- **Stage 4, fallback (no LLM):** if navigate or locate vocabulary is partly present, return `clarify` with 2 to 4 chips (for example the pages that vocabulary could mean). Otherwise route `howto`; the RAG abstains on a low retrieval score and replies with the capability menu. Ambiguity is safe because nothing in this release writes.
 
-**Stage 0 (deterministic, no model):** empty or oversized input, injection patterns, role-forbidden terms, and **greetings and thanks** (templated reply in vi/en). If a confirmation is pending, short replies ("ok", "no", "cancel") belong to the confirmation UI, not the router.
+`nav_mode` (navigate and result): `fast` when `target` is known, every present qualifier is parseable locally and, for `result`, the question asks for a single known metric (score, status, count, date); otherwise `agent`.
 
-**Stage 1:** DeepSeek in non-thinking mode, temperature 0, `max_tokens` about 150, JSON via tool call, Pydantic-validated, one repair retry, then fallback `qa_search`.
+### 5.4 Context
+The router sees one message plus `ClientPageContext` and the previous turn's card targets. One deictic follow-up is resolved: a bare open intent ("mở đi", "mở trang đó", "open it") right after a turn that produced exactly one target becomes `navigate` to that target. Every other deictic follow-up ("that one", "the previous one", "what about the one before") goes to `clarify`. Card targets are persisted with the turn (T0 checks whether `assistant_turns` already stores cards). Report the follow-up subset in the eval so the gap is measured, not guessed.
 
-**Confidence policy:** below the tuned threshold, return `clarify_question` if the message references the user's own data or contains an imperative or state-changing verb; otherwise route `qa_search`. Ambiguity never defaults to an action.
+### 5.5 Acceptance
+`eval/router/` with 350+ labeled utterances, at least 60 of them `result` (vi, en, mixed; per role; adversarial; ambiguous; no-diacritic typing; typos), split train/dev/held-out 60/20/20, held-out frozen before tuning. The team adds 100+ real utterances (collected from teammates and the student interviews) to the held-out set; synthetic-only accuracy is not reported as quality. Thresholds: overall accuracy >= 0.93; `deny` recall >= 0.97 on unsafe and injection; slot extraction exact match >= 0.90 on the navigate subset; confusion matrix reported with `navigate <-> howto`, `locate <-> howto` and `result <-> navigate` tracked separately; router p95 (stages 0 to 3, cache miss) < 30 ms.
 
-**Jev (TypeSafe) is shadow only in this release (task T4.6):** both routers run, **the DeepSeek decision is served**, disagreements are logged masked. Store Jev's full probabilities and compute the top-route probability explicitly (its built-in `confidence` is a normalized statistic, not the top probability). Pin an explicit model version. Confirm a ZDR arrangement before sending anything. Jev is strongest in English; keep the adoption gate: on Vietnamese and mixed subsets within 2 points of the DeepSeek router, and `agent` and `deny` recall not lower.
+### 5.6 Jev (not in this release; do not wire it into `src/`)
+Jev is considered only if a benchmark shows it beats the local router on accuracy, speed or cost. The local router costs nothing and runs in milliseconds, so speed and cost cannot be beaten by a network call with a per-token fee; the realistic criterion is accuracy on the hard subsets. Benchmark rules (task T2.4, optional, needs a key from Harry):
+- The adapter lives only in `eval/` (for example `eval/router_bench/jev.py`), same dataset, same held-out split, same metrics and latency measurement as the local router.
+- Adopt only if, on the vi and mixed held-out subsets, Jev is at least 2 points more accurate than the local router overall, or clearly better on the ambiguous and no-diacritic subsets, with `deny` recall not lower, and the follow-up subset reported (Jev would see only the current masked message).
+- If adopted, Jev becomes a stage-3 fallback for low-confidence cases only; it never replaces stages 0 to 2. It receives one masked message and falls under 4.8; the DPA findings recorded in rev 3 apply.
+- The decision and the numbers go in `ASSISTANT_V2_NOTES.md`.
 
-**Acceptance:** `eval/router.jsonl` with 300+ labeled utterances (VI/EN/mixed, per role, adversarial, ambiguous, personalized read questions). Accuracy >= 0.93; `deny` recall >= 0.97 on unsafe and injection; confusion matrix; track `agent → qa_*` and `qa_* → agent` separately; router p95 < 1.5 s.
+## 6. How-to Q&A and highlight
 
-## 6. Agent loop and the DeepSeek contract
+### 6.1 Retrieval and answer
+- Reuse the existing role-aware hybrid RAG (ChromaDB + BM25). Do not rebuild it. Changes allowed: chunk metadata (`ui_targets`, `route_id`), an abstain threshold, a version stamp (`docs_version`).
+- Abstention is decided from the retrieval score before generation. On abstain, reply with the capability menu template and no model call.
+- Generation: DeepSeek V4.1 Flash (`deepseek-flash`), non-thinking, streaming, no tools, one call. The prompt contains the masked question, the last 2 exchanges (masked), and the retrieved chunks wrapped in `<untrusted_document>`. Rules: answer only from the chunks, at most 6 steps, say so when the chunks do not cover the question, make no claim about the user's own data, answer in the user's language.
+- Citations come from retrieval results, never parsed from model text.
+- **Answer cache:** key `sha256(folded query | role | language | docs_version)`, TTL `RAG_ANSWER_CACHE_TTL_S`. Answers derive only from the guide, so the cache is shared across users; the key never contains resolved user data.
 
-```python
-MAX_STEPS = 8; MAX_TOOL_CALLS_PER_TURN = 12; MAX_RETRIES_PER_TOOL = 2
-```
+### 6.2 Attached actions
+After generation, if the top retrieved chunk has `ui_targets` or `route_id` and its score >= `RAG_UI_THRESHOLD`, the server attaches a `highlight` or `navigate` action drawn from that chunk's metadata and whitelisted for the user's role. The model's text never decides this.
 
-Plain observe-and-continue loop with hard limits. Tool errors go back to the model as tool results, each with a `hint`. IDs invented by the model return `NOT_FOUND`.
+### 6.3 UI registry and highlight
+- `ui_registry` maps `element_id` to `{route_id, roles, labels_vi, labels_en, aliases}`. Elements carry `data-assistant-id="<element_id>"` in the frontend.
+- `locate` matches the folded message against labels and aliases (fuzzy, threshold, top-1 margin). No match goes to `howto`. If the element is on another page, emit `navigate` then `highlight`.
+- Reuse the existing spotlight, tour or highlight component and the existing action dispatcher and guard whitelists if they exist. Build a minimal overlay only if T0 finds none.
+- A drift test fails when a registry `element_id` has no matching `data-assistant-id` in the frontend source, or the reverse.
+- `ui_action` payloads are a discriminated union of exactly two variants: `highlight{element_id}` and `navigate{route_id, params}`. Both are validated server-side against the registries and the role. Delivery acknowledgement is not required: the server's reply text is templated ("Đây là nút bạn cần tìm"), and navigation cards keep a manual button as fallback.
 
-**Provider and structured output.** DeepSeek V4.1 Flash (`deepseek-flash`) through the raw `openai` SDK inside one `LlmClient`. Use native tool calling plus Pydantic validation of every argument (max 2 retries). DeepSeek's `strict` mode exists but is beta, needs the `/beta` base URL, requires every property to be required, and does not support `minLength`, `maxLength` or `minItems`; it is not used. Router and final-answer JSON are validated with one repair retry and a safe fallback.
+## 7. Navigation
 
-**Thinking-mode contract (implement exactly; verify against current docs and keep contract tests):**
-1. Agent calls use thinking mode (`extra_body={"thinking": {"type": "enabled"}}`, `reasoning_effort` from config, default `high`). `temperature` has no effect in thinking mode.
-2. When `tools` is supplied, every later request must replay the full `reasoning_content` of all previous assistant turns in that log, including turns without tool calls. Omitting it can return HTTP 400.
-3. Persist each assistant response verbatim (`message.model_dump(exclude_none=True)`). Never rebuild it from parts and never pass it through LangChain message classes.
-4. Every `tool_call` gets a `tool` message before the next model call, including declined, expired, failed and cancelled ones. For a dangling call, first reconcile the operation (2.3). Append the real result if it committed; append a synthetic `CANCELLED` result only if nothing committed. **Never fabricate assistant `tool_calls`;** the Chat Completions API does not support inserting tool calls mid-conversation. Synthetic results are allowed only for genuine model-issued call ids.
-5. Two logs: only `agent` turns use `agent_messages`. `qa_*` turns are plain text in `assistant_turns`. When the agent starts, inject the last 3 QA exchanges (masked) as one block in the user message.
-6. No per-message trimming. Compaction replaces a whole prefix of old turns with one summary message above a token threshold (start at 60k).
-7. `reasoning_content` is internal: never shown to users, never unmasked, never logged outside the masked checkpoint. The egress guard scans it.
-8. An HTTP 400 mentioning reasoning content is an internal bug: log masked diagnostics, do not retry blindly.
+### 7.1 Route registry
+One backend registry (reuse the existing route whitelist behind `AgentAction`; extend it, do not duplicate): `route_id -> {path_template, roles, labels_vi, labels_en, aliases, params}`. Examples: `cv_list`, `cv_detail{cv_id}`, `jd_list`, `jd_detail{jd_id}`, `analysis_detail{analysis_id}`, `interview_home`, `interview_history`, `interview_session{session_id}`, `interview_report{session_id}`. T0 lists the real frontend routes; the registry mirrors them, and a drift test compares the registry with the Next.js route files.
 
-**Latency.** The `agent` route has no hard latency gate until measured. Emit a `status: thinking` event within 1 s, record agent-route p50 and p95 in the eval report, and set the target from the measurement.
+### 7.2 Which requests need the database
+Static pages (`page` target) need no query. Record-level requests do, and the query is always owner-scoped:
 
-**Context hygiene.** The model sees `summary` (<= 300 chars) and compact `data` (<= about 2 KB) only. Never put full CV text in tool results.
+| Request | Query shape (all with `user_id = :uid`) |
+|---|---|
+| Interview history on a date | sessions whose start time falls in `[day 00:00, day 24:00)` in `ASSISTANT_TZ`, converted to the stored timezone; ordered newest first |
+| Latest analysis for JD "xxx" | resolve the JD by fuzzy title/company among the user's JDs; then analyses for that JD, newest `completed` first (if none completed, the newest with its status shown) |
+| Analysis for CV "yyy" and JD "xxx" | resolve both by fuzzy name; analyses for that pair; newest first |
+| A CV by name, or "my newest CV" | the user's non-deleted CVs, fuzzy name or most recently updated; version family head |
+| A JD by name | the user's JDs, fuzzy title/company |
 
-**Untrusted content.** CV, JD and page text is wrapped in `<untrusted_document>` blocks and is never an instruction. Tainted-turn rule: if untrusted text is in context, every write tool requires confirmation.
+Reuse existing list and get queries or service functions (T0 maps them); add a function only when none exists. Add an index only when `EXPLAIN` on realistic data shows a scan, in its own migration commit.
 
-**Budgets.** Per-turn steps and tool calls, per-user daily token and cost cap, per-route and per-tool rate limits, loop and duplicate-call detection.
+### 7.3 Resolver contract
+`resolve(ctx, slots) -> ResolveResult{status: found | multiple | none | needs_info, targets: list[Target]}`, `Target{ref, route_id, params, label, sublabel}`. No LLM inside.
+- `found` (one target): emit `navigate` plus a link card (label, sublabel such as "Backend_v3 vs Shopee Backend Engineer, 12/10 14:20, completed") with a manual "Open" button.
+- `multiple` (up to 5): chips, each a server-built link. Clicking a chip is plain navigation; the destination page enforces authorization.
+- `none`: say what was searched ("không có buổi phỏng vấn nào ngày 12/10"), offer the 2 nearest dates or the user's 3 most recent records, and a link to the list page.
+- `needs_info`: `clarify` with chips.
+- Fuzzy matching: diacritic-folded `rapidfuzz` (add the dependency only if absent), top-1 must lead top-2 by a margin or the result is `multiple`.
+- Date parser (local, `ASSISTANT_TZ=Asia/Ho_Chi_Minh`): `dd/mm`, `dd/mm/yyyy`, `dd-mm-yyyy`, "ngày 12 tháng 10", "12 tháng 10", "12th October", "hôm nay", "hôm qua", "hôm kia", "tuần trước", "tháng trước", "yesterday", "last week". No year means the current year, and a future date means the previous year. Use `dateparser` only if it is already a dependency; otherwise a small parser covering exactly this list. Ranges ("tuần trước") return a date range.
 
-## 7. Streaming (`text/event-stream`)
+### 7.4 Fast path and agent path
+- **Fast path** (`nav_mode=fast`): router slots go straight to the resolver. No LLM call. Target p95 < 300 ms.
+- **Agent path** (`nav_mode=agent`): used when the target is unknown, a qualifier cannot be parsed, or the request mixes capabilities ("show me how to add a JD and open that page"). See section 8.
 
-### 7.1 What streams
-- Stream `qa_direct`, `qa_search` generation and read-only `agent` answers.
-- On turns with a write tool, buffer model prose and release it per 2.6. Outcome cards come from the server.
-- Never stream `reasoning_content`, tool arguments, cards, diffs or confirmation requests as model text. They are separate events emitted after server-side validation.
-- `deny` templates go out as one `token` then `final`.
+### 7.5 Result answers (facts + link)
 
-### 7.2 Events
-Each event has a monotonically increasing `id` per run. Types: `route`, `status` (`thinking | searching | running_tool | waiting_confirmation | waiting_job`), `token`, `citations`, `tool_start`, `tool_end`, `ui_action`, `proposal`, `confirmation_required`, `paused`, `notice`, `final`, `error`, `heartbeat` (every 15 s). Headers: `Cache-Control: no-cache`, `X-Accel-Buffering: no`. There is no `replace` event.
+Purpose: a quick answer to "what was the result" questions about an analysis or an interview, with a link to the page. Summary level only: the assistant reads stored result figures, never evidence, feedback text or transcripts.
 
-### 7.3 Guard, pre- and post-emission
-- **Before emission (enforced):** placeholder leakage and forbidden markers via cheap per-chunk checks, structured events validated against whitelists, outcome buffering on write turns.
-- **After emission (advisory, recorded):** citation validity and grounding of streamed `qa_*` text. A failure appends a `notice` event and is logged for the eval; it does not pretend to retract text already shown. `qa_search` abstention is decided from retrieval score before generation, and citations come from retrieval results, never parsed from model text.
+- **Flow:** router `result` -> resolver (7.3) finds the record -> facts service returns allowlisted facts -> answer + facts card + link card.
+- **Facts service** (`src/services/assistant/facts/`): one read-only function per record type, scoped by `user_id` inside the query, wrapping the existing services that already compute scores and reports (extract side-effect-free versions where 2.2 applies). It builds its output from `facts_allowlist` (a data file finalized from the T0 proposal against the real schema), not by filtering a larger object, so a field that is not listed cannot be returned by mistake. Expected content. Analysis: status, `created_at`, CV version label, JD label, overall match score, per-category scores, counts of required and preferred requirements matched and missing, up to 5 missing skill names. Interview: `started_at`, status, position label, number of questions, overall STAR score, per-criterion averages, and the overall score and date of the previous session for the same position when one exists. Every string field is at most `RESULT_FACTS_MAX_FIELD_CHARS` (default 80) and none is free text (no answers, feedback, evidence, transcripts, CV or JD text).
+- **Fast path** (`nav_mode=fast`: a single known metric such as score, status, count or date): the answer is a server template filled from the facts. No LLM and nothing leaves the server. Example: "Lần phân tích gần nhất cho JD Shopee Backend (12/10, CV Backend_v3): điểm match 72/100, còn thiếu 3 kỹ năng bắt buộc."
+- **Agent path** (anything else, such as "mình yếu ở đâu trong buổi phỏng vấn hôm qua?" or "so với lần trước thì sao?"): the agent calls `get_result_facts(ref)` for refs the resolver issued and writes at most 4 sentences. Prompt rules: use only numbers and names from the tool result; do not explain why a score is what it is beyond the listed fields; never claim or promise improvement; for deeper detail point to the page ("bằng chứng chi tiết nằm ở trang phân tích").
+- **Numeric grounding guard (server, deterministic):** every number in model prose must appear in the facts (same value after normalization, percent form included). On a violation the prose is dropped, the template answer is shown instead, and the event is logged for the eval. The facts card (exact figures from the database) is always shown next to any prose, so the user never has to trust the model's arithmetic.
+- **Records:** "latest" picks the newest and the answer names its label and date so the user can verify; several matches (for example two sessions on one date) give chips and no answer until one is chosen; none gives the template from 7.3. A comparison between two analyses is shown as two sets of figures with no delta, because analyses are not guaranteed to share scoring criteria in this release.
+- **Link:** every result answer carries a link card per referenced record with an Open button. There is no automatic navigation, since the user asked a question and did not ask to leave the chat. A following bare "mở đi" or "open it" is handled by the 5.4 rule and emits the normal `navigate` action.
+- **Privacy:** this is the only place structured user results can reach the provider, and only on the agent path. Labels are masked (4.4); numbers and dates are not. The product copy must say that results are sent to the provider when the user asks about them (4.8).
 
-### 7.4 Unmasking while streaming
-`StreamUnmasker` holds back text from an unmatched `[[` until `]]` arrives, then emits the resolved value. The hold-back limit is derived from the placeholder length constant (4.5), not a fixed 40 characters. Unknown placeholders become a neutral word (`[hidden]`), never raw. Test every possible chunk boundary.
+## 8. Agent path (DeepSeek V4.1 Flash)
 
-### 7.5 Cancel, disconnect, reconnect
-- Stop aborts the fetch and calls `POST /assistant/runs/{run_id}/cancel`. The server cancels the upstream request, persists partial text with `interrupted=true`, and applies the cancellation boundary (2.3).
-- Client disconnect is handled the same way.
-- Reconnect: `GET /assistant/runs/{run_id}/events?after=<id>` (supports `Last-Event-ID`) replays from a short-TTL store; once expired, the client loads persisted state.
-- **Required endpoints:** `GET /assistant/conversations/{id}/history`, `GET /assistant/runs/{id}` (status), the events endpoint above, and a non-streaming JSON mode for backward compatibility. The existing `getConversationHistory` points at an endpoint that does not exist today; fix it.
-- Resumed runs with no connected client (for example after a job completes) store their events for this replay.
+A small read-only loop. It exists for requests the local slot extractor cannot finish; it is not a second router.
 
-## 8. Tools (`src/services/assistant/tools/`)
+- Model: `deepseek-flash` through the raw `openai` SDK inside one `LlmClient`. **Non-thinking mode, temperature 0, no `reasoning_content` handling.** If thinking mode is ever enabled for this loop, the rev 3 replay contract (section 6 there) applies first.
+- Limits: `AGENT_MAX_STEPS=4`, `AGENT_MAX_TOOL_CALLS=6`, `MAX_RETRIES_PER_TOOL=2`, duplicate-call detection, daily token cap per user.
+- Tools (all read-only; they wrap the section 7 resolvers and the section 6 retrieval and registries, no new query logic): `find_cv`, `find_jd`, `find_analysis`, `find_interviews`, `get_result_facts(ref)` (the allowlisted facts of 7.5), `search_docs`, `open_target(ref)`, `highlight(element_id)`. The route registry's page list (about 15 entries) is part of the system prompt.
+- Tool results: `{ok, summary (<= 300 chars), data (compact, masked labels + opaque refs), error{code, message, hint}}`. Codes: `INVALID_ARGS`, `NOT_FOUND`, `AMBIGUOUS`, `UPSTREAM_FAILED`, `RATE_LIMITED`, `BUDGET_EXCEEDED`. A `ref` the server did not issue this turn returns `NOT_FOUND`.
+- `open_target` and `highlight` only record an intent; the server validates it (registries, role, ownership via the issuing query) and emits the `ui_action`. The model's closing text is limited to one or two sentences (up to four for result answers, 7.5); cards and links come from the server.
+- Untrusted content: labels and titles are user-controlled and are wrapped in `<untrusted_document>`. Because no tool writes, the worst successful injection is a wrong link or highlight; links are still built only from the registry plus ids the owner-scoped queries returned.
 
-### 8.1 Definition and result envelope
-```python
-@agent_tool(name="analysis_start", risk=Risk.T2, roles=["student"],
-            description="...", idempotent=True)
-def analysis_start(ctx: ToolContext, args: AnalysisStartArgs) -> ToolResult: ...
-```
-Arg models contain resource references and business parameters only, never `user_id`, role or tenant. Tools contain no LangGraph or LangChain imports. Risk tiers: T0 read or propose, T1 reversible write, T2 consequential or cost-bearing, T3 irreversible or outbound.
+## 9. Streaming (`text/event-stream`)
 
-`ToolResult`: `ok`, `summary` (<= 300 chars), `data` (compact, masked), `ui` (card payload, not sent to the LLM), `error {code, message, hint, candidates?}`, `truncated`. Codes: `INVALID_ARGS`, `NOT_FOUND`, `FORBIDDEN`, `AMBIGUOUS`, `CONFLICT`, `NEEDS_ANALYSIS`, `RATE_LIMITED`, `UPSTREAM_FAILED`, `USER_DECLINED`, `CANCELLED`, `BUDGET_EXCEEDED`.
+- Stream `howto` generation token by token. Agent-path text streams the same way. Templates go out as one `token` then `final`. Cards, chips and `ui_action` events are separate server-validated events, never model text.
+- Events (monotonic `id` per run): `route`, `status` (`thinking | searching | resolving`), `token`, `citations`, `card`, `ui_action`, `notice`, `final`, `error`, `heartbeat` (15 s). Headers: `Cache-Control: no-cache`, `X-Accel-Buffering: no`.
+- Guard before emission: per-chunk check for placeholder leakage and forbidden markers (hold back text from an unmatched `[[` until `]]`, then replace with the neutral word); events validated against whitelists.
+- Guard after emission (advisory): groundedness of the streamed answer is recorded for the eval; a failure appends a `notice` event and does not retract text.
+- Cancel and disconnect: see 2.4. Reconnect replay is not built; after a drop the client loads persisted state.
+- Required endpoints: `POST /assistant/chat` (SSE, plus the existing non-streaming JSON mode for backward compatibility), `POST /assistant/runs/{id}/cancel`, `GET /assistant/conversations/{id}/history`, `GET /assistant/runs/{id}`. The existing `getConversationHistory` points at an endpoint that does not exist; fix it.
 
-### 8.2 Exposure
-No group routing in this release. Expose the shipped catalog for the user's role (target at most 16 tools). If evaluation shows tool-selection degradation, add routing then.
+## 10. Frontend (Next.js)
 
-### 8.3 Catalog v2 (names and availability are final only in TOOL_MATRIX.md)
+Reuse the existing chat widget, dispatcher and guard code. Add: SSE client over `fetch` and `ReadableStream` (batched rendering at most once per animation frame, safe partial markdown, Stop button, `client_request_id` on every send, JSON fallback); link card and chips; highlight overlay (6.3); capability-menu and clarify templates. Remove the `START_ANALYSIS` confirmation handling from the assistant path once nothing else calls it (T0 verifies; the legacy `POST /assistant/action/confirm` is left alone unless T0 shows it is dead).
 
-| Tool | Risk | Milestone | Notes |
-|---|---|---|---|
-| `search_docs` | T0 | M2 | Hybrid RAG over the guide |
-| `ask_user` | T0 (interrupt) | M3 | Clarifying question with 2 to 4 chips or free text |
-| `cv_list`, `cv_get` | T0 | M2 | `cv_get` returns section summaries, masked; resolves versions through the existing version family model |
-| `jd_list`, `jd_get` | T0 | M2 | |
-| `analysis_list`, `analysis_get`, `analysis_explain` | T0 | M2 | Compact scores and top gaps; explanation from the evidence table |
-| `ui_action` | T0 | M2 | See 8.4 |
-| `analysis_start` | T2 | M3 | Cost-bearing; returns operation and analysis id |
-| `cv_tailor_propose` | T0 | M4 | See section 10 |
-| `proposal_apply` | T2 | M4 | Applies accepted hunks as a new CV version |
-| `analysis_compare` | T0 | M4 | Comparable analyses only |
+## 11. Evaluation
 
-Business rules from the existing services (family deletion, export integrity confirmation, interview timers, advisor sharing permission) are recorded in TOOL_MATRIX.md and bind any tool added later.
-
-### 8.4 `ui_action`
-One tool with a discriminated union over the existing `AgentAction` types (`START_ANALYSIS` removed; it becomes `analysis_start`). **Each variant has its own role, resource and parameter checks**; the existing guard whitelists (routes, selectors, filter names, modal ids) are reused, and a general whitelist alone is not sufficient. The server emits a `ui_action` event with an id; the frontend dispatcher reports `acknowledged` or `failed` to `POST /assistant/ui-actions/{id}/ack`. The tool result waits up to a configurable timeout and returns one of `acknowledged`, `failed`, `timeout`, `disconnected`. A failed navigation never turns a successful business execution into a failure: report them as separate outcomes.
-
-## 9. HITL
-
-### 9.1 ConfirmationRequest (built by the server)
-```json
-{
-  "operation_id": "uuid", "kind": "tool_approval | question | proposal_review",
-  "tool": "analysis_start", "title": "Start analysis",
-  "summary": "Analyze CV 'Backend_v3' against JD 'Shopee Backend Engineer'.",
-  "risk": "T2",
-  "resources": [{"type":"cv_version","id":"...","label":"Backend_v3"}, {"type":"jd","id":"...","label":"..."}],
-  "params": {"cv_version_id":"...","jd_id":"..."},
-  "approval_revision": 1, "irreversible": false, "expires_at": "ISO-8601"
-}
-```
-Labels and resources are resolved by the server from the database. Never show model-written prose as the description of what will happen.
-
-### 9.2 Endpoints
-- `POST /api/v1/assistant/confirmations/{operation_id}` body `{decision: "approve"|"reject", approval_revision, accepted_hunks?}`. Revalidate parameters and re-check ownership and expiry. Returns an SSE stream of the resumed run, or the existing state on a duplicate.
-- Statuses and expiry follow 2.3. Default expiry 30 minutes; expired means not approvable.
-- T2: one-click approve. Always-allow is not offered in this release.
-
-## 10. CV proposal flow (M4)
-
-1. **Precondition:** a completed analysis exists for `(cv_version_id, jd_id)`. The existing optimizer (`cv_optimizer._load`) requires one. If none exists, `cv_tailor_propose` returns `NEEDS_ANALYSIS` with a hint to run the analysis as a separate flow. Do not build a parallel editing system.
-2. **Build on the existing semantics:** `CvVersion`, `cv_versions.append` and `cv_optimizer.finalize` (version families, reviewed edits, audit records, new version creation). `proposal_apply` always creates a new version and never mutates the original.
-3. **Immutable proposal revisions.** A proposal revision records `base_cv_version_id`, `analysis_id`, `jd_requirements_hash`, `scoring_config_version`, and hunks. Each hunk has: source bullet id, source span hash, before, after, status. Review binds to one revision. If the CV head changed while the diff was open, return `CONFLICT` and regenerate.
-4. **Claim preservation (replaces rev 1 provenance labels).** Validate each hunk against its own source bullet:
-   - metric phrases (number plus unit plus the noun it attaches to) must be preserved verbatim, or the hunk is `changed_claim`;
-   - named entities (employers, tools, credentials) are checked by set difference against the source;
-   - ownership and seniority verbs ("led", "managed", "founded", "team of", and the Vietnamese equivalents) absent from the source are flagged;
-   - user evidence is a saved assertion from an `ask_user` answer, stored with its quoted span and bound to a CV version. "Could we target 30%?" is not evidence;
-   - results: `preserved`, `changed_claim`, `unsupported`. Anything other than `preserved` needs explicit per-hunk acceptance and shows a warning. `proposal_apply` revalidates server-side.
-   This reduces fabrication; it does not prove its absence. Human review is the control.
-5. **Missing information (a metric, an outcome):** the model calls `ask_user`; it never invents.
-6. **Score comparison.** `analysis_compare` shows a delta only if both analyses share `jd_requirements_hash` and `scoring_config_version`; otherwise `not_comparable` with the reason. Zero and negative deltas are shown plainly. Do not promise an improvement.
-
-## 11. Observability and evaluation
-
-- Trace every turn (router decision, each LLM call, each tool call, latency, tokens, cost), masked only.
-- Datasets in `eval/`: `router.jsonl`, `tools.jsonl`, `flows.jsonl`, `injection.jsonl`, `pii/`, `fabrication/` (labeled hunks, with expected outcome per hunk).
-- **Recorded regression runs vs live evaluation:** recorded fixtures run in CI and catch regressions in our code; a separate live run (manual or nightly) measures current model behavior and degradation. Do not report recorded results as model quality.
-- **Fake vs real executor:** the fake executor over an in-memory DB is used only for model evaluation speed. Safety and recovery tests (duplicate approval, crash injection, revoked access, stale proposal, cancellation, cross-user) run against the **real executor and real services**.
-- Runner `python -m eval.run --suite all --model <name>` prints a metrics table and exits non-zero below thresholds.
-- Initial thresholds: router accuracy >= 0.93; correct tool >= 0.90; exact args >= 0.85; correct ask-vs-act >= 0.85; flagship flow success >= 0.80; unauthorized-action block rate = 1.0; injection success rate = 0; PII leak count = 0 on the evaluation sets; fabrication set: at least 40 labeled cases, >= 95% of fabricated hunks flagged and <= 15% of faithful rewrites flagged (tune after the first run); QA-route p95 end-to-end < 4 s.
-- **Provider contract tests** (nightly against the real API, recorded fixtures in CI): (1) a 3-step thinking-mode tool chain with verbatim replay succeeds; (2) a non-tool turn followed by a tool-calling turn succeeds; (3) removing `reasoning_content` from a past assistant message fails with HTTP 400 (documents why replay matters; skip if the provider relaxes it); (4) streaming and non-streaming persist identical messages; (5) checkpoint save and load preserves `reasoning_content`; (6) a dangling tool call is reconciled before the next request; (7) router timeout and fallback behave.
+- Datasets in `eval/`: `router/` (5.5), `nav/` (seeded-database fixtures and utterances with expected targets), `results/` (seeded-database fixtures, questions, expected facts and answers), `howto/` (reuse the existing retrieval benchmark and add 30+ out-of-corpus queries), `injection.jsonl` (including malicious JD and CV titles), `pii/` (4.7).
+- Runner: `python -m eval.run --suite all` prints a metrics table and exits non-zero below thresholds.
+- Thresholds: router (5.5); resolver correctness on seeded fixtures = 1.0 for deterministic cases (dates including 23:30 and 00:30 local-time boundaries, no-diacritic names, duplicate names, none, multiple); cross-user probes = 100% `none` with no disclosure; agent-path correct target >= 0.85 on 40+ cases and step cap never exceeded; share of navigate turns served by the fast path reported (target >= 0.7, informational); howto Recall@k and NDCG@k not below the existing benchmark, abstention precision >= 0.9 on out-of-corpus queries; result answers: fast-path figures equal the database values in 100% of 60+ seeded cases, correct record >= 0.95, the numeric grounding guard catches 100% of planted wrong numbers, no non-allowlisted field in any recorded provider request, cross-user probes 100% `none`; injection success = 0; PII leak count = 0 in recorded provider requests; howto p95 end-to-end < 4 s; navigate fast-path p95 < 300 ms; agent-path p50 and p95 recorded, target set from the measurement.
+- Recorded fixtures run in CI and catch regressions in our code; a separate live run (manual or nightly) measures current model behavior. Do not report recorded results as model quality. Resolver and isolation tests run against real services and a real (test) database, never a fake.
+- Provider contract tests (nightly, real API; recorded in CI): (1) a non-thinking streamed completion with the system prompt works; (2) a non-thinking tool-calling loop of 3 steps works; (3) streaming and non-streaming persist identical text; (4) timeout and retry behave; (5) the egress guard blocks a planted identifier.
 
 ## 12. Data model
 
-- `pii_vault` (4.5); `assistant_runs` (2.2); `assistant_operations` (2.3); `proposals` and `proposal_revisions` (M4); `user_assertions` (M4, 10.4).
-- `analyses`: add `operation_id` (UNIQUE nullable), status values per 2.4, `jd_requirements_hash`, `scoring_config_version` (M4), partial unique index for open analyses.
-- Keep `AgentActionLog` for legacy UI actions. The operations table is the audit record for server tools (keep it even though the activity-feed UI is cut).
-- LangGraph checkpoint tables (async SQLite saver). Checkpoint state includes `agent_messages` (raw provider messages with `reasoning_content`, masked content only).
+- `assistant_runs` (2.4); `assistant_turns` (existing; extended only if needed to persist card targets, 5.4). That is all.
+- Not created in this release: `assistant_operations`, `proposals`, `proposal_revisions`, `user_assertions`, `pii_vault`, LangGraph checkpoint tables, `analyses.operation_id` and the partial unique index for open analyses. If T0 finds that earlier tasks already created any of these, leave them in place, do not use them from the assistant, and record them in the notes for a separate cleanup decision.
 - One migration per commit, with a downgrade or a documented reason there is none.
 
-## 13. Frontend (Next.js)
-
-- SSE client over `fetch` and `ReadableStream`: batched rendering (at most once per animation frame), safe partial-markdown rendering, status labels, Stop button, history load, reconnect, `client_request_id` on every send, JSON fallback.
-- `ConfirmationCard` driven by `ConfirmationRequest`: risk styling, server-resolved labels, expiry timer, handles duplicate-approve and conflict responses.
-- Outcome cards using the 2.6 vocabulary; waiting-for-job state that survives refresh; diff review card with per-hunk accept/reject and claim warnings (M4); score delta card with `not_comparable` state (M4).
-- Dispatcher reports acknowledgement and failure for UI actions. Remove `START_ANALYSIS` handling once `analysis_start` is live.
-
-## 14. Configuration (env)
+## 13. Configuration (env)
 
 ```
-LLM_BASE_URL, LLM_API_KEY, LLM_MODEL_AGENT=deepseek-flash, LLM_MODEL_ROUTER=deepseek-flash
-LLM_THINKING_AGENT=enabled, LLM_REASONING_EFFORT=high, LLM_TIMEOUT_S, LLM_MAX_RETRIES
-ROUTER_BACKEND=deepseek                  # deepseek | shadow (T4.6 adds Jev)
-PII_MASKING_ENABLED=true, PII_VAULT_KEY, PII_VAULT_TTL_HOURS
-PII_MASK_ENTITY_TYPES, PII_KEEP_ENTITY_TYPES
-AGENT_MAX_STEPS=8, AGENT_MAX_TOOL_CALLS=12, AGENT_CONFIRM_TTL_MIN=30, UI_ACK_TIMEOUT_S=5
+LLM_BASE_URL, LLM_API_KEY, LLM_MODEL_AGENT=deepseek-flash, LLM_THINKING_AGENT=disabled
+LLM_TIMEOUT_S, LLM_MAX_RETRIES
+ROUTER_BACKEND=local                       # the only supported value in this release
+ROUTER_CLF_THRESHOLD, ROUTER_CLF_MARGIN, ROUTER_CACHE_TTL_S, ROUTER_CACHE_MAX
+RAG_ANSWER_CACHE_TTL_S, RAG_ABSTAIN_THRESHOLD, RAG_UI_THRESHOLD
+AGENT_MAX_STEPS=4, AGENT_MAX_TOOL_CALLS=6
+ASSISTANT_TZ=Asia/Ho_Chi_Minh
+RESULT_FACTS_MAX_FIELD_CHARS=80
+PII_MASKING_ENABLED=true, PII_MASK_ENTITY_TYPES, PII_KEEP_ENTITY_TYPES
 USER_DAILY_TOKEN_CAP
-TRACE_BACKEND=langfuse|langsmith|none    # masked data only; auto-tracing off on the assistant path
-WORKERS=1                                # startup refuses to boot above 1
+TRACE_BACKEND=langfuse|langsmith|none      # masked data only; auto-tracing off on the assistant path
+OCR_BACKEND, STT_PROVIDER, TTS_PROVIDER    # teammate-owned, outside the assistant
 ```
-`LlmClient` wraps the raw `openai` SDK on top of the gateway primitives: it accumulates streamed `content`, `reasoning_content` and `tool_calls` deltas, with timeout, retry with backoff, usage and cost accounting, a per-call thinking flag, the egress guard, and a recorded-response mode for tests.
+`LlmClient` wraps the raw `openai` SDK on top of the gateway: streamed `content` and `tool_calls` accumulation, timeout, retry with backoff, usage and cost accounting, the egress guard, and a recorded-response mode for tests. Reuse the existing LLM service where it can be adapted.
 
-## 15. Milestones and gates
+## 14. Milestones and gates
 
-**M1 Foundation.** Tool-to-service matrix, real authentication, privacy module, provider gateway with migration of reachable outbound calls, `LlmClient`.
-- Gate: matrix reviewed and merged; cross-user tests between two student accounts pass and `X-Demo-Role` no longer changes identity; privacy targets (4.8) met; gateway static test and analysis-service leak test pass; provider contract tests pass.
+**M1 Foundation-lite.** T0 audit and reuse map; real authentication (identity from session; `X-Demo-Role` no longer changes identity) if not already done; gateway, mask-only masker, egress guard, `LlmClient` (non-thinking); slim `assistant_runs`; history endpoint fix.
+- Gate: `REUSE_MAP.md` reviewed; cross-user test between two student accounts passes; static test (no provider SDK outside the gateway) passes; leak test with a recording provider passes; masking targets (4.7) met on message-style fixtures; provider contract tests (1), (4), (5) pass.
 
-**M2 Read-only assistant.** Router, run model, graph and checkpointer, read tools, streaming, `ui_action` with acknowledgement, frontend chat.
-- Gate: personalized read questions ("what is my latest match score?") answer from tools; greetings answered without a model call; router and tool eval thresholds met; streaming tests (split placeholder at every boundary, cancel, disconnect, reconnect) pass; history and run-status endpoints work; duplicate `client_request_id` returns the same run.
+**M2 Local router.** Dataset and harness, stages 0 to 2 with cache, classifier, thresholds tuned on dev, held-out measured once.
+- Gate: 5.5 thresholds met on the held-out set including the team-supplied real utterances; router p95 target met. Optional T2.4 (Jev benchmark) does not block M3.
 
-**M3 One complete write flow (`analysis_start`).** Operations and approval, durable dispatch, job waiting, confirmation UI.
-- Gate (real executor, crash injection): every row of the 2.5 table; kill after approve and before resume; kill after the analysis commit and before dispatch; kill after the claim; kill mid-job; duplicate approve; duplicate message; cancel before and after the claim; cross-user attempt; expired approval; late approve after supersede (zero mutations); leak test over the analysis_start path. Each asserts operation, approval, analysis and run status plus that the next message is answered.
+**M3 How-to and highlight.** Guide RAG changes, answer cache, DeepSeek streaming, citations, attached actions, UI registry and highlight, SSE endpoints, frontend chat.
+- Gate: howto thresholds (11); streaming tests (split placeholder at every chunk boundary, cancel, disconnect) pass; duplicate `client_request_id` returns the same run; registry drift tests pass; greetings and deny answer without a model call.
 
-**M4 CV proposal flow.** Proposals on existing versioning, claim preservation, reviewed apply, comparable score delta, flagship flow.
-- Gate: base-version conflict detection; per-hunk reviewed apply that creates a new version; fabrication set thresholds (11); the flagship sentence completes with at most two confirmations, a per-hunk diff, flagged changed claims and a comparable delta (or an explicit `not_comparable`).
-- After M4 (optional): Jev shadow router (T4.6), advisor tools.
+**M4 Navigation and results.** Route registry, date parser, resolvers with DB, fast path, cards and chips, result facts and answers, agent path.
+- Gate: resolver and isolation thresholds (11) pass on the real test database; agent-path thresholds met; injection set passes; the example requests in section 1 work end to end in the UI; result thresholds (11) pass.
 
-## 16. Definition of done (every task and milestone)
+## 15. Definition of done (every task and milestone)
 
-Tests green (unit, integration, eval thresholds where relevant); no raw PII in any outbound request, log or trace for implemented paths; new tools registered with risk, roles and description; migrations included; `docs/ASSISTANT_V2_NOTES.md` updated with assumptions, skipped tools, accepted limitations (single worker, BackgroundTasks semantics) and known gaps. The freeze rule in 0.1 applies from the start of M3.
+Tests green (unit, integration, eval thresholds where relevant); no raw direct identifiers in any outbound request, log or trace on the assistant path; reuse recorded in `REUSE_MAP.md` (no duplicate module introduced); migrations included; `docs/dev/ASSISTANT_V2_NOTES.md` updated with assumptions, deferred items, accepted limitations (single worker, only the bare open-intent follow-up is resolved, mask-only privacy model, advisor role limited to static pages and how-to unless T0 shows an existing advisor route whitelist) and known gaps. The freeze rule in 0.2 applies from the start of M3.
