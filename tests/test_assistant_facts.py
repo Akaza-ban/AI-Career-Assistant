@@ -235,6 +235,31 @@ def test_result_fast_path_returns_exact_facts_and_link_without_navigation(result
     assert response.cards[1].params["analysis_id"] == latest
 
 
+def test_interview_result_fast_path_uses_stored_star_aggregates(result_db):
+    db, users, _, _, interview_ids, _ = result_db
+    latest = interview_ids[-1]
+    agent = AssistantAgent()
+    response = agent._resolve_result(
+        {"nav_user": users[0], "nav_db": db, "message": "what is the score of my latest interview report"},
+        RouterDecision(
+            route="result",
+            source="rules",
+            confidence=1,
+            language="en",
+            slots=NavSlots(target="report", latest=True),
+            nav_mode="fast",
+        ),
+        "en",
+    )
+    facts = build_interview_facts(db, users[0].id, latest)
+    assert "STAR score 3.0" in response.message
+    assert response.ui_actions == []
+    assert [card.kind for card in response.cards] == ["facts", "link"]
+    assert response.cards[0].facts["overall_star_score"] == facts["overall_star_score"]
+    assert response.cards[0].facts["question_count"] == facts["question_count"]
+    assert response.cards[1].params["session_id"] == latest
+
+
 def test_multiple_results_have_only_chips_and_none_keeps_nearest_suggestions(result_db):
     db, users, jds, _, _, _ = result_db
     duplicate_jd = JobDescription(
