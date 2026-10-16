@@ -268,6 +268,8 @@ class AssistantChip(StrictModel):
     label: str = Field(min_length=1, max_length=200)
     route: Literal["navigate", "locate", "howto"]
     slots: dict[str, str | bool | None]
+    route_id: str | None = None
+    params: dict[str, str] = Field(default_factory=dict)
 
 
 class AssistantCard(StrictModel):
@@ -275,6 +277,7 @@ class AssistantCard(StrictModel):
     label: str = Field(min_length=1, max_length=200)
     route_id: str
     params: dict[str, str] = Field(default_factory=dict)
+    sublabel: str | None = Field(default=None, max_length=300)
 
 
 class ChatRequest(StrictModel):

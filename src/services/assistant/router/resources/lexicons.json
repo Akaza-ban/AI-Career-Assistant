@@ -217,7 +217,7 @@
     "terminal_qualifier": "\\b(?:cua toi|cua minh|of mine)\\b.*$",
     "compound_join": "\\b(?:and|va)\\b",
     "unparsed_qualifier": "\\b(?:(?:on|from)\\s+(?!(?:my|the)\\s+(?:analysis|interview|report)\\b)|ngay\\s+(?!(?:cua|nao)\\b)).+$",
-    "qualifier_noise": "^(?:(?:duoc|match|been|completed|the|my|of|from|on|ngay|receive|received|did|cua|toi|minh|buoi|phien|session|score|status|result|results|diem|ket qua|trang thai|go|turn out|have|la gi|the nao|ra sao|co|how many|number of|count|skills?|are|is|missing|preferred|required|ky nang|uu tien|con thieu|thieu|duoc bao nhieu|bao nhieu|points?|ngay nao|what date|when was)\\b[\\s?!.,]*)+$",
+    "qualifier_noise": "^(?:(?:duoc|match|been|completed|the|my|of|from|on|ngay|receive|received|did|cua|toi|minh|buoi|phien|session|history|histories|score|status|result|results|diem|ket qua|trang thai|go|turn out|have|la gi|the nao|ra sao|co|how many|number of|count|skills?|are|is|missing|preferred|required|ky nang|uu tien|con thieu|thieu|duoc bao nhieu|bao nhieu|points?|ngay nao|what date|when was)\\b[\\s?!.,]*)+$",
     "suffix_ref": "\\b(?:for|to)\\s+(?:the\\s+)?(?P<value>[^?!,;]+?)\\s+(?P<kind>jd|cv)\\b",
     "role_page_prefix": "\\b(?:advisor|student)\\s+$"
   },

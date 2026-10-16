@@ -248,6 +248,7 @@ async def chat(
     if previous is not None:
         return runs.run_response(previous)
     history: list[dict[str, str]] = []
+    previous_targets = []
     if body.conversation_id:
         conversation = _owned_conversation(db, body.conversation_id, user)
         recent = db.scalars(
@@ -266,6 +267,19 @@ async def chat(
                     {"role": "assistant", "content": turn.assistant_message},
                 ]
             )
+        if recent:
+            from src.services.assistant.router.models import CardTarget
+
+            stored_cards = recent[0].context_json.get("assistant_output", {}).get("cards", [])
+            if len(stored_cards) == 1:
+                try:
+                    previous_targets = [
+                        CardTarget.model_validate(
+                            {key: stored_cards[0][key] for key in ("ref", "route_id", "params", "label")}
+                        )
+                    ]
+                except Exception:
+                    previous_targets = []
     else:
         conversation = AssistantConversation(
             id=str(uuid4()), user_id=user.id, role=user.role, title=body.message[:120], created_at=utcnow()
@@ -291,7 +305,16 @@ async def chat(
 
         with SessionLocal() as work_db:
             return await _respond(
-                body, user, work_db, agent, run.id, conversation.id, history, selected_cv_unavailable, event_sink
+                body,
+                user,
+                work_db,
+                agent,
+                run.id,
+                conversation.id,
+                history,
+                selected_cv_unavailable,
+                event_sink,
+                previous_targets,
             )
 
     if "text/event-stream" in request.headers.get("accept", ""):
@@ -309,6 +332,7 @@ async def _respond(
     history: list[dict[str, str]],
     selected_cv_unavailable: bool,
     event_sink: Callable[[str, dict[str, Any]], None] | None = None,
+    previous_targets: list[Any] | None = None,
 ) -> ChatResponse:
     context = body.context
     conversation = _owned_conversation(db, conversation_id, user)
@@ -328,6 +352,7 @@ async def _respond(
         options = {"event_sink": event_sink} if event_sink is not None else {}
         if body.chip is not None:
             options["chip"] = body.chip
+        options.update(nav_db=db, nav_user=user, previous_targets=previous_targets or [])
         result = await agent.respond(body.message, context, history=history, allowed_student_ids=students, **options)
     from src.models.assistant import NavigateAction
     from src.services.assistant.guardrails import validate_ui_actions

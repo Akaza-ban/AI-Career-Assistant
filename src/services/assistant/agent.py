@@ -114,6 +114,9 @@ class AssistantState(TypedDict, total=False):
     masked_query: str
     docs_version: str
     howto: bool
+    nav_db: Any
+    nav_user: Any
+    previous_targets: list[Any]
 
 
 class AssistantAgent:
@@ -141,7 +144,12 @@ class AssistantAgent:
         context = state["context"]
         if self._ui_router is None:
             self._ui_router = LocalRouter()
-        decision = self._ui_router.decide(state["message"], role=context.user_role, page_route_id=context.route)
+        decision = self._ui_router.decide(
+            state["message"],
+            role=context.user_role,
+            page_route_id=context.route,
+            previous_targets=state.get("previous_targets", ()),
+        )
         chip = state.get("chip")
         if chip is not None:
             slots = (
@@ -180,6 +188,8 @@ class AssistantAgent:
                 intent="qa",
                 chips=[chip.model_dump(mode="json") for chip in decision.chips],
             )
+        elif decision.route == "navigate" and decision.nav_mode == "fast":
+            response = self._resolve_navigation(state, decision, language)
         elif decision.route in {"navigate", "result"}:
             response = AssistantResponse(message=capability_menu(language, context.user_role), intent="qa")
         elif decision.route == "locate":
@@ -200,6 +210,128 @@ class AssistantAgent:
             "locate_fallback": decision.route == "locate",
             "intent": "qa",
         }
+
+    @staticmethod
+    def _resolve_navigation(state: AssistantState, decision: RouterDecision, language: str) -> AssistantResponse:
+        from src.services.assistant.resolvers import ResolutionContext, ResolveResult, Target, resolve
+        from src.services.assistant.ui_registry import load_routes, resolve_route
+
+        slots = decision.slots
+        user = state.get("nav_user")
+        db = state.get("nav_db")
+        if decision.card_target is not None:
+            result = ResolveResult(
+                status="found",
+                targets=[
+                    Target(
+                        ref=decision.card_target.ref,
+                        route_id=decision.card_target.route_id,
+                        params=decision.card_target.params,
+                        label=decision.card_target.label,
+                    )
+                ],
+            )
+        elif user is None or db is None or not isinstance(slots, NavSlots):
+            result = None
+        elif user.role != "student" and slots.target != "page":
+            result = None
+        else:
+            emit_event("status", {"status": "resolving"})
+            result = resolve(ResolutionContext(user=user, db=db), slots)
+
+        templates = {
+            "en": {
+                "found": "I found the requested page. You can open it now.",
+                "multiple": "I found a few possible matches. Choose one to open.",
+                "none": "I couldn’t find a matching record. Here are nearby options you can open.",
+                "needs_info": "Please choose which page you want to open.",
+                "role": "Record navigation is available for student accounts. I can open permitted pages for your role.",
+            },
+            "vi": {
+                "found": "Đã tìm thấy trang phù hợp. Bạn có thể mở trang này.",
+                "multiple": "Có một vài kết quả phù hợp. Hãy chọn kết quả muốn mở.",
+                "none": "Không tìm thấy hồ sơ phù hợp. Đây là một số lựa chọn gần nhất để mở.",
+                "needs_info": "Hãy chọn trang bạn muốn mở.",
+                "role": "Điều hướng đến hồ sơ chỉ dành cho tài khoản sinh viên. Tôi có thể mở các trang được phép cho vai trò của bạn.",
+            },
+        }
+        language = "en" if language == "en" else "vi"
+        if result is None:
+            return AssistantResponse(message=templates[language]["role"], intent="qa", route="navigate")
+
+        cards = (
+            [
+                {
+                    "ref": target.ref,
+                    "label": target.label,
+                    "sublabel": target.sublabel,
+                    "route_id": target.route_id,
+                    "params": target.params,
+                }
+                for target in result.targets[:5]
+            ]
+            if result.status == "found"
+            else []
+        )
+        chips = []
+        chip_targets = result.targets[:5]
+        if result.status == "needs_info":
+            defaults = ("cv_list", "jd_list", "analysis_new", "interview_history")
+            chip_targets = [
+                Target(
+                    ref=f"page-{route_id}",
+                    route_id=route_id,
+                    params={},
+                    label=(load_routes()[route_id].labels_en or [route_id])[0],
+                )
+                for route_id in defaults
+                if route_id in load_routes() and user is not None and user.role in load_routes()[route_id].roles
+            ]
+        if result.status in {"multiple", "none", "needs_info"}:
+            chips = [
+                {
+                    "label": target.label,
+                    "route": "navigate",
+                    "slots": {},
+                    "route_id": target.route_id,
+                    "params": target.params,
+                }
+                for target in chip_targets[:5]
+            ]
+        if result.status == "none" and isinstance(slots, NavSlots):
+            target_name = {
+                "cv": ("CV", "CV"),
+                "jd": ("JD", "JD"),
+                "analysis": ("analysis", "phân tích"),
+                "interview": ("interview", "buổi phỏng vấn"),
+                "report": ("interview", "buổi phỏng vấn"),
+            }.get(slots.target, ("record", "hồ sơ"))
+            qualifier = slots.when_expr or slots.jd_ref or slots.cv_ref or slots.free_ref
+            if qualifier:
+                message = (
+                    f"I couldn’t find a {target_name[0]} matching {qualifier}. Here are nearby options you can open."
+                    if language == "en"
+                    else f"Không tìm thấy {target_name[1]} phù hợp với {qualifier}. Đây là các lựa chọn gần nhất để mở."
+                )
+            else:
+                message = templates[language]["none"]
+        else:
+            message = templates[language][result.status]
+        actions = []
+        if result.status == "found" and result.targets:
+            target = result.targets[0]
+            # The API revalidates role and owner before dispatch.
+            if user is not None:
+                resolve_route(target.route_id, target.params, user.role)
+            actions = [{"type": "navigate", "route_id": target.route_id, "params": target.params}]
+        return AssistantResponse(
+            message=message,
+            intent="qa",
+            route="navigate",
+            cards=cards,
+            chips=chips,
+            ui_actions=actions,
+        )
 
     def _classify(self, state: AssistantState) -> dict[str, Any]:
         return {"intent": "qa"}
@@ -649,10 +781,15 @@ class AssistantAgent:
         allowed_student_ids: list[str] | None = None,
         event_sink: Callable[[str, dict[str, Any]], None] | None = None,
         chip: AssistantChip | None = None,
+        nav_db: Any = None,
+        nav_user: Any = None,
+        previous_targets: list[Any] | None = None,
     ) -> AssistantResponse:
         token = _event_sink.set(event_sink)
         try:
-            return await self._respond_graph(message, context, history, allowed_student_ids, chip)
+            return await self._respond_graph(
+                message, context, history, allowed_student_ids, chip, nav_db, nav_user, previous_targets
+            )
         finally:
             _event_sink.reset(token)
 
@@ -663,6 +800,9 @@ class AssistantAgent:
         history: list[dict[str, str]] | None,
         allowed_student_ids: list[str] | None,
         chip: AssistantChip | None,
+        nav_db: Any = None,
+        nav_user: Any = None,
+        previous_targets: list[Any] | None = None,
     ) -> AssistantResponse:
         with provider_scope(mask_only=True):
             result = await self.graph.ainvoke(
@@ -672,6 +812,9 @@ class AssistantAgent:
                     "context": context,
                     "history": history or [],
                     "allowed_student_ids": allowed_student_ids or [],
+                    "nav_db": nav_db,
+                    "nav_user": nav_user,
+                    "previous_targets": previous_targets or [],
                 },
                 config={"callbacks": []},
             )
