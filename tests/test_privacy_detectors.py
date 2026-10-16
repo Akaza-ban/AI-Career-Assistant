@@ -24,6 +24,23 @@ def test_known_identity_variants_and_boundaries():
     assert [text[s.start : s.end] for s in spans] == ["Nguyen Van An", "An Van Nguyen", "Văn An Nguyễn"]
 
 
+@pytest.mark.parametrize("name", ["Nguycn Van An", "Nguyen Vn An", "Nguyenn Van An", "An Van Nguycn"])
+def test_known_identity_ocr_single_edit_preserves_original_offsets(name):
+    text = f"Referee: {name}; Python developer"
+    found = Detector(EmptyNer()).detect(text, identities=[Identity(name="Nguyễn Văn An")])
+    assert [(text[s.start : s.end], s.kind, s.layer) for s in found] == [(name, "PERSON", 1)]
+
+
+def test_fuzzy_identity_is_bounded_and_never_matches_across_fields():
+    text = "Nguycn Vam An; Nguyen\nVan An; Nguyen: Van An; Jo Lu"
+    assert identity_spans(text, [Identity(name="Nguyễn Văn An"), Identity(name="Jo Li")]) == []
+
+
+def test_identity_email_and_phone_do_not_use_fuzzy_matching():
+    text = "alixe@example.test; 0912345679"
+    assert identity_spans(text, [Identity(email="alice@example.test", phone="0912345678")]) == []
+
+
 def test_employment_dates_city_skills_employers_and_schools_are_kept():
     text = "Software Engineer\nComputer Science\nPython Java\nEmployer: Acme Labs\nSchool: Stanford University\nLocation: Hà Nội\nEmployment: 2020-2024"
     assert header_spans(text) == []

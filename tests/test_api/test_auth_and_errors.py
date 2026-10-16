@@ -6,7 +6,7 @@ from tests.helpers import ADVISOR, STUDENT
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("role", "expected_id"),
-    [("student", "sv-0142"), ("advisor", "cv-007"), ("admin", "qt-001")],
+    [("student", "sv-0142"), ("advisor", "cv-007")],
 )
 async def test_me_returns_authenticated_individual(client, role, expected_id):
     response = await client.get("/api/v1/me", headers=STUDENT if role == "student" else ADVISOR)

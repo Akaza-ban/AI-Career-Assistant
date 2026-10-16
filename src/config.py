@@ -5,7 +5,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
-from pydantic import Field, PrivateAttr, SecretStr, model_validator
+from pydantic import Field, PrivateAttr, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Load .env file explicitly so os.environ is populated early
@@ -121,11 +121,19 @@ class Settings(BaseSettings):
             raise ValueError("AUTH_SECRET_KEY must contain at least 32 bytes; production requires an explicit key")
         return self
 
-    # LLM Provider Configuration (Groq / OpenRouter / OpenAI)
-    llm_provider: Literal["groq", "openrouter", "openai"] = Field(
+    # LLM Provider Configuration (Groq / OpenRouter / OpenAI / DeepSeek)
+    llm_provider: Literal["groq", "openrouter", "openai", "deepseek"] = Field(
         default="groq",
         description="LLM provider: deepseek, groq, openrouter, hoặc openai",
     )
+
+    @field_validator("llm_provider", mode="before")
+    @classmethod
+    def _normalize_llm_provider(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value
+
     deepseek_api_key: str = Field(default="", description="API key cho DeepSeek")
     groq_api_key: str = Field(default="", description="API key cho Groq")
     openrouter_api_key: str = Field(default="", description="API key cho OpenRouter")
@@ -214,6 +222,16 @@ class Settings(BaseSettings):
     provider_output_usd_per_million: float | None = Field(default=None, ge=0)
     provider_embedding_usd_per_million: float | None = Field(default=None, ge=0)
 
+    @model_validator(mode="after")
+    def configure_llm_credentials(self) -> "Settings":
+        if not self.llm_api_key.get_secret_value():
+            fallback = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+            if not fallback:
+                fallback, _ = self.get_llm_credentials()
+            if fallback:
+                self.llm_api_key = SecretStr(fallback)
+        return self
+
     def get_llm_credentials(self) -> tuple[str, str]:
         """
         Lấy (api_key, base_url) dựa theo provider đang được kích hoạt.
@@ -221,7 +239,12 @@ class Settings(BaseSettings):
         """
         provider = self.llm_provider.lower()
         if provider == "deepseek":
-            api_key = self.deepseek_api_key or os.getenv("DEEPSEEK_API_KEY", "")
+            api_key = (
+                self.deepseek_api_key
+                or self.llm_api_key.get_secret_value()
+                or os.getenv("DEEPSEEK_API_KEY", "")
+                or os.getenv("LLM_API_KEY", "")
+            )
             base_url = self.llm_base_url or "https://api.deepseek.com"
             return api_key, base_url
 

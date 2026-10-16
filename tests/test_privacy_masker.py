@@ -55,6 +55,14 @@ def test_round_trip(text, detector):
     assert all(len(token) <= MAX_PLACEHOLDER_LENGTH for token in vault.entries)
 
 
+def test_ocr_identity_round_trip_preserves_misspelling_and_escaped_literals(detector):
+    vault = TestVault()
+    text = "Reviewed by Nguycn Van An; [[PERSON_1]]"
+    value = mask(text, vault, detector=detector, identities=[Identity(name="Nguyễn Văn An")], origin="cv:ocr")
+    assert "Nguycn Van An" not in value
+    assert unmask(value, vault, allowed_kinds={"PERSON"}, allowed_origins={"cv:ocr"}) == text
+
+
 def test_injected_literal_and_copied_live_token_never_resolve(detector):
     vault = TestVault()
     live = mask("alice@example.test", vault, detector=detector)
