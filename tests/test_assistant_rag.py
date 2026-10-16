@@ -670,7 +670,9 @@ async def test_navigate_to_jd_detail_only_for_visible_jds(
         {
             "message": "Mở chi tiết vị trí trong Thư viện JD.",
             "intent": "action",
-            "actions": [{"action_type": "NAVIGATE_PAGE", "params": {"route": route}, "description_vi": "Mở chi tiết JD"}],
+            "actions": [
+                {"action_type": "NAVIGATE_PAGE", "params": {"route": route}, "description_vi": "Mở chi tiết JD"}
+            ],
         }
     )
     monkeypatch.setattr(api_agent, "_llm", llm)
@@ -779,7 +781,12 @@ async def test_feedback_persists_and_updates_without_duplicate(client: AsyncClie
         undo = await client.delete(f"{API}/feedback/{chat['turn_id']}", headers=STUDENT)
         assert undo.status_code == 204
     with SessionLocal() as db:
-        assert db.scalar(select(func.count()).select_from(AssistantFeedback).where(AssistantFeedback.turn_id == chat["turn_id"])) == 0
+        assert (
+            db.scalar(
+                select(func.count()).select_from(AssistantFeedback).where(AssistantFeedback.turn_id == chat["turn_id"])
+            )
+            == 0
+        )
 
 
 @pytest.mark.asyncio

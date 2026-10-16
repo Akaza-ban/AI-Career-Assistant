@@ -107,7 +107,8 @@ class CvVersionResponse(BaseModel):
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
     read_by_ocr: bool = Field(
-        default=False, description="Chỉ có ở phản hồi tải lên: chữ được đọc bằng OCR vì file là PDF scan"
+        default=False,
+        description="Chữ được đọc bằng OCR vì file gốc là PDF scan (bản tối ưu / khôi phục thừa hưởng từ bản gốc)",
     )
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
     status: Literal["processing", "ready", "failed"] = Field(default="ready", description="Trạng thái xử lý")

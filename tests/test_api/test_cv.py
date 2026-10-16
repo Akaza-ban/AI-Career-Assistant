@@ -322,6 +322,62 @@ async def test_upload_scanned_pdf_triggers_ocr(client):
     assert text_res.status_code == 200
     assert "Python" in text_res.json()["text"]
 
+    # Cờ "đọc bằng OCR" được lưu lại (Trình tối ưu dùng để nhắc sinh viên kiểm tra chữ), PDF có chữ thì không
+    listed = {c["id"]: c for c in (await client.get("/api/v1/cv", headers=STUDENT)).json()}
+    assert listed[data["id"]]["read_by_ocr"] is True
+    text_pdf = (await upload(client, "text_cv.pdf", make_pdf(CV_TEXT))).json()
+    assert text_pdf["read_by_ocr"] is False
+
+
+def test_backfill_ocr_flags_for_old_versions():
+    """CV tạo trước khi có cờ: PDF không có lớp chữ là bản OCR, bản khôi phục theo bản gốc, DOCX thì không."""
+    from src.services.cv_versions import backfill_ocr_flags
+
+    with SessionLocal() as db:
+        scan = CvVersion(
+            id="cv_scan_cu",
+            owner_id=DEMO_STUDENT_ID,
+            version=901,
+            file_name="scan.pdf",
+            file_type="pdf",
+            size_bytes=1,
+            content_text=CV_TEXT,
+            uploaded_at=utcnow(),
+            read_by_ocr=None,
+        )
+        restored = CvVersion(
+            id="cv_scan_khoi_phuc",
+            owner_id=DEMO_STUDENT_ID,
+            version=902,
+            file_name="scan_v2.pdf",
+            file_type="pdf",
+            size_bytes=1,
+            content_text=CV_TEXT,
+            origin="restored",
+            restored_from_id="cv_scan_cu",
+            uploaded_at=utcnow(),
+            read_by_ocr=None,
+        )
+        docx = CvVersion(
+            id="cv_docx_cu",
+            owner_id=DEMO_STUDENT_ID,
+            version=903,
+            file_name="cv.docx",
+            file_type="docx",
+            size_bytes=1,
+            content_text=CV_TEXT,
+            uploaded_at=utcnow(),
+            read_by_ocr=None,
+        )
+        db.add_all([scan, restored, docx])
+        db.commit()
+        cv_files.save_file(DEMO_STUDENT_ID, "cv_scan_cu", "pdf", make_scanned_pdf(CV_TEXT))
+        try:
+            backfill_ocr_flags(db)
+            assert (scan.read_by_ocr, restored.read_by_ocr, docx.read_by_ocr) == (True, True, False)
+        finally:
+            cv_files.delete_file(DEMO_STUDENT_ID, "cv_scan_cu", "pdf")
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("name, fmt", [("my_cv.png", "PNG"), ("my_cv.jpg", "JPEG")])

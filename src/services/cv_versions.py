@@ -107,6 +107,7 @@ def restore(db: Session, source: CvVersion, now: datetime) -> CvVersion:
         developing_skills=source.developing_skills,
         origin="restored",
         restored_from_id=source.id,
+        read_by_ocr=source.read_by_ocr,
         is_active=False,
         is_draft=False,
         uploaded_at=now,
@@ -121,6 +122,35 @@ def restore(db: Session, source: CvVersion, now: datetime) -> CvVersion:
         cv_files.delete_file(source.owner_id, restored.id, restored.file_type)
         raise
     return restored
+
+
+def backfill_ocr_flags(db: Session) -> None:
+    """
+    Điền read_by_ocr cho phiên bản tạo trước khi có cột này (idempotent, gọi khi khởi động): bản tải lên là PDF không
+    có lớp chữ (cùng ngưỡng như lúc tải lên) thì là bản đọc bằng OCR; bản tối ưu / khôi phục theo bản gốc.
+    """
+    pending = list(db.scalars(select(CvVersion).where(CvVersion.read_by_ocr.is_(None)).order_by(CvVersion.version)))
+    if not pending:
+        return
+    by_id = {
+        cv.id: cv for cv in db.scalars(select(CvVersion).where(CvVersion.owner_id.in_({c.owner_id for c in pending})))
+    }
+    analyzed = dict(db.execute(select(GapAnalysis.id, GapAnalysis.cv_version_id)).all())
+    for cv in pending:
+        if cv.origin == "restored" and cv.restored_from_id in by_id:
+            parent = by_id[cv.restored_from_id]
+        elif cv.origin == "optimized" and analyzed.get(cv.source_analysis_id) in by_id:
+            parent = by_id[analyzed[cv.source_analysis_id]]
+        else:
+            parent = None
+        if parent is not None:
+            cv.read_by_ocr = bool(parent.read_by_ocr)
+        elif cv.file_type == "pdf":
+            path = cv_files.stored_path(cv.owner_id, cv.id, cv.file_type)
+            cv.read_by_ocr = path.exists() and not cv_files.has_text_layer(path.read_bytes())
+        else:
+            cv.read_by_ocr = False
+    db.commit()
 
 
 def backfill(db: Session) -> None:

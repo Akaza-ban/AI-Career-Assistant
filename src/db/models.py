@@ -227,6 +227,9 @@ class CvVersion(Base):
     developing_skills: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, default=None)
     # Lượt phân tích đã dùng để tối ưu ra phiên bản này (origin = "optimized")
     source_analysis_id: Mapped[str | None] = mapped_column(String(64), default=None)
+    # Chữ được đọc bằng OCR (PDF scan): có thể sai chính tả, dính chữ, mất dấu. Bản tối ưu / khôi phục thừa hưởng từ
+    # bản gốc. NULL ở CV tạo trước khi có cột này, được điền khi khởi động (cv_versions.backfill_ocr_flags).
+    read_by_ocr: Mapped[bool | None] = mapped_column(Boolean, default=None)
 
 
 class JobDescription(Base):

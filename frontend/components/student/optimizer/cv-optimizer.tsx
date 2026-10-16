@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, ArrowLeft, ArrowRight, ChevronRight, FileCheck2, Lock } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, ChevronRight, FileCheck2, Lock, ScanText } from "lucide-react"
 import { toast } from "sonner"
 
 import { BottomActionBar } from "@/components/common/bottom-action-bar"
@@ -283,6 +283,14 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
             <h2 id="paper-title" className="flex-1 text-base font-semibold text-ink">
               Bản xem trước CV
             </h2>
+            {session.cv.read_by_ocr && (
+              // Chữ đọc từ ảnh scan (OCR): sinh viên cần tự kiểm tra trước khi dùng file tải về
+              <p className="flex w-full items-start gap-1.5 text-[12.5px] leading-[18px] text-warn sm:order-last md:order-none md:w-auto md:max-w-[440px]">
+                <ScanText className="mt-px size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                CV được đọc từ ảnh scan nên có thể sai chính tả, dính chữ hoặc mất dấu. Hãy đối chiếu với file gốc và
+                sửa lại trong file DOCX sau khi tải về.
+              </p>
+            )}
             {suggestions.length > 0 && (
               <>
                 <span className="inline-flex items-center gap-1.5">

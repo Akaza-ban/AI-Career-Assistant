@@ -61,11 +61,39 @@ _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
     ),
     (
         "skills",
-        ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies", "ngoại ngữ", "language"),
+        (
+            "kỹ năng",
+            "kĩ năng",
+            "skills",
+            "công cụ",
+            "tools",
+            "technical",
+            "technologies",
+            "ngoại ngữ",
+            "ngôn ngữ",
+            "languages",
+            "language",
+            "lĩnh vực chuyên môn",
+            "chuyên môn",
+        ),
     ),
     (
         "certifications",
-        ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award", "honors", "achievements"),
+        (
+            "chứng chỉ",
+            "chứng nhận",
+            "giải thưởng",
+            "thành tích",
+            "certifications",
+            "certification",
+            "certificates",
+            "certificate",
+            "certificat",
+            "awards",
+            "award",
+            "honors",
+            "achievements",
+        ),
     ),
     (
         "summary",
@@ -139,7 +167,49 @@ def _match_section(clean: str) -> tuple[str | None, bool]:
             # ("Project Manager Intern 06/2024 - 08/2024"), không phải tiêu đề
             if len(clean) <= 40 and not clean.rstrip().endswith(".") and not _YEAR.search(clean):
                 return section, True
+    # Tiêu đề bị OCR đọc sai một ký tự ("HQC VAN", "SKlLLS"): chỉ xét dòng trông như tiêu đề đứng riêng
+    if _looks_like_heading(clean):
+        for section, keywords in _FOLDED_KEYWORDS:
+            # Viết hoa toàn bộ ("HQC VAN") hoặc gần như chỉ có từ khoá ("Educatlon"); "Skillful leader" thì không
+            upper = all(c.isupper() for c in clean if c.isalpha())
+            if any(len(kw) >= 5 and (upper or len(folded) <= len(kw) + 1) and _near(folded, kw) for kw in keywords):
+                return section, True
     return None, False
+
+
+def _looks_like_heading(clean: str) -> bool:
+    """Dòng ngắn đứng riêng, không năm / số, không kết thúc câu, viết hoa toàn bộ hoặc chỉ 1–4 từ."""
+    letters = [c for c in clean if c.isalpha()]
+    return (
+        bool(letters)
+        and len(clean) <= 32
+        and not any(c.isdigit() for c in clean)
+        and not clean.rstrip().endswith((".", ","))
+        and ":" not in clean
+        and (all(c.isupper() for c in letters) or len(clean.split()) <= 4)
+    )
+
+
+def _near(folded: str, keyword: str) -> bool:
+    """Đầu dòng khớp từ khoá, sai tối đa 1 ký tự (thay, thiếu hoặc thừa); phần còn lại của dòng ngắn."""
+    if len(folded) > len(keyword) + 14:
+        return False
+    for size in (len(keyword) - 1, len(keyword), len(keyword) + 1):
+        head = folded[:size]
+        if len(head) == size and _edits_at_most_one(head, keyword):
+            return True
+    return False
+
+
+def _edits_at_most_one(a: str, b: str) -> bool:
+    if a == b:
+        return True
+    if abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        return sum(x != y for x, y in zip(a, b, strict=True)) <= 1
+    short, long_ = (a, b) if len(a) < len(b) else (b, a)
+    return any(long_[:i] + long_[i + 1 :] == short for i in range(len(long_)))
 
 
 def strip_bullet(raw: str) -> str:
@@ -149,6 +219,9 @@ def strip_bullet(raw: str) -> str:
 
 def split_cv_lines(text: str) -> list[dict[str, Any]]:
     """Tách CV thành các dòng không rỗng, đánh số từ 1 và gắn mục (section) chứa dòng đó."""
+    from src.services.cv_files import clean_stutter_text
+
+    text = clean_stutter_text(text)
     lines: list[dict[str, Any]] = []
     current = "header"
     for raw in text.splitlines():

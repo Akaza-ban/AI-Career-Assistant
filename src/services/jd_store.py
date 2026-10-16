@@ -55,9 +55,7 @@ def _get_embedding_function() -> Embeddings:
 
     # Kiểm tra nếu có API key OpenAI hợp lệ (không phải giá trị placeholder)
     is_valid_openai = bool(
-        openai_key
-        and not openai_key.startswith("sk-your_")
-        and not openai_key.startswith("sk-dummy")
+        openai_key and not openai_key.startswith("sk-your_") and not openai_key.startswith("sk-dummy")
     )
 
     if is_valid_openai:

@@ -640,6 +640,8 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
         uploaded_at=now,
         developing_skills=list(developing.values()) or None,
         source_analysis_id=analysis.id,
+        # Chữ vẫn đến từ bản gốc: bản đọc bằng OCR thì bản tối ưu cũng cần sinh viên kiểm tra
+        read_by_ocr=cv.read_by_ocr,
     )
     cv_versions.append(db, cv, new_cv, new_major=False)
     new_cv.file_name = _optimized_file_name(cv.file_name, cv_versions.label(new_cv))
