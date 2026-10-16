@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronLeft, ChevronRight, Info, Loader2 } from "lucide-react"
+import { ChevronLeft, ChevronRight, Info, Loader2, ShieldCheck } from "lucide-react"
 
 import { diffAdded } from "@/components/student/optimizer/text-diff"
 import { Badge } from "@/components/ui/badge"
@@ -11,6 +11,17 @@ import { cn } from "@/lib/utils"
 
 /** Khớp MAX_EDIT_CHARS ở backend (src/services/cv_optimizer.py). */
 const MAX_EDIT_CHARS = 600
+
+/**
+ * Câu đề xuất khi SV không có số liệu: bỏ chỗ trống cùng cả vế AI thêm trước nó, tính từ dấu phẩy cuối
+ * ("…, đạt [kết quả đo được]", "…, reducing deployment time by [measurable result]").
+ */
+export function withoutPlaceholder(text: string) {
+  return text
+    .replace(/(?:,[^,[\]]*)?\s*\[[^\]]{1,40}\]/g, "")
+    .replace(/\s+([.,;])/g, "$1")
+    .trim()
+}
 
 const KIND_LABEL: Record<SuggestionKind, string> = {
   star_quantify: "Định lượng hoá theo STAR",
@@ -37,6 +48,8 @@ interface SuggestionCardProps {
   onNext: () => void
   onDecide: (decision: SuggestionDecisionRequest["decision"], editedText?: string) => Promise<void>
   onProvideContext: (answer: string) => Promise<void>
+  /** Ghi chú cuối thẻ: các bước kiểm tra gợi ý đã qua, số câu AI cho là đã rõ. */
+  checkedNote?: string
 }
 
 // Bản vẽ ToiUu: thẻ gợi ý bên phải. PRD US-SV-03 (AC1 áp dụng, AC2 cần ngữ cảnh, AC3 bỏ qua), mục 6.4.
@@ -50,6 +63,7 @@ export function SuggestionCard({
   onNext,
   onDecide,
   onProvideContext,
+  checkedNote,
 }: SuggestionCardProps) {
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -66,7 +80,12 @@ export function SuggestionCard({
   }
 
   const pending = s.status === "pending"
-  const askContext = pending && s.needs_context
+  // Phần AI viết thêm so với câu gốc (không tính chỗ trống chờ điền số): SV tự xác nhận đúng sự thật trước khi áp dụng
+  const aiAdded = diffAdded(s.original_text, s.proposed_text).some(
+    (part) => part.added && /\p{L}/u.test(part.text.replace(/\[[^\]]*\]/g, "")),
+  )
+  // AC2: hỏi số liệu thật trước; SV không có số liệu thì chọn bỏ chỗ trống và tự sửa câu
+  const askContext = pending && s.needs_context && !editing
 
   return (
     <section
@@ -97,12 +116,11 @@ export function SuggestionCard({
             {KIND_LABEL[s.kind]}
           </Badge>
           <span className="text-xs text-ink-3">
-            <span className="font-medium text-ink-2">{s.skill}</span>
-            {section && ` · ${section}`}
+            {/* Gợi ý soạn ở Trình tối ưu có thể không gắn với kỹ năng JD nào */}
+            {s.skill && <span className="font-medium text-ink-2">{s.skill}</span>}
+            {section && `${s.skill ? " · " : ""}${section}`}
           </span>
         </div>
-        {pending && s.rationale && <p className="text-[13px] leading-5 text-ink-2">{s.rationale}</p>}
-
         <Labeled label="Câu gốc">
           <p className="rounded-[10px] bg-panel px-3 py-2.5 text-sm text-ink-2">{s.original_text}</p>
         </Labeled>
@@ -110,6 +128,13 @@ export function SuggestionCard({
         {/* AC2: cần SV bổ sung ngữ cảnh thật trước khi AI gợi ý */}
         {askContext && (
           <>
+            <Labeled label="Đề xuất">
+              <p className="rounded-[10px] border border-line-strong px-3 py-2.5 text-[15px] leading-6 text-ink">
+                <Highlighted prev={s.original_text} next={s.proposed_text} />
+              </p>
+            </Labeled>
+            {s.rationale && <Rationale text={s.rationale} />}
+            {aiAdded && <CheckAdded />}
             <Labeled label={s.context_question ?? "Bạn bổ sung thêm thông tin thật cho câu này nhé"} htmlFor={`ctx-${s.id}`}>
               <Textarea
                 id={`ctx-${s.id}`}
@@ -129,6 +154,16 @@ export function SuggestionCard({
                 <PillButton tone="dark" disabled={busy || !context.trim()} onClick={() => run(() => onProvideContext(context))}>
                   {busy && <Loader2 className="size-4 animate-spin" aria-hidden />}
                   Gửi để nhận gợi ý
+                </PillButton>
+                <PillButton
+                  tone="soft"
+                  disabled={busy}
+                  onClick={() => {
+                    setDraft(withoutPlaceholder(s.proposed_text))
+                    setEditing(true)
+                  }}
+                >
+                  Không có số liệu, bỏ chỗ trống
                 </PillButton>
                 <PillButton tone="ghost" disabled={busy} onClick={() => run(() => onDecide("reject"))}>
                   Bỏ qua
@@ -165,6 +200,8 @@ export function SuggestionCard({
             </p>
           </Labeled>
         )}
+        {!askContext && !editing && pending && s.rationale && <Rationale text={s.rationale} />}
+        {!askContext && !editing && pending && aiAdded && <CheckAdded />}
 
         {pending && !askContext && editable && (
           <div className="flex flex-wrap gap-2 pt-0.5">
@@ -219,21 +256,52 @@ export function SuggestionCard({
           </div>
         )}
       </div>
+      {checkedNote && (
+        <p className="mt-4 flex gap-2 border-t border-line pt-3.5 text-[12.5px] leading-[18px] text-ink-3">
+          <ShieldCheck className="mt-px size-[15px] shrink-0" strokeWidth={1.75} aria-hidden />
+          {checkedNote}
+        </p>
+      )}
     </section>
   )
 }
 
-/** Câu đề xuất với phần thêm mới so với câu gốc được tô nhẹ màu nhấn. */
+function CheckAdded() {
+  return (
+    <p className="flex gap-2 text-[12.5px] leading-[18px] text-ink-3">
+      <Info className="mt-px size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+      Phần tô màu là phần AI viết thêm so với câu gốc. Chỉ áp dụng khi đúng với việc bạn đã làm; chưa đúng thì bấm Sửa
+      hoặc Bỏ qua.
+    </p>
+  )
+}
+
+function Rationale({ text }: { text: string }) {
+  return (
+    <p className="text-[13px] leading-5 text-ink-2">
+      <span className="font-semibold text-ink">Vì sao: </span>
+      {text}
+    </p>
+  )
+}
+
+/** Câu đề xuất: phần thêm mới so với câu gốc tô nhẹ màu nhấn, chỗ trống cần điền số liệu tô màu cảnh báo. */
 function Highlighted({ prev, next }: { prev: string; next: string }) {
   return (
     <>
-      {diffAdded(prev, next).map((part, i) =>
-        part.added ? (
-          <mark key={i} className="rounded bg-accent-soft px-0.5 text-ink">
-            {part.text}
-          </mark>
-        ) : (
-          <span key={i}>{part.text}</span>
+      {diffAdded(prev, next).flatMap((part, i) =>
+        part.text.split(/(\[[^\]]{1,40}\])/).map((piece, j) =>
+          !piece ? null : /^\[[^\]]{1,40}\]$/.test(piece) ? (
+            <mark key={`${i}-${j}`} className="rounded bg-warn-soft px-1 font-semibold text-warn">
+              {piece}
+            </mark>
+          ) : part.added ? (
+            <mark key={`${i}-${j}`} className="rounded bg-accent-soft px-0.5 text-ink">
+              {piece}
+            </mark>
+          ) : (
+            <span key={`${i}-${j}`}>{piece}</span>
+          ),
         ),
       )}
     </>

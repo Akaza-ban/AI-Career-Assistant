@@ -325,6 +325,9 @@ class CvOptimization(Base):
     # Ngữ cảnh SV bổ sung cho gợi ý cần số liệu (US-SV-03 AC2):
     # {suggestion_id: {"answer", "proposed_text", "answered_at"}}; None ở phiên tạo trước khi có cột này
     contexts: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    # Gợi ý viết lại soạn riêng khi mở Trình tối ưu (một lần gọi LLM, lưu cho các lần sau):
+    # {"status": "ready"|"failed", "items": [...], "kept": int, "attempted_at"}; None khi chưa soạn
+    rewrites: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     # Phiên bản CV tạo ra khi "Hoàn tất"
     result_cv_version_id: Mapped[str | None] = mapped_column(String(64), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

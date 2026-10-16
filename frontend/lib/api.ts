@@ -316,6 +316,16 @@ export const api = {
       () => mockApi.getOptimizerSession(analysisId),
       () => request(optimizerPath(analysisId)),
     ),
+  /**
+   * Soạn gợi ý viết lại riêng cho phiên (lần đầu mở, hoặc Thử lại sau khi lỗi): một lần gọi AI, thường 10–20 giây.
+   * Đã có gợi ý thì backend trả về luôn, không gọi lại.
+   */
+  prepareOptimizerSuggestions: (analysisId: string): Promise<OptimizerSession> =>
+    via(
+      "optimizer",
+      () => mockApi.getOptimizerSession(analysisId),
+      () => request(`${optimizerPath(analysisId)}/prepare`, { method: "POST" }),
+    ),
   /** Quyết định nằm trong bản nháp, chưa tạo phiên bản CV mới; trả về trạng thái trình tối ưu sau khi lưu. */
   decideSuggestion: (analysisId: string, id: string, body: SuggestionDecisionRequest): Promise<OptimizerSession> =>
     via(

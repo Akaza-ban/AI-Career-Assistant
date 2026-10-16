@@ -2,7 +2,8 @@
 
 - Trọng số theo mức độ: Required = 3, Preferred = 2, Additional = 1.
 - Match: 0 = không xuất hiện trong CV; 0.5 = chỉ liệt kê (mục Kỹ năng, Mục tiêu...), không có mô tả sử dụng;
-  1 = có bằng chứng cụ thể trong Kinh nghiệm / Dự án / Học vấn / Hoạt động.
+  0.75 = có câu mô tả đã dùng làm gì (Kinh nghiệm / Dự án / Học vấn / Hoạt động) nhưng chưa có số liệu kết quả;
+  1 = có câu mô tả kèm số liệu kết quả, hoặc nằm trong mục Kinh nghiệm làm việc thực tế.
 - Score = Σ(w × Match) / Σw × 100.
 
 Phần chấm theo quy tắc ở đây dùng khi không có LLM và để kiểm tra chéo kết quả LLM.
@@ -250,14 +251,71 @@ def split_cv_lines(text: str) -> list[dict[str, Any]]:
     return lines
 
 
+MATCH_LEVELS = (0, 0.5, 0.75, 1)
+# Ngày tháng, năm: không phải số liệu kết quả
+_DATES = re.compile(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b|\b\d{1,2}/\d{4}\b|\b(?:19|20)\d{2}\b")
+
+
+def has_date(text: str) -> bool:
+    """Dòng có ngày tháng / năm (thường là dòng tiêu đề một mục: tên dự án, nơi làm việc, thời gian)."""
+    return bool(_DATES.search(text))
+
+
+def has_result_metric(text: str) -> bool:
+    """Câu có số liệu (12 endpoint, 30%, 500 người dùng, 3 tháng...), không tính ngày tháng / năm."""
+    return bool(re.search(r"\d", _DATES.sub(" ", text)))
+
+
+def evidence_level(line: dict[str, Any]) -> float:
+    """
+    Mức tối đa một dòng bằng chứng cho phép: 0,5 nếu chỉ là dòng liệt kê; 1 nếu câu mô tả có số liệu kết quả hoặc nằm
+    trong mục Kinh nghiệm làm việc; còn lại 0,75 (đã mô tả việc làm, ví dụ đồ án, nhưng chưa có số liệu).
+    """
+    if not is_descriptive(line):
+        return 0.5
+    if has_result_metric(line["text"]) or line.get("block") == "experience":
+        return 1
+    return 0.75
+
+
 def is_descriptive(line: dict[str, Any]) -> bool:
-    """Dòng mô tả việc đã làm (đủ làm bằng chứng Match = 1)."""
+    """Dòng mô tả việc đã làm (bằng chứng Match ≥ 0,75)."""
     if line.get("is_heading"):
         return False
     if line["section"] in EVIDENCE_SECTIONS:
         return True
     # CV không có tiêu đề mục: coi câu mô tả dài là bằng chứng
     return line["section"] == "header" and len(line["text"].split()) >= 12
+
+
+_VIETNAMESE_MARKS = re.compile(r"[àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]", re.IGNORECASE)
+
+
+def has_vietnamese_marks(text: str) -> bool:
+    """Có chữ tiếng Việt có dấu; không có thì là tiếng Anh hoặc tiếng Việt OCR mất dấu."""
+    return bool(_VIETNAMESE_MARKS.search(text))
+
+
+def entry_text(line: dict[str, Any], lines_by_no: dict[int, dict[str, Any]]) -> str:
+    """
+    Toàn bộ mục CV chứa dòng (một dự án / một nơi làm việc): từ dòng tiêu đề có ngày tháng phía trên tới trước tiêu đề
+    mục kế tiếp, cùng phần CV. Gợi ý chỉ được nhắc công cụ có trong mục này, không lấy từ danh sách Kỹ năng hay dự
+    án khác (tránh gán kỹ năng cho việc không dùng kỹ năng đó).
+    """
+    texts, no = [line["text"]], line["line_no"]
+    up = no - 1
+    while (above := lines_by_no.get(up)) and not above.get("is_heading") and above.get("block") == line.get("block"):
+        texts.append(above["text"])
+        if has_date(above["text"]):
+            break
+        up -= 1
+    down = no + 1
+    while (below := lines_by_no.get(down)) and not below.get("is_heading") and below.get("block") == line.get("block"):
+        if has_date(below["text"]):
+            break
+        texts.append(below["text"])
+        down += 1
+    return " ".join(texts)
 
 
 # ---------- Chuẩn hoá yêu cầu ----------
@@ -322,6 +380,14 @@ def listing_note(skill: str, line: dict[str, Any] | None) -> str:
     )
 
 
+def metric_note(skill: str) -> str:
+    """Ghi chú cho mức 0,75: đã có câu mô tả nhưng chưa có số liệu kết quả."""
+    return (
+        f"Đã có câu mô tả bạn dùng {skill} làm gì nhưng chưa có số liệu kết quả; "
+        "thêm con số thật nếu có (thời gian, %, số người dùng)"
+    )
+
+
 def assessment(
     requirement: dict[str, Any], match: float, evidence_line: dict[str, Any] | None, note: str | None, source: str
 ):
@@ -332,7 +398,8 @@ def assessment(
         "importance": requirement["importance"],
         "weight": IMPORTANCE_WEIGHTS[requirement["importance"]],
         "match": match,
-        "status": "matched" if match == 1 else "partial" if match == 0.5 else "missing",
+        # 0,75 vẫn là "đáp ứng" (đã có câu mô tả); ghi chú nhắc thêm số liệu
+        "status": "matched" if match >= 0.75 else "partial" if match > 0 else "missing",
         "evidence": evidence_of(evidence_line) if evidence_line and match > 0 else None,
         "note": note,
         "roadmap_url": roadmap_info["roadmap_url"],
@@ -360,14 +427,16 @@ def assess_by_rules(requirement: dict[str, Any], lines: list[dict[str, Any]]) ->
         note = f"CV có {', '.join(found)} (cùng nhóm {parent}) nhưng chưa có {name}." if found else None
         return assessment(requirement, 0, None, note, "rule")
 
-    descriptive = [(line, term) for line, term in hits if is_descriptive(line)]
-    line, term = (descriptive or hits)[0]
-    match = 1 if descriptive else 0.5
+    # Dòng bằng chứng tốt nhất: có số liệu / kinh nghiệm làm việc > có câu mô tả > chỉ liệt kê
+    line, term = max(hits, key=lambda hit: evidence_level(hit[0]))
+    match = evidence_level(line)
     notes = []
     if term in child_terms:
         notes.append(f"{term} → tính là {name} (taxonomy)")
     if match == 0.5:
         notes.append(listing_note(name, line))
+    elif match == 0.75:
+        notes.append(metric_note(name))
     return assessment(requirement, match, line, "; ".join(notes) or None, "rule")
 
 
@@ -393,6 +462,8 @@ def lift_parents(
         note = f"{best['skill']} → tính là {item['skill']} (taxonomy)"
         if best["match"] == 0.5:
             note = listing_note(item["skill"], line)
+        elif best["match"] == 0.75:
+            note = metric_note(item["skill"])
         lifted.append(assessment(by_id[item["id"]], best["match"], line, note, best["source"]))
     return lifted
 

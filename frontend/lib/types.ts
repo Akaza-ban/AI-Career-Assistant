@@ -371,6 +371,8 @@ export interface Suggestion {
   skill: string
   /** Dòng trong CvDocument mà gợi ý này thay thế. */
   line_id: string
+  /** Dòng nối của gạch ý bị ngắt dòng khi trích PDF: hiển thị gộp với line_id, câu thay thế thay cả gạch ý. */
+  extra_line_ids?: string[]
   original_text: string
   /** Nội dung AI đề xuất. */
   proposed_text: string
@@ -487,6 +489,15 @@ export interface OptimizerSession {
   /** Nội dung phiên bản tạo ra khi "Hoàn tất" (đúng như file DOCX). */
   result_document: CvDocument | null
   suggestions: Suggestion[]
+  /**
+   * pending: chưa soạn gợi ý viết lại riêng cho phiên (gọi api.prepareOptimizerSuggestions); failed: soạn lỗi (AI bận /
+   * hết lượt), SV bấm Thử lại; ready (hoặc không có, ở chế độ mock): có gợi ý để duyệt.
+   */
+  suggestions_state?: "pending" | "ready" | "failed"
+  /** Số câu AI đã xem xét và cho là đã rõ, không cần sửa. */
+  kept_count?: number
+  /** Lần soạn gợi ý gần nhất. */
+  suggestions_attempted_at?: ISODateString | null
   capability_checks: CapabilityCheck[]
   entries?: CvEntry[]
   finalized_at: ISODateString | null
@@ -565,6 +576,8 @@ export interface GapAnalysis {
   /** Số gợi ý không qua guardrail, đang chờ cố vấn xem lại. */
   pending_review_count: number
   summary: string | null
+  /** Một kỹ năng của JD có trong CV mà nhà tuyển dụng nhiều khả năng sẽ hỏi sâu (chỉ có khi AI chấm). */
+  interview_focus?: string | null
   /** false khi AI không khả dụng và điểm được chấm bằng quy tắc dự phòng. */
   llm_used: boolean
 }

@@ -1,14 +1,18 @@
 """
 Trình tối ưu CV (US-SV-03, US-SV-05, PRD mục 6).
 
-- Gợi ý lấy từ kết quả phân tích (đã qua guardrail grounding). SV chấp nhận / sửa tay / bỏ qua từng gợi ý; mọi quyết
-  định được gom vào bản nháp và ghi Audit Trail (PRD 6.5). Gợi ý đã bỏ qua không được đề xuất lại (AC3).
+- Gợi ý viết lại được soạn riêng khi mở Trình tối ưu lần đầu (một lần gọi LLM chỉ để viết lại, lưu lại cho các lần
+  sau; xem services/cv_rewrite.py), qua cùng các bước kiểm tra và guardrail grounding như gợi ý của bước phân tích.
+  Không có LLM, hoặc phiên đã có quyết định trước khi có bước này, thì dùng gợi ý của lượt phân tích.
+- SV chấp nhận / sửa tay / bỏ qua từng gợi ý; mọi quyết định được gom vào bản nháp và ghi Audit Trail (PRD 6.5). Gợi ý
+  đã bỏ qua không được đề xuất lại (AC3).
 - Kỹ năng JD yêu cầu mà CV chưa có: SV tự xác nhận; AI không tự thêm vào CV. Kỹ năng SV ghi là đang học chỉ vào mục
   "Kỹ năng đang phát triển", không nằm trong nội dung được chấm khi phân tích lại.
 - "Hoàn tất" tạo đúng một phiên bản mới trong cùng CV (số phụ +1, ví dụ v1.1 → v1.2; không ghi đè bản cũ) kèm file
   DOCX, sau đó phiên tối ưu bị khoá. CV đang dùng thì bản mới tự thành bản đang dùng (xem services/cv_versions.py).
 """
 
+import logging
 import re
 import uuid
 from datetime import datetime
@@ -20,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from src.api.errors import AppError
 from src.db.models import CvEditAudit, CvExport, CvOptimization, CvVersion, GapAnalysis, JobDescription, User
-from src.services import cv_files, cv_versions, llm
+from src.services import cv_files, cv_rewrite, cv_versions, llm
 from src.services.cv_layout import SECTION_LABELS_EN, cv_language, layout_lines
 from src.services.fit_summary import entry_title
 from src.services.roadmap import get_roadmap_info
@@ -44,6 +48,8 @@ ENTRY_BLOCKS = ("projects", "experience", "activities")
 IMPORTANCE_ORDER = {"required": 0, "preferred": 1, "additional": 2}
 STATUS_OF_ACTION = {"accept": "accepted", "edit": "edited", "reject": "rejected"}
 DEVELOPING_TITLE = "Kỹ năng đang phát triển"
+
+logger = logging.getLogger(__name__)
 
 
 # ---------- Nội dung CV ----------
@@ -87,12 +93,19 @@ def cv_document(cv: CvVersion) -> dict[str, Any]:
     return {"header": header, "sections": sections, "developing_skills": cv.developing_skills or [], "lang": lang}
 
 
-def apply_changes(text: str, replacements: dict[int, str], insertions: dict[int, list[str]] | None = None) -> str:
+def apply_changes(
+    text: str,
+    replacements: dict[int, str],
+    insertions: dict[int, list[str]] | None = None,
+    removals: set[int] | None = None,
+) -> str:
     """
     Thay các dòng theo số dòng (đếm như split_cv_lines), giữ nguyên ký tự đầu dòng và các dòng còn lại.
     insertions: thêm dòng mới ngay sau một dòng (câu kinh nghiệm SV xác nhận), cùng ký tự đầu dòng với dòng đó.
+    removals: dòng nối của gạch ý bị ngắt dòng mà câu thay thế đã gộp vào (bỏ khỏi bản mới).
     """
     insertions = insertions or {}
+    removals = removals or set()
     out: list[str] = []
     line_no = 0
     for raw in text.splitlines():
@@ -101,6 +114,9 @@ def apply_changes(text: str, replacements: dict[int, str], insertions: dict[int,
             continue
         line_no += 1
         prefix = BULLET_PREFIX.match(raw)
+        if line_no in removals:
+            out.extend((prefix.group(0) if prefix else "") + extra for extra in insertions.get(line_no, []))
+            continue
         out.append((prefix.group(0) if prefix else "") + replacements[line_no] if line_no in replacements else raw)
         # Câu mới theo đúng kiểu đầu dòng của dòng phía trên (có gạch đầu dòng hay không)
         out.extend((prefix.group(0) if prefix else "") + extra for extra in insertions.get(line_no, []))
@@ -143,17 +159,46 @@ def _optimized_file_name(file_name: str, version_label: str) -> str:
 # ---------- Gợi ý & kiểm tra kỹ năng ----------
 
 
-def _suggestions(analysis: GapAnalysis, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Gợi ý của lượt phân tích kèm dòng CV được thay; bỏ gợi ý không còn khớp nguyên văn dòng nào trong CV."""
+def suggestions_state(optimization: CvOptimization) -> str:
+    """
+    pending: chưa soạn gợi ý riêng (frontend gọi prepare_suggestions); failed: soạn lỗi, chờ SV thử lại; ready: có gợi
+    ý để duyệt. Phiên đã hoàn tất, không có LLM, hoặc đã có quyết định trên gợi ý của lượt phân tích (phiên tạo trước
+    khi có bước soạn riêng) thì giữ nguyên gợi ý đang có.
+    """
+    if optimization.status != "draft" or not llm.llm_configured():
+        return "ready"
+    if optimization.rewrites is None:
+        return "ready" if optimization.decisions or optimization.contexts else "pending"
+    return "failed" if optimization.rewrites.get("status") == "failed" else "ready"
+
+
+def _suggestions(analysis: GapAnalysis, cv: CvVersion, optimization: CvOptimization) -> list[dict[str, Any]]:
+    """
+    Gợi ý của phiên (soạn riêng nếu đã có, không thì của lượt phân tích) kèm dòng CV được thay; bỏ gợi ý không còn
+    khớp nguyên văn dòng nào trong CV. Gợi ý soạn riêng thay cả gạch ý bị ngắt dòng (extra_line_nos: các dòng nối).
+    """
+    lines = split_cv_lines(cv.content_text)
+    rewrites = optimization.rewrites or {}
+    source = (
+        rewrites.get("items", [])
+        if rewrites.get("status") == "ready"
+        else (analysis.result or {}).get("suggestions", [])
+    )
     by_no = {line["line_no"]: line for line in lines}
+    units = {u["line_no"]: u for u in cv_rewrite.merge_wrapped(lines, cv.content_text)}
     result = []
-    for s in (analysis.result or {}).get("suggestions", []):
+    for s in source:
+        if "extra_line_nos" in s:
+            unit = units.get(s["line_no"])
+            if unit is not None and unit["text"] == s["original_text"]:
+                result.append({**s, "extra_line_nos": unit["extra_line_nos"]})
+            continue
         line = by_no.get(s.get("line_no"))
         if line is None or line["text"] != s["original_text"]:
             # Lượt phân tích cũ chưa lưu số dòng: tìm theo nguyên văn
             line = next((x for x in lines if not x["is_heading"] and x["text"] == s["original_text"]), None)
         if line is not None:
-            result.append({**s, "line_no": line["line_no"]})
+            result.append({**s, "line_no": line["line_no"], "extra_line_nos": []})
     return result
 
 
@@ -220,7 +265,10 @@ async def provide_context(
         raise AppError(422, "Hãy nhập ngữ cảnh trước khi gửi.", "context_required")
     if len(text) > MAX_CONTEXT_CHARS:
         raise AppError(422, f"Ngữ cảnh tối đa {MAX_CONTEXT_CHARS} ký tự.", "context_too_long")
-    base = next((s for s in _suggestions(analysis, split_cv_lines(cv.content_text)) if s["id"] == suggestion_id), None)
+    base = next(
+        (s for s in _suggestions(analysis, cv, optimization) if s["id"] == suggestion_id),
+        None,
+    )
     if base is None:
         raise AppError(404, "Không tìm thấy gợi ý.", "suggestion_not_found")
     proposed = None
@@ -248,6 +296,7 @@ def _suggestion_out(s: dict[str, Any], decision: dict[str, Any] | None) -> dict[
         "kind": _kind(s["skill"], s["original_text"], s["suggested_text"]),
         "skill": s["skill"],
         "line_id": f"l{s['line_no']}",
+        "extra_line_ids": [f"l{n}" for n in s.get("extra_line_nos", [])],
         "original_text": s["original_text"],
         "proposed_text": s["suggested_text"],
         "final_text": decision["final_text"] if status in ("accepted", "edited") else None,
@@ -334,6 +383,16 @@ def session(db: Session, user: User, analysis_id: str) -> dict[str, Any]:
     lines = split_cv_lines(cv.content_text)
     result_cv = db.get(CvVersion, optimization.result_cv_version_id) if optimization.result_cv_version_id else None
     answers = optimization.capability_answers or {}
+    state = suggestions_state(optimization)
+    rewrites = optimization.rewrites or {}
+    suggestions = (
+        [
+            _suggestion_out(s, (optimization.decisions or {}).get(s["id"]))
+            for s in _with_context(_suggestions(analysis, cv, optimization), optimization)
+        ]
+        if state == "ready"
+        else []
+    )
     return {
         "analysis_id": analysis.id,
         "status": optimization.status,
@@ -353,16 +412,43 @@ def session(db: Session, user: User, analysis_id: str) -> dict[str, Any]:
         "result_cv": result_cv,
         "document": cv_document(cv),
         "result_document": cv_document(result_cv) if result_cv else None,
-        "suggestions": [
-            _suggestion_out(s, (optimization.decisions or {}).get(s["id"]))
-            for s in _with_context(_suggestions(analysis, lines), optimization)
-        ],
+        "suggestions": suggestions,
+        "suggestions_state": state,
+        "kept_count": rewrites.get("kept", 0) if rewrites.get("status") == "ready" else 0,
+        "suggestions_attempted_at": datetime.fromisoformat(rewrites["attempted_at"])
+        if rewrites.get("attempted_at")
+        else None,
         "capability_checks": [_check_out(r, jd, answers.get(r["id"])) for r in _missing(analysis)],
         "entries": [
             {"id": e["id"], "label": e["label"], "after_line_id": f"l{e['after_line_no']}"} for e in cv_entries(lines)
         ],
         "finalized_at": optimization.finalized_at,
     }
+
+
+async def prepare_suggestions(db: Session, user: User, analysis_id: str, now: datetime) -> None:
+    """
+    Soạn gợi ý viết lại riêng cho phiên (lần đầu mở Trình tối ưu, hoặc SV bấm Thử lại sau khi lỗi). Đã có gợi ý thì
+    không gọi lại LLM. Lỗi LLM (bận, hết lượt) thì ghi "failed"; CV và các phần khác của phiên không bị ảnh hưởng.
+    """
+    analysis, cv, optimization = _load(db, user, analysis_id)
+    if suggestions_state(optimization) not in ("pending", "failed"):
+        return
+    jd = db.get(JobDescription, analysis.jd_id)
+    requirements = (analysis.result or {}).get("requirements", [])
+    try:
+        drafted = await cv_rewrite.draft_rewrites(
+            split_cv_lines(cv.content_text), requirements, jd.title if jd else "", cv.content_text
+        )
+        rewrites = {"status": "ready", **drafted, "attempted_at": now.isoformat()}
+    except Exception as e:
+        logger.warning("Soạn gợi ý viết lại cho %s thất bại: %s", analysis_id, e)
+        rewrites = {"status": "failed", "items": [], "kept": 0, "attempted_at": now.isoformat()}
+    # Mở ở hai tab cùng lúc: tab kia đã soạn xong (SV có thể đã duyệt gợi ý) thì giữ, không ghi đè
+    db.refresh(optimization)
+    if suggestions_state(optimization) in ("pending", "failed"):
+        optimization.rewrites = rewrites
+        db.commit()
 
 
 def decide(
@@ -378,11 +464,7 @@ def decide(
     analysis, cv, optimization = _load(db, user, analysis_id)
     _require_draft(optimization)
     suggestion = next(
-        (
-            s
-            for s in _with_context(_suggestions(analysis, split_cv_lines(cv.content_text)), optimization)
-            if s["id"] == suggestion_id
-        ),
+        (s for s in _with_context(_suggestions(analysis, cv, optimization), optimization) if s["id"] == suggestion_id),
         None,
     )
     if suggestion is None:
@@ -409,6 +491,13 @@ def decide(
             )
     else:
         final = suggestion["suggested_text"] if decision == "accept" else suggestion["original_text"]
+    if decision in ("accept", "edit") and _PLACEHOLDER.search(final):
+        # Chỗ trống [ ] không bao giờ được vào CV: SV điền số thật hoặc xoá chỗ trống trước
+        raise AppError(
+            422,
+            "Câu còn chỗ trống [ ]. Hãy điền số liệu thật của bạn hoặc xoá chỗ trống trước khi áp dụng.",
+            "placeholder_left",
+        )
     if decision != "undo":
         decisions[suggestion_id] = {"action": decision, "final_text": final}
 
@@ -600,12 +689,15 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
     analysis, cv, optimization = _load(db, user, analysis_id)
     _require_draft(optimization)
 
-    suggestions = {s["id"]: s for s in _suggestions(analysis, split_cv_lines(cv.content_text))}
-    replacements = {
-        suggestions[sid]["line_no"]: d["final_text"]
+    suggestions = {s["id"]: s for s in _suggestions(analysis, cv, optimization)}
+    applied = [
+        (suggestions[sid], d["final_text"])
         for sid, d in (optimization.decisions or {}).items()
         if d["action"] in ("accept", "edit") and sid in suggestions
-    }
+    ]
+    replacements = {s["line_no"]: final for s, final in applied}
+    # Câu thay thế đã gộp các dòng nối của gạch ý bị ngắt dòng
+    removals = {n for s, _ in applied for n in s.get("extra_line_nos", [])}
     missing = {r["id"]: r for r in _missing(analysis)}
     learning = [
         {"name": missing[rid]["skill"], "note": a["learning_note"]}
@@ -633,7 +725,7 @@ def finalize(db: Session, user: User, analysis_id: str, now: datetime) -> None:
         file_type="docx",
         size_bytes=0,
         page_count=None,
-        content_text=apply_changes(cv.content_text, replacements, insertions),
+        content_text=apply_changes(cv.content_text, replacements, insertions, removals),
         origin="optimized",
         is_active=False,
         is_draft=False,

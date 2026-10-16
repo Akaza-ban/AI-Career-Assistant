@@ -46,7 +46,7 @@ def _entry_of(line_no: int, lines: list[dict[str, Any]]) -> str | None:
 def compose_summary(assessments: list[dict[str, Any]], lines: list[dict[str, Any]]) -> str | None:
     """
     Đáp ứng tốt → mới liệt kê (kèm việc cần làm) → còn thiếu (nên học, không khuyên ghi vào CV).
-    Thiếu yêu cầu Bắt buộc thì câu đó đứng đầu.
+    Thiếu yêu cầu Bắt buộc thì câu đó đứng đầu, kèm rủi ro bị loại ở vòng lọc hồ sơ.
     """
     if not assessments:
         return None
@@ -59,9 +59,13 @@ def compose_summary(assessments: list[dict[str, Any]], lines: list[dict[str, Any
     missing_additional = skills("missing", "additional")
 
     strengths = f"Đáp ứng tốt: {_join(matched)}." if matched else None
+    no_metric = [a["skill"] for a in assessments if a["status"] == "matched" and a["match"] < 1]
+    if no_metric:
+        strengths += f" Với {_join(no_metric)}, thêm kết quả đo được (thời gian, %, số người dùng) nếu bạn có số thật."
     gaps = []
     if missing_required:
         gaps.append(f"Còn thiếu {len(missing_required)} yêu cầu Bắt buộc: {_join(missing_required)}.")
+        gaps.append("Thiếu yêu cầu Bắt buộc là lý do phổ biến khiến CV bị loại ở vòng lọc hồ sơ.")
     if missing_preferred:
         gaps.append(f"Còn thiếu yêu cầu Ưu tiên: {_join(missing_preferred)}.")
     if gaps:
@@ -84,5 +88,17 @@ def compose_summary(assessments: list[dict[str, Any]], lines: list[dict[str, Any
         else None
     )
 
+    outlook = None
+    if matched and not gaps and not listed:
+        outlook = (
+            "CV đã có bằng chứng cho các yêu cầu chính; ở vòng phỏng vấn, nhà tuyển dụng thường hỏi sâu cách bạn đã "
+            "làm, nên chuẩn bị kể cụ thể vài việc tiêu biểu."
+        )
+    elif len(missing_required) >= 3 and not matched and not listed:
+        outlook = (
+            "Khoảng cách với vị trí này còn lớn, nhưng có thể thu hẹp dần: bắt đầu từ một yêu cầu Bắt buộc, làm một "
+            "dự án nhỏ dùng kỹ năng đó rồi cập nhật vào CV."
+        )
+
     order = [*gaps, listing, strengths, extra] if missing_required else [strengths, listing, *gaps, extra]
-    return " ".join(s for s in order if s) or None
+    return " ".join(s for s in [*order, outlook] if s) or None

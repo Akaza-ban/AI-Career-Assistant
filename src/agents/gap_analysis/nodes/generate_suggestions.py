@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from src.agents.gap_analysis.state import GapAnalysisState
+from src.services.cv_rewrite import check_rewrite, wrapped_line_nos
 from src.services.fit_summary import compose_summary
 from src.services.skill_matching import SECTION_LABELS, compute_score, is_descriptive
 
@@ -12,14 +13,18 @@ def build_suggestions(
     raw_suggestions: list[dict[str, Any]],
     assessments: list[dict[str, Any]],
     lines: list[dict[str, Any]],
+    cv_raw: str = "",
 ) -> list[dict[str, Any]]:
     """
     Chuẩn hoá gợi ý viết lại từ LLM. Chỉ giữ gợi ý trỏ tới một dòng mô tả việc đã làm có thật trong CV
-    (bỏ dòng liệt kê kỹ năng), thuộc yêu cầu CV đã đáp ứng (Match > 0) — không bao giờ tạo câu mới cho kỹ năng
-    CV chưa có (PRD mục 6.1).
+    (bỏ dòng liệt kê kỹ năng, dòng tiêu đề), thuộc yêu cầu CV đã đáp ứng (Match > 0) — không bao giờ tạo câu mới cho
+    kỹ năng CV chưa có (PRD mục 6.1). Bỏ gợi ý làm mất số thật, đổi ngôn ngữ dòng gốc hoặc nhắc công cụ / tổ chức
+    không có trong mục CV của dòng đó.
     """
     by_id = {a["id"]: a for a in assessments}
     lines_by_no = {line["line_no"]: line for line in lines}
+    # Gạch ý bị ngắt dòng khi trích PDF: không viết lại từng mẩu (Trình tối ưu viết lại cả gạch ý)
+    wrapped = wrapped_line_nos(lines, cv_raw) if cv_raw else set()
     result: list[dict[str, Any]] = []
     used_lines: set[int] = set()
     for raw in raw_suggestions:
@@ -28,10 +33,17 @@ def build_suggestions(
             line = lines_by_no[int(raw.get("line"))]
         except (KeyError, TypeError, ValueError):
             continue
-        rewrite = str(raw.get("rewrite") or "").strip()
-        if not requirement or requirement["match"] == 0 or not is_descriptive(line) or line["line_no"] in used_lines:
+        if (
+            not requirement
+            or requirement["match"] == 0
+            or not is_descriptive(line)
+            or line["line_no"] in used_lines
+            or line["line_no"] in wrapped
+        ):
             continue
-        if not rewrite or rewrite.lower() == line["text"].lower():
+        # Bỏ gợi ý trùng câu gốc, làm mất số thật, đổi ngôn ngữ dòng gốc hoặc nhắc công cụ ngoài mục CV của dòng
+        rewrite = check_rewrite(line, str(raw.get("rewrite") or ""), lines_by_no)
+        if rewrite is None:
             continue
         used_lines.add(line["line_no"])
         result.append(
@@ -65,6 +77,10 @@ def fallback_summary(assessments: list[dict[str, Any]], score: float | None) -> 
         parts.append(f"Mới chỉ liệt kê, chưa có mô tả sử dụng: {', '.join(partial)}.")
     if missing:
         parts.append(f"Chưa tìm thấy trong CV: {', '.join(missing)}.")
+    if matched and not partial and not missing:
+        parts.append("Ở vòng phỏng vấn, nhà tuyển dụng thường hỏi sâu cách bạn đã làm; nên chuẩn bị kể cụ thể.")
+    elif missing and not matched and not partial:
+        parts.append("Có thể bắt đầu từ một kỹ năng còn thiếu, làm một dự án nhỏ rồi cập nhật vào CV.")
     return " ".join(parts)
 
 
@@ -74,7 +90,9 @@ async def generate_suggestions_node(state: GapAnalysisState) -> dict[str, Any]:
     2 lệnh gọi/lượt), tính CV–JD Matching Score và soạn khuyến nghị.
     """
     assessments = state.get("assessments", [])
-    suggestions = build_suggestions(state.get("raw_suggestions", []), assessments, state.get("cv_lines", []))
+    suggestions = build_suggestions(
+        state.get("raw_suggestions", []), assessments, state.get("cv_lines", []), state.get("cv_raw", "")
+    )
     score, breakdown = compute_score(assessments)
 
     missing = [a["skill"] for a in assessments if a["status"] == "missing"]
