@@ -5,6 +5,7 @@ import io
 from docx import Document
 
 from src.services.cv_files import build_docx
+from src.services.cv_layout import _MISREAD_BULLET_RE as _MISREAD_BULLET
 from src.services.cv_layout import (
     cv_language,
     extract_layout_aware_text,
@@ -12,7 +13,6 @@ from src.services.cv_layout import (
     layout_lines,
     split_date,
 )
-from src.services.ocr import _MISREAD_BULLET
 from src.services.skill_matching import split_cv_lines
 
 # Văn bản trích từ PDF có chữ: câu dài bị xuống dòng, không còn ký hiệu đầu dòng

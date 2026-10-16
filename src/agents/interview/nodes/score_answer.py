@@ -45,6 +45,22 @@ class STARScoreOutput(BaseModel):
         return "\n".join(line for line in lines if line)
 
 
+# Chủ ngữ ngôi thứ nhất số ít ("tôi", "em", "mình"), không tính "nhóm em", "chúng tôi", "anh em"
+_FIRST_PERSON = re.compile(r"(?<!nhóm )(?<!team )(?<!chúng )(?<!anh )(?<!các )\b(?:tôi|em|mình|i|my)\b", re.IGNORECASE)
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+_TEAM = re.compile(r"\b(?:nhóm (?:em|tôi|mình)|chúng (?:em|tôi|mình)|team (?:em|tôi|mình)|we|our)\b", re.IGNORECASE)
+TEAM_ONLY_CAP = 3.0
+
+
+def team_only(text: str) -> bool:
+    """Câu trả lời chỉ kể việc của cả nhóm ("nhóm em", "chúng em"), không có chỗ nào nói phần việc của riêng mình."""
+    return bool(_TEAM.search(text)) and not _FIRST_PERSON.search(text)
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in re.split(r"[.!?;\n]+", text) if len(s.split()) >= 3]
+
+
 def evaluate_answer_fallback(
     user_answer: str,
     job_role: str,
@@ -52,55 +68,70 @@ def evaluate_answer_fallback(
     total_rounds: int,
 ) -> STARScoreOutput:
     """
-    Quy tắc chấm điểm dự phòng (Structural Fallback):
-    Được kích hoạt khi LLM lỗi mạng hoặc không có API key.
-    Đánh giá dựa trên độ hoàn chỉnh cấu trúc văn bản (độ dài, số câu) một cách khách quan,
-    tuyệt đối không dùng danh sách từ khóa thụ động để tránh phán đoán sai lệch hoặc bị gian lận từ khóa.
+    Chấm dự phòng khi LLM lỗi hoặc không có API key. Không đếm từ khoá (dễ bị nhồi từ, lệch theo ngành), chỉ dùng
+    tín hiệu khách quan áp dụng cho mọi vị trí: có con số → Kết quả, có vai trò cá nhân → Nhiệm vụ,
+    kể đủ nhiều bước (≥ 4 câu) → Hành động; câu trả lời chủ yếu là danh sách từ khoá → điểm thấp.
+    Điểm tối đa 4,0 vì đây chỉ là ước lượng (không hiểu nghĩa nên không nhận ra câu lạc đề).
     """
-    clean_text = user_answer.strip()
-    words = clean_text.split()
-    word_count = len(words)
+    words = user_answer.split()
+    sentences = _sentences(user_answer)
+    has_numbers = bool(re.search(r"\d", _YEAR.sub(" ", user_answer)))
+    personal = bool(_FIRST_PERSON.search(user_answer))
+    detailed = len(sentences) >= 4
+    # Danh sách kỹ năng / công cụ ("Python, Docker, Redis, ..."): cứ khoảng 5 từ lại có một dấu phân cách
+    keyword_list = len(re.findall(r"[,/;]", user_answer)) >= 0.2 * max(len(words), 1)
 
-    # Đếm số câu hoàn chỉnh dựa trên dấu kết thúc câu
-    sentences = [s.strip() for s in re.split(r"[.!?\n]+", clean_text) if len(s.strip()) > 3]
-    sentence_count = len(sentences)
-
-    # Thang điểm cấu trúc trung lập (0.0 - 5.0)
-    # Câu trả lời quá ngắn (< 25 từ hoặc < 2 câu): 2.0 - 2.5
-    # Câu trả lời cơ bản (25 - 60 từ): 3.0
-    # Câu trả lời chi tiết (> 60 từ và >= 3 câu): 3.5
-    if word_count < 25 or sentence_count < 2:
-        base_score = 2.0
-    elif word_count < 60 or sentence_count < 3:
-        base_score = 3.0
+    if len(words) < 15:
+        # Quá ngắn để có câu chuyện STAR
+        sit = task = action = result = 1.0
+    elif keyword_list:
+        sit = task = action = result = 1.5
     else:
-        base_score = 3.5
+        base = 2.5 if len(words) >= 40 else 2.0
+        sit = base + (0.5 if len(sentences) >= 2 else 0.0)
+        task = base + (1.0 if personal else 0.0)
+        action = base + (1.0 if detailed else 0.0) + (0.5 if len(words) >= 90 else 0.0)
+        result = base - 0.5 + (1.5 if has_numbers else 0.0)
+    scores = [min(4.0, x) for x in (sit, task, action, result)]
 
-    sit_score = base_score
-    task_score = base_score
-    action_score = min(5.0, base_score + (0.5 if sentence_count >= 4 else 0.0))
-    result_score = base_score
-
-    # Phản hồi 3 phần chuẩn tắc: Điểm tốt / Cần cải thiện / Gợi ý trả lời
+    if keyword_list:
+        good = f"Bạn đã nêu các kỹ năng, công cụ liên quan tới vị trí {job_role}."
+    elif has_numbers:
+        good = "Bạn đã nêu con số cụ thể cho kết quả."
+    elif personal:
+        good = "Bạn đã nói về phần việc của chính mình."
+    else:
+        good = f"Bạn đã kể một trải nghiệm có liên quan tới vị trí {job_role}."
+    if keyword_list:
+        improve = "Câu trả lời mới liệt kê kỹ năng, chưa kể một việc cụ thể bạn đã làm theo đúng câu hỏi."
+    elif not personal:
+        improve = "Chưa rõ phần việc của riêng bạn (Nhiệm vụ, Hành động); tránh chỉ nói chung về cả nhóm."
+    elif not detailed:
+        improve = "Các bước bạn đã làm còn ít chi tiết (Hành động)."
+    elif not has_numbers:
+        improve = "Phần Kết quả chưa có con số hoặc bài học cụ thể."
+    else:
+        improve = "Nêu rõ hơn bối cảnh và khó khăn lúc đầu (Tình huống)."
     feedback = "\n".join(
         [
-            f"Điểm tốt: Câu trả lời đã được ghi nhận với cấu trúc {word_count} từ cho vị trí {job_role}.",
-            "Cần cải thiện: Hãy đảm bảo trình bày đầy đủ cả 4 phần STAR: Bối cảnh (S), Trách nhiệm cá nhân (T), "
-            "Quyết định kỹ thuật & Trade-offs (A), và Kết quả đo lường cụ thể (R).",
-            "Gợi ý trả lời: Trong phỏng vấn kỹ thuật, hãy luôn nêu rõ vị trí của công nghệ trong hệ thống, "
-            "lý do tại sao chọn công nghệ này thay vì phương án khác và kết quả đo lường được.",
+            f"Điểm tốt: {good}",
+            f"Cần cải thiện: {improve}",
+            "Gợi ý trả lời: Nói rõ vai trò của riêng bạn, các bước đã làm theo thứ tự và kết quả thật (con số hoặc "
+            "điều bạn rút ra được).",
+        ]
+    )
         ]
     )
 
     next_q = None
     if current_round < total_rounds:
-        next_q = f"Vòng {current_round + 1}: Hãy chia sẻ về một tình huống bạn gặp mâu thuẫn kỹ thuật với đồng đội và cách bạn giải quyết?"
+        next_q = f"Vòng {current_round + 1}: Hãy kể về một lần bạn bất đồng ý kiến với đồng đội và cách bạn xử lý."
 
     return STARScoreOutput(
-        situation_score=round(sit_score, 2),
-        task_score=round(task_score, 2),
-        action_score=round(action_score, 2),
-        result_score=round(result_score, 2),
+        situation_score=scores[0],
+        task_score=scores[1],
+        action_score=scores[2],
+        result_score=scores[3],
         feedback_text=feedback,
         next_question=next_q,
     )
@@ -120,7 +151,7 @@ async def call_llm_for_scoring(
     if not api_key or is_placeholder:
         return None
 
-    return await invoke_json(prompt, temperature=0.2, timeout=timeout)
+    return await invoke_json(prompt, temperature=0.0, timeout=timeout)
 
 
 async def score_answer_with_llm(
@@ -138,69 +169,45 @@ async def score_answer_with_llm(
     - Validate JSON đầu ra qua Pydantic STARScoreOutput.
     - Retry tối đa 1 lần nếu LLM trả về JSON lỗi hoặc sai định dạng.
     """
-    is_last_round = current_round >= total_rounds
-
-    example_next_q = "null" if is_last_round else '"Câu hỏi cho vòng kế tiếp..."'
+    question = current_question or f"Hãy chia sẻ một trải nghiệm liên quan đến vị trí {job_role}."
 
     base_prompt = (
-        "Bạn là Chuyên gia Tuyển dụng Kỹ thuật Cấp cao (Senior Technical Interviewer & Engineering Lead).\n"
-        "Nhiệm vụ của bạn là thẩm định câu trả lời phỏng vấn theo phương pháp STAR Kỹ thuật (Technical STAR). "
-        "Hãy đánh giá một cách CHỦ ĐỘNG, SẮC BÉN VÀ KHẮT KHE, tuyệt đối không chấm điểm theo hình thức hay bắt từ khóa thụ động.\n\n"
+        f"Bạn là người phỏng vấn tuyển dụng cho vị trí {job_role}, chấm câu trả lời của một sinh viên theo phương "
+        "pháp STAR. Chấm theo những gì ứng viên thực sự kể, không suy đoán thêm.\n\n"
         "=== THÔNG TIN PHỎNG VẤN ===\n"
-        f"- Vị trí tuyển dụng: {job_role}\n"
-        f"- Vòng phỏng vấn: Vòng {current_round} / Tổng số {total_rounds} vòng\n"
-        f"- Câu hỏi của nhà tuyển dụng: {current_question or f'Hãy chia sẻ kinh nghiệm kỹ thuật liên quan đến vị trí {job_role}.'}\n"
+        f"- Vòng hiện tại: {current_round} / {total_rounds}\n"
+        f"- Câu hỏi: {question}\n"
         f"- Câu trả lời của ứng viên:\n{user_answer}\n\n"
-        "=== 4 NGUYÊN TẮC THẨM ĐỊNH CHỦ ĐỘNG (BẮT BUỘC ÁP DỤNG) ===\n"
-        "1. KIỂM TRA ĐỘ TRÚNG ĐÍCH (Relevance Check): Ứng viên có trả lời ĐÚNG TRỌNG TÂM câu hỏi không? "
-        "Nếu trả lời lạc đề, nói vòng vo hoặc chỉ nhồi nhét từ khóa sáo rỗng (keyword stuffing), TẤT CẢ các điểm số KHÔNG ĐƯỢC VƯỢT QUÁ 2.0!\n"
-        "2. KIỂM TRA BẢN CHẤT KỸ THUẬT (Technical Depth: What - Why - Trade-off):\n"
-        "   - CÔNG NGHỆ DÙNG LÀM GÌ (What): Vị trí và vai trò của công nghệ đó trong kiến trúc hệ thống là gì?\n"
-        "   - TẠI SAO LẠI CHỌN CÔNG NGHỆ NÀY (Why): Có so sánh với các phương án thay thế khác không (ví dụ: Redis vs. Memcached, "
-        "FastAPI vs. Django, PostgreSQL vs. MongoDB, Microservices vs. Monolith)?\n"
-        "   - ƯU ĐIỂM VÀ ĐÁNH ĐỔI (Trade-offs): Không có công nghệ nào hoàn hảo tuyệt đối — ứng viên có nhận thức được ưu điểm vượt trội "
-        "và cái giá phải đánh đổi (chi phí RAM, độ phức tạp bảo trì, tính nhất quán dữ liệu...) trong bài toán đó không?\n"
-        "3. TÁCH BẠCH ĐÓNG GÓP CÁ NHÂN (I vs. We): Nếu ứng viên dùng 'chúng em / nhóm em' và nói chung chung về công việc tập thể, "
-        "không nêu rõ trách nhiệm và dòng code/tính năng do chính mình trực tiếp làm, điểm Task và Action TỐI ĐA CHỈ LÀ 3.0.\n"
-        "4. KẾT QUẢ PHẢI XÁC THỰC (Result Verification): Kết quả phải đo lường được (số liệu %, ms, throughput, tài nguyên tiết kiệm) "
-        "HOẶC là bài học kinh nghiệm sâu sắc về kiến trúc; bác bỏ các kết luận chung chung như 'dự án chạy tốt', 'được khen'.\n\n"
-        "=== RUBRIC CHẤM ĐIỂM CHI TIẾT (THANG 0.0 - 5.0 CHO MỖI TIÊU CHÍ) ===\n"
-        "- situation_score (Bối cảnh & Thách thức):\n"
-        "  + 0.0 - 2.5: Bối cảnh mơ hồ, không rõ bài toán xảy ra ở đâu, quy mô và thách thức kỹ thuật là gì.\n"
-        "  + 3.0 - 3.5: Nêu được dự án/công ty và bài toán kỹ thuật cơ bản.\n"
-        "  + 4.0 - 5.0: Bối cảnh sắc nét, nêu rõ ràng kiến trúc hệ thống, quy mô dữ liệu/traffic hoặc ràng buộc thực tế.\n\n"
-        "- task_score (Nhiệm vụ & Vai trò cá nhân):\n"
-        "  + 0.0 - 2.5: Nói việc của cả nhóm, không rõ ứng viên được giao việc gì.\n"
-        "  + 3.0 - 3.5: Xác định được vai trò cá nhân nhưng KPI/mục tiêu kỹ thuật cần đạt chưa rành mạch.\n"
-        "  + 4.0 - 5.0: Phân tách rõ ràng trách nhiệm độc lập của bản thân (I) và chỉ tiêu kỹ thuật cụ thể cần hoàn thành.\n\n"
-        "- action_score (Hành động & Quyết định Kỹ thuật / Trade-offs - TIÊU CHÍ QUAN TRỌNG NHẤT):\n"
-        "  + 0.0 - 2.5: Chỉ liệt kê tên công nghệ như học vẹt, lý thuyết suông; không có hành động cụ thể.\n"
-        "  + 3.0 - 3.5 (Mức WHAT): Nêu được công nghệ dùng để làm gì, nhưng CHƯA giải thích lý do tại sao chọn công nghệ này mà không chọn giải pháp khác.\n"
-        "  + 4.0 - 5.0 (Mức WHY & TRADE-OFFS): Giải thích trọn vẹn: Công nghệ dùng để làm gì? TẠI SAO LẠI CHỌN công nghệ này (so sánh với các phương án thay thế)? và ƯU ĐIỂM / SỰ ĐÁNH ĐỔI (Trade-offs) trong bài toán đó.\n\n"
-        "- result_score (Kết quả & Bài học):\n"
-        "  + 0.0 - 2.5: Không có kết quả đầu ra, hoặc kết quả sáo rỗng không ăn khớp với bài toán.\n"
-        "  + 3.0 - 3.5: Có kết quả công việc nhưng thiếu số liệu minh chứng cụ thể.\n"
-        "  + 4.0 - 5.0: Có số liệu kỹ thuật đo lường rõ ràng (%, ms, throughput, tài nguyên) HOẶC bài học kinh nghiệm sâu sắc giúp tối ưu dự án lâu dài.\n\n"
+        "=== THANG ĐIỂM (0.0–5.0 cho mỗi tiêu chí) ===\n"
+        "Mức chung: 0–1 = không có hoặc không liên quan; 2–3 = có nhưng chung chung; 4 = rõ và cụ thể; "
+        "5 = rất cụ thể, thuyết phục.\n"
+        "1. situation_score: bối cảnh (dự án, môn học, công việc, câu lạc bộ...) và khó khăn lúc đó có rõ không.\n"
+        "2. task_score: mục tiêu và phần việc của RIÊNG ứng viên có rõ không.\n"
+        "3. action_score: các bước ứng viên đã làm và lý do chọn cách làm đó. Tuỳ vị trí, ví dụ: kỹ thuật = giải "
+        "pháp, công cụ đã dùng; phân tích = dữ liệu nào, phân tích ra sao; marketing = kênh, nội dung, cách theo "
+        "dõi hiệu quả.\n"
+        "4. result_score: kết quả đạt được. Con số đo được (thời gian, %, số người, doanh số...) hoặc phản hồi cụ "
+        "thể được 4–5; chưa có kết quả đo được nhưng nêu rõ bài học rút ra được tối đa 3.\n\n"
+        "=== QUY TẮC BẮT BUỘC ===\n"
+        "- Câu trả lời lạc đề, không trả lời câu hỏi, hoặc chỉ liệt kê từ khoá / công cụ mà không kể việc đã làm: "
+        "MỌI tiêu chí tối đa 2.0.\n"
+        '- Chỉ nói "nhóm em / chúng em" mà không nêu phần việc của riêng ứng viên: task_score và action_score '
+        "tối đa 3.0.\n"
+        "- Không cộng điểm vì câu dài hay dùng nhiều thuật ngữ.\n\n"
         "=== YÊU CẦU NHẬN XÉT (feedback_text) ===\n"
         "Viết bằng tiếng Việt, văn bản thường (KHÔNG markdown: không **, không `, không gạch đầu dòng), "
         "tối đa khoảng 120 từ, đúng 3 dòng ngăn bằng ký tự xuống dòng \\n, mỗi dòng bắt đầu bằng nhãn sau:\n"
-        "Điểm tốt: <nêu cụ thể 1 giải pháp kỹ thuật hoặc tư duy phân tích tốt nhất mà ứng viên đã thể hiện>\n"
-        "Cần cải thiện: <chỉ rõ điểm yếu cốt lõi: NẾU chưa giải thích lý do chọn công nghệ hoặc trade-off so sánh, BẮT BUỘC chỉ rõ; NẾU nói chung chung nhóm em, nhắc làm rõ vai trò cá nhân>\n"
-        "Gợi ý trả lời: <1 câu nói mẫu cụ thể hướng dẫn cách so sánh lý do chọn công nghệ hoặc đưa số liệu đo lường vào bài nói>\n\n"
-        "=== YÊU CẦU CÂU HỎI TIẾP THEO ===\n"
-        + (
-            "Đây là vòng cuối cùng (Vòng kết thúc), trường 'next_question' BẮT BUỘC là null.\n"
-            if is_last_round
-            else f"Vì chưa phải vòng cuối, hãy gợi ý 1 câu hỏi phỏng vấn kỹ thuật chuyên sâu kế tiếp (Vòng {current_round + 1}) phù hợp với vị trí {job_role}.\n"
-        )
-        + "\n=== ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ) ===\n"
+        "Điểm tốt: <điều ứng viên đã làm tốt, cụ thể theo câu trả lời>\n"
+        "Cần cải thiện: <phần STAR còn thiếu hoặc yếu nhất, nói rõ thiếu gì>\n"
+        "Gợi ý trả lời: <2–3 ý cụ thể nên kể thêm cho ĐÚNG câu hỏi này, ví dụ vai trò cá nhân, "
+        "các bước đã làm, kết quả đo được; chỉ gợi ý, không viết sẵn câu trả lời, không bịa sự việc thay ứng viên>\n\n"
+        "=== ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ) ===\n"
         "{\n"
-        '  "situation_score": 4.0,\n'
-        '  "task_score": 3.5,\n'
-        '  "action_score": 4.5,\n'
-        '  "result_score": 3.0,\n'
-        '  "feedback_text": "Điểm tốt: Nêu rõ bài toán bottleneck và giải pháp cache.\\nCần cải thiện: Phần Action cần giải thích rõ vì sao chọn Redis thay vì Memcached và ưu điểm cụ thể.\\nGợi ý trả lời: Thêm: Tôi chọn Redis thay vì Memcached vì cần cấu trúc Sorted Set cho bảng xếp hạng real-time...",\n'
-        f'  "next_question": {example_next_q}\n'
+        '  "situation_score": 3.5,\n'
+        '  "task_score": 3.0,\n'
+        '  "action_score": 3.5,\n'
+        '  "result_score": 2.5,\n'
+        '  "feedback_text": "Điểm tốt: ...\\nCần cải thiện: ...\\nGợi ý trả lời: ..."\n'
         "}"
     )
 
@@ -209,9 +216,8 @@ async def score_answer_with_llm(
         raw_json = await call_llm_for_scoring(base_prompt)
         if raw_json:
             validated = STARScoreOutput.model_validate(raw_json)
-            # Ràng buộc vòng cuối
-            if is_last_round:
-                validated.next_question = None
+            # Câu hỏi kế tiếp do ask_question chọn từ ngân hàng câu hỏi, không lấy câu LLM tự nghĩ
+            validated.next_question = None
             return validated
     except Exception:
         logger.warning("Lần 1 chấm điểm LLM thất bại. Đang thực hiện RETRY lần 1...")
@@ -226,8 +232,7 @@ async def score_answer_with_llm(
         raw_json = await call_llm_for_scoring(retry_prompt, timeout=15.0)
         if raw_json:
             validated = STARScoreOutput.model_validate(raw_json)
-            if is_last_round:
-                validated.next_question = None
+            validated.next_question = None
             return validated
     except Exception:
         logger.error("Retry lần 1 vẫn thất bại. Kích hoạt Rule-based Fallback.")
@@ -260,6 +265,9 @@ async def score_answer_node(state: InterviewState) -> dict[str, Any]:
         current_round=current_round,
         total_rounds=total_rounds,
     )
+    if team_only(user_answer):
+        score_result.task_score = min(score_result.task_score, TEAM_ONLY_CAP)
+        score_result.action_score = min(score_result.action_score, TEAM_ONLY_CAP)
 
     is_finished = current_round >= total_rounds
     next_q = None if is_finished else score_result.next_question

@@ -258,7 +258,7 @@ async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
                 {
                     "requirement_id": "r1",
                     "line": 5,
-                    "rewrite": "Viết truy vấn SQL giúp giảm 30% thời gian làm báo cáo",
+                    "rewrite": "Viết truy vấn SQL tổng hợp dữ liệu đơn hàng cho báo cáo tháng, giúp giảm 30% thời gian làm báo cáo",
                     "reason": "Định lượng",
                 },
                 # Dòng chỉ liệt kê kỹ năng → không viết lại

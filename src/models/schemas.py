@@ -107,7 +107,8 @@ class CvVersionResponse(BaseModel):
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
     read_by_ocr: bool = Field(
-        default=False, description="Chỉ có ở phản hồi tải lên: chữ được đọc bằng OCR vì file là PDF scan"
+        default=False,
+        description="Chữ được đọc bằng OCR vì file gốc là PDF scan (bản tối ưu / khôi phục thừa hưởng từ bản gốc)",
     )
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
     status: Literal["processing", "ready", "failed"] = Field(default="ready", description="Trạng thái xử lý")
@@ -445,6 +446,9 @@ class GapAnalysisResponse(BaseModel):
     suggestions: list[AnalysisSuggestion] = Field(default_factory=list)
     pending_review_count: int = Field(default=0, description="Số gợi ý không qua guardrail, chờ cố vấn xem lại")
     summary: str | None = None
+    interview_focus: str | None = Field(
+        default=None, description="Một kỹ năng của JD có trong CV mà nhà tuyển dụng nhiều khả năng hỏi sâu"
+    )
     llm_used: bool = Field(default=False, description="False khi chấm bằng quy tắc dự phòng (không có LLM)")
 
 
@@ -516,6 +520,9 @@ class OptimizerSuggestion(BaseModel):
     )
     skill: str
     line_id: str = Field(..., description="Dòng trong CvDocument mà gợi ý thay thế")
+    extra_line_ids: list[str] = Field(
+        default_factory=list, description="Dòng nối của gạch ý bị ngắt dòng; câu thay thế gộp luôn các dòng này"
+    )
     original_text: str
     proposed_text: str = Field(..., description="Nội dung AI đề xuất")
     final_text: str | None = Field(
@@ -574,6 +581,12 @@ class OptimizerSessionResponse(BaseModel):
         default=None, description="Nội dung phiên bản tạo ra khi 'Hoàn tất' (đúng như file DOCX)"
     )
     suggestions: list[OptimizerSuggestion]
+    suggestions_state: Literal["pending", "ready", "failed"] = Field(
+        default="ready",
+        description="pending: chưa soạn gợi ý riêng (gọi POST .../prepare); failed: soạn lỗi, SV bấm Thử lại",
+    )
+    kept_count: int = Field(default=0, description="Số câu AI xem xét và cho là đã rõ, không cần sửa")
+    suggestions_attempted_at: UtcDatetime | None = Field(default=None, description="Lần soạn gợi ý gần nhất")
     capability_checks: list[CapabilityCheck]
     entries: list[CvEntry] = Field(default_factory=list, description="Chỗ có thể thêm câu kinh nghiệm mới")
     finalized_at: UtcDatetime | None = None
@@ -839,6 +852,11 @@ class InterviewRow(BaseModel):
     label: InterviewLabel
     star: StarScores
     timed_out_count: int
+    interview_mode: Literal["jd_only", "with_cv"] = Field(default="with_cv", description="Có dùng CV khi hỏi không")
+    cv_file_name: str | None = Field(default=None, description="Tên file CV đã dùng (with_cv)")
+    cv_label: str | None = Field(
+        default=None, description="Phiên bản CV đã dùng, ví dụ 'v1.0'; null nếu bản đó đã bị xoá"
+    )
 
 
 class ScorePoint(BaseModel):

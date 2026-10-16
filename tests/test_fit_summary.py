@@ -46,7 +46,10 @@ def test_summary_matches_table_and_names_the_project():
 def test_missing_required_comes_first_and_never_says_add_to_cv():
     _, rows, lines = scored(CV, {"Python": ("required", 0.5), "LLM": ("required", 0), "Chatbot": ("preferred", 0)})
     summary = compose_summary(rows, lines)
-    assert summary.startswith("Còn thiếu 1 yêu cầu Bắt buộc: LLM. Còn thiếu yêu cầu Ưu tiên: Chatbot. Nên học")
+    assert summary.startswith(
+        "Còn thiếu 1 yêu cầu Bắt buộc: LLM. Thiếu yêu cầu Bắt buộc là lý do phổ biến khiến CV bị loại ở vòng lọc hồ "
+        "sơ. Còn thiếu yêu cầu Ưu tiên: Chatbot. Nên học"
+    )
     assert "Python mới được liệt kê" in summary
     assert compose_summary([], lines) is None
 

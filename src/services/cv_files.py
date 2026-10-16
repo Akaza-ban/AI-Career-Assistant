@@ -27,6 +27,8 @@ CV_MEDIA_TYPES = {
 UPLOAD_TYPES = ("pdf", "docx")
 # Ít hơn ngưỡng này coi như không có lớp văn bản (ví dụ PDF scan ảnh) — US-SV-01 AC2
 MIN_TEXT_CHARS = 50
+# Lớp chữ ít hơn ngưỡng này thì đọc lại bằng OCR (PDF scan có watermark / vài chữ rác)
+OCR_MIN_TEXT_CHARS = 120
 
 
 @dataclass
@@ -66,76 +68,6 @@ def _split_diacritics(text: str) -> bool:
     return total >= 10 and len(_ISOLATED_VIET.findall(text)) / total > 0.3
 
 
-def _words_to_lines(words: list[dict[str, Any]]) -> str:
-    if not words:
-        return ""
-    sorted_words = sorted(words, key=lambda w: (w["top"], w["x0"]))
-    lines: list[list[dict[str, Any]]] = []
-    current_line = [sorted_words[0]]
-    for w in sorted_words[1:]:
-        ref = current_line[-1]
-        line_h = max(ref["bottom"] - ref["top"], w["bottom"] - w["top"])
-        if abs(w["top"] - ref["top"]) <= line_h * 0.4:
-            current_line.append(w)
-        else:
-            lines.append(current_line)
-            current_line = [w]
-    lines.append(current_line)
-
-    result: list[str] = []
-    prev_bottom = None
-    for line in lines:
-        line_sorted = sorted(line, key=lambda w: w["x0"])
-        line_text = " ".join(w["text"] for w in line_sorted).strip()
-        if not line_text:
-            continue
-        line_top = min(w["top"] for w in line_sorted)
-        line_bottom = max(w["bottom"] for w in line_sorted)
-        line_h = max(1.0, line_bottom - line_top)
-        if prev_bottom is not None and (line_top - prev_bottom) > line_h * 1.5:
-            result.append("")
-        result.append(line_text)
-        prev_bottom = line_bottom
-    return "\n".join(result)
-
-
-def _find_column_gutter(words: list[dict[str, Any]], width: float) -> float | None:
-    best_split = None
-    min_crossings = float("inf")
-    best_clearance = -1
-
-    for xi in range(int(0.20 * width), int(0.65 * width)):
-        sx = float(xi)
-        crossings = 0
-        min_dist = float("inf")
-        left_count = 0
-        right_count = 0
-
-        for w in words:
-            if w["x0"] < sx < w["x1"]:
-                crossings += 1
-            elif w["x1"] <= sx:
-                left_count += 1
-                dist = sx - w["x1"]
-                if dist < min_dist:
-                    min_dist = dist
-            elif w["x0"] >= sx:
-                right_count += 1
-                dist = w["x0"] - sx
-                if dist < min_dist:
-                    min_dist = dist
-
-        if left_count >= 10 and right_count >= 10:
-            if crossings < min_crossings or (crossings == min_crossings and min_dist > best_clearance):
-                min_crossings = crossings
-                best_clearance = min_dist
-                best_split = sx
-
-    if best_split is not None and min_crossings <= 3:
-        return best_split
-    return None
-
-
 def clean_stutter_text(text: str) -> str:
     """Khử hiện tượng lặp đôi ký tự (DDựự áánn -> Dự án, 771155 -> 715) do Canva/PDF export 2 layer chữ đè nhau."""
     if not text:
@@ -166,14 +98,13 @@ def clean_stutter_text(text: str) -> str:
 
 
 def _extract_pdfplumber_page(page: Any) -> str:
+    """Chữ một trang PDF theo thứ tự đọc (chia trang theo khoảng trắng, xem cv_layout.extract_layout_aware_text)."""
+    from src.services.cv_layout import extract_layout_aware_text
+
     words = page.extract_words()
     if not words:
         return (page.extract_text() or "").strip()
-
-    from src.services.cv_layout import extract_layout_aware_text
-
-    raw_text = extract_layout_aware_text(words, page.width, page.height)
-    return clean_stutter_text(raw_text)
+    return clean_stutter_text(extract_layout_aware_text(words, page.width, page.height))
 
 
 def _extract_pdf(data: bytes) -> tuple[str, int]:
@@ -210,129 +141,109 @@ def _extract_pdf(data: bytes) -> tuple[str, int]:
     return text, len(reader.pages)
 
 
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_MC_FALLBACK = "{http://schemas.openxmlformats.org/markup-compatibility/2006}Fallback"
+
+
+def _in_textbox(node: Any) -> bool:
+    return any(a.tag == f"{_W}txbxContent" for a in node.iterancestors())
+
+
+def _paragraph_text(p: Any, *, inside_box: bool = False) -> str:
+    """Chữ của một đoạn (w:p); đoạn thường không lấy chữ của hộp chữ con (đọc riêng ở _textboxes)."""
+    parts = []
+    for node in p.iter(f"{_W}t", f"{_W}tab"):
+        if not inside_box and _in_textbox(node):
+            continue
+        parts.append("\t" if node.tag == f"{_W}tab" else node.text or "")
+    return "".join(parts)
+
+
+def _textboxes(element: Any) -> list[str]:
+    """Đoạn trong các hộp chữ nằm trong element. Word lưu mỗi hộp hai bản (DrawingML + VML dự phòng) nên bỏ bản
+    nằm trong mc:Fallback để không lặp."""
+    lines = []
+    for box in element.iter(f"{_W}txbxContent"):
+        if any(a.tag == _MC_FALLBACK for a in box.iterancestors()):
+            continue
+        lines += [_paragraph_text(p, inside_box=True) for p in box.iter(f"{_W}p")]
+    return lines
+
+
 def _extract_docx(data: bytes) -> str:
+    """
+    Chữ của DOCX theo đúng thứ tự trong file: đoạn văn, bảng, hộp chữ (template hay để liên hệ / kỹ năng trong hộp
+    chữ) và phần đầu trang (một số mẫu đặt họ tên, liên hệ ở đó).
+    """
     from docx import Document
 
     document = Document(io.BytesIO(data))
-    lines = [p.text for p in document.paragraphs]
-    for table in document.tables:
-        for row in table.rows:
-            lines.append(" | ".join(cell.text for cell in row.cells))
+    lines: list[str] = []
+    header = document.sections[0].header if document.sections else None
+    if header is not None and not header.is_linked_to_previous:
+        lines += [_paragraph_text(p._p) for p in header.paragraphs]
+        lines += _textboxes(header._element)
+    for block in document.element.body.iterchildren():
+        if block.tag == f"{_W}p":
+            lines.append(_paragraph_text(block))
+            lines += _textboxes(block)
+        elif block.tag == f"{_W}tbl":
+            for row in block.iter(f"{_W}tr"):
+                cells = ["\n".join(_paragraph_text(p) for p in cell.iter(f"{_W}p")) for cell in row.iter(f"{_W}tc")]
+                lines.append(" | ".join(c for c in cells if c.strip()))
     return "\n".join(lines)
 
 
-def reformat_cv_with_deepseek(raw_text: str) -> str:
-    """
-    Sử dụng model DeepSeek (deepseek-chat) để đọc hiểu ngữ nghĩa văn bản thô trích xuất từ CV,
-    tự động phân loại chính xác các mục (Học vấn, Kinh nghiệm, Kỹ năng, Dự án...)
-    và sắp xếp lại theo cấu trúc chuẩn Harvard (Harvard Resume Format) rõ ràng, trung thực.
-    """
-    if not raw_text or len(raw_text.strip()) < 50:
-        return raw_text
+_CID = re.compile(r"\(cid:\d+\)")
 
+
+def _odd_char(c: str) -> bool:
+    """Ký tự không thể là chữ của CV: vùng dành riêng của font, ký tự thay thế, ký tự điều khiển."""
+    return c == "�" or unicodedata.category(c) in ("Co", "Cn", "Cc", "Cs")
+
+
+def readable_chars(text: str) -> int:
+    """Số ký tự đọc được (không tính khoảng trắng, mã "(cid:12)" và ký tự lạ)."""
+    return sum(1 for c in _CID.sub("", text) if not c.isspace() and not _odd_char(c))
+
+
+def looks_garbled(text: str) -> bool:
+    """Lớp chữ của PDF hỏng bảng mã font: nhiều mã (cid:N) hoặc ký tự lạ, hoặc gần như không có nguyên âm."""
+    visible = [c for c in text if not c.isspace()]
+    if len(visible) < 120:
+        return False
+    cid_chars = sum(len(m) for m in _CID.findall(text))
+    odd = sum(1 for c in visible if _odd_char(c))
+    letters = [c for c in unicodedata.normalize("NFD", text).lower() if c.isalpha()]
+    vowels = sum(1 for c in letters if c in "aeiouy")
+    return (cid_chars + odd) / len(visible) > 0.2 or (len(letters) > 100 and vowels / len(letters) < 0.15)
+
+
+def has_text_layer(data: bytes) -> bool:
+    """PDF có lớp chữ đọc được (đủ để không cần OCR, cùng ngưỡng với extract_cv)."""
     try:
-        import os
-
-        settings = get_settings()
-        api_key, _ = settings.get_llm_credentials()
-        # Tránh gọi LLM ngoài trong unit test hoặc khi chưa cấu hình key
-        if not api_key or api_key.startswith("sk-dummy") or api_key == "test-key" or os.getenv("PYTEST_CURRENT_TEST"):
-            return raw_text
-
-        from langchain_core.messages import HumanMessage, SystemMessage
-
-        chat_model = settings.get_chat_model(temperature=0.1, timeout=25)
-
-        system_prompt = (
-            "Bạn là chuyên gia phân tích và tái cấu trúc hồ sơ CV theo định dạng chuẩn Harvard (Harvard Resume Format).\n"
-            "Dưới đây là toàn bộ văn bản thô được trích xuất từ CV của ứng viên (có thể bị xáo trộn vị trí các cột, dính chữ ngang, hoặc ngắt dòng lộn xộn do OCR).\n\n"
-            "NHIỆM VỤ CỦA BẠN:\n"
-            "1. XÁC ĐỊNH NGÔN NGỮ CHỦ ĐẠO CỦA CV GỐC (CRITICAL - ĐỒNG BỘ NGÔN NGỮ 100%):\n"
-            "   - Nếu CV gốc viết bằng TIẾNG ANH: TẤT CẢ tiêu đề mục BẮT BUỘC dùng TIẾNG ANH (SUMMARY, EDUCATION, WORK EXPERIENCE, PROJECTS, SKILLS, CERTIFICATIONS, LANGUAGES). TUYỆT ĐỐI KHÔNG dịch tiêu đề sang tiếng Việt. Toàn bộ văn bản xuất ra phải 100% tiếng Anh.\n"
-            "   - Nếu CV gốc viết bằng TIẾNG VIỆT: TẤT CẢ tiêu đề mục BẮT BUỘC dùng TIẾNG VIỆT (TÓM TẮT BẢN THÂN, HỌC VẤN, KINH NGHIỆM LÀM VIỆC, DỰ ÁN, KỸ NĂNG, CHỨNG CHỈ, NGOẠI NGỮ). Toàn bộ văn bản xuất ra phải 100% tiếng Việt.\n"
-            "   - TUYỆT ĐỐI KHÔNG ĐƯỢC TRỘN LẪN TIẾNG ANH VÀ TIẾNG VIỆT (không để nội dung tiếng Anh nhưng tiêu đề tiếng Việt hoặc ngược lại).\n\n"
-            "2. ĐỌC HIỂU NGỮ NGHĨA VÀ PHÂN BIỆT ĐẦY ĐỦ CÁC THÀNH PHẦN:\n"
-            "   - Thông tin liên hệ (Họ tên in hoa, vị trí, email, phone, location, LinkedIn/GitHub/Portfolio).\n"
-            "   - Tóm tắt bản thân / Mục tiêu nghề nghiệp (Summary / Objective).\n"
-            "   - Kinh nghiệm làm việc (Work Experience): Tên tổ chức/công ty, chức danh, thời gian, bullet trách nhiệm.\n"
-            "   - Học vấn (Education): Tên trường, chuyên ngành/bằng cấp, thời gian, môn học/GPA/thành tích.\n"
-            "   - Kỹ năng (Skills): Nhóm kỹ năng, công cụ, ngôn ngữ lập trình, thư viện...\n"
-            "   - Dự án (Projects): Tên dự án, dòng Technologies, bullet mô tả tính năng/kết quả.\n"
-            "   - Chứng chỉ (Certifications): Tất cả chứng chỉ nghề nghiệp, khóa học, job simulation, ngoại ngữ kèm thời gian.\n"
-            "   - Ngoại ngữ (Languages): Danh sách ngôn ngữ và trình độ tương ứng.\n\n"
-            "3. CẤU TRÚC MẪU CHUẨN HARVARD BẮT BUỘC:\n\n"
-            "[HỌ VÀ TÊN IN HOA]\n"
-            "[Vị trí chuyên môn nếu có]\n"
-            "[Địa chỉ / Location] | [Số điện thoại / Phone] | [Email] | [LinkedIn / GitHub / Website]\n\n"
-            "SUMMARY (hoặc TÓM TẮT BẢN THÂN nếu CV tiếng Việt)\n"
-            "[Đoạn văn giới thiệu bản thân liền mạch, súc tích]\n\n"
-            "EDUCATION (hoặc HỌC VẤN nếu CV tiếng Việt)\n"
-            "[Tên trường học / University]\n"
-            "[Bằng cấp / Degree / Chuyên ngành] | [Thời gian]\n"
-            "• [Relevant Coursework / GPA / Xếp loại nếu có]\n\n"
-            "WORK EXPERIENCE (hoặc KINH NGHIỆM LÀM VIỆC nếu CV tiếng Việt)\n"
-            "[Tên công ty / Organization] | [Vị trí / Role]\n"
-            "[Thời gian]\n"
-            "• [Chi tiết trách nhiệm hoặc thành tích 1]\n"
-            "• [Chi tiết trách nhiệm hoặc thành tích 2]\n\n"
-            "PROJECTS (hoặc DỰ ÁN nếu CV tiếng Việt)\n"
-            "[Tên dự án] | [Vai trò hoặc Team Project nếu có] | [Thời gian nếu có] (TUYỆT ĐỐI KHÔNG để dấu • ở dòng tên dự án)\n"
-            "Technologies: [Liệt kê công nghệ, thư viện, công cụ sử dụng] (TUYỆT ĐỐI KHÔNG để dấu • ở dòng này)\n"
-            "• [Mô tả chi tiết giải pháp, hành động, kết quả 1]\n"
-            "• [Mô tả chi tiết giải pháp, hành động, kết quả 2]\n\n"
-            "SKILLS (hoặc KỸ NĂNG nếu CV tiếng Việt)\n"
-            "• [Nhóm kỹ năng 1]: [Danh sách kỹ năng]\n"
-            "• [Nhóm kỹ năng 2]: [Danh sách kỹ năng]\n\n"
-            "CERTIFICATIONS (hoặc CHỨNG CHỈ nếu CV tiếng Việt)\n"
-            "[Tên chứng chỉ 1] (Credential ID: ... nếu có) by [Đơn vị cấp nếu có] | [Thời gian]\n"
-            "[Tên chứng chỉ 2] (Credential ID: ... nếu có) by [Đơn vị cấp nếu có] | [Thời gian]\n"
-            "(BẮT BUỘC liệt kê đầy đủ 100% mọi chứng chỉ có trong CV gốc, đếm kỹ để không bỏ sót bất kỳ chứng chỉ nào, kể cả SQL Intermediate, Python Basic, Job Simulation, HackerRank, Forage, Coursera, TOEIC, IELTS... TUYỆT ĐỐI KHÔNG để dấu • ở đầu dòng chứng chỉ)\n\n"
-            "LANGUAGES (hoặc NGOẠI NGỮ nếu CV tiếng Việt)\n"
-            "• [Ngôn ngữ 1] ([Trình độ / Mức độ thông thạo])\n"
-            "• [Ngôn ngữ 2] ([Trình độ / Mức độ thông thạo])\n\n"
-            "4. QUY TẮC BẮT BUỘC (CRITICAL GUARDRAILS):\n"
-            "- ĐỒNG BỘ NGÔN NGỮ TUYỆT ĐỐI: CV tiếng Anh thì mọi tiêu đề mục là TIẾNG ANH. CV tiếng Việt thì mọi tiêu đề mục là TIẾNG VIỆT.\n"
-            "- GIỮ NGUYÊN 100% SỰ THẬT: Số liệu, tên chứng chỉ, mã Credential ID, thời gian, tên công nghệ. KHÔNG TỰ BỎ SÓT và KHÔNG BỊA ĐẶT.\n"
-            "- MỤC CHỨNG CHỈ & NGOẠI NGỮ: Tách biệt hoàn toàn thành 2 mục riêng biệt. BẮT BUỘC giữ lại ĐẦY ĐỦ 100% TẤT CẢ các chứng chỉ có trong văn bản thô (đếm kỹ từng dòng chứng chỉ để đảm bảo không bỏ sót bất kỳ chứng chỉ nào) và mọi ngôn ngữ có trong CV gốc. TUYỆT ĐỐI KHÔNG lấy ngày tháng của chứng chỉ gán sang mục Ngoại ngữ.\n"
-            "- MỤC DỰ ÁN & KINH NGHIỆM: Tên dự án, tên công ty, dòng Technologies: ... TUYỆT ĐỐI KHÔNG có dấu gạch đầu dòng (•). Chỉ các câu mô tả công việc mới có dấu •.\n"
-            "- Giữa các mục lớn và giữa các dự án/công ty phải có 1 dòng trống để tách bạch rõ ràng.\n"
-            "- Tự động ghép nối các câu bị ngắt dòng giữa chừng do OCR thành câu hoàn chỉnh.\n"
-            "- CHỈ xuất ra duy nhất nội dung văn bản CV đã được định dạng, KHÔNG thêm lời giải thích, chào hỏi hay bọc trong markdown ```."
-        )
-
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"VĂN BẢN CV THÔ TỪ BẢN QUÉT / TRÍCH XUẤT:\n\n{raw_text}"),
-        ]
-
-        response = chat_model.invoke(messages)
-        formatted_text = str(response.content).strip()
-        if formatted_text.startswith("```"):
-            lines = formatted_text.splitlines()
-            if len(lines) >= 3 and lines[0].startswith("```") and lines[-1].startswith("```"):
-                formatted_text = "\n".join(lines[1:-1]).strip()
-
-        if len(formatted_text) >= len(raw_text) * 0.4:
-            logger.info("Đã dùng DeepSeek chuẩn hóa cấu trúc CV theo format Harvard thành công.")
-            return formatted_text
-        return raw_text
-    except Exception as e:
-        logger.warning("Không thể định dạng lại CV bằng DeepSeek (fallback về text thô): %s", e)
-        return raw_text
+        text, _ = _extract_pdf(data)
+    except Exception:
+        return False
+    return readable_chars(text) >= OCR_MIN_TEXT_CHARS and not looks_garbled(text)
 
 
-def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
-    """Trích văn bản từ CV; tự động kích hoạt OCR khi là PDF scan không có lớp text."""
+def extract_cv(file_type: str, data: bytes, vocabulary: list[str] | None = None) -> ExtractedCv:
+    """
+    Trích văn bản từ CV; tự động kích hoạt OCR khi là PDF scan không có lớp text.
+    vocabulary: tên kỹ năng của thư viện JD, dùng sửa tên công cụ OCR đọc nhầm (cùng taxonomy và bảng lộ trình).
+    """
     read_by_ocr = False
     try:
         if file_type == "pdf":
             text, page_count = _extract_pdf(data)
-            chars_count = len("".join(text.split()))
-            # Nếu PDF không có lớp văn bản hoặc quá ít ký tự (< 120 ký tự, tránh file scan có text rác / watermark), quét OCR
-            if chars_count < 120:
-                logger.info("PDF chỉ có %d ký tự văn bản. Tiến hành quét OCR qua các trang...", chars_count)
+            chars_count = readable_chars(text)
+            # PDF không có lớp chữ, quá ít chữ (< 120 ký tự: scan có watermark / chữ rác) hoặc lớp chữ hỏng bảng mã
+            # font (trông bình thường nhưng trích ra "(cid:12)" / ký tự lạ) thì đọc lại bằng OCR
+            if chars_count < OCR_MIN_TEXT_CHARS or looks_garbled(text):
+                logger.info("PDF có %d ký tự đọc được. Tiến hành quét OCR qua các trang...", chars_count)
                 ocr_text, ocr_pages = ocr.ocr_pdf_bytes(data)
-                if len("".join(ocr_text.split())) > chars_count:
+                if readable_chars(ocr_text) > chars_count:
                     text = ocr_text
                     page_count = ocr_pages or page_count
                     read_by_ocr = True
@@ -347,11 +258,13 @@ def extract_cv(file_type: str, data: bytes) -> ExtractedCv:
         ) from e
 
     text = "\n".join(line.rstrip() for line in text.splitlines()).strip()
+    # Chỉ làm sạch cách đọc (chữ lặp đôi do PDF có 2 lớp chữ đè nhau); không để AI viết lại nội dung CV:
+    # chữ lưu lại phải là chữ của sinh viên (phân tích và tối ưu đều dựa trên nó).
     text = clean_stutter_text(text)
+    if read_by_ocr:
+        from src.services.ocr_terms import fix_terms, rejoin_headings, static_vocabulary
 
-    # Khi chữ được bóc tách từ OCR hoặc có layout phức tạp, dùng DeepSeek định dạng lại theo chuẩn Harvard
-    if read_by_ocr or len(text) >= 100:
-        text = reformat_cv_with_deepseek(text)
+        text = fix_terms(rejoin_headings(text), [*static_vocabulary(), *(vocabulary or [])])
 
     if len("".join(text.split())) < MIN_TEXT_CHARS:
         raise AppError(

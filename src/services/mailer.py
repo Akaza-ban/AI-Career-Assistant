@@ -7,9 +7,9 @@ from src.config import get_settings
 logger = logging.getLogger(__name__)
 
 
-def send_email(to: str, subject: str, body: str) -> None:
+def send_email(to: str, subject: str, body: str, html: str | None = None) -> None:
     """
-    Gửi email văn bản thuần qua SMTP. Chưa cấu hình SMTP_HOST (môi trường phát triển) thì chỉ ghi nội dung
+    Gửi email qua SMTP: văn bản thuần, kèm bản HTML nếu có (ứng dụng mail tự chọn bản hiển thị được). Chưa cấu hình SMTP_HOST (môi trường phát triển) thì chỉ ghi nội dung
     vào log để lấy link đặt lại mật khẩu. Lỗi gửi được ghi log, không làm hỏng request.
     """
     settings = get_settings()
@@ -21,6 +21,8 @@ def send_email(to: str, subject: str, body: str) -> None:
     message["To"] = to
     message["Subject"] = subject
     message.set_content(body)
+    if html:
+        message.add_alternative(html, subtype="html")
     try:
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
             if settings.smtp_starttls:

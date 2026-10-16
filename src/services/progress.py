@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from src.api.errors import AppError
 from src.db.models import CvVersion, GapAnalysis, InterviewSession, InterviewTurn, JobDescription, User
@@ -98,6 +98,9 @@ def analysis_row(analysis: GapAnalysis, jd: JobDescription) -> dict[str, Any]:
 
 
 def interview_row(session: InterviewSession, jd: JobDescription, timed_out_count: int) -> dict[str, Any]:
+    mode = session.interview_mode or "with_cv"
+    db = object_session(session)
+    cv = db.get(CvVersion, session.cv_version_id) if db and session.cv_version_id and mode == "with_cv" else None
     return {
         "id": session.id,
         "jd": interview.jd_out(jd),
@@ -107,6 +110,9 @@ def interview_row(session: InterviewSession, jd: JobDescription, timed_out_count
         "label": interview.label_of(session.overall_score),
         "star": session.star,
         "timed_out_count": timed_out_count,
+        "interview_mode": mode,
+        "cv_file_name": session.cv_file_name if mode == "with_cv" else None,
+        "cv_label": cv_versions.label(cv) if cv else None,
     }
 
 

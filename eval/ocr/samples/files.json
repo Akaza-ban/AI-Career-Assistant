@@ -1,0 +1,102 @@
+[
+  {
+    "file": "en_dense.pdf",
+    "sample": "en_dense",
+    "kind": "pdf"
+  },
+  {
+    "file": "en_dense.scan.pdf",
+    "sample": "en_dense",
+    "kind": "scan"
+  },
+  {
+    "file": "en_dense.photo.pdf",
+    "sample": "en_dense",
+    "kind": "photo"
+  },
+  {
+    "file": "en_harvard.pdf",
+    "sample": "en_harvard",
+    "kind": "pdf"
+  },
+  {
+    "file": "en_harvard.scan.pdf",
+    "sample": "en_harvard",
+    "kind": "scan"
+  },
+  {
+    "file": "en_harvard.photo.pdf",
+    "sample": "en_harvard",
+    "kind": "photo"
+  },
+  {
+    "file": "en_sidebar.pdf",
+    "sample": "en_sidebar",
+    "kind": "pdf"
+  },
+  {
+    "file": "en_sidebar.scan.pdf",
+    "sample": "en_sidebar",
+    "kind": "scan"
+  },
+  {
+    "file": "en_sidebar.photo.pdf",
+    "sample": "en_sidebar",
+    "kind": "photo"
+  },
+  {
+    "file": "vi_canva.pdf",
+    "sample": "vi_canva",
+    "kind": "pdf"
+  },
+  {
+    "file": "vi_canva.scan.pdf",
+    "sample": "vi_canva",
+    "kind": "scan"
+  },
+  {
+    "file": "vi_canva.photo.pdf",
+    "sample": "vi_canva",
+    "kind": "photo"
+  },
+  {
+    "file": "vi_hybrid.pdf",
+    "sample": "vi_hybrid",
+    "kind": "pdf"
+  },
+  {
+    "file": "vi_hybrid.scan.pdf",
+    "sample": "vi_hybrid",
+    "kind": "scan"
+  },
+  {
+    "file": "vi_hybrid.photo.pdf",
+    "sample": "vi_hybrid",
+    "kind": "photo"
+  },
+  {
+    "file": "vi_onecol.pdf",
+    "sample": "vi_onecol",
+    "kind": "pdf"
+  },
+  {
+    "file": "vi_onecol.scan.pdf",
+    "sample": "vi_onecol",
+    "kind": "scan"
+  },
+  {
+    "file": "vi_onecol.photo.pdf",
+    "sample": "vi_onecol",
+    "kind": "photo"
+  },
+  {
+    "file": "vi_docx.docx",
+    "sample": "vi_docx",
+    "kind": "docx"
+  },
+  {
+    "file": "en_textbox.docx",
+    "sample": "en_textbox",
+    "kind": "docx"
+  }
+]

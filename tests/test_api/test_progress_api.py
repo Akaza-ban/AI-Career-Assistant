@@ -355,6 +355,9 @@ async def test_progress_interview_layers_per_position(client):
     assert [r["id"] for r in data["interviews"]][0] == latest
     assert data["interviews"][0]["timed_out_count"] == 1
     assert data["interviews"][0]["label"] == "fair"
+    # Dòng thời gian ghi rõ CV đã dùng; phiên bản đã bị xoá thì không có nhãn phiên bản
+    row = data["interviews"][0]
+    assert (row["interview_mode"], row["cv_file_name"], row["cv_label"]) == ("with_cv", "cv.pdf", None)
 
 
 @pytest.mark.asyncio

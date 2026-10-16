@@ -1,7 +1,7 @@
 "use client"
 
 import type { ReactNode } from "react"
-import { Copy, Lightbulb, ShieldCheck } from "lucide-react"
+import { Copy, Lightbulb, MessagesSquare, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 
 import { FeedbackWidget } from "@/components/FeedbackWidget"
@@ -124,7 +124,8 @@ export function ResultSuggestions({ analysis }: { analysis: GapAnalysis }) {
           <div className="grid gap-1.5 border-b border-line py-3 text-[13px] leading-5 text-ink-3">
             <p className="flex items-start gap-2">
               <ShieldCheck className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-              Gợi ý chỉ diễn đạt lại nội dung bạn đã viết, không thêm số liệu hay thành tích.
+              Gợi ý chỉ diễn đạt lại nội dung bạn đã viết, không thêm số liệu hay thành tích. Chỗ trong ngoặc vuông
+              là để bạn tự điền số thật nếu có.
             </p>
           </div>
         </ResultWidget>
@@ -136,6 +137,15 @@ export function ResultSuggestions({ analysis }: { analysis: GapAnalysis }) {
             icon={<Lightbulb className="size-4 text-blue" aria-hidden />}
           >
             <p className="border-b border-line py-3.5 text-[15px] leading-6 text-ink-2">{analysis.summary}</p>
+            {analysis.interview_focus && (
+              <p className="flex items-start gap-2 border-b border-line py-3.5 text-[15px] leading-6 text-ink-2">
+                <MessagesSquare className="mt-1 size-4 shrink-0 text-blue" aria-hidden />
+                <span>
+                  <span className="font-medium text-ink">Nên chuẩn bị phỏng vấn: </span>
+                  {analysis.interview_focus}
+                </span>
+              </p>
+            )}
             <p className="mt-3.5 text-sm text-ink-3">Tổng hợp từ kết quả chấm từng kỹ năng ở trên; hãy tự kiểm chứng.</p>
           </ResultWidget>
         )}

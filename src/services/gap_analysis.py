@@ -151,6 +151,7 @@ def _build_result(final: dict[str, Any]) -> dict[str, Any]:
         "pending_review_count": len(final.get("manual_review_items", [])),
         "breakdown": final.get("score_breakdown", []),
         "summary": final.get("gap_summary"),
+        "interview_focus": final.get("interview_focus"),
         "llm_used": bool(final.get("llm_used")),
     }
 
@@ -281,5 +282,6 @@ def to_response(analysis: GapAnalysis, jd: JobDescription) -> GapAnalysisRespons
         suggestions=result.get("suggestions", []),
         pending_review_count=result.get("pending_review_count", 0),
         summary=result.get("summary"),
+        interview_focus=result.get("interview_focus"),
         llm_used=result.get("llm_used", False),
     )

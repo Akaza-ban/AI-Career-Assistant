@@ -99,6 +99,7 @@ def init_db() -> None:
     from src.db.migrations.pii_vault import upgrade as upgrade_pii_vault
     from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
     from src.services.cv_versions import backfill as backfill_cv_versions
+    from src.services.cv_versions import backfill_ocr_flags
 
     _relax_interview_cv_columns()
     Base.metadata.create_all(bind=engine)
@@ -114,6 +115,8 @@ def init_db() -> None:
         fail_interrupted_analyses(db)
         # Phiên bản CV tạo trước khi có lịch sử phiên bản theo từng CV
         backfill_cv_versions(db)
+        # CV tải lên trước khi lưu cờ "đọc bằng OCR"
+        backfill_ocr_flags(db)
         from src.services.assistant.runs import sweep_running
 
         sweep_running(db)

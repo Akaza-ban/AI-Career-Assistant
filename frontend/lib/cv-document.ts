@@ -3,16 +3,25 @@ import type { CvDocLine, CvDocument, OptimizerSession, Suggestion } from "@/lib/
 /** Dòng câu kinh nghiệm mới (kỹ năng còn thiếu, SV đã áp dụng) trong bản xem trước; id "cap-<mã yêu cầu>". */
 export const NEW_LINE_PREFIX = "cap-"
 
-/** Thay các dòng có gợi ý đã chấp nhận / sửa tay bằng nội dung cuối (final_text). */
+/**
+ * Thay các dòng có gợi ý đã chấp nhận / sửa tay bằng nội dung cuối (final_text). Gạch ý bị ngắt dòng khi trích PDF
+ * (extra_line_ids) hiển thị gộp thành một dòng, như câu mà gợi ý thay thế (khớp finalize ở backend).
+ */
 export function applySuggestions(doc: CvDocument, suggestions: Suggestion[]): CvDocument {
   const replaced = new Map(
     suggestions.filter((s) => s.final_text !== null).map((s) => [s.line_id, s.final_text as string] as const),
   )
+  const joined = new Map(
+    suggestions.filter((s) => s.extra_line_ids?.length).map((s) => [s.line_id, s.original_text] as const),
+  )
+  const merged = new Set(suggestions.flatMap((s) => s.extra_line_ids ?? []))
   return {
     ...doc,
     sections: doc.sections.map((section) => ({
       ...section,
-      lines: section.lines.map((line) => ({ ...line, text: replaced.get(line.id) ?? line.text })),
+      lines: section.lines
+        .filter((line) => !merged.has(line.id))
+        .map((line) => ({ ...line, text: replaced.get(line.id) ?? joined.get(line.id) ?? line.text })),
     })),
   }
 }

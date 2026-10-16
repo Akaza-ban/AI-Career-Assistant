@@ -38,6 +38,16 @@ def get_optimizer(analysis_id: str, user: CurrentStudent, db: DbSession) -> dict
     return _response(db, user, analysis_id)
 
 
+@router.post("/prepare", response_model=OptimizerSessionResponse)
+async def prepare_suggestions(analysis_id: str, user: CurrentStudent, db: DbSession) -> dict[str, Any]:
+    """
+    Soạn gợi ý viết lại riêng cho phiên (suggestions_state = pending, hoặc failed khi SV bấm Thử lại): một lần gọi LLM
+    chỉ để viết lại mọi câu mô tả trong CV, lưu lại cho các lần mở sau. Đã có gợi ý thì trả về luôn, không gọi lại.
+    """
+    await cv_optimizer.prepare_suggestions(db, user, analysis_id, utcnow())
+    return _response(db, user, analysis_id)
+
+
 @router.post("/suggestions/{suggestion_id}", response_model=OptimizerSessionResponse)
 def decide_suggestion(
     analysis_id: str, suggestion_id: str, body: SuggestionDecisionRequest, user: CurrentStudent, db: DbSession

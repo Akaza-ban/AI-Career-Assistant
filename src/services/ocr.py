@@ -11,7 +11,7 @@ có cơ chế fallback sang PyTesseract hoặc Vision LLM khi cần.
 
 import io
 import logging
-import re
+import math
 from typing import Any
 
 import numpy as np
@@ -21,8 +21,111 @@ logger = logging.getLogger(__name__)
 
 _RAPID_OCR_INSTANCE = None
 
-# Ký hiệu đầu dòng hay bị OCR đọc thành "·", ".", "«"... (".NET" giữ nguyên: sau dấu chấm là hai chữ hoa)
-_MISREAD_BULLET = re.compile(r"^(?:[·•●∙◦‧«»▪■]\s*|\.\s*(?=[A-ZĐ][a-zà-ỹ])|\.\s+|[eo]\s+(?=[A-ZĐ]))")
+# Chỗ giữa hai ký tự không chèn dấu cách: giữ nguyên email, link, ngày, số thập phân, từ có gạch nối
+_NO_SPACE_AROUND = set("@./-_:,;()'\"&+%#|")
+# Khoảng trống tối thiểu giữa hai từ, tính theo bề rộng ký tự thường gặp của chính dòng đó
+SPACE_GAP_RATIO = 0.6
+# Số chữ cái trung bình của một từ (tiếng Anh ~4,7; âm tiết tiếng Việt ~3,5): ước lượng dòng nên có bao nhiêu từ
+LETTERS_PER_WORD = 6.0
+
+
+def respace(chars: list[str], char_boxes: list[list[list[float]]]) -> str | None:
+    """
+    Chèn dấu cách OCR bỏ sót ("abackendengineering" → "a backend engineering") dựa vào vị trí từng ký tự trên ảnh:
+    hai ký tự cách nhau xa hơn hẳn mức thường gặp trong dòng là ranh giới hai từ. Ngưỡng tự tính theo cỡ chữ của
+    dòng nên dùng chung cho mọi font, độ phân giải, tiếng Việt lẫn tiếng Anh. None nếu không đủ dữ liệu.
+    """
+    if len(chars) != len(char_boxes) or len(chars) < 4:
+        return None
+    spans = [(min(pt[0] for pt in box), max(pt[0] for pt in box)) for box in char_boxes]
+    widths = sorted(x1 - x0 for (x0, x1), ch in zip(spans, chars, strict=True) if ch.strip())
+    if not widths:
+        return None
+    char_w = max(1.0, widths[len(widths) // 2])
+    # Dòng OCR đã tự đặt dấu cách: khoảng trắng giữa hai từ của chính dòng đó là thước đo (ảnh mờ có nhiễu 3–4 px
+    # ngay trong một từ, không được coi là ranh giới). Dòng không có dấu cách nào thì dựa vào bề rộng ký tự.
+    word_gaps = []
+    for i, ch in enumerate(chars):
+        if ch == " " and 0 < i < len(chars) - 1 and chars[i - 1].strip():
+            nxt = next((j for j in range(i + 1, len(chars)) if chars[j].strip()), None)
+            if nxt is not None:
+                word_gaps.append(spans[nxt][0] - spans[i - 1][1])
+    word_gaps.sort()
+    threshold = char_w * SPACE_GAP_RATIO
+    if len(word_gaps) >= 2:
+        threshold = max(threshold, word_gaps[len(word_gaps) // 2] * 0.75)
+    candidates = []
+    for i in range(1, len(chars)):
+        prev, cur = chars[i - 1], chars[i]
+        gap = spans[i][0] - spans[i - 1][1]
+        if (
+            prev.strip()
+            and cur.strip()
+            and gap > threshold
+            and prev not in _NO_SPACE_AROUND
+            and cur not in _NO_SPACE_AROUND
+        ):
+            candidates.append((gap, i))
+    # Không chèn quá số dấu cách dòng còn thiếu: ước lượng số từ theo số chữ cái, trừ chỗ đã ngăn bằng dấu cách / dấu
+    # câu. Vị trí ước lượng của chữ rộng ("m", "w") hay tạo khoảng trống giả; chỉ giữ các khoảng lớn nhất.
+    letters = sum(1 for ch in chars if ch.isalnum())
+    separated = 1 + sum(
+        1
+        for i, ch in enumerate(chars[:-1])
+        if (ch == " " or ch in ",;/") and chars[i + 1].strip() and chars[i + 1] != " "
+    )
+    missing = max(0, round(letters / LETTERS_PER_WORD) - separated)
+    chosen: set[int] = set()
+    for _, i in sorted(candidates, reverse=True):
+        if len(chosen) >= missing:
+            break
+        if not _leaves_lone_consonant(chars, chosen | {i}, i):
+            chosen.add(i)
+    out = [chars[0]]
+    for i in range(1, len(chars)):
+        if i in chosen:
+            out.append(" ")
+        out.append(chars[i])
+    return " ".join("".join(out).split())
+
+
+_LONE_LETTERS = set("aAiIoOuUyYeE")
+
+
+def _leaves_lone_consonant(chars: list[str], cuts: set[int], at: int) -> bool:
+    """Chèn dấu cách ở `at` tạo ra mảnh chỉ một phụ âm ("m anaged", "problem s"): một chữ cái đứng riêng chỉ hợp lý
+    khi là nguyên âm ("a", "I", "o", "y"), còn lại gần như luôn là khoảng trống giả quanh chữ rộng."""
+
+    def boundary(j: int) -> bool:
+        return j in cuts or not chars[j].strip() or chars[j] in _NO_SPACE_AROUND or chars[j - 1] in _NO_SPACE_AROUND
+
+    start = next((j for j in range(at - 1, 0, -1) if boundary(j)), 0)
+    end = next((j for j in range(at + 1, len(chars)) if boundary(j)), len(chars))
+    left = "".join(chars[start:at]).strip(" ,;/()")
+    right = "".join(chars[at:end]).strip(" ,;/()")
+    return any(len(piece) == 1 and piece.isalpha() and piece not in _LONE_LETTERS for piece in (left, right))
+
+
+def _with_spaces(res: list[Any]) -> list[Any]:
+    """Kết quả RapidOCR có vị trí từng ký tự (return_word_box) → thay chữ của mỗi dòng bằng bản đã chèn dấu cách."""
+    fixed = []
+    for item in res:
+        if len(item) >= 5 and isinstance(item[3], list) and isinstance(item[4], list):
+            text = respace([str(c) for c in item[4]], item[3])
+            if text:
+                item = [item[0], text, *item[2:]]
+        fixed.append(item)
+    return fixed
+
+
+# Vẽ trang PDF scan thành ảnh rộng cố định ~1800 px bất kể khổ trang: OCR đọc tốt nhất khi ảnh vào cỡ ổn định
+# (RapidOCR tự thu ảnh về cạnh dài 2000 px); vẽ theo tỉ lệ cố định thì PDF khổ nhỏ (ảnh chụp đóng gói) ra ảnh quá bé.
+# Đo trên eval/ocr: trung bình 60,5% → 68,1% từ đọc đúng so với vẽ ×2.
+OCR_PAGE_WIDTH_PX = 1800
+
+
+def render_scale(page_width_pt: float) -> float:
+    return min(5.0, max(1.5, OCR_PAGE_WIDTH_PX / max(1.0, page_width_pt)))
 
 
 def get_ocr_engine():
@@ -40,160 +143,54 @@ def get_ocr_engine():
     return _RAPID_OCR_INSTANCE
 
 
-def _check_column_split(boxes: list[dict[str, Any]], width: float) -> float | None:
+def _deskew(polys: list[list[tuple[float, float]]], width: float, height: float) -> list[list[tuple[float, float]]]:
     """
-    Phát hiện vạch chia 2 cột dọc (thường gặp ở CV có sidebar bên trái: kỹ năng, liên hệ;
-    cột chính bên phải: kinh nghiệm, học vấn).
-    Tìm đường x_split trong khoảng 20% - 65% chiều rộng sao cho ít box bị cắt ngang nhất
-    và có khoảng trống (clearance) lớn nhất.
+    Ảnh chụp bằng điện thoại thường nghiêng 1–3 độ: dòng của hai cột lệch độ cao, bị ghép nhầm. Góc nghiêng đo từ
+    chính các khung chữ OCR (trung vị góc cạnh trên của các khung dài) rồi xoay ngược toạ độ quanh tâm trang.
     """
-    if not boxes or len(boxes) < 6 or width <= 0:
-        return None
-
-    best_split = None
-    min_crossings = float("inf")
-    best_clearance = -1
-
-    for xi in range(int(0.20 * width), int(0.65 * width), 2):
-        sx = float(xi)
-        crossings = 0
-        min_dist = float("inf")
-        left_c = 0
-        right_c = 0
-
-        for it in boxes:
-            if it["xmin"] < sx < it["xmax"]:
-                crossings += 1
-            elif it["xmax"] <= sx:
-                left_c += 1
-                dist = sx - it["xmax"]
-                if dist < min_dist:
-                    min_dist = dist
-            elif it["xmin"] >= sx:
-                right_c += 1
-                dist = it["xmin"] - sx
-                if dist < min_dist:
-                    min_dist = dist
-
-        if left_c >= 5 and right_c >= 5:
-            if crossings < min_crossings or (crossings == min_crossings and min_dist > best_clearance):
-                min_crossings = crossings
-                best_clearance = min_dist
-                best_split = sx
-
-    if best_split is not None and min_crossings <= 3:
-        return best_split
-    return None
-
-
-def _group_and_sort_lines(items: list[dict[str, Any]]) -> str:
-    """Gom các hộp chữ thành từng dòng theo toạ độ dọc và sắp xếp từ trái qua phải."""
-    if not items:
-        return ""
-
-    # Sắp xếp sơ bộ theo toạ độ y
-    items.sort(key=lambda it: it["y_center"])
-
-    lines: list[list[dict[str, Any]]] = []
-    current_line = [items[0]]
-
-    for it in items[1:]:
-        ref = current_line[-1]
-        line_h = max(ref["height"], it["height"])
-        # Nếu khoảng cách y_center nhỏ hơn 50% chiều cao dòng -> cùng 1 dòng ngang
-        if abs(it["y_center"] - ref["y_center"]) <= line_h * 0.5:
-            current_line.append(it)
-        else:
-            lines.append(current_line)
-            current_line = [it]
-    lines.append(current_line)
-
-    result_blocks: list[str] = []
-    prev_line_bottom = None
-
-    for line in lines:
-        # Sắp xếp các từ/cụm trong cùng một dòng từ trái sang phải
-        line.sort(key=lambda it: it["xmin"])
-        line_text = _MISREAD_BULLET.sub("• ", " ".join(it["text"] for it in line).strip())
-        if not line_text:
-            continue
-
-        line_top = min(it["ymin"] for it in line)
-        line_bottom = max(it["ymax"] for it in line)
-        line_height = max(1.0, line_bottom - line_top)
-
-        # Nếu khoảng cách giữa dòng trước và dòng sau lớn hơn 1.8 lần chiều cao dòng -> ngắt đoạn
-        if prev_line_bottom is not None and (line_top - prev_line_bottom) > line_height * 1.8:
-            result_blocks.append("")  # Dòng trống biểu thị khoảng cách đoạn
-
-        result_blocks.append(line_text)
-        prev_line_bottom = line_bottom
-
-    return "\n".join(result_blocks)
+    angles = []
+    for poly in polys:
+        (x0, y0), (x1, y1) = poly[0], poly[1]
+        h = max(abs(poly[3][1] - poly[0][1]), 1.0)
+        if x1 - x0 > 3 * h:
+            angles.append(math.atan2(y1 - y0, x1 - x0))
+    if len(angles) < 5:
+        return polys
+    angles.sort()
+    angle = angles[len(angles) // 2]
+    if abs(math.degrees(angle)) < 0.2:
+        return polys
+    cos, sin = math.cos(-angle), math.sin(-angle)
+    cx, cy = width / 2, height / 2
+    return [[(cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos) for x, y in p] for p in polys]
 
 
 def format_ocr_boxes(boxes: list[Any], width: float, height: float) -> str:
     """
-    Chuẩn hoá và tái cấu trúc thứ tự đọc từ kết quả OCR dạng bounding boxes.
-    Hỗ trợ cả bố cục 1 cột tiêu chuẩn và bố cục 2 cột (sidebar + main column).
+    Kết quả OCR dạng khung chữ ([đa giác, chữ, độ tin cậy, ...]) → chữ theo thứ tự đọc: chỉnh nghiêng, rồi chia trang
+    theo khoảng trắng như PDF có chữ (cv_layout.extract_layout_aware_text: một cột, hai cột, bố cục lai, ô lồng nhau).
     """
-    if not boxes:
-        return ""
-
-    items: list[dict[str, Any]] = []
-    for item in boxes:
-        # RapidOCR format: [box, text, score]
-        box = item[0]
-        text = str(item[1]).strip()
-        score = float(item[2]) if len(item) > 2 else 1.0
-
-        # Giữ lại các box có score >= 0.25, hoặc >= 0.18 nếu có chứa số, email, liên kết, dấu câu quan trọng
-        min_score = 0.18 if any(c.isdigit() or c in "@.:/|-" for c in text) else 0.25
-        if not text or score < min_score:
-            continue
-
-        ymin = float(min(pt[1] for pt in box))
-        ymax = float(max(pt[1] for pt in box))
-        xmin = float(min(pt[0] for pt in box))
-        xmax = float(max(pt[0] for pt in box))
-        y_center = (ymin + ymax) / 2.0
-        h = max(1.0, ymax - ymin)
-
-        items.append(
-            {
-                "text": text,
-                "xmin": xmin,
-                "xmax": xmax,
-                "ymin": ymin,
-                "ymax": ymax,
-                "y_center": y_center,
-                "height": h,
-            }
-        )
-
-    if not items:
-        return ""
-
-    from src.services.cv_files import clean_stutter_text
     from src.services.cv_layout import extract_layout_aware_text
 
-    raw_result = extract_layout_aware_text(items, width, height)
-    return clean_stutter_text(raw_result)
-
-
-def enhance_image_for_ocr(pil_img: Image.Image) -> Image.Image:
-    """Tăng tương phản và độ sắc nét giúp OCR dễ dàng đọc được các chữ mờ, xám hoặc font mảnh."""
-    try:
-        from PIL import ImageEnhance
-
-        # Tăng tương phản nhẹ (1.35x)
-        enhancer = ImageEnhance.Contrast(pil_img)
-        img_contrast = enhancer.enhance(1.35)
-        # Tăng độ sắc nét nét chữ (1.25x)
-        enhancer = ImageEnhance.Sharpness(img_contrast)
-        return enhancer.enhance(1.25)
-    except Exception:
-        return pil_img
+    kept = [
+        (item[0], str(item[1]).strip())
+        for item in boxes or []
+        if str(item[1]).strip() and (float(item[2]) if len(item) > 2 else 1.0) >= 0.25
+    ]
+    if not kept:
+        return ""
+    polys = _deskew([[(float(x), float(y)) for x, y in poly] for poly, _ in kept], width, height)
+    items = [
+        {
+            "text": text,
+            "x0": min(x for x, _ in poly),
+            "x1": max(x for x, _ in poly),
+            "top": min(y for _, y in poly),
+            "bottom": max(y for _, y in poly),
+        }
+        for poly, (_, text) in zip(polys, kept, strict=True)
+    ]
+    return extract_layout_aware_text(items, width, height)
 
 
 def _ocr_with_pytesseract(pil_img: Image.Image) -> str:
@@ -214,20 +211,20 @@ def _ocr_with_pytesseract(pil_img: Image.Image) -> str:
 
 
 def ocr_image(pil_img: Image.Image) -> str:
-    """Thực hiện OCR trên một đối tượng PIL Image sau khi tăng cường độ tương phản và sắc nét."""
+    """Thực hiện OCR trên một đối tượng PIL Image."""
     # Đảm bảo ảnh ở định dạng RGB
     if pil_img.mode != "RGB":
         pil_img = pil_img.convert("RGB")
 
     width, height = pil_img.size
-    processed_img = enhance_image_for_ocr(pil_img)
 
-    # 1. Thử chạy với RapidOCR (ONNX) kết hợp tham số phát hiện nét chữ mảnh/mờ
+    # 1. Thử chạy với RapidOCR (ONNX)
     engine = get_ocr_engine()
     if engine is not None:
         try:
-            np_img = np.array(processed_img)
-            res, _ = engine(np_img, text_score=0.15, box_thresh=0.2, unclip_ratio=2.0)
+            np_img = np.array(pil_img)
+            res, _ = engine(np_img, return_word_box=True)
+            res = _with_spaces(res) if res else res
             if res:
                 text = format_ocr_boxes(res, float(width), float(height))
                 if text and len("".join(text.split())) >= 20:
@@ -236,7 +233,7 @@ def ocr_image(pil_img: Image.Image) -> str:
             logger.warning("Lỗi trong quá trình xử lý RapidOCR: %s", e)
 
     # 2. Thử dự phòng với pytesseract
-    fallback_text = _ocr_with_pytesseract(processed_img)
+    fallback_text = _ocr_with_pytesseract(pil_img)
     if fallback_text and len("".join(fallback_text.split())) >= 20:
         return fallback_text
 
@@ -270,8 +267,7 @@ def ocr_pdf_bytes(data: bytes) -> tuple[str, int]:
         page_count = len(pdf)
         for i in range(page_count):
             page = pdf[i]
-            # scale=3.0 tương đương ~216 DPI (rõ chữ nhỏ 8-10pt, dấu tiếng Việt và số điện thoại)
-            pil_img = page.render(scale=3.0).to_pil()
+            pil_img = page.render(scale=render_scale(page.get_width())).to_pil()
             p_text = ocr_image(pil_img)
             if p_text.strip():
                 pages_text.append(p_text.strip())

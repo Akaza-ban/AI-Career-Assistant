@@ -20,7 +20,7 @@ from src.models.schemas import (
     ExportCvRequest,
     ExportCvResponse,
 )
-from src.services import cv_files, cv_optimizer, cv_versions, sharing
+from src.services import cv_files, cv_optimizer, cv_versions, jd_parser, sharing
 
 router = APIRouter(prefix="/cv", tags=["CV Management"])
 
@@ -47,6 +47,7 @@ def to_response(
         file_type=cv.file_type,
         size_bytes=cv.size_bytes,
         page_count=cv.page_count,
+        read_by_ocr=bool(cv.read_by_ocr),
         uploaded_at=cv.uploaded_at,
         origin=cv.origin,
         is_active=cv.is_active,
@@ -113,7 +114,8 @@ def upload_cv(
     file_type = cv_files.file_type_of(file_name)
     data = file.file.read(cv_files.CV_MAX_BYTES + 1)
     cv_files.check_size(len(data))
-    extracted = cv_files.extract_cv(file_type, data)
+    vocabulary = [t for skill in jd_parser.library_vocabulary(db) for t in (skill["name"], *skill["aliases"])]
+    extracted = cv_files.extract_cv(file_type, data, vocabulary)
 
     sequence = cv_versions.next_sequence(db, user.id)
     cv = CvVersion(
@@ -124,6 +126,7 @@ def upload_cv(
         file_type=file_type,
         size_bytes=len(data),
         page_count=extracted.page_count,
+        read_by_ocr=extracted.read_by_ocr,
         content_text=extracted.text,
         # CV đầu tiên tự động là CV đang dùng
         is_active=sequence == 1,
@@ -136,7 +139,7 @@ def upload_cv(
     except Exception:
         cv_files.delete_file(user.id, cv.id, file_type)
         raise
-    return to_response(cv).model_copy(update={"read_by_ocr": extracted.read_by_ocr})
+    return to_response(cv)
 
 
 @router.get("/{cv_id}/versions", response_model=list[CvVersionResponse])

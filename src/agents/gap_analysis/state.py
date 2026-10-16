@@ -29,6 +29,8 @@ class GapAnalysisState(TypedDict, total=False):
     # Gợi ý viết lại thô từ LLM trước khi chuẩn hoá: [{"requirement_id", "line", "rewrite", "reason"}]
     raw_suggestions: list[dict[str, Any]]
     llm_summary: str | None
+    # Một kỹ năng của JD có trong CV mà nhà tuyển dụng nhiều khả năng hỏi sâu (đã kiểm tra nhắc đúng kỹ năng)
+    interview_focus: str | None
     match_score: float | None
     score_breakdown: list[dict[str, Any]]
     # PRD mục 5.2: tối đa 2 lệnh gọi LLM mỗi lượt phân tích
