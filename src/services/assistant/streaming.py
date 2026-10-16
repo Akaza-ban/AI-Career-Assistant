@@ -22,22 +22,22 @@ class OutputGuard:
     def feed(self, text: str) -> str:
         self.pending += self.placeholders.feed(text)
         # HTML and model-control delimiters are never human answer content.
-        self.pending = re.sub(r"<[^>]*>|\[/?INST\]", "", self.pending, flags=re.IGNORECASE)
+        self.pending = re.sub(r"<(?:/?[A-Za-z][^>]*|![^>]*|\|[^>]*)>|\[/?INST\]", "", self.pending, flags=re.IGNORECASE)
         hold = len(self.pending)
-        for opener in ("<", "[INST", "[/INST"):
+        for opener in ("[INST", "[/INST"):
             for length in range(1, len(opener) + 1):
                 if self.pending.lower().endswith(opener[:length].lower()):
                     hold = min(hold, len(self.pending) - length)
-        # Retain everything after an unmatched HTML/protocol opener.
-        index = self.pending.rfind("<")
-        if index >= 0:
-            hold = min(hold, index)
+        # Retain tag/protocol prefixes, preserving ordinary score comparisons.
+        opener = re.search(r"<(?:/?[A-Za-z!|][^>]*|/?)$", self.pending)
+        if opener is not None:
+            hold = min(hold, opener.start())
         ready, self.pending = self.pending[:hold], self.pending[hold:]
         return ready
 
     def finish(self) -> str:
         tail = self.feed(self.placeholders.finish())
-        # An incomplete marker or placeholder is dropped on completion/cancel.
+        # Incomplete protocol markers are dropped; placeholders finish neutral.
         self.pending = ""
         return tail
 

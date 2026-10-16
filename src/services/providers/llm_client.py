@@ -331,9 +331,9 @@ class LlmClient:
                             message = validate_chat_message(accumulated)
                         if scope.mask_only:
                             message.pop("reasoning_content", None)
-                            # Validate the complete response before delivering any
-                            # content/tool delta: identifiers and placeholders can
-                            # straddle arbitrary upstream chunk boundaries.
+                            # Default callers retain complete-response validation.
+                            # Opt-in text streams already masked each complete
+                            # sentence and still validate the assembled response.
                             message = scope.sanitize_output(scope.mask_payload(message, wire=True))
                         egress_scan(message, scope)
                         status = "success"

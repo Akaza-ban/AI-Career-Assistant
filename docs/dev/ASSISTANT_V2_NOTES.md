@@ -623,3 +623,42 @@ T2.3b commit grouping deviation: `6a13a8b` combines the first three approved gro
 - Validation: all 143 combined backend assistant tests passed (including 21 UI cases). 34 frontend tests, type generation/TypeScript, frontend lint (two existing warnings), and production build passed. The build used real fonts and temporary isolated output because default `.next` refused an unlink; temporary build/tsconfig changes were restored. Ruff passes for changed Python files. Repository-wide Ruff still has three untouched errors in `src/api/analysis.py` and `src/db/seed.py`. Repository pytest fail-fast passes 20 tests then fails the untouched account registration profile test (demo name returned).
 
 See [full registered-element list, matching behavior and checks](Assistant_v2/UI_LOCATE_IMPLEMENTATION.md).
+
+
+## 2026-10-16 - architecture 3/9/10 streaming integration
+
+- Retained the T0 LangGraph, run registry and T3 how-to/locate implementations.
+  All seven local router decisions are wired; navigate/result are capability-menu
+  stubs until M4. Template routes use no retrieval or provider calls.
+- SSE is selected by Accept; legacy JSON and duplicate-run metadata stay supported.
+  Section 9 has nine application event names plus heartbeat (ten total). See
+  [implementation and verification](Assistant_v2/STREAMING_IMPLEMENTATION.md).
+- Reused the existing PlaceholderFilter with opt-in deferred replacement, and the
+  existing LlmClient/gateway with opt-in private text streaming. Incomplete
+  sentences are buffered for cross-chunk identifier masking, then released as
+  text tokens; this can delay initial visible output to a sentence boundary.
+  Guide-policy checks after streaming are advisory notices, not semantic proof.
+- Cards/chips/UI metadata use the existing turn context JSON under a server-owned
+  assistant_output key. No database migration, replay store or extra orchestrator.
+- Deployment remains single worker. Cancel/disconnect preserve guarded partial
+  text with interrupted=true; startup sweep is reused. No reconnect replay,
+  reasoning-content handling, confirmation UI, write tools or M4 resolver added.
+- Frontend uses rAF batching, escaped partial text, Stop, a client request ID for
+  each send/retry, JSON fallback, structured chips, role-checked links and saved
+  history. Saved actions are displayed but never dispatched on history load.
+- Legacy tests that expected analysis writes/navigation resolution were migrated
+  to v2 expectations. Action-confirm isolation/idempotency tests seed historical
+  actions explicitly, retaining coverage of the public legacy endpoint.
+- Repository-wide Ruff still reports the pre-existing missing get_roadmap_info
+  references in src/api/analysis.py and unused date import in src/db/seed.py.
+  These unrelated source files and pre-existing user edits were left untouched.
+
+- Verification: 845 scoped backend tests passed, 1 skipped; 43 frontend tests
+  passed; typecheck and scoped Ruff/format checks passed. Frontend lint has zero
+  errors and two existing api.ts navigation warnings. Full-repository pytest
+  stops at the unrelated account-registration profile-name test, also reproduced
+  in an uncached isolated run. The scoped run caches repeated test-fixture hash
+  and verification calculations only; real sessions/ownership remain tested.
+- Final guard regressions: 9 passed (15 deselected), covering score comparisons,
+  deferred placeholder replacement and 138 possible split positions across seven
+  inputs plus character-at-a-time partitions.

@@ -40,6 +40,7 @@ from src.models.assistant import (
     AssistantLlmOutput,
     ClientPageContext,
     FlatLlmAction,
+    NavigateAction,
     SourceCitation,
     validate_llm_actions,
 )
@@ -382,7 +383,7 @@ async def test_business_filter_neutralizes_name_without_restoration(knowledge_ba
     with provider_scope(identities=(Identity(name="Alice Morgan"),)):
         response = await agent.respond("Làm sao dùng nút Chọn file để tải CV lên? Name: Alice Morgan", context())
     structured.ainvoke.assert_awaited_once()
-    assert response.actions[0].params.value == "bạn"
+    assert response.actions == []  # The model cannot supply business/UI commands in v2.
     assert "Alice Morgan" not in str(structured.ainvoke.call_args.args[0])
 
 
@@ -424,7 +425,7 @@ async def test_llm_receives_history_and_returns_only_grounded_safe_actions(
     assert response.sources
     assert response.message == "Bạn có thể tải CV PDF hoặc DOCX."
     llm.with_structured_output.assert_called_once_with(AssistantLlmOutput, method="function_calling")
-    assert len(response.actions) == 1 and response.actions[0].action_type == "HIGHLIGHT_ELEMENT"
+    assert response.actions == []
     messages = structured.ainvoke.call_args.args[0]
     assert len(messages) == 2 and isinstance(messages[1], HumanMessage)
     data = ElementTree.fromstring(f"<data>{messages[-1].content}</data>")
@@ -492,7 +493,7 @@ async def test_low_cosine_does_not_use_rrf_as_similarity() -> None:
 @pytest.mark.parametrize(("distances", "count"), [([0.0, 0.1, 0.2, 0.3, 0.9], 3), ([0.0, 0.9], 1)])
 async def test_agent_applies_cutoff_instead_of_padding_sources(distances: list[float], count: int) -> None:
     agent = AssistantAgent(dense_retriever(distances))
-    result = await agent.respond("Tải CV PDF DOCX", context())
+    result = await agent.respond("Làm sao tải CV PDF DOCX?", context())
     assert len(result.sources) == count
     assert [source.chunk_id for source in result.sources] == [str(i) for i in range(count)]
 
@@ -502,29 +503,29 @@ async def test_selector_crossing_snippet_length_limit_is_cleaned_before_truncati
     retriever = dense_retriever([0.0])
     chunk = retriever.vector_store.search_vector.return_value[0]
     chunk.update(content="CV " * 160 + f"`{UPLOAD_SELECTOR}` PDF", selector=UPLOAD_SELECTOR)
-    response = await AssistantAgent(retriever).respond("Tải CV PDF", context())
+    response = await AssistantAgent(retriever).respond("Làm sao tải CV PDF?", context())
     assert response.sources[0].snippet.endswith("PDF")
     assert "data-agent-target" not in response.sources[0].snippet
     assert response.sources[0].selector == UPLOAD_SELECTOR
 
 
 @pytest.mark.asyncio
-async def test_start_analysis_requires_selected_ids_and_confirmation(knowledge_base: AssistantHybridRetriever) -> None:
+async def test_v2_never_proposes_analysis_writes(knowledge_base: AssistantHybridRetriever) -> None:
     ctx = context().model_copy(update={"selected_cv_id": "cv-1", "page_state": {"selected_jd_id": "jd-1"}})
     response = await AssistantAgent(knowledge_base).respond("Hãy bắt đầu phân tích CV", ctx)
-    start = next(action for action in response.actions if action.action_type == "START_ANALYSIS")
-    assert start.requires_confirmation is True and start.confirmation_message
+    assert response.actions == []
     absent = await AssistantAgent(knowledge_base).respond("Hãy bắt đầu phân tích CV", context())
     assert all(action.action_type != "START_ANALYSIS" for action in absent.actions)
 
 
 @pytest.mark.asyncio
-async def test_open_analysis_and_show_start_button(knowledge_base: AssistantHybridRetriever) -> None:
+async def test_locate_analysis_start_control(knowledge_base: AssistantHybridRetriever) -> None:
     ctx = context().model_copy(update={"route": "/student", "current_url": "/student"})
-    response = await AssistantAgent(knowledge_base).respond("Mở trang phân tích CV và chỉ tôi nút bắt đầu", ctx)
-    assert [action.action_type for action in response.actions] == ["NAVIGATE_PAGE", "HIGHLIGHT_ELEMENT"]
-    assert response.actions[0].params.route == "/student/analysis"
-    assert response.actions[1].params.selector == '[data-agent-target="btn-start-analysis"]'
+    response = await AssistantAgent(knowledge_base).respond("Nút bắt đầu phân tích ở đâu?", ctx)
+    assert response.actions == []
+    assert [action.type for action in response.ui_actions] == ["navigate", "highlight"]
+    assert response.ui_actions[0].route_id == "analysis_new"
+    assert response.ui_actions[1].element_id == "btn-start-analysis"
 
 
 @pytest.mark.asyncio
@@ -546,7 +547,7 @@ async def test_advisor_can_select_only_assigned_students(knowledge_base: Assista
     response = await AssistantAgent(knowledge_base, llm).respond(
         "Chọn sinh viên cần nhận xét báo cáo", context("advisor"), allowed_student_ids=["sv-assigned"]
     )
-    assert len(response.actions) == 1 and response.actions[0].params.student_id == "sv-assigned"
+    assert response.actions == []  # Student selection is outside the read-only v2 UI protocol.
 
 
 @pytest.mark.asyncio
@@ -585,25 +586,20 @@ async def test_negative_command_cannot_navigate(knowledge_base: AssistantHybridR
 
 
 @pytest.mark.asyncio
-async def test_chat_persists_conversation_turn_sources_and_pending_action(
-    client: AsyncClient, api_agent: AssistantAgent
-) -> None:
+async def test_chat_persists_navigation_stub_without_actions(client: AsyncClient, api_agent: AssistantAgent) -> None:
     result = await client.post(f"{API}/chat", json=payload(), headers=STUDENT)
     assert result.status_code == 200, result.text
     data = result.json()
-    assert data["intent"] == "action"
-    assert any(
-        action["params"]["route"] == "/student/analysis"
-        for action in data["actions"]
-        if action["action_type"] == "NAVIGATE_PAGE"
-    )
+    assert data["intent"] == "qa"
+    assert data["route"] == "navigate"
+    assert data["actions"] == data["ui_actions"] == data["sources"] == []
     with SessionLocal() as db:
         conversation = db.get(AssistantConversation, data["conversation_id"])
         turn = db.get(AssistantTurn, data["turn_id"])
         assert conversation.user_id == "sv-0142" and conversation.role == "student"
         assert turn.context_json["user_id"] == "sv-0142"
         assert turn.sources_json == data["sources"]
-        assert all(db.get(AgentActionLog, action["id"]).status == "pending" for action in data["actions"])
+        assert db.scalar(select(func.count()).select_from(AgentActionLog).where(AgentActionLog.turn_id == turn.id)) == 0
 
 
 @pytest.mark.asyncio
@@ -661,16 +657,9 @@ async def test_analysis_actions_require_accessible_cv_and_jd(
     response = await client.post(f"{API}/chat", json=body, headers=STUDENT)
     assert response.status_code == 200, response.text
     starts = [action for action in response.json()["actions"] if action["action_type"] == "START_ANALYSIS"]
-    assert bool(starts) == (kind == "owned")
-    if starts:
-        assert starts[0]["requires_confirmation"] is True
-        assert starts[0]["confirmation_message"]
-        with SessionLocal() as db:
-            assert db.get(AgentActionLog, starts[0]["id"]).status == "pending"
-    else:
-        assert "chọn lại" in response.json()["message"]
+    assert starts == []
     with SessionLocal() as db:
-        # This API proposes a client action; it must not start a background job.
+        # V2 never proposes or starts a background job, even with owned IDs.
         assert db.scalar(select(func.count()).select_from(GapAnalysis)) == analyses_before
 
 
@@ -712,8 +701,13 @@ async def test_navigate_to_jd_detail_only_for_visible_jds(
     monkeypatch.setattr(api_agent, "_llm", llm)
     response = await client.post(f"{API}/chat", json=payload("Mở chi tiết JD trong thư viện JD"), headers=STUDENT)
     assert response.status_code == 200, response.text
-    routes = [a["params"]["route"] for a in response.json()["actions"] if a["action_type"] == "NAVIGATE_PAGE"]
-    assert (route in routes) == (kind in ("library", "own"))
+    assert response.json()["actions"] == []  # Navigation resolution is deferred to M4.
+    with SessionLocal() as db:
+        user = db.get(User, "sv-0142")
+        safe = assistant_api._resource_actions(
+            db, user, [NavigateAction(description_vi="Open JD", params={"route": route})], []
+        )
+        assert bool(safe) == (kind in ("library", "own"))
 
 
 @pytest.mark.asyncio
@@ -748,12 +742,29 @@ async def test_assistant_endpoints_require_auth(client: AsyncClient, endpoint: s
     assert (await client.post(f"{API}/{endpoint}", json=body)).status_code == 401
 
 
+def legacy_audited_chat(chat: dict[str, Any]) -> dict[str, Any]:
+    """Seed a historical action to test the retained audit endpoint independently of v2."""
+    action = NavigateAction(description_vi="Open CV", params={"route": "/student/cv"})
+    with SessionLocal() as db:
+        db.add(
+            AgentActionLog(
+                id=action.id,
+                turn_id=chat["turn_id"],
+                action_type=action.action_type,
+                params_json=action.params.model_dump(mode="json"),
+                status="pending",
+            )
+        )
+        db.commit()
+    return {**chat, "actions": [action.model_dump(mode="json")]}
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("status", ["executed", "rejected", "failed"])
 async def test_action_status_is_persisted_and_idempotent(
     client: AsyncClient, api_agent: AssistantAgent, status: str
 ) -> None:
-    chat = (await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json()
+    chat = legacy_audited_chat((await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json())
     action_id = chat["actions"][0]["id"]
     body = {"action_id": action_id, "status": status, "error_message": "Selector absent"}
     response = await client.post(f"{API}/action/confirm", json=body, headers=STUDENT)
@@ -776,7 +787,7 @@ async def test_action_status_is_persisted_and_idempotent(
 async def test_action_confirmation_precedes_terminal_status(
     client: AsyncClient, api_agent: AssistantAgent, final_status: str
 ) -> None:
-    chat = (await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json()
+    chat = legacy_audited_chat((await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json())
     action_id = chat["actions"][0]["id"]
     body = {"action_id": action_id, "status": "confirmed"}
     for _ in range(2):
@@ -835,7 +846,7 @@ async def test_feedback_rejects_invalid_ratings(client: AsyncClient, rating: Any
 async def test_other_student_cannot_access_conversation_action_or_feedback(
     client: AsyncClient, api_agent: AssistantAgent
 ) -> None:
-    first = (await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json()
+    first = legacy_audited_chat((await client.post(f"{API}/chat", json=payload(), headers=STUDENT)).json())
     other = User(
         id=f"sv-{uuid4().hex[:12]}", role="student", full_name="Other student", email=f"{uuid4().hex}@example.test"
     )

@@ -1,5 +1,12 @@
 # CareerX Assistant v2 reuse map — T0
 
+Implementation follow-up (2026-10-16): architecture 3/9/10 extends the existing
+LangGraph, run registry, provider gateway, placeholder filter, turn JSON, fetch
+helper and chat widget. New `assistant/streaming.py` supplies the missing SSE
+framing/event whitelist; new `assistant-cards.tsx` supplies missing cards/chips UI.
+No parallel orchestrator, privacy implementation, history store or highlighter
+was introduced. See [streaming implementation and privacy buffering](STREAMING_IMPLEMENTATION.md).
+
 Audit date: 2026-10-15. Source HEAD: `a61004e0d21b3a5cdd03fd1963844c53b34e67b2`, including the working tree present at audit start. Authority: `docs/dev/ASSISTANT_V2_ARCHITECTURE.md`, **rev 4.1**. `TOOL_MATRIX.md` remains useful for business rules and purity findings, but its rev-3 tool catalog, milestones and line numbers are historical. This map rechecks current function bodies; it does not authorize removed features. No source changes, reindexing or production business-data inspection were performed. No live-provider benchmark was run; validation details are in `docs/dev/ASSISTANT_V2_NOTES.md`.
 
 Decisions refer to future implementation: **reuse** existing behavior; **extend** an existing boundary; **new** only where no equivalent exists. Navigation classifications explicitly distinguish **reusable as is**, **needs a read-only extraction**, and **missing**. Every assistant record query must include the authenticated user's owner predicate in SQL; a Python ownership check after `db.get()` is not enough for rev 4.1. Route handlers are evidence, never assistant-callable services.

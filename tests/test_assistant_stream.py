@@ -25,6 +25,7 @@ assistant_accounts = run_tests.assistant_accounts
         "a <script>bad</script> b",
         "a <|assistant|>b",
         "a [INST]b[/INST] c",
+        "Score < 70% and > 30%.",
     ],
 )
 def test_every_chunk_boundary(value: str) -> None:
@@ -36,7 +37,8 @@ def test_every_chunk_boundary(value: str) -> None:
         assert "".join(chunks) == expected, boundary
         assert "[[" not in "".join(chunks)
         assert "PERSON" not in "".join(chunks)
-        assert "<" not in "".join(chunks)
+        if "Score" not in value:
+            assert "<" not in "".join(chunks)
     guard = streaming.OutputGuard("you")
     assert "".join(guard.feed(char) for char in value) + guard.finish() == expected
 
@@ -58,6 +60,11 @@ def test_unmatched_placeholder_is_held_until_close() -> None:
     assert guard.feed("Hello [[PER") == "Hello "
     assert guard.feed("SON_abc]") == ""
     assert guard.feed("]!") == "you!"
+
+
+def test_score_comparisons_are_preserved() -> None:
+    guard = streaming.OutputGuard()
+    assert guard.feed("Score < 70% and > 30%.") + guard.finish() == "Score < 70% and > 30%."
 
 
 class Connection:
@@ -142,6 +149,27 @@ async def test_generator_teardown_cancels_upstream(assistant_accounts) -> None:
     with SessionLocal() as db:
         turn = db.query(AssistantTurn).filter_by(run_id=run_id).one()
         assert turn.interrupted and turn.assistant_message == "partial"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_before_producer_starts(assistant_accounts) -> None:
+    _, _, users = assistant_accounts
+    body, run_id, conversation_id = reserved(users["a"])
+    connection = Connection()
+    connection.disconnected = True
+    called = False
+
+    async def respond(sink):
+        nonlocal called
+        called = True
+
+    assert [wire async for wire in runs.stream(run_id, conversation_id, body, connection, respond).body_iterator] == []
+    assert not called
+    with SessionLocal() as db:
+        run = db.get(AssistantRun, run_id)
+        turn = db.query(AssistantTurn).filter_by(run_id=run_id).one()
+        assert run.status == "cancelled"
+        assert turn.interrupted and turn.assistant_message == ""
 
 
 @pytest.mark.asyncio
@@ -409,5 +437,41 @@ async def test_gateway_live_text_before_done_and_cancel_closes_transport(tmp_pat
             assert not finished
             await iterator.aclose()
             assert closed.is_set()
+    finally:
+        await provider.aclose()
+
+
+@pytest.mark.asyncio
+async def test_private_text_stream_masks_identifiers_split_character_by_character(tmp_path) -> None:
+    from src.services.providers.gateway import provider_scope
+    from src.services.providers.llm_client import ContentDelta, Done, LlmClient
+    from tests.test_llm_client import USER, chunk, record, settings
+
+    text = "Contact an@example.test or 0912345678. Select a PDF."
+    provider = LlmClient(
+        settings=settings(),
+        recorded=record(
+            tmp_path,
+            [
+                {
+                    "chunks": [
+                        chunk({"role": "assistant"}),
+                        *[chunk({"content": char}) for char in text],
+                        chunk({}, "stop"),
+                    ]
+                }
+            ],
+        ),
+    )
+    try:
+        with provider_scope(mask_only=True):
+            events = [event async for event in provider.chat_stream(USER, stream_text=True)]
+        visible = "".join(event.text for event in events if isinstance(event, ContentDelta))
+        assert "an@example.test" not in visible
+        assert "0912345678" not in visible
+        assert "[[" not in visible
+        assert "Select a PDF." in visible
+        assert isinstance(events[-1], Done)
+        assert events[-1].message["content"] == visible
     finally:
         await provider.aclose()

@@ -142,7 +142,7 @@ async def test_generic_query_cannot_echo_even_high_scoring_irrelevant_faq(
     agent, _, llm = chat_agent
     context = ClientPageContext(current_url="/student/cv", route="/student/cv", user_role="student")
     response = await agent.respond("Vì sao tôi cảm thấy mức tăng cảm xúc?", context)
-    assert "chưa tìm thấy tài liệu phù hợp" in response.message
+    assert "CareerV" in response.message
     assert response.sources == [] and response.actions == []
     llm.with_structured_output.assert_not_called()
 

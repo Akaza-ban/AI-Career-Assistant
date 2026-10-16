@@ -81,8 +81,9 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
 
 // A small hook harness exercises the provider's state/callback integration. Browser
 // layout and portal behavior are covered separately by the highlighter checks.
-function hooksFixture() {
+function hooksFixture({ runEffects = false } = {}) {
   const cells = []
+  const effects = []
   let cursor = 0
   const memoize = (factory, deps) => {
     const index = cursor++
@@ -93,7 +94,14 @@ function hooksFixture() {
     createContext: () => ({ Provider: "context-provider" }),
     useMemo: memoize, useCallback: (callback, deps) => memoize(() => callback, deps),
     useRef: (value) => memoize(() => ({ current: value }), []),
-    useEffect() {}, useContext() {},
+    useEffect(effect, deps) {
+      if (!runEffects) return
+      const index = cursor++
+      if (!cells[index] || deps.some((value, i) => !Object.is(value, cells[index].deps[i]))) {
+        cells[index] = { deps }
+        effects.push(effect)
+      }
+    }, useContext() {},
     useSyncExternalStore: (subscribe, snapshot) => snapshot(),
     useState: (initial) => {
       const index = cursor++
@@ -102,13 +110,18 @@ function hooksFixture() {
     },
   }
   const jsx = (type, props) => ({ type, props })
-  return { react, jsxRuntime: { jsx, jsxs: jsx }, render: (callback) => { cursor = 0; return callback() } }
+  return { react, jsxRuntime: { jsx, jsxs: jsx }, render: (callback) => {
+    cursor = 0
+    const tree = callback()
+    effects.splice(0).forEach((effect) => effect())
+    return tree
+  } }
 }
 
 function providerFixture(actions, ui_actions = [], options = {}) {
   const f = fixture()
-  const hooks = hooksFixture()
-  f.window.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
+  const hooks = hooksFixture({ runEffects: options.hydrate })
+  f.window.localStorage = { getItem: () => options.conversationId ?? null, setItem() {}, removeItem() {} }
   const { AgentActionRunner } = load("lib/agent-action-runner.ts", {}, { AbortController })
   const inputs = []
   const animationFrames = []
@@ -125,7 +138,7 @@ function providerFixture(actions, ui_actions = [], options = {}) {
         return { conversation_id: "conv-1", turn_id: "turn-1", message: "Saved guide", actions, ui_actions, sources: [] }
       },
       cancelRun: async (id) => { f.requests.push({ cancel: id }); return { id, status: "cancelled" } },
-      getConversationHistory: async () => [],
+      getConversationHistory: async () => options.history ?? [],
       confirmAction: async (id, status) => { f.reports.push([id, status]) },
     },
     "@/components/assistant/action-confirmation-dialog": { ActionConfirmationDialog: "confirmation-dialog" },
@@ -614,4 +627,22 @@ test("cards use role-checked registry links and chips retain structured payloads
   chips.props.children[0].props.onClick()
   assert.equal(selected, chip)
   assert.equal(AssistantChips({ chips: [chip], disabled: true }).props.children[0].props.disabled, true)
+})
+
+test("restoring a conversation loads saved messages without replaying UI actions", async () => {
+  const f = providerFixture([], [], { hydrate: true, conversationId: "saved-conversation", history: [
+    { id: "turn:user", sender: "user", content: "Previous question" },
+    { id: "turn:assistant", turn_id: "turn", sender: "assistant", content: "Saved partial", interrupted: true,
+      ui_actions: [{ type: "navigate", route_id: "cv_list", params: {} }] },
+  ] })
+  f.render()
+  await new Promise(setImmediate)
+  const value = f.render().props.value
+  assert.equal(value.conversationId, "saved-conversation")
+  assert.equal(value.messages.length, 2)
+  assert.equal(value.messages[1].content, "Saved partial")
+  assert.equal(value.messages[1].id, "turn")
+  assert.equal(value.messages[1].interrupted, true)
+  assert.equal(f.pushes.length, 0)
+  assert.equal(f.requests.length, 0)
 })

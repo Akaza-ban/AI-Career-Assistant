@@ -171,7 +171,7 @@ class AssistantAgent:
             response = AssistantResponse(
                 message="I can only help with permitted CareerV features. Please choose a feature from the usage guide."
                 if language == "en"
-                else "Tôi chỉ hỗ trợ các tính năng CareerV được phép. Bạn hãy chọn tính năng cần hướng dẫn.",
+                else "Xin lỗi, tôi chỉ hỗ trợ các tính năng CareerV được phép. Bạn hãy chọn tính năng cần hướng dẫn.",
                 intent="qa",
             )
         elif decision.route == "clarify":
@@ -636,6 +636,9 @@ class AssistantAgent:
                     logger.warning("Assistant generation unavailable; using grounded fallback")
             except Exception:
                 logger.warning("Assistant generation unavailable; using grounded fallback")
+        # Structured backends can supply prose, but v2 accepts no model-authored
+        # legacy actions or model-owned intent.
+        response = response.model_copy(update={"actions": [], "intent": "qa"})
         return {"response": self._guard(response, state)}
 
     async def respond(
