@@ -358,15 +358,8 @@ def lift_parents(
 # ---------- Điểm tổng ----------
 
 
-# Giới hạn thực tế tuyển dụng:
-# - Không có CV đạt 100% tuyệt đối trên giấy (luôn cần vòng phỏng vấn để kiểm chứng chiều sâu thực chiến và văn hoá).
-# - Không có CV 0% (ứng viên luôn có nền tảng học vấn, tư duy số và kỹ năng chuyển đổi cơ bản).
-SCORE_FLOOR = 10.0
-SCORE_CEILING = 92.0
-
-
 def compute_score(assessments: list[dict[str, Any]]) -> tuple[float | None, list[dict[str, Any]]]:
-    """CV–JD Matching Score (giới hạn thực tế 10.0–92.0%, làm tròn 1 chữ số) và bảng phân rã theo mức độ yêu cầu."""
+    """CV–JD Matching Score (0.0–100.0%, làm tròn 1 chữ số) và bảng phân rã theo mức độ yêu cầu."""
     breakdown = []
     for importance, weight in IMPORTANCE_WEIGHTS.items():
         items = [a for a in assessments if a["importance"] == importance]
@@ -390,8 +383,7 @@ def compute_score(assessments: list[dict[str, Any]]) -> tuple[float | None, list
         return None, breakdown
 
     raw_score = sum(b["earned"] for b in breakdown) / possible * 100
-    clamped_score = min(SCORE_CEILING, max(SCORE_FLOOR, raw_score))
-    return round(clamped_score, 1), breakdown
+    return round(raw_score, 1), breakdown
 
 
 def match_label(score: float | None) -> str | None:

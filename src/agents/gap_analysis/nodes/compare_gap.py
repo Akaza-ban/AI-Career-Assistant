@@ -8,9 +8,7 @@ from src.services.skill_matching import (
     SECTION_LABELS,
     assess_by_rules,
     assessment,
-    is_descriptive,
     lift_parents,
-    listing_note,
 )
 
 logger = logging.getLogger(__name__)
@@ -102,7 +100,7 @@ def _merge(
     llm_item: dict[str, Any] | None,
     lines_by_no: dict[int, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Kết hợp chấm của LLM với chấm theo quy tắc; quy tắc cưỡng chế bảng anchor để điểm nhất quán giữa các lần chạy."""
+    """Ưu tiên 100% đánh giá chuyên môn của AI khi có LLM; nếu LLM không khả dụng thì fallback sang quy tắc."""
     if llm_item is None:
         return rule
     try:
@@ -122,19 +120,9 @@ def _merge(
     note = str(llm_item.get("note") or "").strip() or None
 
     if match == 0:
-        # CV có ghi rõ tên kỹ năng → không để LLM đánh "Thiếu" (tránh kết luận sai bất lợi cho SV)
-        return rule if rule["match"] > 0 else assessment(requirement, 0, None, note or rule["note"], "llm")
-    if not evidence_lines:
-        # LLM khẳng định có nhưng không chỉ ra được dòng bằng chứng → không tin, dùng kết quả quy tắc
-        return rule
-    descriptive = [line for line in evidence_lines if is_descriptive(line)]
-    if match == 1 and not descriptive:
-        # Anchor: bằng chứng chỉ là dòng liệt kê thì tối đa 0.5
-        match = 0.5
-    line = (descriptive or evidence_lines)[0]
-    if match == 0.5:
-        # Ghi chú cố định thay cho lời của LLM: nói rõ kỹ năng mới được liệt kê ở đâu và cần thêm gì
-        note = listing_note(requirement["name"], line)
+        return assessment(requirement, 0, None, note or rule["note"], "llm")
+
+    line = evidence_lines[0] if evidence_lines else rule.get("evidence")
     return assessment(requirement, match, line, note or rule["note"], "llm")
 
 
