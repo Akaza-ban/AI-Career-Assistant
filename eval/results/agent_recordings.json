@@ -1,0 +1,34 @@
+{
+  "find_analysis": {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "find-analysis",
+        "type": "function",
+        "function": {
+          "name": "find_analysis",
+          "arguments": "{\"jd\":\"{{jd_title}}\",\"latest\":true}"
+        }
+      }
+    ]
+  },
+  "get_result_facts": {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "result-facts",
+        "type": "function",
+        "function": {
+          "name": "get_result_facts",
+          "arguments": "{\"ref\":\"{{ref}}\"}"
+        }
+      }
+    ]
+  },
+  "closing": {
+    "role": "assistant",
+    "content": "The stored match score is {{score}}."
+  }
+}

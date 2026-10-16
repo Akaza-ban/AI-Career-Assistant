@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -79,6 +80,21 @@ class ScriptedClient:
         response = self.responses.pop(0)
         self.returned_tool_calls += len(response.get("tool_calls", []))
         return response
+
+
+async def _recorded_provider_call(tmp_path, messages, kwargs, response_message):
+    fixture_dir = tmp_path / uuid4().hex
+    fixture_dir.mkdir()
+    client = LlmClient(
+        settings=settings(),
+        recorded=record(fixture_dir, [{"response": completion(response_message)}]),
+    )
+    try:
+        response = await client.chat(messages, **kwargs)
+        client.assert_recording_consumed()
+        return response
+    finally:
+        await client.aclose()
 
 
 def tool_call(name: str, args: dict, call_id: str = "call-1"):
@@ -423,12 +439,13 @@ async def test_non_student_result_agent_is_restricted_before_provider(agent_db):
 
 
 @pytest.mark.asyncio
-async def test_eval_nav_agent_subset_hits_at_least_85_percent(agent_db):
+async def test_eval_nav_agent_subset_hits_at_least_85_percent(agent_db, tmp_path):
     from eval.nav.agent_cases import NAV_AGENT_CASES
     from src.services.assistant.agent_path import run_agent_path
 
     db, user, *_ = agent_db
     suffix = uuid4().hex[:6]
+    recordings = json.loads(Path("eval/nav/agent_recordings.json").read_text(encoding="utf-8"))
     cases = [{**case, "expected_title": f"{case['expected_title']} {suffix}"} for case in NAV_AGENT_CASES]
     rows = [
         JobDescription(
@@ -445,13 +462,18 @@ async def test_eval_nav_agent_subset_hits_at_least_85_percent(agent_db):
     db.commit()
     correct = 0
     try:
-        for case, row in zip(cases, rows, strict=True):
-            client = ScriptedClient(
-                [
-                    tool_call("find_jd", {"name": case["query"] + f" {suffix}"}),
-                    {"role": "assistant", "content": "I found one match."},
-                ]
-            )
+        for index, (case, row) in enumerate(zip(cases, rows, strict=True)):
+
+            class RecordedNavClient:
+                def __init__(self):
+                    self.step = 0
+
+                async def chat(self, messages, **kwargs):
+                    self.step += 1
+                    template = recordings["find_jd"] if self.step == 1 else recordings["closing"]
+                    rendered = json.loads(json.dumps(template).replace("{{query}}", case["query"] + f" {suffix}"))
+                    return await _recorded_provider_call(tmp_path, messages, kwargs, rendered)
+
             context = ClientPageContext(
                 current_url="/student/library", route="/student/library", user_role="student", user_id=user.id
             )
@@ -461,7 +483,7 @@ async def test_eval_nav_agent_subset_hits_at_least_85_percent(agent_db):
                 user=user,
                 context=context,
                 route_kind="navigate",
-                llm=client,
+                llm=RecordedNavClient(),
             )
             correct += bool(response.cards and row.id in response.cards[0].params.values())
             assert response.ui_actions == []
@@ -474,11 +496,12 @@ async def test_eval_nav_agent_subset_hits_at_least_85_percent(agent_db):
 
 
 @pytest.mark.asyncio
-async def test_eval_results_agent_subset_matches_30_seeded_scores(agent_db):
+async def test_eval_results_agent_subset_matches_30_seeded_scores(agent_db, tmp_path):
     from eval.results.agent_cases import RESULT_AGENT_CASES
     from src.services.assistant.agent_path import run_agent_path
 
     db, user, *_ = agent_db
+    recordings = json.loads(Path("eval/results/agent_recordings.json").read_text(encoding="utf-8"))
     suffix = uuid4().hex[:6]
     jds = [
         JobDescription(
@@ -515,14 +538,18 @@ async def test_eval_results_agent_subset_matches_30_seeded_scores(agent_db):
 
         async def chat(self, messages, **kwargs):
             self.step += 1
+            previous = json.loads(messages[-1]["content"]) if messages[-1].get("role") == "tool" else {}
             if self.step == 1:
-                return tool_call("find_analysis", {"jd": self.jd_title, "latest": True}, f"find-{self.step}")
-            previous = json.loads(messages[-1]["content"])
-            if self.step == 2:
+                rendered = json.loads(json.dumps(recordings["find_analysis"]).replace("{{jd_title}}", self.jd_title))
+            elif self.step == 2:
                 ref = previous["data"]["targets"][0]["ref"]
-                return tool_call("get_result_facts", {"ref": ref}, f"facts-{self.step}")
-            facts = previous["data"]["facts"]
-            return {"role": "assistant", "content": f"The stored match score is {facts['overall_match_score']}."}
+                rendered = json.loads(json.dumps(recordings["get_result_facts"]).replace("{{ref}}", ref))
+            else:
+                facts = previous["data"]["facts"]
+                rendered = json.loads(
+                    json.dumps(recordings["closing"]).replace("{{score}}", str(facts["overall_match_score"]))
+                )
+            return await _recorded_provider_call(tmp_path, messages, kwargs, rendered)
 
     correct = 0
     failures = []
