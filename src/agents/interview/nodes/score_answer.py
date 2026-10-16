@@ -53,52 +53,43 @@ def evaluate_answer_fallback(
     total_rounds: int,
 ) -> STARScoreOutput:
     """
-    Quy tắc chấm điểm dự phòng (Rule-based Fallback):
+    Quy tắc chấm điểm dự phòng (Structural Fallback):
     Được kích hoạt khi LLM lỗi mạng hoặc không có API key.
-    Phân tích độ dài câu trả lời và từ khóa STAR để ước tính điểm số khách quan trên thang 0-5.
+    Đánh giá dựa trên độ hoàn chỉnh cấu trúc văn bản (độ dài, số câu) một cách khách quan,
+    tuyệt đối không dùng danh sách từ khóa thụ động để tránh phán đoán sai lệch hoặc bị gian lận từ khóa.
     """
-    ans_lower = user_answer.lower()
-    words = user_answer.split()
+    clean_text = user_answer.strip()
+    words = clean_text.split()
     word_count = len(words)
 
-    # Heuristic cho Situation (bối cảnh dự án, công ty, vấn đề)
-    sit_keywords = ["dự án", "project", "hệ thống", "bối cảnh", "công ty", "khi", "lúc", "khách hàng"]
-    sit_matches = sum(1 for k in sit_keywords if k in ans_lower)
-    sit_score = min(5.0, 2.5 + (0.5 * sit_matches) + (0.5 if word_count > 30 else 0.0))
+    # Đếm số câu hoàn chỉnh dựa trên dấu kết thúc câu
+    sentences = [s.strip() for s in re.split(r"[.!?\n]+", clean_text) if len(s.strip()) > 3]
+    sentence_count = len(sentences)
 
-    # Heuristic cho Task (mục tiêu, nhiệm vụ, yêu cầu)
-    task_keywords = ["nhiệm vụ", "mục tiêu", "yêu cầu", "task", "trách nhiệm", "cần phải", "deadline"]
-    task_matches = sum(1 for k in task_keywords if k in ans_lower)
-    task_score = min(5.0, 2.5 + (0.5 * task_matches) + (0.5 if word_count > 40 else 0.0))
+    # Thang điểm cấu trúc trung lập (0.0 - 5.0)
+    # Câu trả lời quá ngắn (< 25 từ hoặc < 2 câu): 2.0 - 2.5
+    # Câu trả lời cơ bản (25 - 60 từ): 3.0
+    # Câu trả lời chi tiết (> 60 từ và >= 3 câu): 3.5
+    if word_count < 25 or sentence_count < 2:
+        base_score = 2.0
+    elif word_count < 60 or sentence_count < 3:
+        base_score = 3.0
+    else:
+        base_score = 3.5
 
-    # Heuristic cho Action (hành động cụ thể, kỹ thuật đã làm)
-    action_keywords = ["tôi đã", "sử dụng", "triển khai", "tối ưu", "xây dựng", "viết", "cấu hình", "debug", "refactor"]
-    action_matches = sum(1 for k in action_keywords if k in ans_lower)
-    action_score = min(5.0, 2.5 + (0.5 * action_matches) + (0.5 if word_count > 50 else 0.0))
+    sit_score = base_score
+    task_score = base_score
+    action_score = min(5.0, base_score + (0.5 if sentence_count >= 4 else 0.0))
+    result_score = base_score
 
-    # Heuristic cho Result (kết quả, con số, %)
-    has_numbers = bool(re.search(r"\d+%|\d+\s*(ms|s|req|ccu|user|người|lần)", ans_lower))
-    result_keywords = ["kết quả", "giúp", "hoàn thành", "thành công", "cải thiện", "đạt"]
-    result_matches = sum(1 for k in result_keywords if k in ans_lower)
-    result_score = min(5.0, 2.0 + (1.5 if has_numbers else 0.5) + (0.5 * result_matches))
-
-    # Cùng 3 phần như nhận xét của AI: Điểm tốt / Cần cải thiện / Gợi ý trả lời
+    # Phản hồi 3 phần chuẩn tắc: Điểm tốt / Cần cải thiện / Gợi ý trả lời
     feedback = "\n".join(
         [
-            "Điểm tốt: "
-            + (
-                "Bạn đã nêu được con số minh chứng cho kết quả."
-                if has_numbers
-                else f"Câu trả lời có {word_count} từ, đã nêu được trải nghiệm liên quan tới vị trí {job_role}."
-            ),
-            "Cần cải thiện: "
-            + (
-                "Làm rõ hơn những việc chính bạn trực tiếp làm (Hành động)."
-                if has_numbers
-                else "Phần Kết quả còn thiếu số liệu cụ thể."
-            ),
-            "Gợi ý trả lời: Nói rõ vai trò của riêng bạn, các bước đã làm theo thứ tự và một con số thật cho kết quả "
-            "(thời gian, %, số người dùng).",
+            f"Điểm tốt: Câu trả lời đã được ghi nhận với cấu trúc {word_count} từ cho vị trí {job_role}.",
+            "Cần cải thiện: Hãy đảm bảo trình bày đầy đủ cả 4 phần STAR: Bối cảnh (S), Trách nhiệm cá nhân (T), "
+            "Quyết định kỹ thuật & Trade-offs (A), và Kết quả đo lường cụ thể (R).",
+            "Gợi ý trả lời: Trong phỏng vấn kỹ thuật, hãy luôn nêu rõ vị trí của công nghệ trong hệ thống, "
+            "lý do tại sao chọn công nghệ này thay vì phương án khác và kết quả đo lường được.",
         ]
     )
 
@@ -149,40 +140,67 @@ async def score_answer_with_llm(
     total_rounds: int,
 ) -> STARScoreOutput:
     """
-    Chấm điểm câu trả lời phỏng vấn theo phương pháp STAR bằng LLM:
-    - Thang điểm: 0.0 đến 5.0 cho từng tiêu chí.
+    Chấm điểm câu trả lời phỏng vấn theo phương pháp STAR Kỹ thuật (Technical STAR) bằng LLM:
+    - Thang điểm: 0.0 đến 5.0 cho từng tiêu chí S, T, A, R.
+    - Tiêu chí Action (A) đào sâu vào Technical Decision Making & Trade-offs (Tại sao dùng, ưu điểm so với phương án khác).
+    - Tiêu chí Result (R) linh hoạt công nhận cả số liệu định lượng lẫn bài học kinh nghiệm sâu sắc.
     - Validate JSON đầu ra qua Pydantic STARScoreOutput.
-    - Retry tối đa 1 lần nếu LLM trả về JSON lỗi hoặc sai định dạng (do dùng model free-tier).
+    - Retry tối đa 1 lần nếu LLM trả về JSON lỗi hoặc sai định dạng.
     """
     is_last_round = current_round >= total_rounds
 
     example_next_q = "null" if is_last_round else '"Câu hỏi cho vòng kế tiếp..."'
 
     base_prompt = (
-        "Bạn là Chuyên gia Tuyển dụng Kỹ thuật Cấp cao (Senior Technical Interviewer & STAR Assessor).\n"
-        "Hãy đánh giá câu trả lời của ứng viên cho vị trí tuyển dụng theo phương pháp STAR.\n\n"
+        "Bạn là Chuyên gia Tuyển dụng Kỹ thuật Cấp cao (Senior Technical Interviewer & Engineering Lead).\n"
+        "Nhiệm vụ của bạn là thẩm định câu trả lời phỏng vấn theo phương pháp STAR Kỹ thuật (Technical STAR). "
+        "Hãy đánh giá một cách CHỦ ĐỘNG, SẮC BÉN VÀ KHẮT KHE, tuyệt đối không chấm điểm theo hình thức hay bắt từ khóa thụ động.\n\n"
         "=== THÔNG TIN PHỎNG VẤN ===\n"
-        f"- Vị trí ứng tuyển: {job_role}\n"
-        f"- Vòng hiện tại: Vòng {current_round} / Tổng số {total_rounds} vòng\n"
-        f"- Câu hỏi phỏng vấn: {current_question or f'Hãy chia sẻ kinh nghiệm kỹ thuật liên quan đến vị trí {job_role}.'}\n"
+        f"- Vị trí tuyển dụng: {job_role}\n"
+        f"- Vòng phỏng vấn: Vòng {current_round} / Tổng số {total_rounds} vòng\n"
+        f"- Câu hỏi của nhà tuyển dụng: {current_question or f'Hãy chia sẻ kinh nghiệm kỹ thuật liên quan đến vị trí {job_role}.'}\n"
         f"- Câu trả lời của ứng viên:\n{user_answer}\n\n"
-        "=== THANG ĐIỂM CHẤM (TỪ 0.0 ĐẾN 5.0 CHO MỖI TIÊU CHÍ) ===\n"
-        "1. situation_score (0.0 - 5.0): Bối cảnh dự án, quy mô bài toán, khó khăn thực tế có rõ ràng không?\n"
-        "2. task_score (0.0 - 5.0): Trách nhiệm cá nhân và mục tiêu cần giải quyết có rành mạch không?\n"
-        "3. action_score (0.0 - 5.0): Các giải pháp kỹ thuật, công nghệ đã sử dụng và tư duy xử lý có chi tiết không?\n"
-        "4. result_score (0.0 - 5.0): Kết quả đạt được có đo lường được bằng số liệu định lượng (%, ms, throughput) không?\n\n"
+        "=== 4 NGUYÊN TẮC THẨM ĐỊNH CHỦ ĐỘNG (BẮT BUỘC ÁP DỤNG) ===\n"
+        "1. KIỂM TRA ĐỘ TRÚNG ĐÍCH (Relevance Check): Ứng viên có trả lời ĐÚNG TRỌNG TÂM câu hỏi không? "
+        "Nếu trả lời lạc đề, nói vòng vo hoặc chỉ nhồi nhét từ khóa sáo rỗng (keyword stuffing), TẤT CẢ các điểm số KHÔNG ĐƯỢC VƯỢT QUÁ 2.0!\n"
+        "2. KIỂM TRA BẢN CHẤT KỸ THUẬT (Technical Depth: What - Why - Trade-off):\n"
+        "   - CÔNG NGHỆ DÙNG LÀM GÌ (What): Vị trí và vai trò của công nghệ đó trong kiến trúc hệ thống là gì?\n"
+        "   - TẠI SAO LẠI CHỌN CÔNG NGHỆ NÀY (Why): Có so sánh với các phương án thay thế khác không (ví dụ: Redis vs. Memcached, "
+        "FastAPI vs. Django, PostgreSQL vs. MongoDB, Microservices vs. Monolith)?\n"
+        "   - ƯU ĐIỂM VÀ ĐÁNH ĐỔI (Trade-offs): Không có công nghệ nào hoàn hảo tuyệt đối — ứng viên có nhận thức được ưu điểm vượt trội "
+        "và cái giá phải đánh đổi (chi phí RAM, độ phức tạp bảo trì, tính nhất quán dữ liệu...) trong bài toán đó không?\n"
+        "3. TÁCH BẠCH ĐÓNG GÓP CÁ NHÂN (I vs. We): Nếu ứng viên dùng 'chúng em / nhóm em' và nói chung chung về công việc tập thể, "
+        "không nêu rõ trách nhiệm và dòng code/tính năng do chính mình trực tiếp làm, điểm Task và Action TỐI ĐA CHỈ LÀ 3.0.\n"
+        "4. KẾT QUẢ PHẢI XÁC THỰC (Result Verification): Kết quả phải đo lường được (số liệu %, ms, throughput, tài nguyên tiết kiệm) "
+        "HOẶC là bài học kinh nghiệm sâu sắc về kiến trúc; bác bỏ các kết luận chung chung như 'dự án chạy tốt', 'được khen'.\n\n"
+        "=== RUBRIC CHẤM ĐIỂM CHI TIẾT (THANG 0.0 - 5.0 CHO MỖI TIÊU CHÍ) ===\n"
+        "- situation_score (Bối cảnh & Thách thức):\n"
+        "  + 0.0 - 2.5: Bối cảnh mơ hồ, không rõ bài toán xảy ra ở đâu, quy mô và thách thức kỹ thuật là gì.\n"
+        "  + 3.0 - 3.5: Nêu được dự án/công ty và bài toán kỹ thuật cơ bản.\n"
+        "  + 4.0 - 5.0: Bối cảnh sắc nét, nêu rõ ràng kiến trúc hệ thống, quy mô dữ liệu/traffic hoặc ràng buộc thực tế.\n\n"
+        "- task_score (Nhiệm vụ & Vai trò cá nhân):\n"
+        "  + 0.0 - 2.5: Nói việc của cả nhóm, không rõ ứng viên được giao việc gì.\n"
+        "  + 3.0 - 3.5: Xác định được vai trò cá nhân nhưng KPI/mục tiêu kỹ thuật cần đạt chưa rành mạch.\n"
+        "  + 4.0 - 5.0: Phân tách rõ ràng trách nhiệm độc lập của bản thân (I) và chỉ tiêu kỹ thuật cụ thể cần hoàn thành.\n\n"
+        "- action_score (Hành động & Quyết định Kỹ thuật / Trade-offs - TIÊU CHÍ QUAN TRỌNG NHẤT):\n"
+        "  + 0.0 - 2.5: Chỉ liệt kê tên công nghệ như học vẹt, lý thuyết suông; không có hành động cụ thể.\n"
+        "  + 3.0 - 3.5 (Mức WHAT): Nêu được công nghệ dùng để làm gì, nhưng CHƯA giải thích lý do tại sao chọn công nghệ này mà không chọn giải pháp khác.\n"
+        "  + 4.0 - 5.0 (Mức WHY & TRADE-OFFS): Giải thích trọn vẹn: Công nghệ dùng để làm gì? TẠI SAO LẠI CHỌN công nghệ này (so sánh với các phương án thay thế)? và ƯU ĐIỂM / SỰ ĐÁNH ĐỔI (Trade-offs) trong bài toán đó.\n\n"
+        "- result_score (Kết quả & Bài học):\n"
+        "  + 0.0 - 2.5: Không có kết quả đầu ra, hoặc kết quả sáo rỗng không ăn khớp với bài toán.\n"
+        "  + 3.0 - 3.5: Có kết quả công việc nhưng thiếu số liệu minh chứng cụ thể.\n"
+        "  + 4.0 - 5.0: Có số liệu kỹ thuật đo lường rõ ràng (%, ms, throughput, tài nguyên) HOẶC bài học kinh nghiệm sâu sắc giúp tối ưu dự án lâu dài.\n\n"
         "=== YÊU CẦU NHẬN XÉT (feedback_text) ===\n"
         "Viết bằng tiếng Việt, văn bản thường (KHÔNG markdown: không **, không `, không gạch đầu dòng), "
         "tối đa khoảng 120 từ, đúng 3 dòng ngăn bằng ký tự xuống dòng \\n, mỗi dòng bắt đầu bằng nhãn sau:\n"
-        "Điểm tốt: <điều ứng viên đã làm tốt, cụ thể theo câu trả lời>\n"
-        "Cần cải thiện: <phần STAR còn thiếu hoặc yếu nhất, nói rõ thiếu gì>\n"
-        "Gợi ý trả lời: <2–3 ý cụ thể nên kể thêm cho ĐÚNG câu hỏi này, ví dụ vai trò cá nhân, "
-        "các bước đã làm, kết quả đo được; chỉ gợi ý, không bịa sự việc thay ứng viên>\n\n"
+        "Điểm tốt: <nêu cụ thể 1 giải pháp kỹ thuật hoặc tư duy phân tích tốt nhất mà ứng viên đã thể hiện>\n"
+        "Cần cải thiện: <chỉ rõ điểm yếu cốt lõi: NẾU chưa giải thích lý do chọn công nghệ hoặc trade-off so sánh, BẮT BUỘC chỉ rõ; NẾU nói chung chung nhóm em, nhắc làm rõ vai trò cá nhân>\n"
+        "Gợi ý trả lời: <1 câu nói mẫu cụ thể hướng dẫn cách so sánh lý do chọn công nghệ hoặc đưa số liệu đo lường vào bài nói>\n\n"
         "=== YÊU CẦU CÂU HỎI TIẾP THEO ===\n"
         + (
             "Đây là vòng cuối cùng (Vòng kết thúc), trường 'next_question' BẮT BUỘC là null.\n"
             if is_last_round
-            else f"Vì chưa phải vòng cuối, hãy gợi ý 1 câu hỏi phỏng vấn chuyên sâu kế tiếp (Vòng {current_round + 1}) phù hợp với vị trí {job_role}.\n"
+            else f"Vì chưa phải vòng cuối, hãy gợi ý 1 câu hỏi phỏng vấn kỹ thuật chuyên sâu kế tiếp (Vòng {current_round + 1}) phù hợp với vị trí {job_role}.\n"
         )
         + "\n=== ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ) ===\n"
         "{\n"
@@ -190,7 +208,7 @@ async def score_answer_with_llm(
         '  "task_score": 3.5,\n'
         '  "action_score": 4.5,\n'
         '  "result_score": 3.0,\n'
-        '  "feedback_text": "Điểm tốt: ...\\nCần cải thiện: ...\\nGợi ý trả lời: ...",\n'
+        '  "feedback_text": "Điểm tốt: Nêu rõ bài toán bottleneck và giải pháp cache.\\nCần cải thiện: Phần Action cần giải thích rõ vì sao chọn Redis thay vì Memcached và ưu điểm cụ thể.\\nGợi ý trả lời: Thêm: Tôi chọn Redis thay vì Memcached vì cần cấu trúc Sorted Set cho bảng xếp hạng real-time...",\n'
         f'  "next_question": {example_next_q}\n'
         "}"
     )

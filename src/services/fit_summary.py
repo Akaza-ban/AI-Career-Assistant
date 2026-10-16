@@ -84,5 +84,19 @@ def compose_summary(assessments: list[dict[str, Any]], lines: list[dict[str, Any
         else None
     )
 
+    # Ngữ cảnh thực tế tuyển dụng
+    if not gaps and not listed and matched:
+        return (
+            f"Hồ sơ thể hiện độ tương thích cao với các kỹ năng trọng tâm ({_join(matched)}). "
+            "Trong vòng phỏng vấn, nhà tuyển dụng sẽ đào sâu vào tính xác thực của kinh nghiệm và kỹ năng giải quyết vấn đề, "
+            "bạn nên chuẩn bị kỹ các tình huống thực tế đã triển khai."
+        )
+    if len(missing_required) >= 3 and not matched and not listed:
+        return (
+            f"Hồ sơ hiện còn khoảng cách lớn so với các tiêu chí chuyên môn của JD (thiếu {_join(missing_required)}). "
+            "Nền tảng học vấn và kỹ năng sẵn có là điểm tựa tốt; hãy ưu tiên trau dồi các kỹ năng bắt buộc này "
+            "qua dự án thực tế trước khi nộp đơn."
+        )
+
     order = [*gaps, listing, strengths, extra] if missing_required else [strengths, listing, *gaps, extra]
     return " ".join(s for s in order if s) or None

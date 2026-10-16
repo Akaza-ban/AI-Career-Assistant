@@ -53,31 +53,44 @@ async def score_with_llm(
     """
     context = "\n".join(f"- {doc.get('title', '')}: {doc.get('content', '')}" for doc in retrieved_context[:4])
     prompt = (
-        "Bạn là chuyên gia tuyển dụng, chấm mức độ đáp ứng yêu cầu JD của một CV theo rubric cố định.\n\n"
-        "=== CV (mỗi dòng: [số dòng|mục] nội dung) ===\n"
+        "Bạn là chuyên gia tuyển dụng cao cấp (Senior Technical Recruiter), đánh giá mức độ tương thích thực tế "
+        "giữa CV ứng viên và bản mô tả công việc (JD) theo rubric tuyển dụng chặt chẽ và khách quan.\n\n"
+        "=== CV CỦA ỨNG VIÊN (định dạng mỗi dòng: [số dòng|mục] nội dung) ===\n"
         f"{_cv_block(lines)}\n\n"
-        "=== YÊU CẦU CỦA JD ===\n"
+        "=== CÁC YÊU CẦU NĂNG LỰC TỪ JD ===\n"
         f"{_requirements_block(requirements)}\n\n"
-        "=== BẢNG CHẤM MATCH (bắt buộc tuân theo) ===\n"
-        "- 0: yêu cầu không xuất hiện ở bất kỳ đâu trong CV.\n"
-        "- 0.5: chỉ xuất hiện dạng liệt kê (mục Kỹ năng, Giới thiệu, Chứng chỉ..., hoặc dòng 'Technologies: ...' / "
-        "'Công nghệ: ...' của một dự án), không có câu mô tả đã dùng để làm gì.\n"
-        "- 1: có bằng chứng cụ thể trong Kinh nghiệm / Dự án / Học vấn / Hoạt động, mô tả đã dùng kỹ năng để làm gì.\n"
-        "Taxonomy: FastAPI/Flask/Django tính là Python; PyTorch/TensorFlow tính là Machine Learning; "
-        "React/Next.js/Vue/Angular tính là JavaScript.\n\n"
+        "=== RUBRIC ĐÁNH GIÁ THỰC TẾ (BẮT BUỘC TUÂN THỦ) ===\n"
+        "Nhà tuyển dụng không đánh giá dựa trên việc rải từ khóa (keyword stuffing) mà đánh giá dựa trên năng lực thực tiễn:\n"
+        "- 0 (Chưa đáp ứng): Kỹ năng hoàn toàn không xuất hiện hoặc không có cơ sở liên quan trong CV.\n"
+        "- 0.5 (Đáp ứng một phần / Mức nhận biết): Chỉ xuất hiện dưới dạng liệt kê danh mục từ khóa (mục Kỹ năng, "
+        "Chứng chỉ, tóm tắt, hoặc dòng 'Technologies/Công nghệ' của dự án), hoặc chỉ là bài tập lý thuyết/đồ án môn học "
+        "cơ bản chưa chứng minh được chiều sâu triển khai.\n"
+        "- 1 (Đáp ứng tốt / Năng lực thực chiến): Có câu mô tả hành động cụ thể trong Kinh nghiệm / Dự án / Hoạt động, "
+        "nêu rõ ứng viên đã dùng kỹ năng đó để giải quyết bài toán gì hoặc xây dựng tính năng/hệ thống nào.\n\n"
+        "=== QUY TẮC PHẢN ÁNH NĂNG LỰC (TAXONOMY & THỰC TIỄN) ===\n"
+        "- Framework cụ thể phản ánh ngôn ngữ nền tảng: FastAPI/Flask/Django tính là Python; PyTorch/TensorFlow tính là "
+        "Machine Learning; React/Next.js/Vue/Angular tính là JavaScript/TypeScript; Spring Boot tính là Java.\n"
+        "- Không ngộ nhận: nhắc tên công nghệ không đồng nghĩa với thành thạo nếu thiếu ngữ cảnh hành động.\n\n"
         "=== TIÊU CHUẨN THAM KHẢO ===\n"
-        f"{context or '- Chỉ công nhận kỹ năng có bằng chứng thật trong CV.'}\n\n"
+        f"{context or '- Chỉ công nhận kỹ năng có bằng chứng thật và ngữ cảnh sử dụng trong CV.'}\n\n"
         "=== NHIỆM VỤ ===\n"
-        "1. Chấm match (0, 0.5 hoặc 1) cho TỪNG yêu cầu, kèm evidence_lines là số dòng CV làm bằng chứng "
-        "(match = 0 thì evidence_lines = []). note: ghi chú ngắn bằng tiếng Việt cho sinh viên đọc (có thể rỗng), "
-        "không ghi số điểm match.\n"
-        f"2. Viết tối đa {MAX_SUGGESTIONS} gợi ý diễn đạt lại cho các dòng CV thuộc mục Kinh nghiệm / Dự án / Học vấn / "
-        "Hoạt động đang là bằng chứng của yêu cầu có match > 0, giúp làm rõ kỹ năng mà JD cần (không viết lại dòng chỉ "
-        "liệt kê kỹ năng). RÀNG BUỘC: chỉ đổi cách diễn đạt; KHÔNG thêm số liệu, công cụ, thành tích, "
-        "quy mô, tên dự án không có trong dòng gốc; không viết câu cho kỹ năng CV chưa có.\n"
-        "CHỈ trả về JSON hợp lệ, không giải thích:\n"
-        '{"requirements": [{"id": "r1", "match": 1, "evidence_lines": [5], "note": ""}], '
-        '"suggestions": [{"requirement_id": "r1", "line": 5, "rewrite": "...", "reason": "..."}]}'
+        "1. Chấm match (chỉ nhận một trong ba giá trị 0, 0.5 hoặc 1) cho TỪNG yêu cầu của JD:\n"
+        "   - evidence_lines: danh sách số dòng CV làm bằng chứng cụ thể (nếu match = 0 thì evidence_lines = []).\n"
+        "   - note: nhận xét ngắn gọn, sắc bén và mang tính xây dựng bằng tiếng Việt (tối đa 1-2 câu). Với match = 0, "
+        "chỉ ra định hướng học tập/bổ sung; với match = 0.5, chỉ ra cần làm rõ thêm bối cảnh gì; với match = 1, "
+        "nêu điểm nổi bật ứng viên đã làm được. Tuyệt đối không ghi số điểm thô vào note.\n"
+        f"2. Viết tối đa {MAX_SUGGESTIONS} gợi ý diễn đạt lại chuyên nghiệp (action-oriented rewrites) cho các dòng CV "
+        "thuộc Kinh nghiệm / Dự án / Học vấn / Hoạt động (chỉ áp dụng cho yêu cầu có match > 0):\n"
+        "   - RÀNG BUỘC ĐẠO ĐỨC: Giữ đúng sự thật! Chỉ trau chuốt hành động, ngữ cảnh kỹ thuật; TUYỆT ĐỐI KHÔNG bịa đặt "
+        "số liệu, quy mô, công nghệ hoặc thành tích không có trong dòng gốc; không viết câu cho kỹ năng CV chưa có.\n"
+        "3. Viết nhận xét tổng quan (summary) ngắn gọn (khoảng 2–3 câu) với văn phong cố vấn nhân sự cao cấp, "
+        "tự nhiên, mạch lạc và tinh tế:\n"
+        "   - Ghi nhận những điểm sáng/thế mạnh công nghệ nổi bật mà CV đã chứng minh được.\n"
+        "   - Đưa ra lời khuyên thiết thực để chuẩn bị cho vòng phỏng vấn hoặc gợi ý hoàn thiện lỗ hổng kỹ thuật (tránh lặp từ máy móc như 'đáp ứng tốt... đáp ứng rất tốt').\n\n"
+        "CHỈ trả về JSON hợp lệ theo schema sau, không thêm lời dẫn:\n"
+        '{"requirements": [{"id": "r1", "match": 1, "evidence_lines": [5], "note": "Đã ứng dụng xây dựng API xử lý dữ liệu thực tế."}], '
+        '"suggestions": [{"requirement_id": "r1", "line": 5, "rewrite": "...", "reason": "Làm nổi bật kỹ thuật và hành động cụ thể"}], '
+        '"summary": "Hồ sơ thể hiện nền tảng vững chắc với các công nghệ cốt lõi như Python, FastAPI và Docker. Tuy nhiên, nhà tuyển dụng sẽ kiểm chứng kỹ chiều sâu giải quyết bài toán trong vòng phỏng vấn, bạn nên chuẩn bị kỹ các tình huống thực tế đã triển khai."}'
     )
     # temperature 0: cùng CV và JD thì chấm lại ra cùng kết quả nhiều nhất có thể
     return await invoke_json(prompt, temperature=0.0, timeout=60.0)
@@ -159,10 +172,12 @@ async def compare_gap_node(state: GapAnalysisState) -> dict[str, Any]:
     missing = [a["skill"] for a in assessments if a["match"] == 0]
     taxonomy_matches = {a["skill"]: a["note"] for a in assessments if a["note"] and "taxonomy" in a["note"]}
     raw_suggestions = [s for s in (llm_data or {}).get("suggestions") or [] if isinstance(s, dict)]
+    llm_summary = str((llm_data or {}).get("summary") or "").strip() or None
 
     return {
         "assessments": assessments,
         "raw_suggestions": raw_suggestions,
+        "llm_summary": llm_summary,
         "llm_used": llm_data is not None,
         "llm_calls": llm_calls,
         # Giữ các trường cũ cho script demo và báo cáo eval

@@ -213,6 +213,23 @@ def test_score_formula_matches_prd_example():
     assert [b["weight"] for b in breakdown] == [3, 2, 1]
 
 
+def test_score_floor_and_ceiling_no_zero_or_hundred():
+    """Kiểm tra không bao giờ có điểm 0 hoặc 100 tuyệt đối (thực tế tuyển dụng)."""
+    # 1. Trường hợp CV hoàn hảo (match = 1 cho tất cả) -> chạm trần SCORE_CEILING (92.0)
+    perfect_rows = [("SQL", "required", 1), ("Python", "required", 1), ("Git", "additional", 1)]
+    perfect_items = [{"importance": imp, "match": m, "status": "matched"} for _, imp, m in perfect_rows]
+    perf_score, _ = compute_score(perfect_items)
+    assert perf_score == 92.0
+    assert perf_score < 100.0
+
+    # 2. Trường hợp CV không khớp kỹ năng nào (match = 0 cho tất cả) -> chạm sàn SCORE_FLOOR (10.0)
+    zero_rows = [("SQL", "required", 0), ("Python", "required", 0), ("Git", "additional", 0)]
+    zero_items = [{"importance": imp, "match": m, "status": "missing"} for _, imp, m in zero_rows]
+    zero_score, _ = compute_score(zero_items)
+    assert zero_score == 10.0
+    assert zero_score > 0.0
+
+
 @pytest.mark.asyncio
 async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
     """Kết quả LLM được kiểm tra chéo bằng quy tắc anchor và guardrail trước khi hiển thị."""
