@@ -491,6 +491,45 @@ def build_report(db: Session, user: User, session_id: str, now: datetime) -> dic
     }
 
 
+def read_result_facts_source(
+    db: Session, user_id: str, session_id: str
+) -> tuple[InterviewSession, JobDescription, int, InterviewSession | None] | None:
+    """Read stored interview aggregates for assistant facts without settling sessions.
+
+    Ownership is part of the session query. This deliberately avoids ``load_session``
+    and ``build_report`` because loading an abandoned session can delete it.
+    """
+    row = db.execute(
+        select(InterviewSession, JobDescription)
+        .join(JobDescription, JobDescription.id == InterviewSession.jd_id)
+        .where(InterviewSession.id == session_id, InterviewSession.owner_id == user_id)
+    ).first()
+    if row is None:
+        return None
+    session, jd = row
+    question_count = db.scalar(
+        select(func.count(InterviewTurn.id))
+        .join(InterviewSession, InterviewSession.id == InterviewTurn.session_id)
+        .where(InterviewTurn.session_id == session.id, InterviewSession.owner_id == user_id)
+    ) or 0
+    previous = None
+    if session.status == "completed" and session.completed_at is not None:
+        previous = db.scalar(
+            select(InterviewSession)
+            .where(
+                InterviewSession.owner_id == user_id,
+                InterviewSession.jd_id == session.jd_id,
+                InterviewSession.status == "completed",
+                InterviewSession.completed_at.is_not(None),
+                (InterviewSession.completed_at < session.completed_at)
+                | ((InterviewSession.completed_at == session.completed_at) & (InterviewSession.id < session.id)),
+            )
+            .order_by(InterviewSession.completed_at.desc(), InterviewSession.id.desc())
+            .limit(1)
+        )
+    return session, jd, int(question_count), previous
+
+
 def recent(db: Session, user: User, limit: int) -> list[dict[str, Any]]:
     sessions = db.scalars(
         select(InterviewSession)
