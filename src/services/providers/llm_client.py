@@ -161,8 +161,9 @@ class LlmClient:
                 "model": model or self.settings.llm_model_agent,
                 "messages": log,
                 "stream": stream,
-                "extra_body": {"thinking": {"type": "enabled" if enabled else "disabled"}},
             }
+            if "deepseek" in (self.settings.llm_base_url or "").lower() or self.settings.llm_provider == "deepseek":
+                payload["extra_body"] = {"thinking": {"type": "enabled" if enabled else "disabled"}}
             if enabled:
                 payload["reasoning_effort"] = self.settings.llm_reasoning_effort
             elif temperature is not None or scope.mask_only:

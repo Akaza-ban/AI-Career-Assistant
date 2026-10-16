@@ -1,6 +1,6 @@
 import type { UIAction, UserRole } from "@/types/assistant"
-import routeData from "../../src/services/assistant/resources/routes.json"
-import uiData from "../../src/services/assistant/resources/ui_registry.json"
+import routeData from "@/resources/routes.json"
+import uiData from "@/resources/ui_registry.json"
 
 interface RegistryRoute {
   path_template: string

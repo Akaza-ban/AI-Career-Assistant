@@ -8,7 +8,6 @@ Sources supported:
   2. ~/.gemini/antigravity-ide/brain/<conv_id>/.system_generated/logs/transcript.jsonl (legacy JSONL format)
 """
 import argparse
-import hashlib
 import json
 import os
 import re
@@ -290,9 +289,12 @@ def get_logged_entries(target: Path) -> tuple[set[str], dict[str, str], set[tupl
                         continue
                     eid = entry.get("entry_id", "")
                     sid = entry.get("session_id", "")
-                    prompt = (entry.get("prompt") or "").strip()
+                    prompt = (entry.get("prompt") or "").strip().replace("\r\n", "\n")
                     if eid:
                         logged_ids.add(eid)
+                        m_base = re.match(r"^(antigravity-.*-\d{5})", eid)
+                        if m_base:
+                            logged_ids.add(m_base.group(1))
                         if eid not in logged_prompts_by_id:
                             logged_prompts_by_id[eid] = prompt
                     if sid and prompt:
@@ -504,17 +506,7 @@ def build_entry(
         except ValueError:
             pass
 
-    base_eid = f"antigravity-{msg['conv_id']}-{msg['step_index']:05d}"
-    prompt_text = msg["text"].strip()
-
-    eid = base_eid
-    if logged_prompts_by_id and base_eid in logged_prompts_by_id:
-        existing_prompt = logged_prompts_by_id[base_eid]
-        # If the same step_index has already been logged with different prompt text (edited prompt),
-        # use a hash suffix so this new revision gets its own distinct entry_id.
-        if prompt_text != existing_prompt:
-            p_hash = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()[:8]
-            eid = f"{base_eid}-{p_hash}"
+    eid = f"antigravity-{msg['conv_id']}-{msg['step_index']:05d}"
 
     return {
         "ts": ts or datetime.now(VN_TZ).isoformat(),
@@ -577,7 +569,7 @@ def log_from_hook(source: Path, data: dict) -> int:
 
     new_entries = []
     for msg in inputs:
-        prompt_text = (msg.get("text") or "").strip()
+        prompt_text = (msg.get("text") or "").strip().replace("\r\n", "\n")
         # Fast check: if this session + prompt was already logged, skip
         if (conv_id, prompt_text) in logged_prompt_keys:
             continue
@@ -659,7 +651,7 @@ def main() -> None:
 
     new_entries: list[dict] = []
     for msg in iter_user_inputs(brain_dirs, cutoff, args.conv_id, repo_root_n):
-        prompt_text = (msg.get("text") or "").strip()
+        prompt_text = (msg.get("text") or "").strip().replace("\r\n", "\n")
         cid = msg.get("conv_id", "")
         if cid and prompt_text and (cid, prompt_text) in logged_prompt_keys:
             continue

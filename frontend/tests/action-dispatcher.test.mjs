@@ -45,8 +45,10 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
     },
   }
   const navigation = load("lib/assistant-navigation.ts", {
-    "../../src/services/assistant/resources/routes.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../../src/services/assistant/resources/routes.json"), "utf8")) },
-    "../../src/services/assistant/resources/ui_registry.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../../src/services/assistant/resources/ui_registry.json"), "utf8")) },
+    "@/resources/routes.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/routes.json"), "utf8")) },
+    "@/resources/ui_registry.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/ui_registry.json"), "utf8")) },
+    "../../src/services/assistant/resources/routes.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/routes.json"), "utf8")) },
+    "../../src/services/assistant/resources/ui_registry.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/ui_registry.json"), "utf8")) },
   })
   const { dispatchAgentAction, dispatchUIActions } = load("lib/action-dispatcher.ts", {
     "sonner": { toast: { error() {}, info() {}, success() {} } },

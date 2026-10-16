@@ -1,0 +1,322 @@
+{
+  "student_home": {
+    "path_template": "/student",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Tổng quan"
+    ],
+    "labels_en": [
+      "Overview"
+    ],
+    "aliases": [
+      "/student/overview"
+    ],
+    "params": []
+  },
+  "cv_list": {
+    "path_template": "/student/cv",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "CV của tôi"
+    ],
+    "labels_en": [
+      "My CVs"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "analysis_new": {
+    "path_template": "/student/analysis/new",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Phân tích CV & JD"
+    ],
+    "labels_en": [
+      "CV and JD analysis"
+    ],
+    "aliases": [
+      "/student/analysis"
+    ],
+    "params": []
+  },
+  "interview_home": {
+    "path_template": "/student/interview/new",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Luyện phỏng vấn"
+    ],
+    "labels_en": [
+      "Interview practice"
+    ],
+    "aliases": [
+      "/student/interview"
+    ],
+    "params": []
+  },
+  "interview_lobby": {
+    "path_template": "/student/interview/start",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Phòng chờ"
+    ],
+    "labels_en": [
+      "Interview lobby"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "interview_history": {
+    "path_template": "/student/history",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Lịch sử & Tiến bộ"
+    ],
+    "labels_en": [
+      "History and progress"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "jd_list": {
+    "path_template": "/student/library",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Thư viện JD"
+    ],
+    "labels_en": [
+      "Job library"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "sharing": {
+    "path_template": "/student/share",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Chia sẻ"
+    ],
+    "labels_en": [
+      "Sharing"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "student_settings": {
+    "path_template": "/student/settings",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Cài đặt"
+    ],
+    "labels_en": [
+      "Settings"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "advisor_home": {
+    "path_template": "/advisor",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "Tổng quan cố vấn"
+    ],
+    "labels_en": [
+      "Advisor overview"
+    ],
+    "aliases": [
+      "/advisor/dashboard"
+    ],
+    "params": []
+  },
+  "advisor_students": {
+    "path_template": "/advisor/students",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "Sinh viên phụ trách"
+    ],
+    "labels_en": [
+      "Assigned students"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "cv_detail": {
+    "path_template": "/student/cv/{cv_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Chi tiết CV"
+    ],
+    "labels_en": [
+      "CV details"
+    ],
+    "aliases": [],
+    "params": [
+      "cv_id"
+    ]
+  },
+  "jd_detail": {
+    "path_template": "/student/library/{jd_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Chi tiết JD"
+    ],
+    "labels_en": [
+      "Job details"
+    ],
+    "aliases": [],
+    "params": [
+      "jd_id"
+    ]
+  },
+  "analysis_compare": {
+    "path_template": "/student/analysis/compare",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "So sánh vị trí"
+    ],
+    "labels_en": [
+      "Compare positions"
+    ],
+    "aliases": [],
+    "params": []
+  },
+  "analysis_comparison": {
+    "path_template": "/student/analysis/compare/{comparison_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Kết quả so sánh"
+    ],
+    "labels_en": [
+      "Comparison result"
+    ],
+    "aliases": [],
+    "params": [
+      "comparison_id"
+    ]
+  },
+  "analysis_detail": {
+    "path_template": "/student/analysis/{analysis_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Kết quả phân tích"
+    ],
+    "labels_en": [
+      "Analysis result"
+    ],
+    "aliases": [],
+    "params": [
+      "analysis_id"
+    ]
+  },
+  "analysis_optimize": {
+    "path_template": "/student/analysis/{analysis_id}/optimize",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Tối ưu CV"
+    ],
+    "labels_en": [
+      "Optimize CV"
+    ],
+    "aliases": [],
+    "params": [
+      "analysis_id"
+    ]
+  },
+  "analysis_export": {
+    "path_template": "/student/analysis/{analysis_id}/export",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Xuất CV"
+    ],
+    "labels_en": [
+      "Export CV"
+    ],
+    "aliases": [],
+    "params": [
+      "analysis_id"
+    ]
+  },
+  "interview_session": {
+    "path_template": "/student/interview/{session_id}",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Phòng phỏng vấn"
+    ],
+    "labels_en": [
+      "Interview room"
+    ],
+    "aliases": [],
+    "params": [
+      "session_id"
+    ]
+  },
+  "interview_report": {
+    "path_template": "/student/interview/{session_id}/report",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Báo cáo phỏng vấn"
+    ],
+    "labels_en": [
+      "Interview report"
+    ],
+    "aliases": [],
+    "params": [
+      "session_id"
+    ]
+  },
+  "advisor_student": {
+    "path_template": "/advisor/students/{student_id}",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "Hồ sơ sinh viên"
+    ],
+    "labels_en": [
+      "Student profile"
+    ],
+    "aliases": [],
+    "params": [
+      "student_id"
+    ]
+  }
+}

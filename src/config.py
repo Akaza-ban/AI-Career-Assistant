@@ -286,7 +286,10 @@ class Settings(BaseSettings):
 
         api_key, base_url = self.get_llm_credentials()
         temperature = kwargs.pop("temperature", self.llm_temperature)
-        default_model = "deepseek-chat" if self.llm_provider.lower() == "deepseek" else self.model_name
+        if self.llm_provider.lower() == "deepseek":
+            default_model = self.model_name if ("deepseek" in self.model_name.lower()) else "deepseek-v4.1-flash"
+        else:
+            default_model = self.model_name
         model = kwargs.pop("model", default_model)
         if self.llm_reasoning_effort and is_reasoning_model(model):
             kwargs.setdefault("reasoning_effort", self.llm_reasoning_effort)
