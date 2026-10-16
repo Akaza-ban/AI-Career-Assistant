@@ -2,6 +2,7 @@ import os
 import secrets
 from functools import lru_cache
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from dotenv import load_dotenv
 from pydantic import Field, PrivateAttr, SecretStr, model_validator
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
     login_max_attempts: int = 5
     login_lock_minutes: int = 15
     frontend_url: str = "http://localhost:3000"
+    assistant_tz: str = "Asia/Ho_Chi_Minh"
     demo_login_enabled: bool = False
     demo_account_password: str = "careerx123"
 
@@ -46,6 +48,18 @@ class Settings(BaseSettings):
     @session_cookie_secure.setter
     def session_cookie_secure(self, value: bool | None) -> None:
         self._session_cookie_secure = value
+
+    @model_validator(mode="after")
+    def valid_assistant_timezone(self) -> "Settings":
+        try:
+            ZoneInfo(self.assistant_tz)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            # Windows Python may not ship the system IANA database. The default
+            # zone is fixed UTC+07:00 and does not observe daylight saving time.
+            if self.assistant_tz == "Asia/Ho_Chi_Minh":
+                return self
+            raise ValueError("ASSISTANT_TZ must be a valid IANA timezone") from exc
+        return self
 
     # SMTP Mailer
     smtp_host: str = ""
