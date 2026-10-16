@@ -391,7 +391,7 @@ def test_agent_limits_are_architecture_values():
 
 @pytest.mark.asyncio
 async def test_daily_token_cap_blocks_before_provider_dispatch(agent_db):
-    from src.services.assistant.agent_path import run_agent_path
+    from src.services.assistant.agent_path import _budget_exceeded_result, run_agent_path
 
     db, user, *_ = agent_db
     db.add(
@@ -415,6 +415,7 @@ async def test_daily_token_cap_blocks_before_provider_dispatch(agent_db):
     )
     assert provider.requests == []
     assert "safely" in response.message
+    assert _budget_exceeded_result()["error"]["code"] == "BUDGET_EXCEEDED"
 
 
 @pytest.mark.asyncio

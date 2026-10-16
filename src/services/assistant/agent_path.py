@@ -97,6 +97,7 @@ class AgentTurn:
     tokens_used: int = 0
     resolution_status: str | None = None
     resolution_refs: list[str] = field(default_factory=list)
+    last_error: dict[str, Any] | None = None
     open_requested: bool = field(init=False, default=False)
     highlight_requested: bool = field(init=False, default=False)
 
@@ -127,6 +128,15 @@ def _envelope(
 ) -> dict[str, Any]:
     error = {"code": code, "message": message, "hint": hint} if code else None
     return {"ok": ok, "summary": summary[:_SUMMARY_LIMIT], "data": data, "error": error}
+
+
+def _budget_exceeded_result() -> dict[str, Any]:
+    return _envelope(
+        ok=False,
+        code="BUDGET_EXCEEDED",
+        message="Daily token budget reached",
+        hint="Try again after the daily reset",
+    )
 
 
 def _untrusted(value: str | None) -> str:
@@ -427,6 +437,7 @@ async def run_agent_path(
     cap = settings.user_daily_token_cap
     used_before = _used_tokens(db, user.id)
     if used_before >= cap:
+        turn.last_error = _budget_exceeded_result()
         return AssistantResponse(message=fallback, intent="qa", route=route_kind)
     client = llm or LlmClient(settings=settings)
     own_client = llm is None
@@ -441,6 +452,7 @@ async def run_agent_path(
                 remaining = cap - used
                 estimated_prompt_tokens = max(1, len(json.dumps(messages, ensure_ascii=False)) // 2)
                 if remaining <= estimated_prompt_tokens:
+                    turn.last_error = _budget_exceeded_result()
                     return AssistantResponse(message=fallback, intent="qa", route=route_kind)
                 response = await client.chat(
                     messages,
@@ -462,6 +474,7 @@ async def run_agent_path(
                         1, (len(json.dumps(messages, ensure_ascii=False)) + len(str(output or ""))) // 2
                     )
                 if used_after > cap or used_before + turn.tokens_used > cap:
+                    turn.last_error = _budget_exceeded_result()
                     return AssistantResponse(message=fallback, intent="qa", route=route_kind)
                 tool_calls = response.get("tool_calls", [])
                 if not tool_calls:
