@@ -102,7 +102,14 @@ def public_targets(result) -> list[tuple[str, dict[str, str], str, str | None]]:
 
 def assert_no_body_fields(result) -> None:
     serialized = str(result.model_dump()).casefold()
-    for marker in ("private cv body", "private jd body", "private analysis body", "content_text", "feedback", "transcript"):
+    for marker in (
+        "private cv body",
+        "private jd body",
+        "private analysis body",
+        "content_text",
+        "feedback",
+        "transcript",
+    ):
         assert marker not in serialized
 
 
@@ -235,16 +242,102 @@ def test_resolver_source_never_calls_side_effecting_services() -> None:
     tree = ast.parse(source)
     forbidden = {"session", "shared_cv", "interview_report", "build_report"}
     called = {
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+        node.func.attr for node in ast.walk(tree) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
     }
-    imported = {
-        alias.name
-        for node in ast.walk(tree)
-        if isinstance(node, ast.ImportFrom)
-        for alias in node.names
-    }
+    imported = {alias.name for node in ast.walk(tree) if isinstance(node, ast.ImportFrom) for alias in node.names}
     assert not (called & forbidden)
     assert not (imported & {"cv_optimizer", "advisor", "interview"})
 
+
+@pytest.mark.asyncio
+async def test_navigation_fast_path_uses_real_database_without_provider_and_meets_latency(resolver_db) -> None:
+    from time import perf_counter
+    from unittest.mock import MagicMock
+
+    from src.models.assistant import ClientPageContext
+    from src.services.assistant.agent import AssistantAgent
+    from src.services.assistant.date_parser import assistant_timezone
+
+    db, (user, _) = resolver_db
+    jd = add_jd(db, user, "jd-fast", "Shopee Backend Engineer", "Shopee")
+    cv = add_cv(db, user, "cv-fast", "Backend_v3.pdf", datetime(2025, 4, 1))
+    add_analysis(db, user, jd, cv, "analysis-fast", "completed", datetime(2025, 4, 2))
+    today = datetime.now(assistant_timezone()).date()
+    interview_year = today.year if (today.month, today.day) >= (10, 12) else today.year - 1
+    add_interview(db, user, jd, "interview-fast", datetime(interview_year, 10, 12, 10, 0))
+    db.commit()
+    retriever, provider = MagicMock(), MagicMock()
+    agent = AssistantAgent(retriever=retriever, llm=provider)
+    context = ClientPageContext(current_url="/student/overview", route="/student/overview", user_role="student")
+    cases = [
+        ("Show my interview history on 12/10", "interview_session", {"session_id": "interview-fast"}),
+        ("Open my latest analysis for the Shopee Backend JD", "analysis_detail", {"analysis_id": "analysis-fast"}),
+    ]
+    samples: list[float] = []
+    for message, route_id, params in cases:
+        for _ in range(20):
+            started = perf_counter()
+            response = await agent.respond(message, context, nav_db=db, nav_user=user)
+            samples.append((perf_counter() - started) * 1000)
+            assert response.route == "navigate"
+            assert response.cards[0].route_id == route_id
+            assert response.cards[0].params == params
+            assert response.ui_actions[0].type == "navigate"
+            assert "PRIVATE" not in str(response.model_dump())
+            assert "promise" not in response.message.casefold()
+    highlight = await agent.respond("Where is the button to add a JD?", context, nav_db=db, nav_user=user)
+    assert [action.type for action in highlight.ui_actions] == ["navigate", "highlight"]
+    duplicate_a = add_interview(db, user, jd, "interview-duplicate-a", datetime(interview_year, 10, 12, 9, 0))
+    duplicate_b = add_interview(db, user, jd, "interview-duplicate-b", datetime(interview_year, 10, 12, 11, 0))
+    db.commit()
+    multiple = await agent.respond("Show my interview history on 12/10", context, nav_db=db, nav_user=user)
+    assert multiple.ui_actions == []
+    assert {chip.params["session_id"] for chip in multiple.chips} == {duplicate_a.id, duplicate_b.id, "interview-fast"}
+    missing = await agent.respond("Open my interview history on 01/01/2020", context, nav_db=db, nav_user=user)
+    assert "01/01/2020" in missing.message
+    assert missing.chips
+    retriever.search.assert_not_called()
+    provider.with_structured_output.assert_not_called()
+    provider.ainvoke.assert_not_called()
+    samples.sort()
+    p50 = samples[len(samples) // 2]
+    p95 = samples[int((len(samples) - 1) * 0.95)]
+    print(f"fast navigation fixtures: p50={p50:.1f}ms p95={p95:.1f}ms")
+    assert p95 < 300, f"fast navigation p95 {p95:.1f}ms; p50 {p50:.1f}ms"
+
+
+@pytest.mark.asyncio
+async def test_navigation_followup_uses_previous_card_and_advisor_is_static_only(resolver_db) -> None:
+    from unittest.mock import MagicMock
+
+    from src.models.assistant import ClientPageContext
+    from src.services.assistant.agent import AssistantAgent
+    from src.services.assistant.router.models import CardTarget
+
+    db, (user, _) = resolver_db
+    add_cv(db, user, "cv-followup", "Backend_v3.pdf", datetime(2025, 4, 1))
+    db.commit()
+    agent = AssistantAgent(MagicMock(), MagicMock())
+    context = ClientPageContext(current_url="/student/overview", route="/student/overview", user_role="student")
+    prior = [CardTarget(ref="r1", route_id="cv_detail", params={"cv_id": "cv-followup"}, label="Backend_v3.pdf")]
+    opened = await agent.respond("open it", context, nav_db=db, nav_user=user, previous_targets=prior)
+    assert opened.ui_actions[0].params == {"cv_id": "cv-followup"}
+
+    advisor = User(
+        id=f"advisor-{uuid4().hex[:8]}",
+        role="advisor",
+        full_name="Advisor",
+        email=f"advisor-{uuid4().hex}@example.invalid",
+    )
+    db.add(advisor)
+    db.commit()
+    advisor_context = context.model_copy(
+        update={"user_role": "advisor", "current_url": "/advisor/overview", "route": "/advisor/overview"}
+    )
+    denied_record = await agent.respond("Open my CV Backend", advisor_context, nav_db=db, nav_user=advisor)
+    assert denied_record.ui_actions == []
+    assert denied_record.cards == []
+    allowed_page = await agent.respond("Open advisor dashboard", advisor_context, nav_db=db, nav_user=advisor)
+    assert allowed_page.ui_actions[0].route_id == "advisor_home"
+    db.delete(advisor)
+    db.commit()
