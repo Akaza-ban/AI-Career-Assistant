@@ -157,15 +157,43 @@ class AssistantAgent:
         )
         builder = StateGraph(AssistantState)
         builder.add_node("inspect", self._inspect)
+        builder.add_node("agent", self._agent_path)
         builder.add_node("classify", self._classify)
         builder.add_node("retrieve", self._retrieve)
         builder.add_node("generate", self._generate)
         builder.add_edge(START, "inspect")
-        builder.add_conditional_edges("inspect", lambda state: state["input_allowed"], {True: "classify", False: END})
+        builder.add_conditional_edges(
+            "inspect", self._next_after_inspect, {"classify": "classify", "agent": "agent", "end": END}
+        )
+        builder.add_edge("agent", END)
         builder.add_edge("classify", "retrieve")
         builder.add_edge("retrieve", "generate")
         builder.add_edge("generate", END)
         self.graph = builder.compile()
+
+    @staticmethod
+    def _next_after_inspect(state: AssistantState) -> str:
+        decision = state.get("decision")
+        if not state["input_allowed"]:
+            return "end"
+        if decision and decision.route in {"navigate", "result"} and decision.nav_mode == "agent":
+            return "agent"
+        return "classify"
+
+    async def _agent_path(self, state: AssistantState) -> dict[str, Any]:
+        from src.services.assistant.agent_path import run_agent_path
+
+        decision = state["decision"]
+        response = await run_agent_path(
+            message=state["message"],
+            db=state.get("nav_db"),
+            user=state.get("nav_user"),
+            context=state["context"],
+            route_kind=decision.route,
+            llm=self._llm if isinstance(self._llm, LlmClient) or hasattr(self._llm, "chat") else None,
+            retriever=self._retriever,
+        )
+        return {"response": response}
 
     def _inspect(self, state: AssistantState) -> dict[str, Any]:
         context = state["context"]
@@ -219,6 +247,8 @@ class AssistantAgent:
             response = self._resolve_navigation(state, decision, language)
         elif decision.route == "result" and decision.nav_mode == "fast":
             response = self._resolve_result(state, decision, language)
+        elif decision.route in {"navigate", "result"} and decision.nav_mode == "agent":
+            response = None
         elif decision.route in {"navigate", "result"}:
             response = AssistantResponse(message=capability_menu(language, context.user_role), intent="qa")
         elif decision.route == "locate":
@@ -1019,7 +1049,7 @@ class AssistantAgent:
         nav_user: Any = None,
         previous_targets: list[Any] | None = None,
     ) -> AssistantResponse:
-        with provider_scope(mask_only=True):
+        with provider_scope(user_id=getattr(nav_user, "id", None), mask_only=True):
             result = await self.graph.ainvoke(
                 {
                     "message": message,

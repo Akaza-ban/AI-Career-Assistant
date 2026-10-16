@@ -26,7 +26,13 @@ def _flatten(value: Any) -> list[str]:
         return [item for child in value.values() for item in _flatten(child)]
     if isinstance(value, (list, tuple, set)):
         return [item for child in value for item in _flatten(child)]
-    return [str(value)] if value is not None else []
+    if value is None:
+        return []
+    text = str(value)
+    values = [text]
+    if re.match(r"^\d{4}-\d{2}-\d{2}T", text):
+        values.append(text[:10])
+    return values
 
 
 def numeric_claims_are_grounded(prose: str, facts: Any) -> bool:
