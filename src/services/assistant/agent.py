@@ -68,6 +68,33 @@ ASSISTANT_INDEX_LOCK = RLock()
 _event_sink: ContextVar[Callable[[str, dict[str, Any]], None] | None] = ContextVar("assistant_events", default=None)
 
 
+def _result_metric(message: str) -> str | None:
+    from src.services.assistant.router.data import LEXICONS
+    from src.services.assistant.router.matching import SurfaceText, matches
+
+    folded = SurfaceText(message).folded
+    found = [name for name, phrases in LEXICONS["metrics"].items() if matches(folded, phrases)]
+    return found[0] if len(found) == 1 else None
+
+
+def _facts_card_values(facts: dict[str, Any], record_type: str) -> dict[str, str | int | float | None]:
+    values: dict[str, str | int | float | None] = {}
+    for key, value in facts.items():
+        if key == "category_scores" and isinstance(value, list):
+            for category in value:
+                if not isinstance(category, dict):
+                    continue
+                prefix = str(category.get("importance", "category"))
+                for field in ("total", "matched", "partial", "missing", "earned", "possible"):
+                    if category.get(field) is not None:
+                        values[f"{prefix}_{field}"] = category[field]
+        elif key == "missing_skills" and isinstance(value, list):
+            values.update({f"missing_skill_{index}": skill for index, skill in enumerate(value[:5], 1)})
+        elif isinstance(value, (str, int, float)) or value is None:
+            values[key] = value
+    return values
+
+
 def emit_event(name: str, data: dict[str, Any]) -> None:
     sink = _event_sink.get()
     if sink is not None:
@@ -190,6 +217,8 @@ class AssistantAgent:
             )
         elif decision.route == "navigate" and decision.nav_mode == "fast":
             response = self._resolve_navigation(state, decision, language)
+        elif decision.route == "result" and decision.nav_mode == "fast":
+            response = self._resolve_result(state, decision, language)
         elif decision.route in {"navigate", "result"}:
             response = AssistantResponse(message=capability_menu(language, context.user_role), intent="qa")
         elif decision.route == "locate":
@@ -210,6 +239,171 @@ class AssistantAgent:
             "locate_fallback": decision.route == "locate",
             "intent": "qa",
         }
+
+    @staticmethod
+    def _resolve_result(state: AssistantState, decision: RouterDecision, language: str) -> AssistantResponse:
+        from src.services.assistant.facts import get_result_facts
+        from src.services.assistant.resolvers import ResolutionContext, resolve
+        from src.services.assistant.router.matching import SurfaceText
+        from src.services.assistant.ui_registry import resolve_route
+
+        user, db, slots = state.get("nav_user"), state.get("nav_db"), decision.slots
+        lang = "en" if language == "en" else "vi"
+        templates = {
+            "en": {
+                "none": "I couldn’t find a matching result. Here are the nearest records you can open.",
+                "multiple": "Choose a result below to see its figures.",
+                "role": "Result records are available only to student accounts.",
+                "facts": "Result figures",
+                "latest": "Latest result for {label} ({date}): {metric} {value}.",
+                "value": "For {label} ({date}), {metric} {value}.",
+                "metric_score": "match score",
+                "metric_status": "status",
+                "metric_count": "count",
+                "metric_date": "date",
+                "unknown": "I couldn’t read the stored result figures.",
+            },
+            "vi": {
+                "none": "Không tìm thấy kết quả phù hợp. Đây là những hồ sơ gần nhất bạn có thể mở.",
+                "multiple": "Hãy chọn một kết quả bên dưới để xem các số liệu.",
+                "role": "Kết quả hồ sơ chỉ dành cho tài khoản sinh viên.",
+                "facts": "Số liệu kết quả",
+                "latest": "Kết quả gần nhất cho {label} ({date}): {metric} {value}.",
+                "value": "Với {label} ({date}), {metric} {value}.",
+                "metric_score": "điểm match",
+                "metric_status": "trạng thái",
+                "metric_count": "số lượng",
+                "metric_date": "ngày",
+                "unknown": "Không đọc được số liệu kết quả đã lưu.",
+            },
+        }
+        if user is None or db is None or user.role != "student" or not isinstance(slots, NavSlots):
+            return AssistantResponse(message=templates[lang]["role"], intent="qa", route="result")
+        emit_event("status", {"status": "resolving"})
+        resolved = resolve(ResolutionContext(user=user, db=db), slots)
+        if resolved.status == "none":
+            return AssistantResponse(
+                message=templates[lang]["none"],
+                intent="qa",
+                route="result",
+                chips=[
+                    {
+                        "label": target.label[:200],
+                        "route": "navigate",
+                        "slots": {},
+                        "route_id": target.route_id,
+                        "params": target.params,
+                    }
+                    for target in resolved.targets[:4]
+                ],
+            )
+        if resolved.status in {"multiple", "needs_info"}:
+            return AssistantResponse(
+                message=templates[lang]["multiple"],
+                intent="qa",
+                route="result",
+                chips=[
+                    {
+                        "label": target.label[:200],
+                        "route": "navigate",
+                        "slots": {},
+                        "route_id": target.route_id,
+                        "params": target.params,
+                    }
+                    for target in resolved.targets[:5]
+                ],
+            )
+        target = resolved.targets[0]
+        record_id = target.params.get("analysis_id") or target.params.get("session_id")
+        record_type = "analysis" if "analysis_id" in target.params else "interview"
+        facts = get_result_facts(db, user.id, record_type, record_id or "")
+        if facts is None:
+            return AssistantResponse(message=templates[lang]["none"], intent="qa", route="result")
+        resolve_route(target.route_id, target.params, user.role)
+        metric_key = _result_metric(state.get("message", ""))
+        folded_question = SurfaceText(state.get("message", "")).folded
+        metric_value: Any = None
+        metric_label = templates[lang][f"metric_{metric_key}"] if metric_key else ""
+        if metric_key == "score":
+            if record_type == "analysis":
+                importance = next((item for item in ("required", "preferred") if item in folded_question), None)
+                category = next(
+                    (item for item in facts.get("category_scores", []) if item.get("importance") == importance), None
+                ) if importance else None
+                if category:
+                    metric_value = f"{category['earned']}/{category['possible']}"
+                    metric_label = f"{importance} earned/possible"
+                else:
+                    metric_value = facts.get("overall_match_score")
+            else:
+                criterion = next(
+                    (item for item in ("situation", "task", "action", "result") if item in folded_question), None
+                )
+                metric_value = facts.get(f"{criterion}_average") if criterion else facts.get("overall_star_score")
+                if criterion:
+                    metric_label = f"{criterion} STAR score"
+        elif metric_key == "status":
+            metric_value = facts.get("status")
+        elif metric_key == "date":
+            metric_value = facts.get("created_at") if record_type == "analysis" else facts.get("started_at")
+        elif metric_key == "count":
+            if record_type == "interview":
+                metric_value = facts.get("question_count")
+            else:
+                importance = next((item for item in ("required", "preferred") if item in folded_question), None)
+                measure = next(
+                    (item for item in ("missing", "partial", "matched") if item in folded_question),
+                    "missing",
+                )
+                matches_filter = any(word in folded_question for word in ("matched", "match", "dat", "ach duoc"))
+                if matches_filter:
+                    measure = "matched"
+                if importance:
+                    metric_value = facts.get(f"{importance}_{measure}_count")
+                    metric_label = f"{importance} {measure} count"
+                else:
+                    metric_value = (
+                        f"{facts.get(f'required_{measure}_count', 0)} required; "
+                        f"{facts.get(f'preferred_{measure}_count', 0)} preferred"
+                    )
+                    metric_label = f"{measure} counts"
+        if metric_value is None:
+            return AssistantResponse(message=templates[lang]["unknown"], intent="qa", route="result")
+        label = facts.get("jd_label") if record_type == "analysis" else facts.get("position_label")
+        if record_type == "analysis" and facts.get("cv_label"):
+            label = f"{label}, CV {facts['cv_label']}"
+        date_value = facts.get("created_at") if record_type == "analysis" else facts.get("started_at")
+        date_label = str(date_value or "")[:10]
+        value_label = f"{metric_value}%" if metric_key == "score" and record_type == "analysis" else str(metric_value)
+        message = templates[lang]["latest" if slots.latest else "value"].format(
+            label=label or "result", date=date_label, metric=metric_label, value=value_label
+        )
+        card_facts = _facts_card_values(facts, record_type)
+        if record_type == "analysis" and "overall_match_score" in card_facts:
+            card_facts["overall_match_score_percent"] = card_facts.pop("overall_match_score")
+        return AssistantResponse(
+            message=message,
+            intent="qa",
+            route="result",
+            cards=[
+                {
+                    "ref": f"facts-{target.ref}",
+                    "label": templates[lang]["facts"],
+                    "route_id": target.route_id,
+                    "params": target.params,
+                    "kind": "facts",
+                    "facts": card_facts,
+                },
+                {
+                    "ref": target.ref,
+                    "label": (label or target.label)[:200],
+                    "sublabel": (target.sublabel or date_label)[:300],
+                    "route_id": target.route_id,
+                    "params": target.params,
+                    "kind": "link",
+                },
+            ],
+        )
 
     @staticmethod
     def _resolve_navigation(state: AssistantState, decision: RouterDecision, language: str) -> AssistantResponse:

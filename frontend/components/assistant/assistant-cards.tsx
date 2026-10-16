@@ -7,6 +7,12 @@ import type { AssistantCard, AssistantChip, UserRole } from "@/types/assistant"
 
 export function AssistantCards({ cards, role }: { cards: AssistantCard[]; role: UserRole }) {
   return <div className="grid gap-2">{cards.map((card) => {
+    if (card.kind === "facts") return <section key={card.ref} aria-label={card.label} className="rounded-xl border border-line px-3 py-2 text-sm">
+      <div className="mb-1 font-medium">{card.label}</div>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-1">{Object.entries(card.facts ?? {}).map(([name, value]) => <div key={name} className="contents">
+        <dt className="text-ink-3">{name.replaceAll("_", " ")}</dt><dd>{value ?? "—"}</dd>
+      </div>)}</dl>
+    </section>
     const href = resolveUIRoute({ type: "navigate", route_id: card.route_id, params: card.params }, role)
     return href ? <Link key={card.ref} href={href} className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2 text-sm text-blue hover:bg-surface">
       <span className="grid min-w-0 flex-1 gap-0.5"><span>{card.label}</span>{card.sublabel && <span className="text-xs text-ink-3">{card.sublabel}</span>}</span>

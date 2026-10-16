@@ -278,6 +278,8 @@ class AssistantCard(StrictModel):
     route_id: str
     params: dict[str, str] = Field(default_factory=dict)
     sublabel: str | None = Field(default=None, max_length=300)
+    kind: Literal["link", "facts"] = "link"
+    facts: dict[str, str | int | float | None] = Field(default_factory=dict)
 
 
 class ChatRequest(StrictModel):

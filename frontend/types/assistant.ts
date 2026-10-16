@@ -39,6 +39,8 @@ export interface AssistantCard {
   route_id: string
   params: Record<string, string>
   sublabel?: string | null
+  kind?: "link" | "facts"
+  facts?: Record<string, string | number | null>
 }
 
 export interface AssistantChip {
