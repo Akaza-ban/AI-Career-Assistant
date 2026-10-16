@@ -95,9 +95,7 @@ def build_analysis_facts(db: Session, user_id: str, analysis_id: str) -> dict[st
             "earned": _finite_number(category.get("earned"), 0, 1000),
             "possible": _finite_number(category.get("possible"), 0, 1000),
         }
-        source["category_scores"].append(
-            {key: item[key] for key in facts_allowlist()["analysis_category"]}
-        )
+        source["category_scores"].append({key: item[key] for key in facts_allowlist()["analysis_category"]})
     requirements = result.get("requirements", []) if isinstance(result.get("requirements"), list) else []
     missing_skills: list[str] = []
     for requirement in requirements:

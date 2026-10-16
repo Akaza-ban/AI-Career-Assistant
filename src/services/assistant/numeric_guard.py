@@ -42,6 +42,5 @@ def numeric_claims_are_grounded(prose: str, facts: Any) -> bool:
         if claim is not None
     }
     return all(
-        (claim := _canonical(match.group())) is not None and claim in allowed
-        for match in _NUMBER.finditer(prose)
+        (claim := _canonical(match.group())) is not None and claim in allowed for match in _NUMBER.finditer(prose)
     )

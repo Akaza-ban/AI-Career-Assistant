@@ -30,7 +30,14 @@ def result_db():
     db.add_all(users)
     db.flush()
     jds = [
-        JobDescription(id=f"facts-jd-{i}-{suffix}", source="pasted", owner_id=user.id, title="Backend Role" if i == 0 else "Quantum Xenon Secret Position", company="Acme", content="PRIVATE JD BODY SENTINEL")
+        JobDescription(
+            id=f"facts-jd-{i}-{suffix}",
+            source="pasted",
+            owner_id=user.id,
+            title="Backend Role" if i == 0 else "Quantum Xenon Secret Position",
+            company="Acme",
+            content="PRIVATE JD BODY SENTINEL",
+        )
         for i, user in enumerate(users)
     ]
     db.add_all(jds)
@@ -53,7 +60,17 @@ def result_db():
                 match_score=float(i) + 0.5,
                 created_at=start + timedelta(days=i),
                 result={
-                    "breakdown": [{"importance": "required", "total": 3, "matched": i % 3, "partial": 1, "missing": 2, "earned": float(i) / 10, "possible": 3.0}],
+                    "breakdown": [
+                        {
+                            "importance": "required",
+                            "total": 3,
+                            "matched": i % 3,
+                            "partial": 1,
+                            "missing": 2,
+                            "earned": float(i) / 10,
+                            "possible": 3.0,
+                        }
+                    ],
                     "requirements": [
                         {"importance": "required", "status": "missing", "skill": "Python"},
                         {"importance": "required", "status": "matched", "skill": "SQL"},
@@ -80,10 +97,32 @@ def result_db():
             )
         )
         for q in range(2):
-            db.add(InterviewTurn(id=f"facts-turn-{i}-{q}-{suffix}", session_id=session_id, index=q + 1, theme="work", question="PRIVATE QUESTION", asked_at=created))
+            db.add(
+                InterviewTurn(
+                    id=f"facts-turn-{i}-{q}-{suffix}",
+                    session_id=session_id,
+                    index=q + 1,
+                    theme="work",
+                    question="PRIVATE QUESTION",
+                    asked_at=created,
+                )
+            )
     # A foreign result exists, so probes must be indistinguishable from a miss.
     foreign = "facts-foreign-analysis-" + suffix
-    db.add(GapAnalysis(id=foreign, owner_id=users[1].id, cv_version_id="foreign-cv", cv_file_name="x.pdf", cv_label="v1.0", jd_id=jds[1].id, status="completed", match_score=99, created_at=start, result={"breakdown": [], "requirements": []}))
+    db.add(
+        GapAnalysis(
+            id=foreign,
+            owner_id=users[1].id,
+            cv_version_id="foreign-cv",
+            cv_file_name="x.pdf",
+            cv_label="v1.0",
+            jd_id=jds[1].id,
+            status="completed",
+            match_score=99,
+            created_at=start,
+            result={"breakdown": [], "requirements": []},
+        )
+    )
     db.commit()
     yield db, users, jds, analysis_ids, interview_ids, foreign
     db.execute(delete(InterviewTurn).where(InterviewTurn.session_id.in_(interview_ids)))
@@ -135,7 +174,9 @@ def test_fact_outputs_are_bounded_and_allowlisted(result_db):
         *((record_id, build_interview_facts) for record_id in interview_ids),
     ]:
         facts = builder(db, users[0].id, record_id)
-        allowed = set(facts_allowlist()["analysis"] if builder is build_analysis_facts else facts_allowlist()["interview"])
+        allowed = set(
+            facts_allowlist()["analysis"] if builder is build_analysis_facts else facts_allowlist()["interview"]
+        )
         assert set(facts) == allowed
         assert all(not any(word in key.casefold() for word in forbidden) for key in facts)
         assert all(len(value) <= 80 for value in _walk_strings(facts))
@@ -147,7 +188,14 @@ def test_cross_user_facts_and_fast_path_have_identical_missing_wording(result_db
     assert build_analysis_facts(db, users[0].id, foreign_id) is None
     assert build_analysis_facts(db, users[0].id, "not-a-real-analysis") is None
     agent = AssistantAgent()
-    decision = RouterDecision(route="result", source="rules", confidence=1, language="en", slots=NavSlots(target="analysis", latest=True), nav_mode="fast")
+    decision = RouterDecision(
+        route="result",
+        source="rules",
+        confidence=1,
+        language="en",
+        slots=NavSlots(target="analysis", latest=True),
+        nav_mode="fast",
+    )
     state = {"nav_user": users[0], "nav_db": db, "message": "what is the score of my latest analysis"}
     foreign_result = agent._resolve_result(
         {**state, "message": "what is the score for Quantum Xenon Secret Position"},
@@ -169,7 +217,14 @@ def test_result_fast_path_returns_exact_facts_and_link_without_navigation(result
     latest = analysis_ids[-1]
     target = resolve(ResolutionContext(users[0], db), NavSlots(target="analysis", latest=True))
     assert target.targets[0].params["analysis_id"] == latest
-    decision = RouterDecision(route="result", source="rules", confidence=1, language="en", slots=NavSlots(target="analysis", latest=True), nav_mode="fast")
+    decision = RouterDecision(
+        route="result",
+        source="rules",
+        confidence=1,
+        language="en",
+        slots=NavSlots(target="analysis", latest=True),
+        nav_mode="fast",
+    )
     state = {"nav_user": users[0], "nav_db": db, "message": "what is the score of my latest analysis"}
     response = agent._resolve_result(state, decision, "en")
     facts = build_analysis_facts(db, users[0].id, latest)

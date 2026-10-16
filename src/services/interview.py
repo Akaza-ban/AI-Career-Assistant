@@ -507,11 +507,14 @@ def read_result_facts_source(
     if row is None:
         return None
     session, jd = row
-    question_count = db.scalar(
-        select(func.count(InterviewTurn.id))
-        .join(InterviewSession, InterviewSession.id == InterviewTurn.session_id)
-        .where(InterviewTurn.session_id == session.id, InterviewSession.owner_id == user_id)
-    ) or 0
+    question_count = (
+        db.scalar(
+            select(func.count(InterviewTurn.id))
+            .join(InterviewSession, InterviewSession.id == InterviewTurn.session_id)
+            .where(InterviewTurn.session_id == session.id, InterviewSession.owner_id == user_id)
+        )
+        or 0
+    )
     previous = None
     if session.status == "completed" and session.completed_at is not None:
         previous = db.scalar(

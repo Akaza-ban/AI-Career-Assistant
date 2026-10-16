@@ -251,7 +251,7 @@ class AssistantAgent:
         lang = "en" if language == "en" else "vi"
         templates = {
             "en": {
-                "none": "I couldn’t find a matching result. Here are the nearest records you can open.",
+                "none": "I couldn’t find a matching record. Here are nearby options you can open.",
                 "multiple": "Choose a result below to see its figures.",
                 "role": "Result records are available only to student accounts.",
                 "facts": "Result figures",
@@ -264,7 +264,7 @@ class AssistantAgent:
                 "unknown": "I couldn’t read the stored result figures.",
             },
             "vi": {
-                "none": "Không tìm thấy kết quả phù hợp. Đây là những hồ sơ gần nhất bạn có thể mở.",
+                "none": "Không tìm thấy hồ sơ phù hợp. Đây là một số lựa chọn gần nhất để mở.",
                 "multiple": "Hãy chọn một kết quả bên dưới để xem các số liệu.",
                 "role": "Kết quả hồ sơ chỉ dành cho tài khoản sinh viên.",
                 "facts": "Số liệu kết quả",
@@ -327,12 +327,22 @@ class AssistantAgent:
         if metric_key == "score":
             if record_type == "analysis":
                 importance = next((item for item in ("required", "preferred") if item in folded_question), None)
-                category = next(
-                    (item for item in facts.get("category_scores", []) if item.get("importance") == importance), None
-                ) if importance else None
+                category = (
+                    next(
+                        (item for item in facts.get("category_scores", []) if item.get("importance") == importance),
+                        None,
+                    )
+                    if importance
+                    else None
+                )
                 if category:
                     metric_value = f"{category['earned']}/{category['possible']}"
-                    metric_label = f"{importance} earned/possible"
+                    importance_label = (
+                        importance if lang == "en" else ("bắt buộc" if importance == "required" else "ưu tiên")
+                    )
+                    metric_label = (
+                        f"{importance_label} earned/possible" if lang == "en" else f"tỉ lệ {importance_label} đạt/tổng"
+                    )
                 else:
                     metric_value = facts.get("overall_match_score")
             else:
@@ -341,7 +351,9 @@ class AssistantAgent:
                 )
                 metric_value = facts.get(f"{criterion}_average") if criterion else facts.get("overall_star_score")
                 if criterion:
-                    metric_label = f"{criterion} STAR score"
+                    metric_label = f"{criterion} STAR score" if lang == "en" else f"điểm STAR {criterion}"
+                else:
+                    metric_label = "STAR score" if lang == "en" else "điểm STAR"
         elif metric_key == "status":
             metric_value = facts.get("status")
         elif metric_key == "date":
@@ -360,13 +372,22 @@ class AssistantAgent:
                     measure = "matched"
                 if importance:
                     metric_value = facts.get(f"{importance}_{measure}_count")
-                    metric_label = f"{importance} {measure} count"
+                    if lang == "en":
+                        metric_label = f"{importance} {measure} count"
+                    else:
+                        importance_label = "bắt buộc" if importance == "required" else "ưu tiên"
+                        measure_label = {"missing": "thiếu", "partial": "một phần", "matched": "đạt"}[measure]
+                        metric_label = f"số lượng {measure_label} {importance_label}"
                 else:
+                    required_count = facts.get(f"required_{measure}_count", 0)
+                    preferred_count = facts.get(f"preferred_{measure}_count", 0)
                     metric_value = (
-                        f"{facts.get(f'required_{measure}_count', 0)} required; "
-                        f"{facts.get(f'preferred_{measure}_count', 0)} preferred"
+                        f"{required_count} required; {preferred_count} preferred"
+                        if lang == "en"
+                        else f"{required_count} bắt buộc; {preferred_count} ưu tiên"
                     )
-                    metric_label = f"{measure} counts"
+                    measure_label = {"missing": "missing", "partial": "partial", "matched": "matched"}[measure]
+                    metric_label = f"{measure_label} counts" if lang == "en" else f"số lượng {measure_label}"
         if metric_value is None:
             return AssistantResponse(message=templates[lang]["unknown"], intent="qa", route="result")
         label = facts.get("jd_label") if record_type == "analysis" else facts.get("position_label")
