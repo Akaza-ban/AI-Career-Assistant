@@ -290,7 +290,7 @@ def assessment(
         "importance": requirement["importance"],
         "weight": IMPORTANCE_WEIGHTS[requirement["importance"]],
         "match": match,
-        "status": "matched" if match == 1 else "partial" if match == 0.5 else "missing",
+        "status": "matched" if match >= 0.75 else "partial" if match > 0 else "missing",
         "evidence": evidence_of(evidence_line) if evidence_line and match > 0 else None,
         "note": note,
         "roadmap_url": roadmap_info["roadmap_url"],
