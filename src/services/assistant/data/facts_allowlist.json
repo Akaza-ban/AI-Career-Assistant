@@ -1,0 +1,14 @@
+{
+  "analysis": [
+    "status", "created_at", "cv_label", "jd_label", "overall_match_score",
+    "category_scores", "required_matched_count", "required_partial_count",
+    "required_missing_count", "preferred_matched_count", "preferred_partial_count",
+    "preferred_missing_count", "missing_skills"
+  ],
+  "analysis_category": ["importance", "total", "matched", "partial", "missing", "earned", "possible"],
+  "interview": [
+    "status", "started_at", "position_label", "question_count", "overall_star_score",
+    "situation_average", "task_average", "action_average", "result_average",
+    "previous_session_score", "previous_session_date"
+  ]
+}

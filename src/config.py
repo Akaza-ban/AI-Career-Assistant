@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     login_lock_minutes: int = 15
     frontend_url: str = "http://localhost:3000"
     assistant_tz: str = "Asia/Ho_Chi_Minh"
+    result_facts_max_field_chars: int = Field(default=80, ge=1, le=500)
     demo_login_enabled: bool = False
     demo_account_password: str = "careerx123"
 
