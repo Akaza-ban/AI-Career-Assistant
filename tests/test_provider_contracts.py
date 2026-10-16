@@ -12,7 +12,7 @@ import sqlite3
 import pytest
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 
-from src.services.providers.gateway import GatewayError, GatewayTimeoutError
+from src.services.providers.gateway import GatewayError, GatewayTimeoutError, provider_scope
 from src.services.providers.llm_client import Done, LlmClient, LlmProviderError
 from tests.test_llm_client import FIXTURES, USER, completion, record, settings
 
@@ -95,6 +95,33 @@ async def test_2_non_tool_then_tool_turn_replays_reasoning(mode):
         if mode == "recorded":
             client.assert_recording_consumed()
             assert client.recorded_requests[-1]["messages"][1] == plain
+    finally:
+        await client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_contract_2_non_thinking_three_step_tool_loop(mode):
+    """Section 11 contract 2: non-thinking agent tool calls work over three steps."""
+    client = client_for(mode, "three_step.json")
+    log = [
+        {
+            "role": "user",
+            "content": "Call get_stage with stage 1, then 2, then 3 in separate requests, then say Complete.",
+        }
+    ]
+    try:
+        with provider_scope(mask_only=True):
+            for _ in range(3):
+                message = await client.chat(log, tools=[TOOL], thinking=False, temperature=0)
+                assert message.get("tool_calls") and not message.get("reasoning_content")
+                resolve(message, log)
+            final = await client.chat(log, tools=[TOOL], thinking=False, temperature=0)
+        assert final.get("content") == "Complete" and not final.get("tool_calls")
+        if mode == "recorded":
+            assert len(client.recorded_requests) == 4
+            assert all(request["thinking"] == {"type": "disabled"} for request in client.recorded_requests)
+            assert all(request["temperature"] == 0 for request in client.recorded_requests)
+            client.assert_recording_consumed()
     finally:
         await client.aclose()
 
