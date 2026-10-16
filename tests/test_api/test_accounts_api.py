@@ -64,7 +64,7 @@ async def test_register_signs_in_with_normalized_profile(client):
     body = res.json()
     assert body["role"] == "student"
     assert (body["profile"]["full_name"], body["profile"]["subtitle"]) == ("Nguyễn Văn A", NEW_EMAIL)
-    assert "careerx_session" in res.cookies
+    assert "careerv_session" in res.cookies
 
     # Cookie phiên đăng nhập được ưu tiên hơn header demo
     me = await client.get(f"{API}/me", headers=STUDENT)
@@ -105,7 +105,7 @@ async def test_register_validates_fields(client, field, value, code):
 
 @pytest.mark.asyncio
 async def test_login_counts_failures_then_locks(client):
-    ok = await client.post(f"{API}/auth/login", json={"email": "MinhAnh.Nguyen@gmail.com", "password": "careerx123"})
+    ok = await client.post(f"{API}/auth/login", json={"email": "MinhAnh.Nguyen@gmail.com", "password": "careerv123"})
     assert ok.status_code == 200 and ok.json()["profile"]["id"] == DEMO_STUDENT_ID
     client.cookies.clear()
 
@@ -118,7 +118,7 @@ async def test_login_counts_failures_then_locks(client):
     locked = await client.post(f"{API}/auth/login", json=wrong)
     assert (locked.status_code, locked.json()["code"]) == (429, "too_many_attempts")
     # Đang khoá thì mật khẩu đúng cũng không vào được
-    still = await client.post(f"{API}/auth/login", json={**wrong, "password": "careerx123"})
+    still = await client.post(f"{API}/auth/login", json={**wrong, "password": "careerv123"})
     assert still.status_code == 429
 
     unknown = await client.post(f"{API}/auth/login", json={"email": "ai@gmail.com", "password": "x1234567"})

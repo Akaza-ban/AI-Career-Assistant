@@ -36,6 +36,31 @@ from src.services.providers.gateway import provider_scope
 router = APIRouter()
 
 
+def _latest_analysis_scores(db: DbSession, owner_id: str, cv_version_id: str) -> dict[str, dict]:
+    """Lượt phân tích hoàn tất mới nhất của CV này với từng JD, để gợi ý JD dùng đúng điểm sinh viên đã xem."""
+    rows = db.scalars(
+        select(GapAnalysis)
+        .where(
+            GapAnalysis.owner_id == owner_id,
+            GapAnalysis.cv_version_id == cv_version_id,
+            GapAnalysis.status == "completed",
+        )
+        .order_by(GapAnalysis.created_at.desc())
+    )
+    known: dict[str, dict] = {}
+    for analysis in rows:
+        if analysis.jd_id in known or analysis.match_score is None:
+            continue
+        result = analysis.result or {}
+        known[analysis.jd_id] = {
+            "match_score": analysis.match_score,
+            "requirements": result.get("requirements", []),
+            "breakdown": result.get("breakdown", []),
+            "analysis_id": analysis.id,
+        }
+    return known
+
+
 def _roadmaps(skills: list[str]) -> dict[str, str]:
     """Link roadmap.sh cho các kỹ năng có lộ trình riêng (bỏ qua kỹ năng ngoài CNTT)."""
     infos = {skill: get_roadmap_info(skill) for skill in skills}
@@ -223,6 +248,19 @@ async def recommend_jds(
             cv_text=cv_text,
             db=db,
             top_n=body.top_n,
+        )
+    results = recommend_top_jds_from_cv(
+        cv_text=cv_text,
+        db=db,
+        top_n=body.top_n,
+        known_scores=_latest_analysis_scores(db, user.id, body.cv_version_id) if body.cv_version_id else None,
+    )
+
+    advice = None
+    if body.generate_advice:
+        advice_data = await generate_career_advice_with_llm(
+            cv_summary=cv_text[:800],
+            recommendations=results,
         )
 
         advice = None

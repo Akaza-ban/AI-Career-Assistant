@@ -36,7 +36,7 @@ from src.models.assistant import (
 from src.prompts.assistant_prompts import ASSISTANT_SYSTEM_PROMPT, HOWTO_SYSTEM_PROMPT
 from src.services.assistant.chunker import DocChunk
 from src.services.assistant.guardrails import (
-    has_careerx_topic,
+    has_careerv_topic,
     is_chitchat,
     is_refusal_response,
     is_role_forbidden,
@@ -682,7 +682,7 @@ class AssistantAgent:
         chitchat, reply = is_chitchat(state["message"])
         if chitchat:
             return AssistantResponse(message=reply, intent="qa", actions=[], sources=[])
-        if state["confidence"] != "high" or not sources or not has_careerx_topic(state["message"]):
+        if state["confidence"] != "high" or not sources or not has_careerv_topic(state["message"]):
             return AssistantResponse(
                 message="Xin lỗi, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerV.",
                 intent=state["intent"],

@@ -44,7 +44,7 @@ DEMO_USERS = [
         "role": "advisor",
         "full_name": "ThS. Trần Hoàng Nam",
         "subtitle": "Cố vấn hướng nghiệp",
-        "email": "nam.tran@careerx.vn",
+        "email": "nam.tran@careerv.vn",
         "title": "Cố vấn hướng nghiệp",
         "office": "Trực tuyến qua Google Meet",
         "office_hours": "Thứ 3 & Thứ 5 (14:00 – 16:30)",
@@ -54,7 +54,7 @@ DEMO_USERS = [
         "role": "admin",
         "full_name": "Quản trị CareerV",
         "subtitle": "Quản trị hệ thống",
-        "email": "admin@careerx.vn",
+        "email": "admin@careerv.vn",
     },
 ]
 
@@ -82,23 +82,49 @@ def seed_demo_users(db: Session) -> None:
         if not user.password_hash:
             user.password_hash = hash_password(passwords[data["id"]])
     db.flush()
+    migrate_brand_domain(db)
     _set_demo_passwords(db)
     assign(db, DEMO_ADVISOR_ID, DEMO_STUDENT_ID)
     assign(db, DEMO_ADVISOR_ID, SECOND_STUDENT_ID)
     db.commit()
 
 
+# Đổi tên CareerX → CareerV: email tài khoản demo và mật khẩu demo cũ
+LEGACY_EMAIL_DOMAIN = "@careerx.vn"
+BRAND_EMAIL_DOMAIN = "@careerv.vn"
+LEGACY_DEMO_PASSWORD = "careerx123"
+
+
+def migrate_brand_domain(db: Session) -> None:
+    """Email "@careerx.vn" (cố vấn, quản trị demo tạo trước khi đổi tên) đổi sang "@careerv.vn" nếu chưa ai dùng."""
+    from sqlalchemy import select
+
+    for user in db.scalars(select(User).where(User.email.like(f"%{LEGACY_EMAIL_DOMAIN}"))):
+        old, new = user.email, user.email[: -len(LEGACY_EMAIL_DOMAIN)] + BRAND_EMAIL_DOMAIN
+        if db.scalars(select(User.id).where(User.email == new)).first() is None:
+            user.email = new
+            if user.subtitle == old:
+                user.subtitle = new
+    db.flush()
+
+
 def _set_demo_passwords(db: Session) -> None:
     """Đặt mật khẩu DEMO_ACCOUNT_PASSWORD cho tài khoản demo chưa có mật khẩu (để thử trang Đăng nhập)."""
     from src.config import get_settings
-    from src.services.auth import hash_password
+    from src.services.auth import hash_password, verify_password
 
     password = get_settings().demo_account_password
     if not password:
         return
     for user_id in (DEMO_STUDENT_ID, DEMO_ADVISOR_ID, DEMO_ADMIN_ID):
         user = db.get(User, user_id)
-        if user is not None and user.password_hash is None:
+        # Chưa có mật khẩu, hoặc vẫn là mật khẩu demo cũ "careerx123" (người dùng chưa tự đổi) → mật khẩu demo hiện tại
+        legacy = (
+            password != LEGACY_DEMO_PASSWORD and verify_password(LEGACY_DEMO_PASSWORD, user.password_hash)
+            if user
+            else False
+        )
+        if user is not None and (user.password_hash is None or legacy):
             user.password_hash = hash_password(password)
             if user.role == "student" and user.consent_accepted_at is None:
                 user.consent_accepted_at = utcnow()

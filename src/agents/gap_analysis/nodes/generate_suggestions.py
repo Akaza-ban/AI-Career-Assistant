@@ -2,6 +2,7 @@ import uuid
 from typing import Any
 
 from src.agents.gap_analysis.state import GapAnalysisState
+from src.services.fit_summary import compose_summary
 from src.services.skill_matching import SECTION_LABELS, compute_score, is_descriptive
 
 MAX_SUGGESTIONS = 5
@@ -64,6 +65,14 @@ def fallback_summary(assessments: list[dict[str, Any]], score: float | None) -> 
         parts.append(f"Mới chỉ liệt kê, chưa có mô tả sử dụng: {', '.join(partial)}.")
     if missing:
         parts.append(f"Chưa tìm thấy trong CV: {', '.join(missing)}.")
+    if score is not None and score >= 80.0:
+        parts.append(
+            "Hồ sơ có độ tương thích từ khóa rất cao; trên thực tế tuyển dụng, vòng phỏng vấn sẽ đào sâu kiểm chứng năng lực thực tế."
+        )
+    elif score is not None and score <= 30.0:
+        parts.append(
+            "Độ tương thích hiện còn khoảng cách với JD đặc thù này; hãy dựa vào nền tảng sẵn có để hoàn thiện thêm các kỹ năng cốt lõi."
+        )
     return " ".join(parts)
 
 
@@ -90,10 +99,15 @@ async def generate_suggestions_node(state: GapAnalysisState) -> dict[str, Any]:
             "kèm bằng chứng; nếu chưa, đây là kỹ năng nên học thêm."
         )
 
+    llm_summary = state.get("llm_summary")
+    summary = (
+        llm_summary or compose_summary(assessments, state.get("cv_lines", [])) or fallback_summary(assessments, score)
+    )
+
     return {
         "suggestions": suggestions,
         "recommendations": recommendations,
         "match_score": score,
         "score_breakdown": breakdown,
-        "gap_summary": state.get("llm_summary") or fallback_summary(assessments, score),
+        "gap_summary": summary,
     }

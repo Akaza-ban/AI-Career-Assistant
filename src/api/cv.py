@@ -13,7 +13,13 @@ from sqlalchemy import func, select, update
 from src.api.deps import CurrentStudent, DbSession
 from src.api.errors import AppError
 from src.db.models import CvVersion, GapAnalysis, JobDescription, utcnow
-from src.models.schemas import CvTextResponse, CvVersionResponse, ExportCvRequest, ExportCvResponse
+from src.models.schemas import (
+    CvPreviewResponse,
+    CvTextResponse,
+    CvVersionResponse,
+    ExportCvRequest,
+    ExportCvResponse,
+)
 from src.services import cv_files, cv_optimizer, cv_versions, sharing
 
 router = APIRouter(prefix="/cv", tags=["CV Management"])
@@ -228,6 +234,19 @@ def get_cv_text(cv_id: str, user: CurrentStudent, db: DbSession) -> CvTextRespon
     """Văn bản đã trích từ CV, dùng để xem nhanh file DOCX (trình duyệt không hiển thị được DOCX)."""
     cv = get_owned_cv(db, user.id, cv_id)
     return CvTextResponse(text=cv_optimizer.display_text(cv))
+
+
+@router.get("/{cv_id}/preview", response_model=CvPreviewResponse)
+def get_cv_preview(cv_id: str, user: CurrentStudent, db: DbSession) -> dict:
+    """Cách xem phiên bản CV trong app: ảnh từng trang (PDF) hoặc nội dung theo mẫu CV (DOCX, bản đã tối ưu)."""
+    return cv_optimizer.cv_preview(get_owned_cv(db, user.id, cv_id))
+
+
+@router.get("/{cv_id}/pages/{page}")
+def get_cv_page(cv_id: str, page: int, user: CurrentStudent, db: DbSession) -> Response:
+    """Ảnh PNG một trang của CV PDF (đếm từ 1)."""
+    data = cv_optimizer.page_image(get_owned_cv(db, user.id, cv_id), page)
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.post("/{cv_id}/export", response_model=ExportCvResponse)

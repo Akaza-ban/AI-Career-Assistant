@@ -9,6 +9,7 @@ Phần chấm theo quy tắc ở đây dùng khi không có LLM và để kiểm
 """
 
 import re
+import unicodedata
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -25,13 +26,75 @@ MAX_REQUIREMENTS = 20
 EVIDENCE_SECTIONS = {"experience", "projects", "education", "activities"}
 
 # Thứ tự quan trọng: từ khoá dài/cụ thể đặt trước để không bị từ khoá ngắn bắt nhầm.
+# So khớp sau khi bỏ dấu và khoảng trắng (fold): CV quét OCR hay mất dấu, dính chữ ("KINHNGHIEMLAMVIEC").
 _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
-    ("experience", ("kinh nghiệm", "quá trình làm việc", "experience", "work history", "employment")),
-    ("projects", ("dự án", "academic projects", "project")),
-    ("education", ("học vấn", "trình độ học vấn", "education", "đào tạo")),
-    ("activities", ("hoạt động", "ngoại khóa", "ngoại khoá", "tình nguyện", "volunteer", "activities", "câu lạc bộ")),
-    ("skills", ("kỹ năng", "kĩ năng", "skills", "công cụ", "tools", "technical", "technologies")),
-    ("certifications", ("chứng chỉ", "giải thưởng", "thành tích", "certificat", "certification", "award")),
+    (
+        "experience",
+        (
+            "kinh nghiệm",
+            "quá trình làm việc",
+            "experience",
+            "work experience",
+            "professional experience",
+            "relevant experience",
+            "working experience",
+            "internship experience",
+            "work history",
+            "employment",
+        ),
+    ),
+    ("projects", ("dự án", "academic projects", "personal projects", "selected projects", "side projects", "project")),
+    ("education", ("học vấn", "trình độ học vấn", "education", "academic background", "đào tạo")),
+    (
+        "activities",
+        (
+            "hoạt động",
+            "ngoại khóa",
+            "ngoại khoá",
+            "tình nguyện",
+            "volunteer",
+            "activities",
+            "leadership",
+            "extracurricular",
+            "câu lạc bộ",
+        ),
+    ),
+    (
+        "skills",
+        (
+            "kỹ năng",
+            "kĩ năng",
+            "skills",
+            "công cụ",
+            "tools",
+            "technical",
+            "technologies",
+            "ngoại ngữ",
+            "ngôn ngữ",
+            "languages",
+            "language",
+            "lĩnh vực chuyên môn",
+            "chuyên môn",
+        ),
+    ),
+    (
+        "certifications",
+        (
+            "chứng chỉ",
+            "chứng nhận",
+            "giải thưởng",
+            "thành tích",
+            "certifications",
+            "certification",
+            "certificates",
+            "certificate",
+            "certificat",
+            "awards",
+            "award",
+            "honors",
+            "achievements",
+        ),
+    ),
     (
         "summary",
         (
@@ -46,6 +109,18 @@ _SECTION_KEYWORDS: list[tuple[str, tuple[str, ...]]] = [
             "about",
         ),
     ),
+    (
+        "other",
+        (
+            "sở thích",
+            "người tham chiếu",
+            "thông tin khác",
+            "interests",
+            "hobbies",
+            "references",
+            "additional information",
+        ),
+    ),
 ]
 
 SECTION_LABELS: dict[str, str] = {
@@ -57,28 +132,40 @@ SECTION_LABELS: dict[str, str] = {
     "skills": "Kỹ năng",
     "certifications": "Chứng chỉ & giải thưởng",
     "summary": "Giới thiệu",
+    "other": "Thông tin khác",
 }
 
 
 # ---------- Tách CV thành dòng có gắn mục ----------
 
 # Ký tự đầu dòng bị bỏ khi tách dòng (số dòng chỉ đếm dòng có nội dung)
-BULLET_PREFIX = re.compile(r"^[#*\-•●▪+\s]+")
+BULLET_PREFIX = re.compile(r"^[#*\-•●▪+·◦■➢►✓–\s]+")
+
+
+def fold(text: str) -> str:
+    """Bỏ dấu, chữ thường, bỏ khoảng trắng và dấu câu: "KINH NGHIỆM" ≈ "KINHNGHIEM" (OCR mất dấu, dính chữ)."""
+    plain = unicodedata.normalize("NFD", text.replace("đ", "d").replace("Đ", "D"))
+    return "".join(c for c in plain if c.isalnum() and not unicodedata.combining(c)).lower()
+
+
+_FOLDED_KEYWORDS = [(section, tuple(fold(kw) for kw in keywords)) for section, keywords in _SECTION_KEYWORDS]
+_YEAR = re.compile(r"(?:19|20)\d{2}")
 
 
 def _match_section(clean: str) -> tuple[str | None, bool]:
     """(mục, là tiêu đề riêng một dòng?) nếu dòng mở đầu một mục CV; ngược lại (None, False)."""
-    lower = clean.lower()
-    for section, keywords in _SECTION_KEYWORDS:
+    folded = fold(clean)
+    for section, keywords in _FOLDED_KEYWORDS:
         for kw in keywords:
-            if not lower.startswith(kw):
+            if not folded.startswith(kw):
                 continue
             colon = clean.find(":")
             # "Kỹ năng: Python, SQL" — mục viết cùng dòng với nội dung
             if 0 < colon <= 40 and clean[colon + 1 :].strip():
                 return section, False
-            # "KINH NGHIỆM LÀM VIỆC", "Dự án cá nhân:" — tiêu đề ngắn đứng riêng
-            if len(clean) <= 40 and not clean.rstrip().endswith("."):
+            # "KINH NGHIỆM LÀM VIỆC", "Dự án cá nhân:" — tiêu đề ngắn đứng riêng; dòng có năm là tên một mục con
+            # ("Project Manager Intern 06/2024 - 08/2024"), không phải tiêu đề
+            if len(clean) <= 40 and not clean.rstrip().endswith(".") and not _YEAR.search(clean):
                 return section, True
     return None, False
 
@@ -90,6 +177,9 @@ def strip_bullet(raw: str) -> str:
 
 def split_cv_lines(text: str) -> list[dict[str, Any]]:
     """Tách CV thành các dòng không rỗng, đánh số từ 1 và gắn mục (section) chứa dòng đó."""
+    from src.services.cv_files import clean_stutter_text
+
+    text = clean_stutter_text(text)
     lines: list[dict[str, Any]] = []
     current = "header"
     for raw in text.splitlines():
@@ -97,6 +187,10 @@ def split_cv_lines(text: str) -> list[dict[str, Any]]:
         if not clean:
             continue
         section, is_heading = _match_section(clean)
+        # Dòng đầu tiên chỉ khớp khi bỏ dấu thường là họ tên ("Duan Nguyen" ≠ mục "Dự án")
+        lower = clean.lower()
+        if not lines and is_heading and not any(lower.startswith(kw) for _, kws in _SECTION_KEYWORDS for kw in kws):
+            section, is_heading = None, False
         # "Technologies: React.js, Git" trong một mục Kinh nghiệm / Dự án là dòng liệt kê của mục đó,
         # không mở mục mới: các dòng mô tả phía sau vẫn là bằng chứng của mục đang có.
         if section and (is_heading or current not in EVIDENCE_SECTIONS):
@@ -161,13 +255,29 @@ def _mentions(term: str, lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return [line for line in lines if not line.get("is_heading") and _pattern(term).search(line["text"])]
 
 
+def _in_entry(line: dict[str, Any]) -> bool:
+    """Dòng liệt kê ("Technologies: ...") nằm trong một mục Kinh nghiệm / Dự án..."""
+    return line["section"] not in EVIDENCE_SECTIONS and line.get("block") in EVIDENCE_SECTIONS
+
+
 def evidence_of(line: dict[str, Any]) -> dict[str, Any]:
+    # Dòng công nghệ của một dự án hiện "Mục Dự án" (nơi sinh viên tìm thấy nó), không phải "Mục Kỹ năng"
+    shown = line["block"] if _in_entry(line) else line["section"]
     return {
         "line_no": line["line_no"],
         "text": line["text"],
         "section": line["section"],
-        "section_label": SECTION_LABELS.get(line["section"], line["section"]),
+        "section_label": SECTION_LABELS.get(shown, shown),
     }
+
+
+def listing_note(skill: str, line: dict[str, Any] | None) -> str:
+    """Ghi chú cho mức 0,5: kỹ năng mới được liệt kê, nói rõ cần thêm gì để thành bằng chứng."""
+    if line is not None and _in_entry(line):
+        return f"Có trong dòng công nghệ nhưng chưa có câu mô tả bạn đã dùng {skill} làm gì"
+    return (
+        f"Chỉ có trong danh sách kỹ năng, chưa có câu nào trong Kinh nghiệm hoặc Dự án mô tả bạn đã dùng {skill} làm gì"
+    )
 
 
 def assessment(
@@ -180,7 +290,7 @@ def assessment(
         "importance": requirement["importance"],
         "weight": IMPORTANCE_WEIGHTS[requirement["importance"]],
         "match": match,
-        "status": "matched" if match == 1 else "partial" if match == 0.5 else "missing",
+        "status": "matched" if match >= 0.75 else "partial" if match > 0 else "missing",
         "evidence": evidence_of(evidence_line) if evidence_line and match > 0 else None,
         "note": note,
         "roadmap_url": roadmap_info["roadmap_url"],
@@ -215,15 +325,41 @@ def assess_by_rules(requirement: dict[str, Any], lines: list[dict[str, Any]]) ->
     if term in child_terms:
         notes.append(f"{term} → tính là {name} (taxonomy)")
     if match == 0.5:
-        notes.append("Chỉ được liệt kê, chưa có dự án hoặc kinh nghiệm mô tả việc sử dụng")
+        notes.append(listing_note(name, line))
     return assessment(requirement, match, line, "; ".join(notes) or None, "rule")
+
+
+def lift_parents(
+    requirements: list[dict[str, Any]],
+    assessments: list[dict[str, Any]],
+    lines_by_no: dict[int, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    Sau khi kết hợp AI và quy tắc: kỹ năng con (FastAPI) được chấm cao hơn kỹ năng cha (Python) thì nâng kỹ năng cha
+    lên cùng mức, dùng chung dòng bằng chứng — tránh bảng ghi "FastAPI ● nhưng Python ◐".
+    """
+    by_skill = {a["skill"].lower(): a for a in assessments}
+    by_id = {r["id"]: r for r in requirements}
+    lifted = []
+    for item in assessments:
+        children = [by_skill.get(c.lower()) for c in get_child_skills(item["skill"])]
+        best = max((c for c in children if c and c["match"] > item["match"]), key=lambda c: c["match"], default=None)
+        if best is None or item["id"] not in by_id:
+            lifted.append(item)
+            continue
+        line = lines_by_no.get(best["evidence"]["line_no"]) if best.get("evidence") else None
+        note = f"{best['skill']} → tính là {item['skill']} (taxonomy)"
+        if best["match"] == 0.5:
+            note = listing_note(item["skill"], line)
+        lifted.append(assessment(by_id[item["id"]], best["match"], line, note, best["source"]))
+    return lifted
 
 
 # ---------- Điểm tổng ----------
 
 
 def compute_score(assessments: list[dict[str, Any]]) -> tuple[float | None, list[dict[str, Any]]]:
-    """CV–JD Matching Score (0–100, làm tròn 1 chữ số) và bảng phân rã theo mức độ yêu cầu."""
+    """CV–JD Matching Score (0.0–100.0%, làm tròn 1 chữ số) và bảng phân rã theo mức độ yêu cầu."""
     breakdown = []
     for importance, weight in IMPORTANCE_WEIGHTS.items():
         items = [a for a in assessments if a["importance"] == importance]
@@ -245,7 +381,9 @@ def compute_score(assessments: list[dict[str, Any]]) -> tuple[float | None, list
     possible = sum(b["possible"] for b in breakdown)
     if not possible:
         return None, breakdown
-    return round(sum(b["earned"] for b in breakdown) / possible * 100, 1), breakdown
+
+    raw_score = sum(b["earned"] for b in breakdown) / possible * 100
+    return round(raw_score, 1), breakdown
 
 
 def match_label(score: float | None) -> str | None:

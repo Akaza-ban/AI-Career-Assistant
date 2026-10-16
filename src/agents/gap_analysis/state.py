@@ -22,6 +22,8 @@ class GapAnalysisState(TypedDict, total=False):
     cv_lines: list[dict[str, Any]]
     # Yêu cầu của JD: [{"id", "name", "importance", "aliases"}]; JD thư viện truyền sẵn, JD tự dán thì trích ở node retrieve
     requirements: list[dict[str, Any]]
+    # given: có sẵn (JD thư viện / đã trích trước); llm: vừa trích bằng AI; dictionary: AI lỗi, dùng từ điển kỹ năng
+    requirements_source: str
     # Kết quả chấm từng yêu cầu: [{"id", "skill", "importance", "weight", "match", "status", "evidence", "note", "source"}]
     assessments: list[dict[str, Any]]
     # Gợi ý viết lại thô từ LLM trước khi chuẩn hoá: [{"requirement_id", "line", "rewrite", "reason"}]

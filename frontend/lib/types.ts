@@ -167,8 +167,8 @@ export interface RecommendJdsRequest {
 }
 
 /**
- * Một vị trí được gợi ý (JDRecommendationItem). Chấm theo quy tắc, không qua LLM: giao diện chỉ hiện match_label,
- * không hiện match_score (DESIGN.md 8.1).
+ * Một vị trí được gợi ý (JDRecommendationItem). Ước tính nhanh theo quy tắc, không qua LLM; JD đã có lượt phân tích
+ * của đúng CV này thì dùng điểm của lượt phân tích. Giao diện chỉ hiện match_label, không hiện match_score (DESIGN.md 8.1).
  */
 export interface JdRecommendationItem {
   jd_id: string
@@ -186,6 +186,9 @@ export interface JdRecommendationItem {
   partial_skills: string[]
   missing_skills: string[]
   breakdown: ScoreBreakdown[]
+  /** analysis: lấy từ lượt phân tích đã có của CV này; estimate: ước tính nhanh bằng quy tắc. */
+  score_source?: "analysis" | "estimate"
+  analysis_id?: string | null
 }
 
 /** Lời khuyên nghề nghiệp do LLM viết cho vị trí #1 (CareerAdvice). */
@@ -255,6 +258,10 @@ export interface JdComparisonItem {
   breakdown: ScoreBreakdown[]
   llm_summary: string | null
   llm_used: boolean
+  /** Số yêu cầu kỹ năng trích được từ JD (lượt so sánh cũ không có). */
+  requirement_count?: number
+  /** given: có sẵn; llm: vừa trích bằng AI; dictionary: AI lỗi, chỉ có kỹ năng nhận ra theo từ điển. */
+  requirements_source?: "given" | "llm" | "dictionary"
 }
 
 export interface CompareJdsResponse {
@@ -386,7 +393,19 @@ export interface CvDocLine {
   /** Số dòng trong CV gốc (đếm các dòng có nội dung), khớp với EvidenceSpan.line_start. */
   line_no: number
   text: string
+  /**
+   * Cách trình bày trong mẫu CV (backend src/services/cv_layout.py); thiếu thì coi là "bullet".
+   * entry: tên mục con in đậm, thời gian (date) căn phải · role: in nghiêng · tech: in nghiêng đậm ·
+   * label: "Nhãn:" in đậm · text: đoạn văn · name / contact: phần đầu.
+   */
+  kind?: CvLineKind
+  /** Thời gian của dòng entry, ví dụ "Jun 2024 – Present". */
+  date?: string | null
+  /** Nửa sau của câu bị xuống dòng khi trích PDF/OCR: ghép vào dòng trước khi trình bày. */
+  cont?: boolean
 }
+
+export type CvLineKind = "name" | "contact" | "text" | "entry" | "role" | "tech" | "label" | "bullet"
 
 export interface CvDocSection {
   id: string
@@ -402,7 +421,14 @@ export interface CvDocument {
   sections: CvDocSection[]
   /** Kỹ năng SV tự ghi là đang học; không bao giờ ghi là thành thạo và không tính điểm khi phân tích lại. */
   developing_skills: { name: string; note: string }[]
+  /** Ngôn ngữ CV: đặt tiêu đề "Kỹ năng đang phát triển" / "Developing Skills". */
+  lang?: "vi" | "en"
 }
+
+/** Cách xem một phiên bản CV trong app: ảnh từng trang PDF gốc, hoặc nội dung theo mẫu CV (DOCX, bản đã tối ưu). */
+export type CvPreviewInfo =
+  | { kind: "pages"; page_count: number; document: null }
+  | { kind: "document"; page_count: null; document: CvDocument }
 
 // ---------- Trình tối ưu CV (US-SV-03) & Xuất CV ----------
 
@@ -418,6 +444,23 @@ export interface CapabilityCheck {
   context: string | null
   /** Ghi chú đang học khi chọn "chưa có kinh nghiệm". */
   learning_note: string | null
+  /** "Có, đã dùng": phần CV sẽ thêm câu (id trong OptimizerSession.entries). */
+  entry_id?: string | null
+  /** Câu cho CV viết từ lời kể của SV (AI, không thêm thông tin mới), chờ SV duyệt. */
+  draft_text?: string | null
+  /** Câu sẽ thêm vào CV khi Hoàn tất (đã áp dụng hoặc SV sửa). */
+  final_text?: string | null
+  line_status?: "pending" | "accepted" | "edited" | "rejected"
+  /** Lộ trình học trên roadmap.sh (chỉ kỹ năng CNTT); hiện khi SV chọn "Chưa có". */
+  roadmap_url?: string | null
+}
+
+/** Chỗ có thể thêm câu kinh nghiệm mới: một dự án / công việc trong CV, hoặc cuối một mục. */
+export interface CvEntry {
+  id: string
+  label: string
+  /** Câu mới chèn ngay sau dòng này của document. */
+  after_line_id: string
 }
 
 /**
@@ -445,11 +488,23 @@ export interface OptimizerSession {
   result_document: CvDocument | null
   suggestions: Suggestion[]
   capability_checks: CapabilityCheck[]
+  entries?: CvEntry[]
   finalized_at: ISODateString | null
 }
 
 export interface SuggestionDecisionRequest {
   /** undo: đưa gợi ý về chờ duyệt (chỉ khi chưa "Hoàn tất"). */
+  decision: "accept" | "edit" | "reject" | "undo"
+  /** Bắt buộc khi decision = "edit". */
+  edited_text?: string
+}
+
+export interface CapabilityDraftRequest {
+  context: string
+  entry_id: string
+}
+
+export interface CapabilityLineDecisionRequest {
   decision: "accept" | "edit" | "reject" | "undo"
   /** Bắt buộc khi decision = "edit". */
   edited_text?: string

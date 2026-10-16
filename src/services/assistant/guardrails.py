@@ -34,6 +34,13 @@ _CHITCHAT_PATTERN = re.compile(_GUARDS["chitchat"])
 _CAREERX_TOPIC_PATTERN = re.compile(_GUARDS["topic"])
 _OUT_OF_SCOPE_PATTERNS = tuple(re.compile(pattern) for pattern in _GUARDS["out_of_scope"])
 
+_CAREERV_TOPIC_PATTERN = re.compile(
+    r"\b(?:careerv|careerx|edu\s*17|cv|jd|star|phong van|interview|sinh vien|student|advisor|"
+    r"ky nang|skill|tai lieu|lich su|history|diem|score|match|phan tich|analysis|"
+    r"ho so|tai len|upload|chia se|co van|bo loc|filter|cai dat|settings|"
+    r"dang nhap|dang ky|he thong|nen tang|thong ke|dashboard|nhan xet|feedback|"
+    r"pdf|docx|nghe nghiep|tien bo|readiness|analytics|reviews|dinh dang)\b"
+)
 
 def is_role_forbidden(message: str, role: str) -> bool:
     """Shared role gate; sharing guidance does not request an advisor resource."""
@@ -94,9 +101,9 @@ def is_chitchat(message: str) -> tuple[bool, str]:
     return True, CHITCHAT_MESSAGE
 
 
-def has_careerx_topic(message: str) -> bool:
+def has_careerv_topic(message: str) -> bool:
     """Topic evidence for filtering short, coincidental lexical matches."""
-    return bool(_CAREERX_TOPIC_PATTERN.search(_inspection_text(message)))
+    return bool(_CAREERV_TOPIC_PATTERN.search(_inspection_text(message)))
 
 
 def is_out_of_scope(message: str) -> tuple[bool, str]:

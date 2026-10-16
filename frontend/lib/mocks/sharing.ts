@@ -13,7 +13,7 @@ export const mockAdvisorContact: AdvisorContact = {
   id: "cv-007",
   full_name: "ThS. Trần Hoàng Nam",
   title: "Cố vấn hướng nghiệp",
-  email: "nam.tran@careerx.vn",
+  email: "nam.tran@careerv.vn",
   office: "Trực tuyến qua Google Meet",
   office_hours: "Thứ 3 & Thứ 5 (14:00 – 16:30)",
   avatar_url: null,

@@ -1,73 +1,22 @@
 "use client"
 
-import { useCallback, useEffect } from "react"
-import { AlertCircle, Download, FileText, Loader2 } from "lucide-react"
+import { useCallback } from "react"
+import { Download } from "lucide-react"
 
+import { CvViewer, loadCvView } from "@/components/common/cv-viewer"
+import { studentCvSource } from "@/components/student/cv/cv-paper"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { api } from "@/lib/api"
 import { downloadCv } from "@/lib/download"
 import { formatBytes } from "@/lib/format"
 import type { CvVersion } from "@/lib/types"
-import { useApi } from "@/lib/use-api"
 
-export type CvPreview = { kind: "pdf"; url: string } | { kind: "text"; text: string } | { kind: "unavailable" }
-
-// Trình duyệt hiển thị được PDF; DOCX (hoặc PDF không có file, ví dụ ở chế độ mock) thì xem bằng văn bản đã trích.
-export async function loadPreview(cv: CvVersion): Promise<CvPreview> {
-  if (cv.file_type === "pdf") {
-    const blob = await api.getCvFile(cv.id)
-    if (blob) return { kind: "pdf", url: URL.createObjectURL(blob) }
-  }
-  const text = await api.getCvText(cv.id)
-  return text !== null ? { kind: "text", text } : { kind: "unavailable" }
-}
-
-/** Nội dung một phiên bản CV, cao bằng khung chứa (dùng ở popup Xem nhanh và trang Chi tiết CV). */
+/** Nội dung một phiên bản CV trong popup Xem nhanh: các tờ giấy trên nền xám, cuộn trong khung. */
 export function CvPreviewBody({ cv }: { cv: CvVersion }) {
-  const fetchPreview = useCallback(() => loadPreview(cv), [cv])
-  const { data, error, reload } = useApi(fetchPreview)
-
-  useEffect(() => {
-    return () => {
-      if (data?.kind === "pdf") URL.revokeObjectURL(data.url)
-    }
-  }, [data])
-
-  if (error) {
-    return (
-      <div className="grid h-full place-content-center justify-items-center gap-3 text-center">
-        <AlertCircle className="size-8 text-bad" aria-hidden />
-        <p className="text-sm text-ink-2">{error.message}</p>
-        <Button variant="soft" onClick={reload}>
-          Thử lại
-        </Button>
-      </div>
-    )
-  }
-  if (!data) {
-    return (
-      <div className="grid h-full place-content-center justify-items-center gap-2 text-sm text-ink-2" aria-busy="true">
-        <Loader2 className="size-6 animate-spin text-blue" aria-hidden />
-        Đang mở CV…
-      </div>
-    )
-  }
-  if (data.kind === "pdf") {
-    return <iframe src={`${data.url}#view=FitH`} title={`Xem nhanh ${cv.file_name}`} className="size-full rounded-lg bg-surface" />
-  }
-  if (data.kind === "text") {
-    return (
-      <div className="h-full overflow-y-auto rounded-lg bg-surface p-5">
-        <p className="mb-3 text-xs text-ink-3">Bản xem dạng văn bản. Tải file gốc để xem đúng bố cục.</p>
-        <p className="text-sm leading-6 whitespace-pre-line text-ink">{data.text}</p>
-      </div>
-    )
-  }
+  const load = useCallback(() => loadCvView(studentCvSource(cv)), [cv])
   return (
-    <div className="grid h-full place-content-center justify-items-center gap-2 text-center text-sm text-ink-2">
-      <FileText className="size-8 text-ink-3" aria-hidden />
-      Bản demo chưa có file thật để xem trước.
+    <div className="h-full overflow-y-auto rounded-xl bg-surface p-3 sm:p-5">
+      <CvViewer load={load} fileName={cv.file_name} />
     </div>
   )
 }

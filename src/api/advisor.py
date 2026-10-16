@@ -20,6 +20,7 @@ from src.models.schemas import (
     AdvisorStudentDetail,
     AdvisorStudentProgress,
     AssignedStudentResponse,
+    CvPreviewResponse,
     CvTextResponse,
     NoteRequest,
     NoteUpdateRequest,
@@ -96,6 +97,19 @@ def get_cv_text(student_id: str, cv_id: str, user: CurrentAdvisor, db: DbSession
     """Văn bản của phiên bản CV SV đã chia sẻ (xem nhanh)."""
     cv = advisor.shared_cv(db, user, student_id, cv_id, utcnow())
     return CvTextResponse(text=cv_optimizer.display_text(cv))
+
+
+@router.get("/students/{student_id}/cvs/{cv_id}/preview", response_model=CvPreviewResponse)
+def get_cv_preview(student_id: str, cv_id: str, user: CurrentAdvisor, db: DbSession) -> dict[str, Any]:
+    """Cách xem phiên bản CV SV đã chia sẻ: ảnh từng trang (PDF) hoặc nội dung theo mẫu CV."""
+    return cv_optimizer.cv_preview(advisor.shared_cv(db, user, student_id, cv_id, utcnow()))
+
+
+@router.get("/students/{student_id}/cvs/{cv_id}/pages/{page}")
+def get_cv_page(student_id: str, cv_id: str, page: int, user: CurrentAdvisor, db: DbSession) -> Response:
+    """Ảnh PNG một trang của CV PDF SV đã chia sẻ (đếm từ 1)."""
+    data = cv_optimizer.page_image(advisor.shared_cv(db, user, student_id, cv_id, utcnow()), page)
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.post("/students/{student_id}/notes", response_model=AdvisorNoteResponse, status_code=status.HTTP_201_CREATED)

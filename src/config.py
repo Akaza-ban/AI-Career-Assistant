@@ -144,17 +144,15 @@ class Settings(BaseSettings):
         description="Tên model LLM mặc định",
     )
     llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    llm_base_url: str | None = Field(
-        default=None,
-        description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng",
-    )
-
+    llm_base_url: str | None = Field(default=None, description="Tùy chỉnh base URL nếu có proxy hoặc endpoint riêng")
     # Assistant v2 raw-provider path (independent of legacy credential fallback).
     llm_api_key: SecretStr = SecretStr("")
     llm_model_agent: str = "deepseek-flash"
     llm_model_router: str = "deepseek-flash"
     llm_thinking_agent: Literal["enabled", "disabled"] = "disabled"
-    llm_reasoning_effort: Literal["low", "high", "max"] = "high"
+    # Model suy luận (gpt-oss, o-series, gpt-5): mức "medium" mặc định tiêu hết giới hạn đầu ra cho phần suy luận,
+    # JSON bị cắt giữa chừng. "low" đủ cho các bước chấm / trích của dự án. Mặc định section 14 là "high".
+    llm_reasoning_effort: Literal["low", "medium", "high", "max", ""] = "high"
     llm_timeout_s: float = Field(default=60, gt=0, le=600)
     llm_max_retries: int = Field(default=2, ge=0, le=8)
     router_backend: Literal["deepseek", "shadow"] = "deepseek"
@@ -186,6 +184,9 @@ class Settings(BaseSettings):
     seed_student_a_password: SecretStr = SecretStr("")
     seed_student_b_password: SecretStr = SecretStr("")
     seed_advisor_password: SecretStr = SecretStr("")
+
+    # Dung lượng lưu CV cho mỗi sinh viên
+    storage_limit_mb: int = 50
 
     # Vector Store
     chroma_persist_dir: str = "./data/chroma"
@@ -279,10 +280,31 @@ class Settings(BaseSettings):
         return api_key, base_url
 
     def get_chat_model(self, **kwargs: Any):
-        """Khởi tạo Chat Model tương thích OpenAI API (hỗ trợ Groq, OpenRouter, OpenAI)."""
-        from src.services.providers.gateway import GatewayChat
+        """Khởi tạo Chat Model tương thích OpenAI API (hỗ trợ DeepSeek, Groq, OpenRouter, OpenAI)."""
+        import httpx
+        from langchain_openai import ChatOpenAI
 
-        return GatewayChat(settings=self, **kwargs)
+        api_key, base_url = self.get_llm_credentials()
+        temperature = kwargs.pop("temperature", self.llm_temperature)
+        default_model = "deepseek-chat" if self.llm_provider.lower() == "deepseek" else self.model_name
+        model = kwargs.pop("model", default_model)
+        if self.llm_reasoning_effort and is_reasoning_model(model):
+            kwargs.setdefault("reasoning_effort", self.llm_reasoning_effort)
+
+        return ChatOpenAI(
+            model=model,
+            api_key=api_key or "sk-dummy-key-for-init",
+            base_url=base_url,
+            temperature=temperature,
+            http_async_client=httpx.AsyncClient(),
+            **kwargs,
+        )
+
+
+def is_reasoning_model(model: str) -> bool:
+    """Model nhận tham số reasoning_effort; model khác (Llama, DeepSeek chat...) không gửi để tránh lỗi 400."""
+    name = model.lower().rsplit("/", 1)[-1]
+    return name.startswith(("gpt-oss", "o1", "o3", "o4", "gpt-5"))
 
 
 @lru_cache

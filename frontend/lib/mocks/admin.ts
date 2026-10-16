@@ -46,7 +46,7 @@ const advisors: StoredAdvisor[] = [
   {
     id: DEMO_ADVISOR_ID,
     full_name: "ThS. Trần Hoàng Nam",
-    email: "nam.tran@careerx.vn",
+    email: "nam.tran@careerv.vn",
     title: "Cố vấn hướng nghiệp",
     avatar_url: null,
     disabled: false,
@@ -59,7 +59,7 @@ const advisors: StoredAdvisor[] = [
   {
     id: "cv-008",
     full_name: "Lê Thu Hà",
-    email: "ha.le@careerx.vn",
+    email: "ha.le@careerv.vn",
     title: "Cố vấn hướng nghiệp",
     avatar_url: null,
     disabled: false,
@@ -67,12 +67,12 @@ const advisors: StoredAdvisor[] = [
     last_active_at: ago(1),
     created_at: ago(180),
     pending: 3,
-    password: "careerx123",
+    password: "careerv123",
   },
   {
     id: "cv-009",
     full_name: "Võ Minh Đức",
-    email: "duc.vo@careerx.vn",
+    email: "duc.vo@careerv.vn",
     title: "Cố vấn ngành CNTT",
     avatar_url: null,
     disabled: false,
@@ -80,12 +80,12 @@ const advisors: StoredAdvisor[] = [
     last_active_at: ago(3),
     created_at: ago(150),
     pending: 1,
-    password: "careerx123",
+    password: "careerv123",
   },
   {
     id: "cv-010",
     full_name: "Phạm Quỳnh",
-    email: "quynh.pham@careerx.vn",
+    email: "quynh.pham@careerv.vn",
     title: "Cố vấn ngành Kinh tế",
     avatar_url: null,
     disabled: false,
@@ -93,12 +93,12 @@ const advisors: StoredAdvisor[] = [
     last_active_at: null,
     created_at: ago(2),
     pending: 0,
-    password: "Careerx-5T8K1",
+    password: "Careerv-5T8K1",
   },
   {
     id: "cv-011",
     full_name: "Đặng Khánh",
-    email: "khanh.dang@careerx.vn",
+    email: "khanh.dang@careerv.vn",
     title: "Cố vấn hướng nghiệp",
     avatar_url: null,
     disabled: true,
@@ -106,7 +106,7 @@ const advisors: StoredAdvisor[] = [
     last_active_at: ago(25),
     created_at: ago(300),
     pending: 0,
-    password: "careerx123",
+    password: "careerv123",
   },
 ]
 
@@ -187,7 +187,7 @@ function checkEmailFree(email: string, id?: string) {
   const value = normalize(email)
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value)) throw new ApiError(422, "Email chưa đúng định dạng.", "invalid_email")
   const taken = advisors.some((a) => a.email === value && a.id !== id) || students.some((s) => s.email === value)
-  if (taken || value === "minhanh.nguyen@gmail.com" || value === "admin@careerx.vn") {
+  if (taken || value === "minhanh.nguyen@gmail.com" || value === "admin@careerv.vn") {
     throw new ApiError(409, "Email này đã có tài khoản.", "email_taken")
   }
   return value

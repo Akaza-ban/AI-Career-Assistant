@@ -253,6 +253,27 @@ async def test_file_and_text_preview(client):
 
 
 @pytest.mark.asyncio
+async def test_in_app_preview_pages_for_pdf_and_template_for_docx(client):
+    """Xem CV trong app: PDF → ảnh từng trang (không dùng trình xem PDF của trình duyệt); DOCX → mẫu CV."""
+    cv = (await upload(client, "cv.pdf", make_pdf(CV_TEXT))).json()
+    preview = (await client.get(f"/api/v1/cv/{cv['id']}/preview", headers=STUDENT)).json()
+    assert preview["kind"] == "pages" and preview["page_count"] == 1 and preview["document"] is None
+    page = await client.get(f"/api/v1/cv/{cv['id']}/pages/1", headers=STUDENT)
+    assert page.status_code == 200 and page.headers["content-type"] == "image/png"
+    assert page.content.startswith(b"\x89PNG")
+    missing = await client.get(f"/api/v1/cv/{cv['id']}/pages/2", headers=STUDENT)
+    assert missing.status_code == 404 and missing.json()["code"] == "cv_page_not_found"
+
+    docx = (await upload(client, "cv.docx", make_docx(["Nguyễn Minh Anh", "KỸ NĂNG", CV_TEXT]))).json()
+    preview = (await client.get(f"/api/v1/cv/{docx['id']}/preview", headers=STUDENT)).json()
+    assert preview["kind"] == "document" and preview["page_count"] is None
+    assert preview["document"]["header"][0]["text"] == "Nguyễn Minh Anh"
+    assert preview["document"]["header"][0]["kind"] == "name"
+    no_pages = await client.get(f"/api/v1/cv/{docx['id']}/pages/1", headers=STUDENT)
+    assert no_pages.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_advisor_cannot_use_student_cv_endpoints(client):
     response = await client.get("/api/v1/cv", headers=ADVISOR)
     assert response.status_code == 403
