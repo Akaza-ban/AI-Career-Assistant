@@ -248,3 +248,10 @@ The 15-case pre-change retrieval snapshot in `eval/howto/retrieval_baseline.json
 - Reused LlmClient.chat_stream and mask-only provider_scope; no second SDK, privacy module or embedding path. Guide text/history are quoted, citations remain retrieval-owned and actions remain registry-owned.
 - Reused the existing knowledge_base test fixture, optionally selecting cached E5, existing 15-case golden corpus/keyword metrics, and benchmark rank-metric utilities. New eval/howto fixtures add 40 authored negatives and freeze original-retriever snapshots for both embedding profiles.
 - See [implementation, measurements, limitations and reproduction](HOWTO_IMPLEMENTATION.md), especially the distinction between zero before/after regression and T0's historical MRR figure.
+
+## Architecture 7.1-7.3 navigation implementation
+
+- Reused the existing `ui_registry.load_routes()` data and `AgentAction` route validation. `tests/test_assistant_route_registry_drift.py` compares registry templates with student/advisor Next.js pages after normalizing route groups and dynamic segment names.
+- Reused `cv_versions.families`, `jds.published_library`, and `jds.list_pasted` through `assistant/nav_queries.py`. Added owner-scoped read-only analysis and interview history queries because no service query covered these resolver shapes. Resolvers do not call the side-effecting optimizer/advisor/report functions identified in architecture 2.2.
+- Added the missing local date grammar and resolver contract in `assistant/date_parser.py` and `assistant/resolvers.py`. Name matching uses standard-library `SequenceMatcher` on folded labels to avoid introducing an undeclared fuzzy dependency; ambiguous top matches remain multiple targets.
+- No body text enters `ResolveResult` or its `Target` objects. Focused two-user SQLite coverage is in `tests/test_assistant_resolvers.py`; date grammar/boundary coverage is in `tests/test_assistant_nav_dates.py`.

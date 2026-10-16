@@ -34,6 +34,39 @@ def analyses_for_jd(
     return list(db.scalars(statement))
 
 
+def analyses_for_jds(
+    db: Session,
+    user_id: str,
+    jd_ids: list[str],
+    *,
+    cv_version_ids: set[str] | None = None,
+) -> list[GapAnalysis]:
+    """Fetch a set of JD candidates in one owner-scoped query."""
+    if not jd_ids:
+        return []
+    statement = select(GapAnalysis).where(
+        GapAnalysis.owner_id == user_id,
+        GapAnalysis.jd_id.in_(jd_ids),
+    )
+    if cv_version_ids is not None:
+        if not cv_version_ids:
+            return []
+        statement = statement.where(GapAnalysis.cv_version_id.in_(cv_version_ids))
+    statement = statement.order_by(GapAnalysis.created_at.desc(), GapAnalysis.id.desc())
+    return list(db.scalars(statement))
+
+
+def analyses_with_jds_for_user(db: Session, user_id: str) -> list[tuple[GapAnalysis, JobDescription]]:
+    """Owner-scoped analysis rows with only their display join at query time."""
+    statement = (
+        select(GapAnalysis, JobDescription)
+        .join(JobDescription, JobDescription.id == GapAnalysis.jd_id)
+        .where(GapAnalysis.owner_id == user_id)
+        .order_by(GapAnalysis.created_at.desc(), GapAnalysis.id.desc())
+    )
+    return list(db.execute(statement))
+
+
 def interview_history(
     db: Session,
     user_id: str,
