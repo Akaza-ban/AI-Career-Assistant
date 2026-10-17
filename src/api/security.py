@@ -11,9 +11,19 @@ class OriginProtectionMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             origin = request.headers.get("origin")
-            trusted = {value.strip().rstrip("/") for value in get_settings().cors_origins.split(",") if value.strip()}
+            settings = get_settings()
+            trusted = {value.strip().rstrip("/") for value in settings.cors_origins.split(",") if value.strip()}
             trusted.add(f"{request.url.scheme}://{request.url.netloc}")
-            if (origin is not None and origin not in trusted) or (
+            if settings.frontend_url:
+                trusted.add(settings.frontend_url.strip().rstrip("/"))
+
+            # Tự động cho phép mọi domain vercel.app (bao gồm preview/production) và localhost
+            is_valid_origin = (
+                origin in trusted
+                or (origin is not None and origin.rstrip("/").endswith(".vercel.app"))
+            )
+
+            if (origin is not None and not is_valid_origin) or (
                 origin is None and request.headers.get("sec-fetch-site") == "cross-site"
             ):
                 return JSONResponse(

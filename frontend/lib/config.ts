@@ -1,6 +1,6 @@
 // Cấu hình đọc từ biến môi trường NEXT_PUBLIC_* (xem frontend/.env.example).
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "")
 
 /**
  * Nhóm API trong lib/api.ts. Mỗi nhóm được chuyển từ mock sang backend thật độc lập,
