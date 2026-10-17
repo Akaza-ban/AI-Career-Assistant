@@ -289,7 +289,7 @@ class Settings(BaseSettings):
         api_key, base_url = self.get_llm_credentials()
         temperature = kwargs.pop("temperature", self.llm_temperature)
         if self.llm_provider.lower() == "deepseek":
-            default_model = self.model_name if ("deepseek" in self.model_name.lower()) else "deepseek-v4.1-flash"
+            default_model = self.model_name if ("deepseek" in self.model_name.lower()) else "deepseek-chat"
         else:
             default_model = self.model_name
         model = kwargs.pop("model", default_model)
