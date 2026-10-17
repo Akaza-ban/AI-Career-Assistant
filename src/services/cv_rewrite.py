@@ -16,6 +16,7 @@ from typing import Any
 from src.services import llm
 from src.services.cv_layout import layout_lines
 from src.services.guardrails import check_output_grounding
+from src.services.providers.gateway import provider_scope
 from src.services.skill_matching import (
     EVIDENCE_SECTIONS,
     IMPORTANCE_LABELS,
@@ -283,9 +284,14 @@ async def draft_rewrites(
     targets = rewrite_lines(lines)
     if not targets:
         return {"items": [], "kept": 0}
-    data = await llm.invoke_json(
-        _prompt(lines, targets, requirements, job), temperature=0.0, timeout=REWRITE_TIMEOUT_SECONDS
-    )
+    # Cổng gateway che thông tin cá nhân trong CV trước khi gửi; câu đề xuất được đổi mã ẩn về chữ thật trước khi
+    # kiểm tra (câu còn sót mã ẩn bị check_rewrite loại vì có dấu "[")
+    with provider_scope() as scope:
+        data = await llm.invoke_json(
+            _prompt(lines, targets, requirements, job), temperature=0.0, timeout=REWRITE_TIMEOUT_SECONDS
+        )
+        if not scope.mask_only:
+            data = scope.restore_business(data)
     by_no = {line["line_no"]: line for line in lines}
     allowed = {t["line_no"] for t in targets}
     # Gợi ý không được gắn với kỹ năng CV chưa có (AI không tự thêm kỹ năng vào CV)
