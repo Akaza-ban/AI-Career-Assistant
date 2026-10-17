@@ -47,7 +47,7 @@ def is_generic_requirement(name: str) -> bool:
     return fold(name).strip() in _GENERIC_REQUIREMENTS
 
 
-async def extract_requirements_with_llm(jd_text: str) -> list[dict[str, Any]]:
+def _extract_prompt(jd_text: str) -> str:
     """LLM call #1 (PRD 5.2): trích yêu cầu kỹ năng từ JD tự dán và gán mức Required / Preferred / Additional."""
     prompt = (
         "Bạn là chuyên gia tuyển dụng. Hãy trích xuất các yêu cầu về kỹ năng, kiến thức, công cụ, ngoại ngữ "

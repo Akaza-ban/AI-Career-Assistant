@@ -13,7 +13,6 @@ from src.db.models import JobDescription
 from src.services.fit_summary import compose_summary
 from src.services.jd_requirements import requirements_for
 from src.services.jd_store import get_jd_store
-from src.services.providers.gateway import provider_scope
 from src.services.skill_matching import (
     assess_by_rules,
     compute_score,

@@ -120,8 +120,6 @@ def evaluate_answer_fallback(
             "điều bạn rút ra được).",
         ]
     )
-        ]
-    )
 
     next_q = None
     if current_round < total_rounds:

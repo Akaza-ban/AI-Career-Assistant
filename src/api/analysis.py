@@ -32,6 +32,7 @@ from src.services.jd_recommendation import (
 )
 from src.services.privacy.types import Identity
 from src.services.providers.gateway import provider_scope
+from src.services.roadmap import get_roadmap_info
 
 router = APIRouter()
 

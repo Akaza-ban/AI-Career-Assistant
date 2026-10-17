@@ -13,9 +13,9 @@ from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
 from src.services import cv_versions, notifications
+from src.services.jd_requirements import has_trusted_skills
 from src.services.llm import llm_configured
 from src.services.providers.gateway import provider_scope
-from src.services.jd_requirements import has_trusted_skills
 from src.services.roadmap import get_roadmap_info
 from src.services.skill_matching import match_label
 

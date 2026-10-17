@@ -7,11 +7,10 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from langchain_core.messages import HumanMessage
-from langchain_openai import ChatOpenAI
 from openai import RateLimitError
 
 from src.config import get_settings
-from src.services.providers.gateway import GatewayChat, GatewayError, PreparedPayload, provider_scope, wrap_chat
+from src.services.providers.gateway import GatewayChat, provider_scope, wrap_chat
 from src.services.providers.llm_client import LlmClient
 
 # Tiền tố của key mẫu trong .env.example; key như vậy coi như chưa cấu hình LLM.
