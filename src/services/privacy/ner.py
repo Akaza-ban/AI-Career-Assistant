@@ -190,9 +190,42 @@ class PhoBertNer:
         return _entities(text, ((start, end, label[1]) for (start, end), label in zip(offsets, labels, strict=True)))
 
 
+class LightweightNer:
+    """Bộ nhận diện thực thể tiếng Việt siêu nhẹ (0 MB RAM) cho môi trường hạn chế tài nguyên như Render Free 512MB."""
+
+    def __init__(self) -> None:
+        self.metadata = {
+            "backend": "lightweight",
+            "version": "1.0.0",
+            "model": "lightweight-regex-ner",
+            "device": "cpu",
+        }
+        self._name_pattern = re.compile(
+            r"\b[A-ZÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴ]"
+            r"[a-zàáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]+"
+            r"(?:\s+[A-ZÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬĐÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴ]"
+            r"[a-zàáảãạăắằẳẵặâấầẩẫậđèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵ]+){1,3}\b"
+        )
+
+    def detect(self, text: str) -> list[Span]:
+        if not text.strip():
+            return []
+        return [Span(m.start(), m.end(), "PERSON", layer=3) for m in self._name_pattern.finditer(text)]
+
+
 def load_ner(backend: str, *, settings: Settings | None = None) -> Ner:
+    import os
+
     settings = settings or get_settings()
     try:
+        # Trên môi trường Render Free (512MB RAM), underthesea nạp transformers/torch nuốt trọn 496MB RAM gây OOM.
+        # Tự động chuyển sang LightweightNer khi phát hiện chạy trên Render hoặc bật cờ LIGHTWEIGHT_NER.
+        if (
+            backend in ("lightweight", "regex")
+            or os.environ.get("RENDER")
+            or os.environ.get("LIGHTWEIGHT_NER", "").lower() in ("1", "true")
+        ):
+            return LightweightNer()
         if backend == "underthesea":
             return UndertheseaNer()
         if backend == "spacy":
