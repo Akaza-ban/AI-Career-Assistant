@@ -13,6 +13,10 @@ class Base(DeclarativeBase):
 
 
 def _create_engine(database_url: str):
+    # Dịch vụ Cloud (Neon, Render) thường trả URL bắt đầu bằng postgres://
+    # SQLAlchemy 2.0 yêu cầu postgresql://
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
     url = make_url(database_url)
     connect_args = {}
     if url.get_backend_name() == "sqlite":
@@ -56,6 +60,9 @@ def _relax_interview_cv_columns() -> None:
     SQLite không đổi được NOT NULL tại chỗ nên dựng lại bảng interview_sessions và chép toàn bộ buổi phỏng vấn cũ sang
     (không xoá dữ liệu). legacy_alter_table giữ khoá ngoại của interview_turns trỏ đúng bảng mới.
     """
+    if engine.dialect.name != "sqlite":
+        return
+
     with engine.begin() as conn:
         row = conn.execute(
             text("SELECT sql FROM sqlite_master WHERE type='table' AND name='interview_sessions'")
