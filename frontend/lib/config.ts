@@ -1,5 +1,6 @@
-// Cấu hình đọc từ biến môi trường NEXT_PUBLIC_* (xem frontend/.env.example).
+import { features } from "@/lib/features"
 
+// Bỏ dấu / ở cuối để không thành "//api/v1/..." khi NEXT_PUBLIC_API_URL kết thúc bằng "/"
 export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "")
 
 /**
@@ -46,3 +47,9 @@ export const OPTIMIZER_AVAILABLE = isLive("optimizer") || !isLive("gap")
 // Kịch bản dữ liệu mock: "empty" (mặc định, tài khoản demo sinh viên chưa có gì, giống tài khoản mới tạo)
 // | "sample" (Minh Anh có sẵn CV, phân tích, phỏng vấn… để xem thiết kế). Cố vấn demo luôn có nhóm SV mẫu.
 export const MOCK_SCENARIO = process.env.NEXT_PUBLIC_MOCK_SCENARIO ?? "empty"
+
+/** Vai trò cố vấn và các tính năng liên quan (tạm ẩn, xem lib/features.ts). */
+export const ADVISOR_FEATURES = features.advisor
+
+/** Nút "Dùng thử bản demo" ở trang Đăng nhập (tạm ẩn, xem lib/features.ts). */
+export const DEMO_TRY = features.demoTry

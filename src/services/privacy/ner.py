@@ -56,6 +56,38 @@ def _entities(text: str, tokens: Iterable[tuple[int, int, str]]) -> list[Span]:
     return result
 
 
+# underthesea chuẩn hoá dấu thanh kiểu cũ (đặt trên nguyên âm thứ hai, cuối âm tiết) sang kiểu mới trong từ trả về:
+# "khoá" → "khóa", "thuỷ" → "thủy". Không đổi "hoàng", "quý". Phép đổi giữ nguyên độ dài nên vị trí trên bản đã đổi
+# cũng là vị trí trên văn bản gốc.
+_OLD_TONE_PAIRS = {
+    "oà": "òa",
+    "oá": "óa",
+    "oả": "ỏa",
+    "oã": "õa",
+    "oạ": "ọa",
+    "oè": "òe",
+    "oé": "óe",
+    "oẻ": "ỏe",
+    "oẽ": "õe",
+    "oẹ": "ọe",
+    "uỳ": "ùy",
+    "uý": "úy",
+    "uỷ": "ủy",
+    "uỹ": "ũy",
+    "uỵ": "ụy",
+}
+_OLD_TONE = re.compile(r"(?<![qQ])(" + "|".join(_OLD_TONE_PAIRS) + r")(?!\w)", re.IGNORECASE)
+
+
+def _modern_tone(text: str) -> str:
+    def swap(match: re.Match[str]) -> str:
+        old = match.group(1)
+        new = _OLD_TONE_PAIRS[old.lower()]
+        return "".join(n.upper() if o.isupper() else n for o, n in zip(old, new, strict=True))
+
+    return _OLD_TONE.sub(swap, text)
+
+
 class UndertheseaNer:
     def __init__(self) -> None:
         from underthesea import ner
@@ -80,11 +112,14 @@ class UndertheseaNer:
             offset = cursor
             local_cursor = 0
             if line.strip():
+                # Tìm từ trên bản đã chuẩn hoá dấu thanh (cùng độ dài với dòng gốc), vì từ underthesea trả về đã
+                # được chuẩn hoá; nội dung gửi đi vẫn là văn bản gốc
+                aligned = _modern_tone(line)
                 for word, _, _, label in self._ner(line):
                     # underthesea can return grouped punctuation as "[ [" and
                     # "PERSON_1 ]" although the original has no added spaces.
-                    pattern = re.escape(word).replace(r"\ ", r"\s*")
-                    found = re.search(pattern, line[local_cursor:])
+                    pattern = re.escape(_modern_tone(word)).replace(r"\ ", r"\s*")
+                    found = re.search(pattern, aligned[local_cursor:])
                     if found is None:
                         raise NerUnavailableError("Local NER token alignment failed")
                     start, end = local_cursor + found.start(), local_cursor + found.end()
