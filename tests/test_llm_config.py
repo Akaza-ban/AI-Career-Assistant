@@ -22,7 +22,20 @@ def test_llm_environment_configuration_and_bounds(monkeypatch):
             Settings(_env_file=None, app_env="test", **values)
 
 
-def test_section_14_defaults():
+def test_section_14_defaults(monkeypatch):
+    for env_var in (
+        "LLM_MODEL_AGENT",
+        "LLM_MODEL_ROUTER",
+        "LLM_THINKING_AGENT",
+        "LLM_REASONING_EFFORT",
+        "AGENT_MAX_STEPS",
+        "AGENT_MAX_TOOL_CALLS",
+        "AGENT_CONFIRM_TTL_MIN",
+        "UI_ACK_TIMEOUT_S",
+        "WORKERS",
+        "TRACE_BACKEND",
+    ):
+        monkeypatch.delenv(env_var, raising=False)
     config = Settings(_env_file=None)
     assert (config.llm_model_agent, config.llm_model_router) == ("deepseek-flash", "deepseek-flash")
     assert (config.llm_thinking_agent, config.llm_reasoning_effort) == ("disabled", "high")
