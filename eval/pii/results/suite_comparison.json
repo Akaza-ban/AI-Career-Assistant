@@ -1,0 +1,43 @@
+{
+  "full_suite_revision": "bd0fca7",
+  "pre_task_revision": "c385b50eb2becd3df50ea72337c3d1c8ee6e2fa5",
+  "full_suite": {
+    "total": 709,
+    "passed": 685,
+    "failed": 17,
+    "skipped": 7
+  },
+  "baseline_comparison": {
+    "selected": 18,
+    "same_failing_ids": true,
+    "failed": 17,
+    "passed": 1
+  },
+  "test_process_policy": "Offline; model credentials blanked; password N=1024 except the explicit password-hash assertion (32768). Production auth unchanged.",
+  "final_embedding_revision": "3d767df",
+  "final_embedding_focused_passed": 33,
+  "pre_existing_failure_ids": [
+    "tests.test_api.test_accounts_api::test_login_counts_failures_then_locks",
+    "tests.test_api.test_accounts_api::test_register_signs_in_with_normalized_profile",
+    "tests.test_api.test_accounts_api::test_settings_profile_and_data",
+    "tests.test_api.test_auth_and_errors::test_me_without_session_is_unauthenticated[headers1]",
+    "tests.test_api.test_cross_user_isolation::test_recommendations_cannot_leak_private_vector_candidates",
+    "tests.test_api.test_cv::test_upload_scanned_pdf_triggers_ocr",
+    "tests.test_api.test_soniox_ws::test_build_soniox_config_defaults",
+    "tests.test_api.test_verified_auth::test_header_cannot_authenticate[admin]",
+    "tests.test_api.test_verified_auth::test_header_cannot_authenticate[advisor]",
+    "tests.test_api.test_verified_auth::test_header_cannot_authenticate[student]",
+    "tests.test_api.test_verified_auth::test_login_ignores_role_header_and_logout_revokes_cookie",
+    "tests.test_api.test_verified_auth::test_login_rotates_existing_session",
+    "tests.test_auth_seed::test_seed_creates_individual_credentials_and_assignments",
+    "tests.test_jd_comparison::test_compare_jds_api_success",
+    "tests.test_jd_comparison::test_comparison_history_api",
+    "tests.test_roadmap::test_api_skill_roadmap_endpoint",
+    "tests.test_roadmap::test_common_missing_roadmaps_only_keeps_it_skills"
+  ],
+  "global_ruff_baseline_errors": [
+    "src/api/analysis.py:41:F821",
+    "src/api/analysis.py:349:F821",
+    "src/db/seed.py:2:F401"
+  ]
+}

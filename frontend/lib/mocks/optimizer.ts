@@ -2,14 +2,20 @@
 
 import type { CvDocLine, CvDocument, Suggestion } from "@/lib/types"
 
-const line = (line_no: number, text: string): CvDocLine => ({ id: `l${line_no}`, line_no, text })
+const line = (line_no: number, text: string, kind?: CvDocLine["kind"], date?: string): CvDocLine => ({
+  id: `l${line_no}`,
+  line_no,
+  text,
+  ...(kind && { kind }),
+  ...(date && { date }),
+})
 
 /** Nội dung CV tách theo mục như backend trả về (số dòng đếm cả dòng tiêu đề mục). */
 export const mockCvDocument: CvDocument = {
   header: [
-    line(1, "Nguyễn Minh Anh"),
-    line(2, "Fresher Business Analyst"),
-    line(3, "minhanh.nguyen@gmail.com | 0912 345 678 | Hà Nội, Việt Nam"),
+    line(1, "Nguyễn Minh Anh", "name"),
+    line(2, "Fresher Business Analyst", "contact"),
+    line(3, "minhanh.nguyen@gmail.com | 0912 345 678 | Hà Nội, Việt Nam", "contact"),
   ],
   sections: [
     {
@@ -19,6 +25,7 @@ export const mockCvDocument: CvDocument = {
         line(
           5,
           "Sinh viên năm cuối ngành Kinh doanh quốc tế với nền tảng phân tích quy trình doanh nghiệp và tư duy giải quyết vấn đề bằng dữ liệu.",
+          "text",
         ),
       ],
     },
@@ -26,14 +33,24 @@ export const mockCvDocument: CvDocument = {
       id: "s6",
       title: "KINH NGHIỆM DỰ ÁN & THỰC TẬP",
       lines: [
-        line(7, "Cổng quản lý thông tin CLB sinh viên – Đồ án môn Phân tích thiết kế hệ thống (09/2023 – 12/2023)"),
+        line(
+          7,
+          "Cổng quản lý thông tin CLB sinh viên – Đồ án môn Phân tích thiết kế hệ thống (09/2023 – 12/2023)",
+          "entry",
+          "09/2023 – 12/2023",
+        ),
         line(8, "Đóng vai trò phân tích yêu cầu trong nhóm 5 người, phỏng vấn giảng viên và viết tài liệu chức năng."),
         line(9, "Soạn thảo tài liệu đặc tả yêu cầu người dùng (SRS) cho 12 tính năng chính của ứng dụng di động."),
-        line(10, "Hệ thống quản lý thư viện sinh viên – Bài tập lớn (03/2023 – 06/2023)"),
+        line(10, "Hệ thống quản lý thư viện sinh viên – Bài tập lớn (03/2023 – 06/2023)", "entry", "03/2023 – 06/2023"),
         line(11, "Thu thập phản hồi của hơn 150 người dùng thử nghiệm beta trước khi bảo vệ trước hội đồng khoa."),
         line(12, "Vẽ sơ đồ chức năng đồ án hệ thống quản lý thư viện sinh viên."),
         line(13, "Làm việc nhóm theo sprint 2 tuần, hoàn thành dự án đúng hạn."),
-        line(14, "Nghiên cứu tối ưu chuỗi cung ứng bán lẻ – Thực tập sinh nghiên cứu dữ liệu (07/2024 – 09/2024)"),
+        line(
+          14,
+          "Nghiên cứu tối ưu chuỗi cung ứng bán lẻ – Thực tập sinh nghiên cứu dữ liệu (07/2024 – 09/2024)",
+          "entry",
+          "07/2024 – 09/2024",
+        ),
         line(15, "Sử dụng PostgreSQL trích xuất 50.000 dòng dữ liệu bán hàng cho đồ án Thương mại điện tử."),
         line(16, "Tổng hợp và làm sạch dữ liệu khảo sát 300 sinh viên bằng Excel (PivotTable)."),
       ],
@@ -42,14 +59,16 @@ export const mockCvDocument: CvDocument = {
       id: "s17",
       title: "HỌC VẤN",
       lines: [
-        line(18, "Trường Đại học X – Cử nhân Kinh doanh quốc tế (2021 – 2025, dự kiến)"),
-        line(19, "GPA 3.4/4.0. Trình bày đồ án tốt nghiệp trước hội đồng khoa và 2 doanh nghiệp đối tác."),
+        line(18, "Trường Đại học X – Cử nhân Kinh doanh quốc tế (2021 – 2025, dự kiến)", "text"),
+        line(19, "GPA 3.4/4.0. Trình bày đồ án tốt nghiệp trước hội đồng khoa và 2 doanh nghiệp đối tác.", "text"),
       ],
     },
     {
       id: "s20",
       title: "KỸ NĂNG",
-      lines: [line(21, "Viết BRD & SRS, SQL (PostgreSQL), Phỏng vấn stakeholder, Excel (PivotTable), Phân tích SWOT")],
+      lines: [
+        line(21, "Viết BRD & SRS, SQL (PostgreSQL), Phỏng vấn stakeholder, Excel (PivotTable), Phân tích SWOT", "text"),
+      ],
     },
   ],
   developing_skills: [],

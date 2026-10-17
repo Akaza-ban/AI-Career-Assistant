@@ -1,5 +1,5 @@
 import pytest
-from sqlalchemy import delete
+from sqlalchemy import delete, select
 
 from src.db.database import SessionLocal, init_db
 from src.db.models import CvVersion, Feedback, GapAnalysis, JobDescription
@@ -99,6 +99,8 @@ async def test_pasted_jd_requirements_are_extracted_and_saved(client):
     with SessionLocal() as db:
         jd = db.get(JobDescription, result["jd"]["id"])
         assert {s["name"] for s in jd.skills} == skills
+        # Test không có LLM: yêu cầu chỉ từ từ điển, giữ "dictionary" để lần sau AI trích lại
+        assert jd.skills_source == "dictionary"
 
 
 @pytest.mark.asyncio
@@ -236,7 +238,49 @@ async def test_recommend_jds_errors(client):
     assert res_not_found.status_code == 404
 
     # Cố vấn không được gọi endpoint dành riêng cho sinh viên
-    res_advisor = await client.post(
-        "/api/v1/jd/recommend", json={"cv_text": "Python Developer"}, headers=ADVISOR
-    )
+    res_advisor = await client.post("/api/v1/jd/recommend", json={"cv_text": "Python Developer"}, headers=ADVISOR)
     assert res_advisor.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_recommend_scores_every_visible_library_jd(client):
+    """Thư viện nhỏ: mọi JD đang hiển thị đều được chấm, không bị loại trước bởi bước tìm theo vector."""
+    with SessionLocal() as db:
+        visible = db.scalars(
+            select(JobDescription.id).where(
+                JobDescription.source == "library",
+                (JobDescription.status.is_(None)) | (JobDescription.status == "published"),
+            )
+        ).all()
+    response = await client.post(
+        "/api/v1/jd/recommend",
+        json={
+            "cv_text": "Sinh viên Kinh tế, thành thạo Excel và SQL, làm báo cáo doanh số.",
+            "top_n": 10,
+            "generate_advice": False,
+        },
+        headers=STUDENT,
+    )
+    assert response.status_code == 200
+    ids = [r["jd_id"] for r in response.json()["recommendations"]]
+    assert sorted(ids) == sorted(visible[:10])
+    assert {r["score_source"] for r in response.json()["recommendations"]} == {"estimate"}
+
+
+@pytest.mark.asyncio
+async def test_recommend_uses_score_of_existing_analysis(client):
+    """CV đã phân tích với một JD: gợi ý dùng đúng điểm và nhãn của lượt phân tích đó."""
+    cv = await create_cv(client)
+    _, analysis = await analyze(client, cv_version_id=cv["id"], jd_id="jd-da-intern")
+    assert analysis["status"] == "completed"
+
+    response = await client.post(
+        "/api/v1/jd/recommend",
+        json={"cv_version_id": cv["id"], "top_n": 10, "generate_advice": False},
+        headers=STUDENT,
+    )
+    by_id = {r["jd_id"]: r for r in response.json()["recommendations"]}
+    da = by_id["jd-da-intern"]
+    assert (da["score_source"], da["analysis_id"]) == ("analysis", analysis["id"])
+    assert da["match_score"] == analysis["match_score"]
+    assert all(r["score_source"] == "estimate" for jd_id, r in by_id.items() if jd_id != "jd-da-intern")

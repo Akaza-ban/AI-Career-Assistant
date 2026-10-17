@@ -28,7 +28,7 @@ from src.db.models import (
 )
 from src.db.seed import DEMO_ADVISOR_ID, assign, migrate_school_profile
 from src.services import cv_files
-from src.services.cv_optimizer import DEVELOPING_TITLE, cv_document
+from src.services.cv_optimizer import cv_document
 from src.services.cv_versions import label
 from src.services.interview import CRITERIA, GUIDANCE
 from src.services.skill_matching import IMPORTANCE_WEIGHTS, compute_score
@@ -424,7 +424,7 @@ def _seed_student(db: Session, spec: dict[str, Any]) -> None:
             is_active=index == len(spec["versions"]) - 1,
             uploaded_at=now - timedelta(days=days, hours=3),
         )
-        data = cv_files.build_docx(cv_document(cv), DEVELOPING_TITLE)
+        data = cv_files.build_docx(cv_document(cv))
         cv.size_bytes = len(data)
         cv_files.save_file(spec["id"], cv.id, "docx", data)
         db.add(cv)
@@ -519,8 +519,8 @@ CSAT_TAGS = {
 
 # Cố vấn khác (chưa đặt mật khẩu nên không đăng nhập được) và SV mới đăng ký đang chờ phân công
 EXTRA_ADVISORS = [
-    {"id": "cv-008", "full_name": "Lê Thu Hà", "email": "ha.le@careerx.vn", "title": "Cố vấn hướng nghiệp"},
-    {"id": "cv-009", "full_name": "Võ Minh Đức", "email": "duc.vo@careerx.vn", "title": "Cố vấn ngành CNTT"},
+    {"id": "cv-008", "full_name": "Lê Thu Hà", "email": "ha.le@careerv.vn", "title": "Cố vấn hướng nghiệp"},
+    {"id": "cv-009", "full_name": "Võ Minh Đức", "email": "duc.vo@careerv.vn", "title": "Cố vấn ngành CNTT"},
 ]
 UNASSIGNED_STUDENTS = [
     {

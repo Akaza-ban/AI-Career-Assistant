@@ -1,0 +1,18 @@
+{
+  "src/services/assistant/vector_store.py": {
+    "chromadb": "Local PersistentClient only, explicit embedding_function=None and anonymized_telemetry=False; all embeddings use the gateway."
+  },
+  "src/services/jd_store.py": {
+    "chromadb.config": "Local Chroma settings disable telemetry; no implicit embeddings are permitted.",
+    "langchain_chroma": "Local persistence/search adapter; its explicitly supplied embedding function is gateway-owned."
+  },
+  "src/services/privacy/ner.py": {
+    "transformers": "Local CPU privacy NER only; both model/tokenizer require local_files_only=True. Document data never leaves the process.",
+    "torch": "Local CPU privacy NER inference only.",
+    "spacy": "Local privacy NER model loaded from disk; no hosted inference.",
+    "underthesea": "Packaged local CRF privacy NER; no hosted inference."
+  },
+  "scripts/submit_log.py": {
+    "urllib.request": "Protected development-log uploader, unrelated to model/business traffic; AGENTS.md prohibits changing its logging infrastructure."
+  }
+}

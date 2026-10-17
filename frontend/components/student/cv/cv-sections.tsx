@@ -119,7 +119,7 @@ export function CvDropzone({ onFile, onBrowse, state, onDismiss, prominent }: Cv
 
   const browse = (
     <button
-      data-agent-target="btn-upload-cv"
+      data-agent-target="btn-upload-cv" data-assistant-id="btn-upload-cv"
       type="button"
       onClick={onBrowse}
       disabled={uploading}
@@ -247,7 +247,7 @@ export function CvToolbar({ query, onQueryChange, sort, onSortChange }: CvToolba
       <div className="relative min-w-0 flex-1 sm:w-[260px] sm:flex-none">
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
         <Input
-          data-agent-target="cv-search-input"
+          data-agent-target="cv-search-input" data-assistant-id="cv-search-input"
           type="search"
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}

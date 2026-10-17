@@ -1,0 +1,18 @@
+{
+  "exchanges": [{
+    "request": {
+      "model": "deepseek-flash",
+      "messages": [{"role": "system", "content": "You are an in-app usage guide."}, {"role": "user", "content": "How do I upload a CV?"}],
+      "stream": true,
+      "thinking": {"type": "disabled"},
+      "temperature": 0,
+      "stream_options": {"include_usage": true}
+    },
+    "chunks": [
+      {"id": "rev41", "object": "chat.completion.chunk", "created": 0, "model": "deepseek-flash", "choices": [{"index": 0, "delta": {"role": "assistant", "content": "Open "}}]},
+      {"id": "rev41", "object": "chat.completion.chunk", "created": 0, "model": "deepseek-flash", "choices": [{"index": 0, "delta": {"content": "the CV page."}}]},
+      {"id": "rev41", "object": "chat.completion.chunk", "created": 0, "model": "deepseek-flash", "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]},
+      {"id": "rev41", "object": "chat.completion.chunk", "created": 0, "model": "deepseek-flash", "choices": [], "usage": {"prompt_tokens": 14, "completion_tokens": 6, "total_tokens": 20}}
+    ]
+  }]
+}

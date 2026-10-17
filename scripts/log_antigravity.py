@@ -14,7 +14,7 @@ import re
 import sqlite3
 import subprocess
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 
 # Fix Windows console encoding so VN diacritics in prompts print cleanly.
@@ -68,6 +68,33 @@ AUX_BLOCK_RE = re.compile(
 )
 
 
+def _safe_is_dir(p: Path | None) -> bool:
+    if not p:
+        return False
+    try:
+        return p.is_dir()
+    except OSError:
+        return False
+
+
+def _safe_is_file(p: Path | None) -> bool:
+    if not p:
+        return False
+    try:
+        return p.is_file()
+    except OSError:
+        return False
+
+
+def _safe_file_with_size(p: Path | None) -> bool:
+    if not p:
+        return False
+    try:
+        return p.is_file() and p.stat().st_size > 0
+    except OSError:
+        return False
+
+
 def git(cmd: str, cwd: Path | None = None) -> str:
     try:
         return subprocess.check_output(
@@ -96,15 +123,18 @@ def get_brain_dirs() -> list[Path]:
     env = os.environ.get("ANTIGRAVITY_BRAIN_DIR")
     if env:
         p = Path(env)
-        return [p] if p.exists() else []
-    dirs = [p for p in BRAIN_CANDIDATES if p.exists()]
+        return [p] if _safe_is_dir(p) else []
+    dirs = [p for p in BRAIN_CANDIDATES if _safe_is_dir(p)]
     if not dirs and sys.platform.startswith("linux"):
         # WSL fallback: check mounted Windows user profiles
-        for wsl_user in Path("/mnt/c/Users").glob("*"):
-            for sub in ("antigravity-ide/brain", "antigravity/brain"):
-                p = wsl_user / ".gemini" / sub
-                if p.exists():
-                    dirs.append(p)
+        try:
+            for wsl_user in Path("/mnt/c/Users").glob("*"):
+                for sub in ("antigravity-ide/brain", "antigravity/brain"):
+                    p = wsl_user / ".gemini" / sub
+                    if _safe_is_dir(p):
+                        dirs.append(p)
+        except OSError:
+            pass
     return dirs
 
 
@@ -219,17 +249,34 @@ def extract_user_prompt(content: str) -> str:
     return cleaned.strip()
 
 
-def get_logged_entry_ids(log_dir: Path) -> set[str]:
-    """Return all entry_ids already recorded in session.jsonl or archive/."""
-    logged: set[str] = set()
-    files_to_check = [log_dir / "session.jsonl"]
-    archive_dir = log_dir / "archive"
-    if archive_dir.is_dir():
-        files_to_check.extend(archive_dir.glob("*.jsonl"))
+def get_logged_entries(target: Path) -> tuple[set[str], dict[str, str], set[tuple[str, str]]]:
+    """Return:
+      1. logged_ids: set of all entry_ids already recorded
+      2. logged_prompts_by_id: dict of entry_id -> stripped prompt text
+      3. logged_prompt_keys: set of (session_id, stripped prompt text)
+    Works whether target is .ai-log (directory) or .ai-log/session.jsonl (file).
+    """
+    logged_ids: set[str] = set()
+    logged_prompts_by_id: dict[str, str] = {}
+    logged_prompt_keys: set[tuple[str, str]] = set()
+
+    if _safe_is_dir(target):
+        log_file = target / "session.jsonl"
+        archive_dir = target / "archive"
+    else:
+        log_file = target
+        archive_dir = target.parent / "archive"
+
+    files_to_check = []
+    if _safe_is_file(log_file):
+        files_to_check.append(log_file)
+    if _safe_is_dir(archive_dir):
+        try:
+            files_to_check.extend(archive_dir.glob("*.jsonl"))
+        except OSError:
+            pass
 
     for fpath in files_to_check:
-        if not fpath.is_file():
-            continue
         try:
             with open(fpath, encoding="utf-8-sig") as f:
                 for line in f:
@@ -241,11 +288,27 @@ def get_logged_entry_ids(log_dir: Path) -> set[str]:
                     except json.JSONDecodeError:
                         continue
                     eid = entry.get("entry_id", "")
+                    sid = entry.get("session_id", "")
+                    prompt = (entry.get("prompt") or "").strip().replace("\r\n", "\n")
                     if eid:
-                        logged.add(eid)
+                        logged_ids.add(eid)
+                        m_base = re.match(r"^(antigravity-.*-\d{5})", eid)
+                        if m_base:
+                            logged_ids.add(m_base.group(1))
+                        if eid not in logged_prompts_by_id:
+                            logged_prompts_by_id[eid] = prompt
+                    if sid and prompt:
+                        logged_prompt_keys.add((sid, prompt))
         except OSError:
             pass
-    return logged
+
+    return logged_ids, logged_prompts_by_id, logged_prompt_keys
+
+
+def get_logged_entry_ids(target: Path) -> set[str]:
+    """Backward compatibility helper returning set of entry_ids."""
+    logged_ids, _, _ = get_logged_entries(target)
+    return logged_ids
 
 
 def iter_db_inputs(db_path: Path, conv_id: str, cutoff: datetime | None):
@@ -264,7 +327,7 @@ def iter_db_inputs(db_path: Path, conv_id: str, cutoff: datetime | None):
                             for ssfn, sswt, ssv in parse_protobuf(sv):
                                 if ssfn == 1 and sswt == "varint" and ssv > 1000000000:
                                     try:
-                                        ts_dt = datetime.fromtimestamp(ssv, tz=timezone.utc).astimezone(VN_TZ)
+                                        ts_dt = datetime.fromtimestamp(ssv, tz=UTC).astimezone(VN_TZ)
                                         ts_str = ts_dt.isoformat()
                                     except Exception:
                                         pass
@@ -278,7 +341,7 @@ def iter_db_inputs(db_path: Path, conv_id: str, cutoff: datetime | None):
 
             if not ts_str:
                 try:
-                    ts_dt = datetime.fromtimestamp(db_path.stat().st_mtime, tz=timezone.utc).astimezone(VN_TZ)
+                    ts_dt = datetime.fromtimestamp(db_path.stat().st_mtime, tz=UTC).astimezone(VN_TZ)
                     ts_str = ts_dt.isoformat()
                 except Exception:
                     ts_str = datetime.now(VN_TZ).isoformat()
@@ -340,54 +403,6 @@ def _conv_matches_repo(cwds: set[str], repo_root_n: str) -> bool:
     return False
 
 
-# ---------------------------------------------------------------------------
-# Prompt extraction
-# ---------------------------------------------------------------------------
-
-def extract_user_prompt(content: str) -> str:
-    """Pull the text between <USER_REQUEST>...</USER_REQUEST>. Fall back to
-    stripping known auxiliary blocks if no wrapper is present."""
-    if not isinstance(content, str):
-        return ""
-    m = USER_REQUEST_RE.search(content)
-    if m:
-        return m.group(1).strip()
-    cleaned = AUX_BLOCK_RE.sub("", content)
-    return cleaned.strip()
-
-
-# ---------------------------------------------------------------------------
-# Reading existing log to avoid duplicates
-# ---------------------------------------------------------------------------
-
-def get_logged_entry_ids(log_file: Path) -> set[str]:
-    logged: set[str] = set()
-    files_to_check = []
-    if log_file.exists():
-        files_to_check.append(log_file)
-    archive_dir = log_file.parent / "archive"
-    if archive_dir.exists():
-        files_to_check.extend(archive_dir.glob("*.jsonl"))
-
-    for p in files_to_check:
-        try:
-            with open(p, encoding="utf-8-sig") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        entry = json.loads(line)
-                    except json.JSONDecodeError:
-                        continue
-                    eid = entry.get("entry_id", "")
-                    if eid:
-                        logged.add(eid)
-        except OSError:
-            pass
-    return logged
-
-
 
 # ---------------------------------------------------------------------------
 # Iterating user inputs
@@ -435,9 +450,13 @@ def iter_user_inputs(brain_dirs: list[Path], cutoff: datetime | None, only_conv:
 
     # 1. Scan SQLite conversation databases
     for conv_dir in CONVERSATION_DIRS:
-        if not conv_dir.is_dir():
+        if not _safe_is_dir(conv_dir):
             continue
-        for db_file in sorted(conv_dir.glob("*.db")):
+        try:
+            db_files = sorted(conv_dir.glob("*.db"))
+        except OSError:
+            db_files = []
+        for db_file in db_files:
             conv_id = db_file.stem
             if only_conv and conv_id != only_conv:
                 continue
@@ -448,15 +467,19 @@ def iter_user_inputs(brain_dirs: list[Path], cutoff: datetime | None, only_conv:
 
     # 2. Scan legacy brain/ directories
     for brain in brain_dirs:
-        for conv_dir in sorted(brain.iterdir()):
-            if not conv_dir.is_dir():
+        try:
+            subdirs = sorted(brain.iterdir())
+        except OSError:
+            continue
+        for conv_dir in subdirs:
+            if not _safe_is_dir(conv_dir):
                 continue
             if conv_dir.name in seen_convs:
                 continue
             if only_conv and conv_dir.name != only_conv:
                 continue
             transcript = conv_dir / ".system_generated" / "logs" / "transcript.jsonl"
-            if not transcript.exists() or transcript.stat().st_size == 0:
+            if not _safe_file_with_size(transcript):
                 continue
 
             cwds = _conv_cwds(transcript)
@@ -466,7 +489,16 @@ def iter_user_inputs(brain_dirs: list[Path], cutoff: datetime | None, only_conv:
             yield from iter_transcript_inputs(transcript, conv_dir.name, cutoff)
 
 
-def build_entry(msg: dict, repo: str, branch: str, commit: str, student: str, model: str = "gemini") -> dict:
+def build_entry(
+    msg: dict,
+    repo: str,
+    branch: str,
+    commit: str,
+    student: str,
+    model: str = "gemini",
+    logged_ids: set[str] | None = None,
+    logged_prompts_by_id: dict[str, str] | None = None,
+) -> dict:
     ts = msg["timestamp"]
     if ts.endswith("Z"):
         try:
@@ -474,11 +506,13 @@ def build_entry(msg: dict, repo: str, branch: str, commit: str, student: str, mo
         except ValueError:
             pass
 
+    eid = f"antigravity-{msg['conv_id']}-{msg['step_index']:05d}"
+
     return {
         "ts": ts or datetime.now(VN_TZ).isoformat(),
         "tool": "antigravity",
         "event": "UserPrompt",
-        "entry_id": f"antigravity-{msg['conv_id']}-{msg['step_index']:05d}",
+        "entry_id": eid,
         "session_id": msg["conv_id"],
         "model": model,
         "repo": repo,
@@ -496,19 +530,19 @@ def find_source_from_payload(data: dict) -> Path | None:
     if conv:
         for cdir in CONVERSATION_DIRS:
             cand = cdir / f"{conv}.db"
-            if cand.is_file() and cand.stat().st_size > 0:
+            if _safe_file_with_size(cand):
                 return cand
 
     # Try transcriptPath
     p = data.get("transcriptPath") or ""
-    if p and Path(p).is_file() and Path(p).stat().st_size > 0:
+    if p and _safe_file_with_size(Path(p)):
         return Path(p)
 
     # Try brain transcript fallback
     if conv:
         for brain in get_brain_dirs():
             cand = brain / conv / ".system_generated" / "logs" / "transcript.jsonl"
-            if cand.is_file() and cand.stat().st_size > 0:
+            if _safe_file_with_size(cand):
                 return cand
     return None
 
@@ -523,7 +557,7 @@ def log_from_hook(source: Path, data: dict) -> int:
         log_dir = root / log_dir
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / "session.jsonl"
-    logged_ids = get_logged_entry_ids(log_dir)
+    logged_ids, logged_prompts_by_id, logged_prompt_keys = get_logged_entries(log_dir)
 
     repo, branch, commit, student = repo_context(root)
     model = data.get("modelName") or "gemini"
@@ -533,13 +567,26 @@ def log_from_hook(source: Path, data: dict) -> int:
     else:
         inputs = iter_transcript_inputs(source, conv_id, None)
 
-    new_entries = [
-        e for e in (
-            build_entry(msg, repo, branch, commit, student, model)
-            for msg in inputs
+    new_entries = []
+    for msg in inputs:
+        prompt_text = (msg.get("text") or "").strip().replace("\r\n", "\n")
+        # Fast check: if this session + prompt was already logged, skip
+        if (conv_id, prompt_text) in logged_prompt_keys:
+            continue
+
+        entry = build_entry(
+            msg, repo, branch, commit, student, model,
+            logged_ids=logged_ids,
+            logged_prompts_by_id=logged_prompts_by_id,
         )
-        if e["entry_id"] not in logged_ids
-    ]
+        if entry["entry_id"] in logged_ids:
+            continue
+
+        new_entries.append(entry)
+        logged_ids.add(entry["entry_id"])
+        logged_prompts_by_id[entry["entry_id"]] = prompt_text
+        logged_prompt_keys.add((conv_id, prompt_text))
+
     if not new_entries:
         return 0
 
@@ -593,7 +640,7 @@ def main() -> None:
     log_dir = Path(os.environ.get("AI_LOG_DIR", ".ai-log"))
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / "session.jsonl"
-    logged_ids = get_logged_entry_ids(log_dir)
+    logged_ids, logged_prompts_by_id, logged_prompt_keys = get_logged_entries(log_dir)
 
     cutoff = None
     if not args.all:
@@ -604,11 +651,24 @@ def main() -> None:
 
     new_entries: list[dict] = []
     for msg in iter_user_inputs(brain_dirs, cutoff, args.conv_id, repo_root_n):
-        entry = build_entry(msg, repo, branch, commit, student)
+        prompt_text = (msg.get("text") or "").strip().replace("\r\n", "\n")
+        cid = msg.get("conv_id", "")
+        if cid and prompt_text and (cid, prompt_text) in logged_prompt_keys:
+            continue
+
+        entry = build_entry(
+            msg, repo, branch, commit, student,
+            logged_ids=logged_ids,
+            logged_prompts_by_id=logged_prompts_by_id,
+        )
         if entry["entry_id"] in logged_ids:
             continue
+
         new_entries.append(entry)
         logged_ids.add(entry["entry_id"])
+        logged_prompts_by_id[entry["entry_id"]] = prompt_text
+        if cid and prompt_text:
+            logged_prompt_keys.add((cid, prompt_text))
 
     if not new_entries:
         scope = "all" if args.all else f"{args.hours}h"

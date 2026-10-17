@@ -13,8 +13,14 @@ from sqlalchemy import func, select, update
 from src.api.deps import CurrentStudent, DbSession
 from src.api.errors import AppError
 from src.db.models import CvVersion, GapAnalysis, JobDescription, utcnow
-from src.models.schemas import CvTextResponse, CvVersionResponse, ExportCvRequest, ExportCvResponse
-from src.services import cv_files, cv_optimizer, cv_versions, sharing
+from src.models.schemas import (
+    CvPreviewResponse,
+    CvTextResponse,
+    CvVersionResponse,
+    ExportCvRequest,
+    ExportCvResponse,
+)
+from src.services import cv_files, cv_optimizer, cv_versions, jd_parser, sharing
 
 router = APIRouter(prefix="/cv", tags=["CV Management"])
 
@@ -41,6 +47,7 @@ def to_response(
         file_type=cv.file_type,
         size_bytes=cv.size_bytes,
         page_count=cv.page_count,
+        read_by_ocr=bool(cv.read_by_ocr),
         uploaded_at=cv.uploaded_at,
         origin=cv.origin,
         is_active=cv.is_active,
@@ -107,7 +114,8 @@ def upload_cv(
     file_type = cv_files.file_type_of(file_name)
     data = file.file.read(cv_files.CV_MAX_BYTES + 1)
     cv_files.check_size(len(data))
-    extracted = cv_files.extract_cv(file_type, data)
+    vocabulary = [t for skill in jd_parser.library_vocabulary(db) for t in (skill["name"], *skill["aliases"])]
+    extracted = cv_files.extract_cv(file_type, data, vocabulary)
 
     sequence = cv_versions.next_sequence(db, user.id)
     cv = CvVersion(
@@ -118,6 +126,7 @@ def upload_cv(
         file_type=file_type,
         size_bytes=len(data),
         page_count=extracted.page_count,
+        read_by_ocr=extracted.read_by_ocr,
         content_text=extracted.text,
         # CV đầu tiên tự động là CV đang dùng
         is_active=sequence == 1,
@@ -130,7 +139,7 @@ def upload_cv(
     except Exception:
         cv_files.delete_file(user.id, cv.id, file_type)
         raise
-    return to_response(cv).model_copy(update={"read_by_ocr": extracted.read_by_ocr})
+    return to_response(cv)
 
 
 @router.get("/{cv_id}/versions", response_model=list[CvVersionResponse])
@@ -228,6 +237,19 @@ def get_cv_text(cv_id: str, user: CurrentStudent, db: DbSession) -> CvTextRespon
     """Văn bản đã trích từ CV, dùng để xem nhanh file DOCX (trình duyệt không hiển thị được DOCX)."""
     cv = get_owned_cv(db, user.id, cv_id)
     return CvTextResponse(text=cv_optimizer.display_text(cv))
+
+
+@router.get("/{cv_id}/preview", response_model=CvPreviewResponse)
+def get_cv_preview(cv_id: str, user: CurrentStudent, db: DbSession) -> dict:
+    """Cách xem phiên bản CV trong app: ảnh từng trang (PDF) hoặc nội dung theo mẫu CV (DOCX, bản đã tối ưu)."""
+    return cv_optimizer.cv_preview(get_owned_cv(db, user.id, cv_id))
+
+
+@router.get("/{cv_id}/pages/{page}")
+def get_cv_page(cv_id: str, page: int, user: CurrentStudent, db: DbSession) -> Response:
+    """Ảnh PNG một trang của CV PDF (đếm từ 1)."""
+    data = cv_optimizer.page_image(get_owned_cv(db, user.id, cv_id), page)
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.post("/{cv_id}/export", response_model=ExportCvResponse)

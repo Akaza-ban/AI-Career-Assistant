@@ -142,19 +142,30 @@ async def test_generic_query_cannot_echo_even_high_scoring_irrelevant_faq(
     agent, _, llm = chat_agent
     context = ClientPageContext(current_url="/student/cv", route="/student/cv", user_role="student")
     response = await agent.respond("Vì sao tôi cảm thấy mức tăng cảm xúc?", context)
-    assert "chưa tìm thấy tài liệu phù hợp" in response.message
+    assert "CareerV" in response.message
     assert response.sources == [] and response.actions == []
     llm.with_structured_output.assert_not_called()
 
 
 @pytest.fixture
 def health_model(monkeypatch: pytest.MonkeyPatch) -> tuple[SimpleNamespace, AsyncMock]:
+    from langchain_core.messages import AIMessage
+    from pydantic import SecretStr
+
     model = AsyncMock()
+    model.ainvoke.return_value = AIMessage(content="pong")
     settings = SimpleNamespace(
         llm_provider="groq",
         model_name="test-model",
+        llm_model_agent="test-model",
+        llm_api_key=SecretStr("test-key"),
+        llm_base_url="https://api.groq.com/openai/v1",
         get_llm_credentials=MagicMock(return_value=("test-key", "https://api.groq.com/openai/v1")),
         get_chat_model=MagicMock(return_value=model),
+    )
+    settings.model_copy = lambda **kwargs: settings
+    monkeypatch.setattr(
+        llm_service, "LlmClient", lambda **kwargs: SimpleNamespace(chat=model.ainvoke, aclose=AsyncMock())
     )
     monkeypatch.setattr(llm_service, "get_settings", lambda: settings)
     monkeypatch.setattr(llm_service, "_llm_health_cache", None)

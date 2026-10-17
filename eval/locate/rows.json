@@ -1,0 +1,222 @@
+[
+  {
+    "message": "Nút Tải lên CV ở đâu?",
+    "role": "student",
+    "element_id": "btn-upload-cv"
+  },
+  {
+    "message": "Where is the Upload CV button?",
+    "role": "student",
+    "element_id": "btn-upload-cv"
+  },
+  {
+    "message": "Nút Danh sách CV ở đâu?",
+    "role": "student",
+    "element_id": "cv-list"
+  },
+  {
+    "message": "Where is the CV list button?",
+    "role": "student",
+    "element_id": "cv-list"
+  },
+  {
+    "message": "Nút Tìm CV ở đâu?",
+    "role": "student",
+    "element_id": "cv-search-input"
+  },
+  {
+    "message": "Where is the Search CV button?",
+    "role": "student",
+    "element_id": "cv-search-input"
+  },
+  {
+    "message": "Nút Đổi CV phân tích ở đâu?",
+    "role": "student",
+    "element_id": "analysis-select-cv"
+  },
+  {
+    "message": "Where is the Choose analysis CV button?",
+    "role": "student",
+    "element_id": "analysis-select-cv"
+  },
+  {
+    "message": "Nút Bắt đầu phân tích ở đâu?",
+    "role": "student",
+    "element_id": "btn-start-analysis"
+  },
+  {
+    "message": "Where is the Start analysis button?",
+    "role": "student",
+    "element_id": "btn-start-analysis"
+  },
+  {
+    "message": "Nút Đổi CV phỏng vấn ở đâu?",
+    "role": "student",
+    "element_id": "interview-select-cv"
+  },
+  {
+    "message": "Where is the Choose interview CV button?",
+    "role": "student",
+    "element_id": "interview-select-cv"
+  },
+  {
+    "message": "Nút Chọn vị trí phỏng vấn ở đâu?",
+    "role": "student",
+    "element_id": "interview-select-jd"
+  },
+  {
+    "message": "Where is the Choose interview position button?",
+    "role": "student",
+    "element_id": "interview-select-jd"
+  },
+  {
+    "message": "Nút Vào phòng chờ ở đâu?",
+    "role": "student",
+    "element_id": "btn-start-interview"
+  },
+  {
+    "message": "Where is the Enter interview lobby button?",
+    "role": "student",
+    "element_id": "btn-start-interview"
+  },
+  {
+    "message": "Nút Loại lịch sử ở đâu?",
+    "role": "student",
+    "element_id": "history-type-filter"
+  },
+  {
+    "message": "Where is the History type filter button?",
+    "role": "student",
+    "element_id": "history-type-filter"
+  },
+  {
+    "message": "Nút Danh sách lịch sử ở đâu?",
+    "role": "student",
+    "element_id": "history-session-list"
+  },
+  {
+    "message": "Where is the History session list button?",
+    "role": "student",
+    "element_id": "history-session-list"
+  },
+  {
+    "message": "Nút Thêm JD ở đâu?",
+    "role": "student",
+    "element_id": "btn-add-jd"
+  },
+  {
+    "message": "Where is the Add JD button?",
+    "role": "student",
+    "element_id": "btn-add-jd"
+  },
+  {
+    "message": "Nút Tìm vị trí ở đâu?",
+    "role": "student",
+    "element_id": "jd-search-input"
+  },
+  {
+    "message": "Where is the Search positions button?",
+    "role": "student",
+    "element_id": "jd-search-input"
+  },
+  {
+    "message": "Nút Tìm sinh viên ở đâu?",
+    "role": "advisor",
+    "element_id": "advisor-student-search"
+  },
+  {
+    "message": "Where is the Search students button?",
+    "role": "advisor",
+    "element_id": "advisor-student-search"
+  },
+  {
+    "message": "Nút Sinh viên phụ trách ở đâu?",
+    "role": "advisor",
+    "element_id": "advisor-students-link"
+  },
+  {
+    "message": "Where is the Assigned students button?",
+    "role": "advisor",
+    "element_id": "advisor-students-link"
+  },
+  {
+    "message": "nut tai len cv o dau",
+    "role": "student",
+    "element_id": "btn-upload-cv"
+  },
+  {
+    "message": "Where is uplod CV?",
+    "role": "student",
+    "element_id": "btn-upload-cv"
+  },
+  {
+    "message": "nut bat dau phan tich o dau",
+    "role": "student",
+    "element_id": "btn-start-analysis"
+  },
+  {
+    "message": "Where is the start anlysis button?",
+    "role": "student",
+    "element_id": "btn-start-analysis"
+  },
+  {
+    "message": "nút thêm tin tuyển dụng ở đâu",
+    "role": "student",
+    "element_id": "btn-add-jd"
+  },
+  {
+    "message": "where is add job descripton",
+    "role": "student",
+    "element_id": "btn-add-jd"
+  },
+  {
+    "message": "chọn CV ở đâu",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "Where is choose CV?",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "Where is the export payroll button?",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "nút xóa tài khoản ở đâu",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "where is search students",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "where is upload CV",
+    "role": "advisor",
+    "element_id": null
+  },
+  {
+    "message": "nút bắt đầu phân tích và tải lên CV ở đâu",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "where is the add JD and upload CV button",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "abc xyz qqq",
+    "role": "student",
+    "element_id": null
+  },
+  {
+    "message": "where is the match score",
+    "role": "student",
+    "element_id": null
+  }
+]

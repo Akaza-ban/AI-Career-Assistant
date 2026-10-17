@@ -15,8 +15,8 @@ const { isAssistantRefusal, sourcePageTitle } = exports
 test("recognizes refusals in existing messages without a refusal flag", () => {
   for (const message of [
     "Xin lỗi, hiện tại tài liệu hướng dẫn chưa có thông tin chi tiết về nội dung này. Bạn vui lòng nêu rõ thao tác cần hỗ trợ.",
-    "**Xin lỗi**, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerX.",
-    "Tôi chỉ hỗ trợ tính năng CareerX và không thể trả lời chủ đề đó.",
+    "**Xin lỗi**, tôi chưa tìm thấy tài liệu phù hợp để trả lời câu hỏi này trong hệ thống CareerV.",
+    "Tôi chỉ hỗ trợ tính năng CareerV và không thể trả lời chủ đề đó.",
     "Yêu cầu của bạn vi phạm chính sách an toàn của hệ thống.",
   ]) {
     assert.equal(isAssistantRefusal(message), true, message)

@@ -1,11 +1,10 @@
 """Phỏng vấn thử có chấm điểm STAR (US-SV-04): S5 thiết lập → S6 phòng phỏng vấn → S7 kết quả."""
 
-from fastapi import APIRouter, Query, Response, WebSocket, status
+from fastapi import APIRouter, File, Form, Query, Response, UploadFile, status
+from pydantic import BaseModel
 
-from src.api.deps import CurrentStudent, DbSession, _session_user
+from src.api.deps import CurrentStudent, DbSession
 from src.api.errors import AppError
-from src.config import get_settings
-from src.db.database import SessionLocal
 from src.db.models import InterviewSession, utcnow
 from src.models.schemas import (
     CreateInterviewRequest,
@@ -16,42 +15,45 @@ from src.models.schemas import (
     SubmitAnswerRequest,
     SubmitAnswerResponse,
 )
-from src.services import interview, sharing, soniox_stt
+from src.services import groq_stt, interview, sharing
 
 router = APIRouter(prefix="/interviews", tags=["Mock Interview"])
 
 
-@router.websocket("/ws/transcribe")
-async def websocket_transcribe(
-    websocket: WebSocket,
-    session_id: str | None = None,
-) -> None:
-    """WebSocket Real-time Speech-to-Text proxy kết nối với Soniox STT:
+class TranscribeResponse(BaseModel):
+    text: str
 
-    Nhận audio PCM 16kHz từ microphone sinh viên -> gửi lên Soniox -> trả về tokens thời gian thực.
-    """
-    db = SessionLocal()
-    try:
-        # Trình duyệt gửi kèm cookie phiên khi mở WebSocket cùng tên miền: chỉ sinh viên đã đăng nhập mới dùng được
-        # key Soniox của máy chủ, và chỉ với buổi phỏng vấn của chính mình.
-        try:
-            user = _session_user(
-                db, websocket.cookies.get(get_settings().session_cookie_name), websocket.headers.get("x-demo-role")
-            )
-        except AppError:
-            user = None
-        owns_session = session_id is None or (
-            (session := db.get(InterviewSession, session_id)) is not None
-            and user is not None
-            and session.owner_id == user.id
-        )
-        if user is None or user.role != "student" or not owns_session:
-            await websocket.close(code=4401, reason="unauthorized")
-            return
-        await websocket.accept()
-        await soniox_stt.proxy_soniox_stream(websocket, session_id=session_id, db=db)
-    finally:
-        db.close()
+
+@router.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_audio(
+    user: CurrentStudent,
+    db: DbSession,
+    file: UploadFile = File(..., description="File âm thanh ghi âm từ microphone (webm/wav/mp3/m4a)"),
+    session_id: str | None = Query(
+        None, description="Buổi phỏng vấn của chính sinh viên, để gợi ý thuật ngữ của vị trí"
+    ),
+    previous: str | None = Form(
+        None, max_length=2000, description="Chữ đã nhận diện của các đoạn ghi trước trong cùng lần nói (ngữ cảnh)"
+    ),
+) -> dict[str, str]:
+    """Trả lời phỏng vấn bằng giọng nói: chuyển file ghi âm thành văn bản qua Groq Whisper."""
+    if session_id is not None:
+        # Chỉ lấy tên vị trí và kỹ năng của buổi phỏng vấn thuộc về chính sinh viên này
+        session = db.get(InterviewSession, session_id)
+        if session is None or session.owner_id != user.id:
+            raise AppError(404, "Không tìm thấy buổi phỏng vấn.", "interview_not_found")
+    audio_bytes = await file.read(groq_stt.MAX_AUDIO_BYTES + 1)
+    if len(audio_bytes) > groq_stt.MAX_AUDIO_BYTES:
+        raise AppError(413, "Đoạn ghi âm quá dài. Hãy nói từng phần ngắn hơn (dưới khoảng 5 phút).", "audio_too_large")
+    text = await groq_stt.transcribe_with_groq(
+        audio_bytes=audio_bytes,
+        filename=file.filename or "recording.webm",
+        content_type=file.content_type or "audio/webm",
+        session_id=session_id,
+        db=db,
+        previous_text=previous,
+    )
+    return {"text": text}
 
 
 @router.get("/quota", response_model=InterviewQuota)

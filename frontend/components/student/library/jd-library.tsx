@@ -63,7 +63,7 @@ export function JdLibrary({ initialCvId }: { initialCvId: string | null }) {
           actions={
             <>
               <CvPicker cvs={cvs.data ? readyCvs : undefined} value={cv} onChange={setPickedCvId} />
-              <Button size="brand" className="h-[38px] px-4" onClick={() => setDialog({ kind: "create" })}>
+              <Button data-assistant-id="btn-add-jd" size="brand" className="h-[38px] px-4" onClick={() => setDialog({ kind: "create" })}>
                 <Plus data-icon="inline-start" aria-hidden />
                 Thêm JD
               </Button>

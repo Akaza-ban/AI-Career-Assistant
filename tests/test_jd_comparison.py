@@ -70,7 +70,10 @@ async def test_compare_selected_jds_with_mocked_llm():
         assert len(result["comparisons"]) == 2
         for item in result["comparisons"]:
             assert item["llm_used"] is True
-            assert item["llm_summary"] == "Ứng viên có nền tảng tốt về backend."
+            # Nhận xét ghép từ bảng của chính JD đó, không dùng câu chung của LLM
+            assert item["llm_summary"] != "Ứng viên có nền tảng tốt về backend."
+            for skill in item["partial_skills"]:
+                assert skill in item["llm_summary"]
 
 
 @pytest.mark.asyncio
@@ -272,3 +275,45 @@ async def test_comparison_history_api(client):
     after_res = await client.get("/api/v1/jd/compare/history", headers=STUDENT)
     assert after_res.status_code == 200
     assert not any(item["id"] == history_id for item in after_res.json())
+
+
+PASTED_JD = (
+    "Frontend Developer Intern. Mô tả công việc: phát triển giao diện web bằng React và TypeScript, phối hợp với "
+    "backend qua REST API, viết unit test, review code cùng nhóm. Yêu cầu ứng viên: thành thạo JavaScript, React, "
+    "HTML, CSS; biết Git; ưu tiên có kinh nghiệm Next.js và Tailwind CSS; tiếng Anh đọc hiểu tài liệu."
+)
+
+
+@pytest.mark.asyncio
+async def test_compare_library_jd_with_own_pasted_jd(client):
+    """Chế độ So với nhiều vị trí cho dán JD mới: JD tự dán của chính sinh viên được so sánh như JD thư viện."""
+    pasted = await client.post(
+        "/api/v1/jd", json={"text": PASTED_JD, "title": "Frontend Intern (tự dán)"}, headers=STUDENT
+    )
+    assert pasted.status_code == 201
+    pasted_id = pasted.json()["id"]
+
+    res = await client.post(
+        "/api/v1/jd/compare",
+        json={
+            "cv_text": "Skills: JavaScript, React, HTML, CSS. Project: admin dashboard.",
+            "jd_ids": ["jd-fe-junior", pasted_id],
+        },
+        headers=STUDENT,
+    )
+    assert res.status_code == 200, res.text
+    by_id = {c["jd_id"]: c for c in res.json()["comparisons"]}
+    assert set(by_id) == {"jd-fe-junior", pasted_id}
+    assert by_id["jd-fe-junior"]["requirements_source"] == "given"
+    # Test không có LLM: JD tự dán chỉ có kỹ năng theo từ điển, giao diện sẽ nhắc kết quả có thể chưa chính xác
+    assert by_id[pasted_id]["requirements_source"] == "dictionary"
+    assert by_id[pasted_id]["requirement_count"] > 0
+
+    # JD tự dán đã xoá thì không so sánh được nữa
+    assert (await client.delete(f"/api/v1/jd/{pasted_id}", headers=STUDENT)).status_code == 204
+    gone = await client.post(
+        "/api/v1/jd/compare",
+        json={"cv_text": "Skills: React.", "jd_ids": ["jd-fe-junior", pasted_id]},
+        headers=STUDENT,
+    )
+    assert gone.status_code == 404

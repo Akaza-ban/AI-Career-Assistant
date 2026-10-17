@@ -1,0 +1,236 @@
+{
+  "btn-upload-cv": {
+    "element_id": "btn-upload-cv",
+    "route_id": "cv_list",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Tải lên CV"
+    ],
+    "labels_en": [
+      "Upload CV"
+    ],
+    "aliases": [
+      "tải CV",
+      "upload resume"
+    ]
+  },
+  "cv-list": {
+    "element_id": "cv-list",
+    "route_id": "cv_list",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Danh sách CV"
+    ],
+    "labels_en": [
+      "CV list"
+    ],
+    "aliases": [
+      "CV đã tải",
+      "my resumes"
+    ]
+  },
+  "cv-search-input": {
+    "element_id": "cv-search-input",
+    "route_id": "cv_list",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Tìm CV"
+    ],
+    "labels_en": [
+      "Search CV"
+    ],
+    "aliases": [
+      "tìm kiếm CV"
+    ]
+  },
+  "analysis-select-cv": {
+    "element_id": "analysis-select-cv",
+    "route_id": "analysis_new",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Đổi CV phân tích"
+    ],
+    "labels_en": [
+      "Choose analysis CV"
+    ],
+    "aliases": [
+      "chọn CV phân tích",
+      "analysis CV picker"
+    ]
+  },
+  "btn-start-analysis": {
+    "element_id": "btn-start-analysis",
+    "route_id": "analysis_new",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Bắt đầu phân tích"
+    ],
+    "labels_en": [
+      "Start analysis"
+    ],
+    "aliases": [
+      "nút phân tích CV",
+      "analyze CV"
+    ]
+  },
+  "interview-select-cv": {
+    "element_id": "interview-select-cv",
+    "route_id": "interview_home",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Đổi CV phỏng vấn"
+    ],
+    "labels_en": [
+      "Choose interview CV"
+    ],
+    "aliases": [
+      "chọn CV phỏng vấn"
+    ]
+  },
+  "interview-select-jd": {
+    "element_id": "interview-select-jd",
+    "route_id": "interview_home",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Chọn vị trí phỏng vấn"
+    ],
+    "labels_en": [
+      "Choose interview position"
+    ],
+    "aliases": [
+      "chọn JD phỏng vấn"
+    ]
+  },
+  "btn-start-interview": {
+    "element_id": "btn-start-interview",
+    "route_id": "interview_home",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Vào phòng chờ"
+    ],
+    "labels_en": [
+      "Enter interview lobby"
+    ],
+    "aliases": [
+      "bắt đầu phỏng vấn",
+      "start interview"
+    ]
+  },
+  "history-type-filter": {
+    "element_id": "history-type-filter",
+    "route_id": "interview_history",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Loại lịch sử"
+    ],
+    "labels_en": [
+      "History type filter"
+    ],
+    "aliases": [
+      "lọc lịch sử",
+      "history filter"
+    ]
+  },
+  "history-session-list": {
+    "element_id": "history-session-list",
+    "route_id": "interview_history",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Danh sách lịch sử"
+    ],
+    "labels_en": [
+      "History session list"
+    ],
+    "aliases": [
+      "lịch sử phỏng vấn",
+      "interview history"
+    ]
+  },
+  "btn-add-jd": {
+    "element_id": "btn-add-jd",
+    "route_id": "jd_list",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Thêm JD"
+    ],
+    "labels_en": [
+      "Add JD"
+    ],
+    "aliases": [
+      "thêm tin tuyển dụng",
+      "add job description"
+    ]
+  },
+  "jd-search-input": {
+    "element_id": "jd-search-input",
+    "route_id": "jd_list",
+    "roles": [
+      "student"
+    ],
+    "labels_vi": [
+      "Tìm vị trí"
+    ],
+    "labels_en": [
+      "Search positions"
+    ],
+    "aliases": [
+      "tìm JD",
+      "search jobs"
+    ]
+  },
+  "advisor-student-search": {
+    "element_id": "advisor-student-search",
+    "route_id": "advisor_students",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "Tìm sinh viên"
+    ],
+    "labels_en": [
+      "Search students"
+    ],
+    "aliases": [
+      "tìm kiếm sinh viên"
+    ]
+  },
+  "advisor-students-link": {
+    "element_id": "advisor-students-link",
+    "route_id": "advisor_home",
+    "roles": [
+      "advisor"
+    ],
+    "labels_vi": [
+      "Sinh viên phụ trách"
+    ],
+    "labels_en": [
+      "Assigned students"
+    ],
+    "aliases": [
+      "danh sách sinh viên",
+      "my students"
+    ]
+  }
+}

@@ -94,17 +94,29 @@ def init_db() -> None:
     """
     from src.db import models  # noqa: F401  (đăng ký các bảng vào Base.metadata)
     from src.db.demo_cohort import seed_demo_cohort
+    from src.db.migrations.assistant_runs import upgrade as upgrade_assistant_runs
+    from src.db.migrations.auth import upgrade as upgrade_auth
+    from src.db.migrations.pii_vault import upgrade as upgrade_pii_vault
     from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
     from src.services.cv_versions import backfill as backfill_cv_versions
+    from src.services.cv_versions import backfill_ocr_flags
 
     _relax_interview_cv_columns()
     Base.metadata.create_all(bind=engine)
+    upgrade_auth(engine)
+    upgrade_pii_vault(engine)
+    upgrade_assistant_runs(engine)
     _add_missing_columns()
     with SessionLocal() as db:
         seed_demo_users(db)
         seed_jd_library(db)
-        if get_settings().seed_demo_cohort:
+        if get_settings().app_env != "production" and get_settings().seed_demo_cohort:
             seed_demo_cohort(db)
         fail_interrupted_analyses(db)
         # Phiên bản CV tạo trước khi có lịch sử phiên bản theo từng CV
         backfill_cv_versions(db)
+        # CV tải lên trước khi lưu cờ "đọc bằng OCR"
+        backfill_ocr_flags(db)
+        from src.services.assistant.runs import sweep_running
+
+        sweep_running(db)

@@ -2,7 +2,22 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.database import Base
@@ -11,6 +26,27 @@ from src.db.database import Base
 def utcnow() -> datetime:
     """Thời điểm hiện tại theo UTC, lưu dạng naive (SQLite không giữ múi giờ)."""
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+class ProviderUsage(Base):
+    """One physical dispatch, including failed/cancelled and system job calls.
+
+    Only numeric usage and server-controlled labels; never prompts or outputs.
+    Unknown prices/tokens remain explicit instead of masquerading as free calls.
+    """
+
+    __tablename__ = "provider_usage"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid4().hex)
+    user_id: Mapped[str] = mapped_column(String(64), index=True)
+    operation: Mapped[str] = mapped_column(String(32))
+    status: Mapped[str] = mapped_column(String(16), default="started")
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    usage_known: Mapped[bool] = mapped_column(Boolean, default=False)
+    cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
+    cost_known: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class User(Base):
@@ -227,6 +263,9 @@ class CvVersion(Base):
     developing_skills: Mapped[list[dict[str, str]] | None] = mapped_column(JSON, default=None)
     # Lượt phân tích đã dùng để tối ưu ra phiên bản này (origin = "optimized")
     source_analysis_id: Mapped[str | None] = mapped_column(String(64), default=None)
+    # Chữ được đọc bằng OCR (PDF scan): có thể sai chính tả, dính chữ, mất dấu. Bản tối ưu / khôi phục thừa hưởng từ
+    # bản gốc. NULL ở CV tạo trước khi có cột này, được điền khi khởi động (cv_versions.backfill_ocr_flags).
+    read_by_ocr: Mapped[bool | None] = mapped_column(Boolean, default=None)
 
 
 class JobDescription(Base):
@@ -322,6 +361,9 @@ class CvOptimization(Base):
     # Ngữ cảnh SV bổ sung cho gợi ý cần số liệu (US-SV-03 AC2):
     # {suggestion_id: {"answer", "proposed_text", "answered_at"}}; None ở phiên tạo trước khi có cột này
     contexts: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
+    # Gợi ý viết lại soạn riêng khi mở Trình tối ưu (một lần gọi LLM, lưu cho các lần sau):
+    # {"status": "ready"|"failed", "items": [...], "kept": int, "attempted_at"}; None khi chưa soạn
+    rewrites: Mapped[dict[str, Any] | None] = mapped_column(JSON, default=None)
     # Phiên bản CV tạo ra khi "Hoàn tất"
     result_cv_version_id: Mapped[str | None] = mapped_column(String(64), default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
@@ -452,6 +494,8 @@ class AssistantConversation(Base):
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     role: Mapped[str] = mapped_column(String(16), default="student")
+    # Assigned atomically by the privacy vault on first use, retained across TTL.
+    pii_nonce: Mapped[str | None] = mapped_column(String(32), default=None)
     title: Mapped[str] = mapped_column(String(255), default="Cuộc trò chuyện mới")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
@@ -461,16 +505,51 @@ class AssistantConversation(Base):
     )
 
 
+class AssistantRun(Base):
+    """One deduplicated request; only one running request per conversation."""
+
+    __tablename__ = "assistant_runs"
+    __table_args__ = (
+        UniqueConstraint("user_id", "conversation_id", "client_request_id", name="uq_assistant_run_request"),
+        CheckConstraint(
+            "status IN ('running', 'done', 'failed', 'cancelled', 'interrupted')", name="ck_assistant_run_status"
+        ),
+        Index(
+            "uq_assistant_running_conversation",
+            "conversation_id",
+            unique=True,
+            sqlite_where=text("status = 'running'"),
+            postgresql_where=text("status = 'running'"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    client_request_id: Mapped[str] = mapped_column(String(64))
+    route: Mapped[str] = mapped_column(String(200))
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+
 class AssistantTurn(Base):
     """Một lượt hỏi đáp, kèm ngữ cảnh giao diện và nguồn trích dẫn."""
 
     __tablename__ = "assistant_turns"
+    __table_args__ = (Index("uq_assistant_turn_run", "run_id", unique=True),)
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True, default=lambda: str(uuid4()))
     conversation_id: Mapped[str] = mapped_column(
         ForeignKey("assistant_conversations.id", ondelete="CASCADE"), index=True
     )
     user_message: Mapped[str] = mapped_column(Text)
+    # An indexed correlation ID keeps SQLite DROP COLUMN reversible on both
+    # fresh and legacy databases; turns survive a run-metadata downgrade.
+    run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    interrupted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     assistant_message: Mapped[str] = mapped_column(Text)
     intent: Mapped[str] = mapped_column(String(16))
     context_json: Mapped[dict[str, Any] | list[Any]] = mapped_column(JSON, default=dict)

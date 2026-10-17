@@ -8,6 +8,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, Field
 
+from src.services.assistant.ui_registry import load_routes, load_ui_registry
+
 SELECTOR_PATTERN = re.compile(r"\[data-agent-target\s*=\s*([\"'])[^\"'\]\n]+\1\]")
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$")
 BLOCK_PATTERN = re.compile(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|\*\*Q:|Q:)")
@@ -23,6 +25,9 @@ class DocChunk(BaseModel):
     selector: str | None = None
     tags: list[str] = Field(default_factory=list)
     source: str = ""
+    route_id: str = ""
+    ui_targets: list[str] = Field(default_factory=list)
+    docs_version: str = ""
 
 
 class DocMetadata(BaseModel):
@@ -30,6 +35,9 @@ class DocMetadata(BaseModel):
     role: Literal["student", "advisor", "all"]
     title: str = Field(min_length=1)
     tags: list[str]
+    route_id: str = ""
+    ui_targets: list[str] = Field(default_factory=list)
+    docs_version: str = ""
 
 
 class MarkdownDocChunker:
@@ -50,6 +58,27 @@ class MarkdownDocChunker:
         if not isinstance(raw, dict):
             raise ValueError("Frontmatter must be a YAML mapping")
         metadata = DocMetadata.model_validate(raw)
+        routes = load_routes()
+        if not metadata.route_id:
+            metadata.route_id = next(
+                (
+                    key
+                    for key, entry in routes.items()
+                    if not entry.params and metadata.route in [entry.path_template, *entry.aliases]
+                ),
+                "",
+            )
+        roles = {"student", "advisor"} if metadata.role == "all" else {metadata.role}
+        if metadata.route_id:
+            entry = routes.get(metadata.route_id)
+            if entry is None or entry.params or not roles <= set(entry.roles):
+                raise ValueError("Guide route_id must be static and allowed for its role")
+        for target in metadata.ui_targets:
+            element = load_ui_registry().get(target)
+            if element is None or not roles <= set(element.roles) or element.route_id != metadata.route_id:
+                raise ValueError("Guide ui_targets must belong to its route and role")
+        if not metadata.docs_version:
+            metadata.docs_version = hashlib.sha256(text.encode("utf-8")).hexdigest()
         return metadata.model_dump(), text[match.end() :].strip()
 
     def _split(self, text: str) -> list[str]:
@@ -146,6 +175,12 @@ class MarkdownDocChunker:
 
         chunks: list[DocChunk] = []
         for index, (section, content, selector) in enumerate(units):
+            targets = list(metadata["ui_targets"])
+            if selector:
+                element_id = re.search(r"[\"']([^\"']+)[\"']", selector).group(1)
+                element = load_ui_registry().get(element_id)
+                if element and element.route_id == metadata["route_id"] and element_id not in targets:
+                    targets.append(element_id)
             identity = f"{source}\0{metadata['route']}\0{section}\0{index}\0{content}"
             chunks.append(
                 DocChunk(
@@ -154,7 +189,7 @@ class MarkdownDocChunker:
                     section=section,
                     selector=selector,
                     source=source,
-                    **metadata,
+                    **{**metadata, "ui_targets": targets},
                 )
             )
         return chunks

@@ -1,0 +1,92 @@
+{
+  "en_harvard": {
+    "text": "Daniel Tran\nHo Chi Minh City | daniel.tran@example.com | +84 901 234 567 | github.com/dtran\nSUMMARY\nFinal-year Computer Science student with hands-on experience building REST APIs and data pipelines, looking for a backend engineering internship where I can grow with a strong team.\nEDUCATION\nUniversity of Information Technology\nSep 2021 – Jun 2025\nB.Sc. in Computer Science, GPA 3.5/4.0\nWORK EXPERIENCE\nAcme Software | Backend Intern\nJun 2024 – Present\nTechnologies: Python, FastAPI, PostgreSQL, Docker\nBuilt 12 REST endpoints for the order management module and wrote integration tests, cutting regression bugs by 30% over two releases.\nMigrated nightly reports from cron scripts to Celery tasks.\nPERSONAL PROJECTS\nCampus Library System\n03/2023 – 06/2023\nDesigned the database schema and implemented book reservation with email reminders for more than 500 student users.\nTECHNICAL SKILLS\nLanguages: Python, Java, SQL\nTools: Git, Docker, Linux\nCERTIFICATIONS\nAWS Cloud Practitioner – Amazon Web Services\n08/2024\nLANGUAGES\nEnglish (IELTS 7.0), Vietnamese (native)",
+    "name": "Daniel Tran",
+    "headings": [
+      "SUMMARY",
+      "EDUCATION",
+      "WORK EXPERIENCE",
+      "PERSONAL PROJECTS",
+      "TECHNICAL SKILLS",
+      "CERTIFICATIONS",
+      "LANGUAGES"
+    ]
+  },
+  "vi_onecol": {
+    "text": "Lê Thu Hà\nĐà Nẵng | lethuha@example.com | 0935 123 456\nMỤC TIÊU NGHỀ NGHIỆP\nSinh viên năm cuối ngành Marketing, mong muốn trở thành chuyên viên Digital Marketing, áp dụng kinh nghiệm chạy quảng cáo và phân tích dữ liệu để tăng trưởng thương hiệu.\nHỌC VẤN\nTrường Đại học Kinh tế – Đại học Đà Nẵng\n09/2021 – 06/2025\nCử nhân Marketing, GPA 3.3/4.0\nKINH NGHIỆM LÀM VIỆC\nCông ty TNHH Truyền thông Biển Xanh\n01/2024 – 06/2024\nThực tập sinh Digital Marketing\nLên kế hoạch và chạy 15 chiến dịch quảng cáo Facebook cho 3 khách hàng bán lẻ, giảm chi phí mỗi khách hàng tiềm năng xuống 25% sau hai tháng.\nViết báo cáo tuần bằng Google Data Studio.\nDỰ ÁN\nChiến dịch \"Xanh cùng Đà Nẵng\"\n09/2023 – 12/2023\nCông cụ: Canva, Meta Ads, Google Analytics\nPhụ trách nội dung fanpage, tăng 4.000 lượt theo dõi trong ba tháng nhờ chuỗi video ngắn về hoạt động tình nguyện.\nKỸ NĂNG\nMarketing: Facebook Ads, SEO cơ bản, viết nội dung\nPhân tích: Excel, Google Analytics\nNGOẠI NGỮ\nTiếng Anh (TOEIC 750)",
+    "name": "Lê Thu Hà",
+    "headings": [
+      "MỤC TIÊU NGHỀ NGHIỆP",
+      "HỌC VẤN",
+      "KINH NGHIỆM LÀM VIỆC",
+      "DỰ ÁN",
+      "KỸ NĂNG",
+      "NGOẠI NGỮ"
+    ]
+  },
+  "en_sidebar": {
+    "text": "Pham Quang Huy\nData Analyst Intern\nCONTACT\nhuy.pham@example.com\n0987 654 321\nHanoi, Vietnam\nSKILLS\nPython\nSQL\nPower BI\nLANGUAGES\nEnglish - IELTS 6.5\nSUMMARY\nThird-year Data Science student who enjoys turning messy business data into clear dashboards and decisions for operations teams.\nEXPERIENCE\nBeta Retail JSC\nJul 2024 – Present\nData Analyst Intern\nBuilt a weekly sales dashboard in Power BI used by 30 store managers across northern Vietnam.\nCleaned 2 million transaction rows with Python and SQL.\nPROJECTS\nChurn Prediction\n2023\nTrained a logistic regression model that flagged churn risk with 81% recall on a telecom dataset.\nEDUCATION\nNational Economics University\n2022 – 2026\nB.Sc. Data Science",
+    "name": "Pham Quang Huy",
+    "headings": [
+      "CONTACT",
+      "SKILLS",
+      "LANGUAGES",
+      "SUMMARY",
+      "EXPERIENCE",
+      "PROJECTS",
+      "EDUCATION"
+    ]
+  },
+  "vi_hybrid": {
+    "text": "Trần Anh Tuấn\nVideo Editor | tuan.tran@example.com | 0901 222 333 | TP Hồ Chí Minh\nKINH NGHIỆM LÀM VIỆC\nCông ty Sáng tạo Truyền thông Ánh Dương | Thực tập sinh Dựng phim\n08/2023 – 05/2024\nHỗ trợ chuyên viên chính cắt ghép dữ liệu quay thô và đồng bộ âm thanh cho 20 video quảng cáo mỗi tháng.\nTìm kiếm, chọn lọc và quản lý kho tài nguyên âm nhạc không vi phạm bản quyền.\nHỌC VẤN\nTrường Cao đẳng Nghệ thuật Sài Gòn\nChuyên ngành Dựng phim, 2021 – 2024\nTập trung vào tư duy dựng phim, kỹ thuật cắt cảnh và quy trình xuất tệp chất lượng cao.\nKỸ NĂNG\nPhần mềm: Premiere Pro, After Effects, DaVinci Resolve\nChuyên môn: Cắt dựng video ngắn, phối màu cơ bản\nNgoại ngữ: Tiếng Anh giao tiếp",
+    "name": "Trần Anh Tuấn",
+    "headings": [
+      "KINH NGHIỆM LÀM VIỆC",
+      "HỌC VẤN",
+      "KỸ NĂNG"
+    ]
+  },
+  "vi_canva": {
+    "text": "Võ Minh Châu\nChuyên viên Phân tích Dữ liệu\nTHÔNG TIN LIÊN HỆ\nchau.vo@example.com\n0912 888 777\nQuận 7, TP Hồ Chí Minh\nMỤC TIÊU\nKhông ngừng học hỏi, phát triển kỹ năng phân tích và xây dựng báo cáo hỗ trợ ra quyết định.\nKỸ NĂNG\nMicrosoft Excel\nSQL Server và Power BI\nPython cho phân tích dữ liệu\nDỰ ÁN CÁ NHÂN\nPhân tích bán lẻ – Làm sạch dữ liệu đơn hàng và xây dựng báo cáo doanh thu theo vùng.\nKhảo sát sinh viên – Thu thập 300 phiếu khảo sát và phân tích bằng SPSS.\nHỌC VẤN\n09/2016 – 06/2020\nĐại học Kinh tế TP Hồ Chí Minh\nChuyên ngành: Tài chính\nKINH NGHIỆM\n06/2021 – 11/2022\nCông ty Dữ liệu Phương Nam\nNhân viên Phân tích Dữ liệu\nXây dựng báo cáo BI cho kho dữ liệu và xử lý yêu cầu dữ liệu nội bộ.\n10/2020 – 03/2021\nTrung tâm Anh ngữ Sao Mai\nTrợ giảng\nNGOẠI NGỮ\nIELTS 6.5 – Tiếng Anh nâng cao",
+    "name": "Võ Minh Châu",
+    "headings": [
+      "THÔNG TIN LIÊN HỆ",
+      "MỤC TIÊU",
+      "KỸ NĂNG",
+      "DỰ ÁN CÁ NHÂN",
+      "HỌC VẤN",
+      "KINH NGHIỆM",
+      "NGOẠI NGỮ"
+    ]
+  },
+  "en_dense": {
+    "text": "Hoang Minh Khoa\nHo Chi Minh City • khoa.hoang@example.com • linkedin.com/in/khoa-hoang\nFresh graduated Data Science student with a solid foundation in machine learning and data manipulation, experienced in building LLM-based applications and predictive models.\nEDUCATION\nBachelor of Data Science\nOct 2021 - Nov 2025\nInternational University - VNU HCMC\nRelevant Coursework: Regression Analysis, Big Data Technology, Database Management, Data Structures and Algorithms.\nPROJECTS\nDepression Factors Classification | Team Project (4 members)\nPython, Java, Weka, scikit-learn\nEvaluated and compared 6 classification algorithms: SVM, Logistic Regression, Naive Bayes and J48.\nPerformed hyperparameter optimization using GridSearchCV.\nRAG-based Real Estate Chatbot\nPython, Selenium, Milvus, Docker, Streamlit\nImplemented a hybrid retrieval system combining dense vectors in Milvus and BM25 lexical search.\nIntegrated 4 local LLMs via Ollama for Vietnamese language queries.\nSKILLS\nML/DL Libraries: pandas, NumPy, scikit-learn, transformers, PyTorch\nMLOps & Tools: Docker, Git, Streamlit, Ollama\nCERTIFICATIONS\nTOEIC 780 by IIG Viet Nam\nMay 2024\nSQL Intermediate Certificate by HackerRank\nNov 2023\nData Science Job Simulation by Forage\nSep 2023",
+    "name": "Hoang Minh Khoa",
+    "headings": [
+      "EDUCATION",
+      "PROJECTS",
+      "SKILLS",
+      "CERTIFICATIONS"
+    ]
+  },
+  "vi_docx": {
+    "text": "Đặng Khánh Linh\nHà Nội | linh.dang@example.com | 0977 456 123\nMỤC TIÊU\nSinh viên năm ba ngành Hệ thống thông tin, mong muốn thực tập ở vị trí Business Analyst.\nHỌC VẤN\nHọc viện Công nghệ Bưu chính Viễn thông 09/2022 – nay\nHệ thống thông tin quản lý, GPA 3.4/4.0\nKINH NGHIỆM\nCông ty Phần mềm Hòa Bình | Thực tập sinh BA 06/2024 – 09/2024\n• Phỏng vấn 8 người dùng nội bộ để thu thập yêu cầu cho module quản lý kho.\n• Viết tài liệu đặc tả yêu cầu cho 12 tính năng và vẽ sơ đồ BPMN.\nKỸ NĂNG\nPhân tích nghiệp vụ BRD, SRS, BPMN, user story\nCông cụ Jira, Draw.io, Excel, SQL",
+    "name": "Đặng Khánh Linh",
+    "headings": [
+      "MỤC TIÊU",
+      "HỌC VẤN",
+      "KINH NGHIỆM",
+      "KỸ NĂNG"
+    ]
+  },
+  "en_textbox": {
+    "text": "Nguyen Bao Ngoc\nCONTACT\nngoc.nguyen@example.com\n0938 111 222\nDa Nang, Vietnam\nSKILLS\nFigma, Adobe XD\nUser research\nHTML and CSS\nPROFILE\nUI/UX design student who enjoys turning user research into simple, usable interfaces.\nEXPERIENCE\nLotus Studio | UI/UX Design Intern Jan 2024 – Jun 2024\n• Redesigned the booking flow of a travel app, reducing checkout steps from 6 to 3.\n• Ran 5 usability tests and presented findings to the product team.\nEDUCATION\nUniversity of Architecture Ho Chi Minh City 2021 – 2025\nBachelor of Graphic Design",
+    "name": "Nguyen Bao Ngoc",
+    "headings": [
+      "SKILLS",
+      "PROFILE",
+      "EXPERIENCE",
+      "EDUCATION"
+    ]
+  }
+}

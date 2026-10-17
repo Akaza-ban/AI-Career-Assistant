@@ -103,7 +103,7 @@ export function StudentHistory() {
         title="Lịch sử & tiến bộ"
         actions={
           !noActivity && (
-            <div data-agent-target="history-type-filter" className="w-full sm:w-auto">
+            <div data-agent-target="history-type-filter" data-assistant-id="history-type-filter" className="w-full sm:w-auto">
               <SegmentedControl
                 options={FILTERS}
                 value={filter}
@@ -129,7 +129,7 @@ export function StudentHistory() {
             </div>
           </Zone>
           <Zone id="timeline-title" title="Dòng thời gian">
-            <div data-agent-target="history-session-list">
+            <div data-agent-target="history-session-list" data-assistant-id="history-session-list">
               {/* key: về trang đầu khi đổi bộ lọc */}
               <Timeline
                 key={filter}

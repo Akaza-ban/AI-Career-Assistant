@@ -1,0 +1,86 @@
+{
+  "provenance": "Synthetic provider-shaped protocol example; not captured live; not model-quality evidence.",
+  "exchanges": [
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Ready",
+              "reasoning_content": "Wait for request."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "reasoning_content": "Read stage 1.",
+              "tool_calls": [
+                {
+                  "id": "stage-1",
+                  "type": "function",
+                  "function": {
+                    "name": "get_stage",
+                    "arguments": "{\"stage\": 1}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Complete",
+              "reasoning_content": "Stage read."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    }
+  ]
+}

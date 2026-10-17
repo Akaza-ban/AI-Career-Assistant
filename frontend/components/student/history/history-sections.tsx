@@ -2,7 +2,16 @@
 
 import Link from "next/link"
 import { useState, type ReactNode } from "react"
-import { Clock, FileSearch, GitCompareArrows, Loader2, MessagesSquare, ScanText, type LucideIcon } from "lucide-react"
+import {
+  Clock,
+  FileSearch,
+  FileText,
+  GitCompareArrows,
+  Loader2,
+  MessagesSquare,
+  ScanText,
+  type LucideIcon,
+} from "lucide-react"
 
 import { EmptyState } from "@/components/common/empty-state"
 import { MatchBadge } from "@/components/common/match-badge"
@@ -306,10 +315,17 @@ interface TimelineEntry {
   icon: LucideIcon
   kind: string
   title: ReactNode
+  /** CV đã dùng ("CV_MinhAnh.pdf · v1.0") hoặc "Chỉ dựa trên JD". */
+  cv: string | null
   score: ReactNode
   href: string
   linkLabel: string
   reviewed: boolean
+}
+
+/** "CV_MinhAnh.pdf · v1.0": tên file và phiên bản CV đã dùng. */
+function cvRef(fileName: string | null | undefined, label: string | null | undefined): string | null {
+  return [fileName, label].filter(Boolean).join(" · ") || null
 }
 
 function interviewEntry(row: InterviewRow, reviewed: boolean): TimelineEntry {
@@ -319,6 +335,7 @@ function interviewEntry(row: InterviewRow, reviewed: boolean): TimelineEntry {
     icon: MessagesSquare,
     kind: "Phỏng vấn",
     title: row.jd.title,
+    cv: row.interview_mode === "jd_only" ? "Chỉ dựa trên JD, không dùng CV" : cvRef(row.cv_file_name, row.cv_label),
     // Phỏng vấn hiện x,x / 5, không gắn nhãn (DESIGN.md mục 8.1).
     score: `${formatScore(row.overall_score)} / 5`,
     href: `/student/interview/${encodeURIComponent(row.id)}/report`,
@@ -351,7 +368,8 @@ function analysisEntry(row: AnalysisRow): TimelineEntry {
     at: row.created_at,
     icon: ScanText,
     kind: "Phân tích",
-    title: `CV ${row.cv_label} × ${row.jd.title}`,
+    title: row.jd.title,
+    cv: cvRef(row.cv_file_name, row.cv_label),
     score: <AnalysisScore row={row} />,
     href: `/student/analysis/${encodeURIComponent(row.id)}`,
     linkLabel: "Xem",
@@ -373,6 +391,7 @@ function compareEntry(row: CompareJdsResponse & { id: string; created_at: string
         <span className="font-normal text-ink-3">· {row.comparisons.map((c) => c.title).join(", ")}</span>
       </>
     ),
+    cv: cvRef(row.cv_name, row.cv_label),
     score: top && (
       <>
         <span className="text-[13px] font-medium whitespace-nowrap text-ink-3">cao nhất</span>
@@ -417,12 +436,20 @@ function TimelineRow({ entry }: { entry: TimelineEntry }) {
           </span>
           {entry.reviewed && <span className="truncate text-accent-strong sm:hidden">· Cố vấn đã nhận xét</span>}
         </span>
-        <span className="order-1 flex min-w-0 items-center gap-2.5 sm:order-3">
-          <span className="truncate text-[15px] font-medium">{entry.title}</span>
-          {entry.reviewed && (
-            <Badge variant="blue" className="hidden sm:inline-flex">
-              Cố vấn đã nhận xét
-            </Badge>
+        <span className="order-1 grid min-w-0 gap-0.5 sm:order-3">
+          <span className="flex min-w-0 items-center gap-2.5">
+            <span className="truncate text-[15px] font-medium">{entry.title}</span>
+            {entry.reviewed && (
+              <Badge variant="blue" className="hidden sm:inline-flex">
+                Cố vấn đã nhận xét
+              </Badge>
+            )}
+          </span>
+          {entry.cv && (
+            <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-ink-3">
+              <FileText className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+              <span className="truncate">{entry.cv}</span>
+            </span>
           )}
         </span>
         <span className="order-2 inline-flex items-center justify-end gap-2 text-[15px] font-semibold tabular-nums sm:order-4">

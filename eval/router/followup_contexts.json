@@ -1,0 +1,213 @@
+{
+  "syn-navigate-vi-19": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-navigate-vi-20": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "cv_detail",
+        "params": {
+          "cv_id": "fixture-cv-1-0"
+        },
+        "label": "Fixture cv 0"
+      }
+    ]
+  },
+  "syn-navigate-en-19": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "analysis_detail",
+        "params": {
+          "analysis_id": "fixture-analysis-1-0"
+        },
+        "label": "Fixture analysis 0"
+      }
+    ]
+  },
+  "syn-navigate-en-20": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "jd_detail",
+        "params": {
+          "jd_id": "fixture-jd-1-0"
+        },
+        "label": "Fixture jd 0"
+      }
+    ]
+  },
+  "syn-navigate-mixed-19": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_report",
+        "params": {
+          "session_id": "fixture-interview-2-0"
+        },
+        "label": "Fixture report 0"
+      }
+    ]
+  },
+  "syn-navigate-mixed-20": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "cv_list",
+        "params": {},
+        "label": "Fixture page 0"
+      }
+    ]
+  },
+  "syn-clarify-vi-17": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-clarify-vi-18": {
+    "previous_targets": []
+  },
+  "syn-clarify-vi-19": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-clarify-vi-20": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      },
+      {
+        "ref": "fixture-ref-1",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-1"
+        },
+        "label": "Fixture interview 1"
+      }
+    ]
+  },
+  "syn-clarify-en-17": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-clarify-en-18": {
+    "previous_targets": []
+  },
+  "syn-clarify-en-19": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-clarify-en-20": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      },
+      {
+        "ref": "fixture-ref-1",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-1"
+        },
+        "label": "Fixture interview 1"
+      }
+    ]
+  },
+  "syn-clarify-mixed-17": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-clarify-mixed-18": {
+    "previous_targets": []
+  },
+  "syn-clarify-mixed-19": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      }
+    ]
+  },
+  "syn-clarify-mixed-20": {
+    "previous_targets": [
+      {
+        "ref": "fixture-ref-0",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-0"
+        },
+        "label": "Fixture interview 0"
+      },
+      {
+        "ref": "fixture-ref-1",
+        "route_id": "interview_session",
+        "params": {
+          "session_id": "fixture-interview-1-1"
+        },
+        "label": "Fixture interview 1"
+      }
+    ]
+  }
+}

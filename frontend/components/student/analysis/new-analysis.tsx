@@ -275,7 +275,7 @@ function SinglePicker({ cv, picks, initialJdId, industries }: SinglePickerProps)
           </div>
           {!ready && hint && <span className="text-[13px] text-ink-3">{hint}</span>}
           <Button
-            data-agent-target="btn-start-analysis"
+            data-agent-target="btn-start-analysis" data-assistant-id="btn-start-analysis"
             size="brand"
             onClick={submit}
             disabled={submitting || !ready}

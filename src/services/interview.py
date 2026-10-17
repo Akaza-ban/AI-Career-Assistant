@@ -23,9 +23,8 @@ from sqlalchemy.orm import Session
 from src.agents.interview.graph import interview_agent
 from src.agents.interview.question_generator import generate_interview_questions
 from src.api.errors import AppError
-from src.config import get_settings
 from src.db.models import CvVersion, InterviewSession, InterviewTurn, JobDescription, User
-from src.services import notifications
+from src.services import groq_stt, notifications
 from src.services.guardrails import check_input_safety
 
 logger = logging.getLogger(__name__)
@@ -125,6 +124,7 @@ def _visible_jd(db: Session, user: User, jd_id: str) -> JobDescription:
 
 
 def quota(db: Session, user: User, jd_id: str, now: datetime) -> dict[str, Any]:
+    _visible_jd(db, user, jd_id)
     start = week_start(now)
     used = db.scalar(
         select(func.count())
@@ -272,7 +272,7 @@ async def create_session(
 def _blocked_reason(text: str) -> str | None:
     """Guardrail đầu vào (tạm dùng quy tắc; kiểm tra lạc đề bằng LLM sẽ thêm khi hoàn thiện agent)."""
     if len(text) < MIN_ANSWER_CHARS:
-        return f"Câu trả lời quá ngắn. Hãy trả lời ít nhất {MIN_ANSWER_CHARS} ký tự theo khung STAR."
+        return f"Câu trả lời quá ngắn. Hãy trả lời ít nhất {MIN_ANSWER_CHARS} ký tự."
     if len(text) > MAX_ANSWER_CHARS:
         return f"Câu trả lời quá dài. Hãy rút gọn trong {MAX_ANSWER_CHARS} ký tự."
     safe, _ = check_input_safety(text)
@@ -333,7 +333,11 @@ async def submit_answer(
     turn.timed_out = timed_out or late
     turn.answered_at = now
     if usable:
-        scored = await _score(jd.title, turn.question, text, question_index)
+        from src.services.privacy.types import Identity
+        from src.services.providers.gateway import provider_scope
+
+        with provider_scope(user_id=user.id, identities=(Identity(name=user.full_name, email=user.email),)):
+            scored = await _score(jd.title, turn.question, text, question_index)
         turn.answer = text
         for criterion in CRITERIA:
             setattr(turn, criterion, scored["star"][criterion])
@@ -486,6 +490,48 @@ def build_report(db: Session, user: User, session_id: str, now: datetime) -> dic
     }
 
 
+def read_result_facts_source(
+    db: Session, user_id: str, session_id: str
+) -> tuple[InterviewSession, JobDescription, int, InterviewSession | None] | None:
+    """Read stored interview aggregates for assistant facts without settling sessions.
+
+    Ownership is part of the session query. This deliberately avoids ``load_session``
+    and ``build_report`` because loading an abandoned session can delete it.
+    """
+    row = db.execute(
+        select(InterviewSession, JobDescription)
+        .join(JobDescription, JobDescription.id == InterviewSession.jd_id)
+        .where(InterviewSession.id == session_id, InterviewSession.owner_id == user_id)
+    ).first()
+    if row is None:
+        return None
+    session, jd = row
+    question_count = (
+        db.scalar(
+            select(func.count(InterviewTurn.id))
+            .join(InterviewSession, InterviewSession.id == InterviewTurn.session_id)
+            .where(InterviewTurn.session_id == session.id, InterviewSession.owner_id == user_id)
+        )
+        or 0
+    )
+    previous = None
+    if session.status == "completed" and session.completed_at is not None:
+        previous = db.scalar(
+            select(InterviewSession)
+            .where(
+                InterviewSession.owner_id == user_id,
+                InterviewSession.jd_id == session.jd_id,
+                InterviewSession.status == "completed",
+                InterviewSession.completed_at.is_not(None),
+                (InterviewSession.completed_at < session.completed_at)
+                | ((InterviewSession.completed_at == session.completed_at) & (InterviewSession.id < session.id)),
+            )
+            .order_by(InterviewSession.completed_at.desc(), InterviewSession.id.desc())
+            .limit(1)
+        )
+    return session, jd, int(question_count), previous
+
+
 def recent(db: Session, user: User, limit: int) -> list[dict[str, Any]]:
     sessions = db.scalars(
         select(InterviewSession)
@@ -550,5 +596,5 @@ def session_out(db: Session, session: InterviewSession, now: datetime) -> dict[s
         "pause_seconds_left": _pause_seconds_left(session, now),
         "turns": [turn_out(t) for t in turns if t.answered_at is not None],
         "created_at": session.created_at,
-        "voice_input": bool(get_settings().soniox_api_key.strip()),
+        "voice_input": groq_stt.voice_input_enabled(),
     }

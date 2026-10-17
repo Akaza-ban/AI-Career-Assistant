@@ -25,7 +25,7 @@ const STEP_MS = 1400
 const SLOW_MS = 15_000
 
 // So sánh tốn một lượt LLM: giữ kết quả theo (CV, danh sách JD) trong phiên để tải lại trang không phải chạy lại.
-const cacheKey = (cvId: string, jdIds: string[]) => `careerx:compare:${cvId}:${jdIds.join(",")}`
+const cacheKey = (cvId: string, jdIds: string[]) => `careerv:compare:${cvId}:${jdIds.join(",")}`
 
 function readCache(key: string): CompareJdsResponse | null {
   try {

@@ -2,8 +2,21 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
-import { AlertCircle, ArrowLeft, ArrowRight, ChevronRight, Clock, FileCheck2, Lock } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  ChevronRight,
+  Circle,
+  FileCheck2,
+  Loader2,
+  Lock,
+  RefreshCw,
+  ScanText,
+  Sparkles,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { BottomActionBar } from "@/components/common/bottom-action-bar"
@@ -15,10 +28,12 @@ import { SuggestionCard } from "@/components/student/optimizer/suggestion-card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ApiError, api } from "@/lib/api"
-import { draftDocument, learningSkills, suggestionCounts } from "@/lib/cv-document"
+import { NEW_LINE_PREFIX, draftDocument, learningSkills, suggestionCounts } from "@/lib/cv-document"
 import { formatWhen } from "@/lib/format"
 import type {
   CapabilityAnswerRequest,
+  CapabilityDraftRequest,
+  CapabilityLineDecisionRequest,
   CvDocLine,
   CvDocument,
   CvVersion,
@@ -68,6 +83,11 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
   const [currentId, setCurrentId] = useState<string>()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [nextLabel, setNextLabel] = useState<string>()
+  // Gợi ý viết lại được soạn riêng lần đầu mở trang (một lần gọi AI, backend lưu lại cho các lần sau)
+  const prepareStarted = useRef(false)
+  const [retrying, setRetrying] = useState(false)
+  const [prepareFailed, setPrepareFailed] = useState(false)
+  const suggestionsState = session?.suggestions_state
   const analysisHref = `/student/analysis/${encodeURIComponent(analysisId)}`
   const exportHref = `${analysisHref}/export`
 
@@ -84,6 +104,27 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
       alive = false
     }
   }, [cvId])
+
+  useEffect(() => {
+    if (suggestionsState !== "pending" || prepareStarted.current) return
+    prepareStarted.current = true
+    api
+      .prepareOptimizerSuggestions(analysisId)
+      .then(setUpdated)
+      .catch(() => setPrepareFailed(true))
+  }, [suggestionsState, analysisId])
+
+  async function retryPrepare() {
+    setRetrying(true)
+    setPrepareFailed(false)
+    try {
+      setUpdated(await api.prepareOptimizerSuggestions(analysisId))
+    } catch {
+      setPrepareFailed(true)
+    } finally {
+      setRetrying(false)
+    }
+  }
 
   async function decide(s: Suggestion, decision: SuggestionDecisionRequest["decision"], editedText?: string) {
     try {
@@ -111,6 +152,25 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
       setUpdated(await api.answerCapabilityCheck(analysisId, id, body))
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không lưu được câu trả lời.")
+      throw err
+    }
+  }
+
+  /** "Có, đã dùng": AI viết lời kể thành câu cho CV. Báo lỗi rồi ném lại để thẻ giữ nội dung đang nhập. */
+  async function draftLine(id: string, body: CapabilityDraftRequest) {
+    try {
+      setUpdated(await api.draftCapabilityLine(analysisId, id, body))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Chưa viết được câu. Hãy thử lại.")
+      throw err
+    }
+  }
+
+  async function decideLine(id: string, body: CapabilityLineDecisionRequest) {
+    try {
+      setUpdated(await api.decideCapabilityLine(analysisId, id, body))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không lưu được lựa chọn.")
       throw err
     }
   }
@@ -174,14 +234,22 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
   const sections = sectionByLine(session.document)
   const counts = suggestionCounts(suggestions)
   const learning = learningSkills(session)
-  const changeCount = counts.accepted + counts.edited + learning.length
+  // Câu kinh nghiệm SV đã áp dụng cho kỹ năng còn thiếu (thêm vào CV khi Hoàn tất)
+  const addedCount = session.capability_checks.filter((c) => c.final_text).length
+  const changeCount = counts.accepted + counts.edited + learning.length + addedCount
   const reviewed = suggestions.length - counts.pending
   const current =
     suggestions.find((s) => s.id === currentId) ?? suggestions.find((s) => s.status === "pending") ?? suggestions[0]
   const currentIndex = current ? suggestions.indexOf(current) : -1
+  const preparing = (session.suggestions_state === "pending" && !prepareFailed) || retrying
+  const prepareError = !preparing && (session.suggestions_state === "failed" || prepareFailed)
+  const kept = session.kept_count ?? 0
+  const checkedNote =
+    "Đã kiểm tra: giữ nguyên số thật, đúng ngôn ngữ dòng gốc, chỉ nhắc công cụ có trong cùng dự án." +
+    (kept > 0 ? ` ${kept} câu đã rõ nên không cần sửa.` : "")
   const newLabel = nextLabel ?? "phiên bản mới"
-  // Kỹ năng đang học hiện ngay trong bản xem trước để SV thấy đúng nội dung sẽ vào phiên bản mới.
-  const preview = { ...session.document, developing_skills: draftDocument(session).developing_skills }
+  // Câu kinh nghiệm mới và kỹ năng đang học hiện ngay trong bản xem trước, đúng nội dung sẽ vào phiên bản mới.
+  const preview = draftDocument(session)
 
   function goTo(id: string) {
     setCurrentId(id)
@@ -194,6 +262,16 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
   }
 
   function renderLine(line: CvDocLine) {
+    if (line.id.startsWith(NEW_LINE_PREFIX)) {
+      return (
+        <div className="-mx-2.5 rounded-lg bg-good-soft px-2.5 py-[5px]">
+          {line.text}
+          <span className="ml-2 inline-flex items-center rounded-md bg-card px-[7px] font-sans text-[11px] leading-[18px] font-medium whitespace-nowrap text-good">
+            Mới thêm
+          </span>
+        </div>
+      )
+    }
     const s = byLine.get(line.id)
     if (!s) return undefined
     return <PaperLine line={line} suggestion={s} current={s.id === current?.id} onPick={() => goTo(s.id)} />
@@ -201,7 +279,7 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
 
   const finishHint =
     changeCount === 0
-      ? "Áp dụng ít nhất một gợi ý hoặc ghi kỹ năng đang học"
+      ? "Áp dụng ít nhất một gợi ý, thêm một câu kinh nghiệm hoặc ghi kỹ năng đang học"
       : counts.pending > 0
         ? `Còn ${counts.pending} gợi ý chưa xét, bạn vẫn có thể hoàn tất`
         : "Đã xét hết gợi ý"
@@ -247,9 +325,17 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
       <div className="flex flex-wrap items-start gap-6">
         <section aria-labelledby="paper-title" className="min-w-0 flex-[1.15_1_480px]">
           <div className="mb-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[13px] text-ink-3">
-            <h2 id="paper-title" className="flex-1 text-base font-semibold text-ink">
+            <h2 id="paper-title" className="flex-1 text-base font-semibold whitespace-nowrap text-ink">
               Bản xem trước CV
             </h2>
+            {session.cv.read_by_ocr && (
+              // Chữ đọc từ ảnh scan (OCR): sinh viên cần tự kiểm tra trước khi dùng file tải về
+              <p className="flex w-full items-start gap-1.5 text-[12.5px] leading-[18px] text-warn sm:order-last md:order-none md:w-auto md:max-w-[440px]">
+                <ScanText className="mt-px size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                CV được đọc từ ảnh scan nên có thể sai chính tả, dính chữ hoặc mất dấu. Hãy đối chiếu với file gốc và
+                sửa lại trong file DOCX sau khi tải về.
+              </p>
+            )}
             {suggestions.length > 0 && (
               <>
                 <span className="inline-flex items-center gap-1.5">
@@ -270,7 +356,11 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
 
         <div className="flex min-w-0 flex-[1_1_380px] flex-col gap-[18px]">
           <div id="suggestion-panel" className="scroll-mt-24">
-            {current ? (
+            {preparing ? (
+              <PreparingSuggestions jobTitle={session.jd.title} />
+            ) : prepareError ? (
+              <PrepareFailed attemptedAt={session.suggestions_attempted_at} onRetry={retryPrepare} />
+            ) : current ? (
               <SuggestionCard
                 key={`${current.id}-${current.status}-${current.proposed_text}`}
                 suggestion={current}
@@ -282,32 +372,32 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
                 onNext={() => step(1)}
                 onDecide={(d, text) => decide(current, d, text)}
                 onProvideContext={(answer) => provideContext(current, answer)}
+                checkedNote={checkedNote}
               />
             ) : (
               <NoSuggestions session={session} />
             )}
           </div>
 
-          {session.pending_review_count > 0 && (
-            <p className="flex items-start gap-2 text-[13px] leading-5 text-ink-3">
-              <Clock className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-              {session.pending_review_count} gợi ý chưa đủ căn cứ trong CV nên đang chờ cố vấn xem lại, chưa hiển thị ở đây.
-            </p>
-          )}
-
           {session.capability_checks.length > 0 && (
             <section aria-labelledby="cap-title">
               <h2 id="cap-title" className="mb-1 text-base font-semibold text-ink">
-                Kỹ năng JD cần mà CV chưa thể hiện
+                Kỹ năng vị trí cần mà CV chưa có
               </h2>
-              <p className="mb-2.5 text-[13px] text-ink-3">AI không tự thêm kỹ năng vào CV. Hãy trả lời trung thực.</p>
+              <p className="mb-3 text-[13px] text-ink-3">
+                AI không tự thêm kỹ năng vào CV. Trả lời trung thực từng kỹ năng, mỗi lựa chọn dẫn tới một việc khác nhau:
+              </p>
+              {editable && <CapabilityLegend />}
               <div className="grid gap-2.5">
                 {session.capability_checks.map((c) => (
                   <CapabilityCheckCard
-                    key={`${c.id}-${c.status}-${c.learning_note ?? ""}-${c.context ?? ""}`}
+                    key={`${c.id}-${c.status}-${c.learning_note ?? ""}-${c.context ?? ""}-${c.draft_text ?? ""}-${c.line_status ?? ""}-${c.final_text ?? ""}`}
                     check={c}
+                    entries={session.entries ?? []}
                     editable={editable}
                     onAnswer={(body) => answerCheck(c.id, body)}
+                    onDraft={(body) => draftLine(c.id, body)}
+                    onDecide={(body) => decideLine(c.id, body)}
                   />
                 ))}
               </div>
@@ -321,6 +411,11 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
           <span className="text-sm text-ink-2 tabular-nums">
             <b className="font-semibold text-ink">{counts.accepted + counts.edited}</b> áp dụng ·{" "}
             <b className="font-semibold text-ink">{counts.rejected}</b> bỏ qua ·{" "}
+            {addedCount > 0 && (
+              <>
+                <b className="font-semibold text-ink">{addedCount}</b> câu kinh nghiệm mới ·{" "}
+              </>
+            )}
             <b className="font-semibold text-ink">{learning.length}</b> kỹ năng đang học
           </span>
           <span className="hidden flex-1 sm:block" />
@@ -357,6 +452,7 @@ export function CvOptimizer({ analysisId }: { analysisId: string }) {
         facts={[
           { label: "Áp dụng", value: counts.accepted },
           { label: "Bạn sửa", value: counts.edited },
+          ...(addedCount > 0 ? [{ label: "Câu mới", value: addedCount }] : []),
           ...(learning.length > 0 ? [{ label: "Đang học", value: learning.length }] : []),
           { label: "Giữ câu gốc", value: counts.pending },
         ]}
@@ -405,7 +501,7 @@ function PaperLine({
       {tag && (
         <span
           className={cn(
-            "ml-2 inline-flex items-center rounded-md px-[7px] text-[11px] leading-[18px] font-medium whitespace-nowrap",
+            "ml-2 inline-flex items-center rounded-md px-[7px] font-sans text-[11px] leading-[18px] font-medium whitespace-nowrap",
             applied ? "bg-card text-good" : "bg-surface text-ink-3",
           )}
         >
@@ -413,6 +509,40 @@ function PaperLine({
         </span>
       )}
     </button>
+  )
+}
+
+/** Mỗi lựa chọn ở mục kỹ năng còn thiếu dẫn tới đâu (bản vẽ ToiUuKyNangA). */
+function CapabilityLegend() {
+  const rows = [
+    {
+      label: "Có, đã dùng",
+      text: (
+        <>
+          Kể ngắn bạn đã dùng ở đâu, làm gì. AI viết thành <b className="font-semibold text-ink">một câu để bạn duyệt</b> rồi
+          mới thêm vào CV; chỉ dùng đúng thông tin bạn viết.
+        </>
+      ),
+    },
+    {
+      label: "Đang học",
+      text: (
+        <>
+          Thêm vào mục <b className="font-semibold text-ink">Kỹ năng đang phát triển</b> cuối CV, không ghi là thành thạo.
+        </>
+      ),
+    },
+    { label: "Chưa có", text: "Không thêm gì vào CV. Gợi ý lộ trình học nếu có." },
+  ]
+  return (
+    <dl className="mb-3 grid gap-2 rounded-[14px] bg-panel px-4 py-3.5 text-[13px] leading-[19px] text-ink-2">
+      {rows.map((r) => (
+        <div key={r.label} className="grid gap-x-2.5 gap-y-0.5 sm:grid-cols-[92px_minmax(0,1fr)]">
+          <dt className="font-semibold text-ink">{r.label}</dt>
+          <dd>{r.text}</dd>
+        </div>
+      ))}
+    </dl>
   )
 }
 
@@ -448,6 +578,93 @@ function NoSuggestions({ session }: { session: OptimizerSession }) {
       {session.capability_checks.length > 0 && (
         <p className="mt-1.5 text-sm text-ink-2">Bạn vẫn có thể xác nhận các kỹ năng còn thiếu bên dưới.</p>
       )}
+    </section>
+  )
+}
+
+const PREPARE_STEPS = [
+  { until: 2, text: "Đọc các câu mô tả việc đã làm trong CV" },
+  { until: 14, text: "Viết lại từng câu theo yêu cầu của JD" },
+  { until: Infinity, text: "Kiểm tra: giữ số thật, đúng ngôn ngữ, không thêm công cụ" },
+]
+
+// Bản vẽ ToiUuDangSoan: lần đầu mở trình tối ưu, AI đang soạn gợi ý (thường 10–20 giây).
+function PreparingSuggestions({ jobTitle }: { jobTitle: string }) {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed((t) => t + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
+  const active = PREPARE_STEPS.findIndex((step) => elapsed < step.until)
+
+  return (
+    <section
+      aria-live="polite"
+      aria-busy="true"
+      className="rounded-card border border-line bg-card px-5 py-5 shadow-card sm:px-[22px]"
+    >
+      <p className="flex items-center gap-2 text-[12.5px] font-semibold text-accent-strong">
+        <Sparkles className="size-[15px]" strokeWidth={1.75} aria-hidden />
+        AI đang soạn gợi ý
+      </p>
+      <h2 className="mt-2 text-lg leading-[26px] font-semibold text-ink">Đang đọc từng câu trong CV của bạn</h2>
+      <p className="mt-1.5 text-sm leading-[22px] text-ink-2">
+        Gợi ý cách viết rõ hơn cho các câu trong Kinh nghiệm, Dự án và Hoạt động, theo yêu cầu của{" "}
+        <span className="font-semibold text-ink">{jobTitle}</span>.
+      </p>
+      <ol className="my-4 grid gap-3 rounded-[14px] bg-panel px-4 py-3.5">
+        {PREPARE_STEPS.map((step, i) => (
+          <li key={step.text} className="flex items-start gap-2.5 text-sm">
+            {i < active ? (
+              <Check className="mt-0.5 size-4 shrink-0 text-good" strokeWidth={2.25} aria-label="Xong" />
+            ) : i === active ? (
+              <Loader2 className="mt-0.5 size-4 shrink-0 animate-spin text-ink" aria-label="Đang làm" />
+            ) : (
+              <Circle className="mt-0.5 size-4 shrink-0 text-line-strong" aria-hidden />
+            )}
+            <span className={cn(i > active ? "text-ink-3" : "text-ink", i === active ? "font-semibold" : "font-medium")}>
+              {step.text}
+            </span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-[12.5px] leading-[18px] text-ink-3">
+        Thường mất 10–20 giây. Chỉ soạn một lần; lần sau mở lại không phải chờ. Trong lúc chờ, bạn có thể trả lời phần
+        kỹ năng còn thiếu bên dưới.
+      </p>
+      <div className="mt-[18px] grid gap-2.5 border-t border-line pt-4" aria-hidden>
+        <Skeleton className="h-3 w-[38%] rounded-md" />
+        <Skeleton className="h-3 w-full rounded-md" />
+        <Skeleton className="h-3 w-[86%] rounded-md" />
+        <div className="mt-1 flex gap-2">
+          <Skeleton className="h-9 w-24 rounded-full" />
+          <Skeleton className="h-9 w-[72px] rounded-full" />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// Bản vẽ ToiUuLoiGoiY: AI lỗi / hết lượt; CV không đổi, phần kỹ năng còn thiếu vẫn dùng được.
+function PrepareFailed({ attemptedAt, onRetry }: { attemptedAt?: string | null; onRetry: () => void }) {
+  return (
+    <section role="alert" className="rounded-card border border-line bg-card px-5 py-5 shadow-card sm:px-[22px]">
+      <p className="flex items-center gap-2 text-[12.5px] font-semibold text-warn">
+        <AlertCircle className="size-[15px]" strokeWidth={1.75} aria-hidden />
+        Chưa soạn được gợi ý
+      </p>
+      <h2 className="mt-2 text-lg leading-[26px] font-semibold text-ink">AI đang bận hoặc đã hết lượt dùng hôm nay</h2>
+      <p className="mt-1.5 text-sm leading-[22px] text-ink-2">
+        CV của bạn không bị thay đổi. Bạn vẫn có thể trả lời phần kỹ năng còn thiếu bên dưới và hoàn tất; gợi ý viết lại
+        có thể soạn lại sau.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-2.5">
+        <Button size="brand" onClick={onRetry}>
+          <RefreshCw aria-hidden />
+          Thử lại
+        </Button>
+        {attemptedAt && <span className="text-[12.5px] text-ink-3">Lần thử gần nhất: {formatWhen(attemptedAt)}</span>}
+      </div>
     </section>
   )
 }

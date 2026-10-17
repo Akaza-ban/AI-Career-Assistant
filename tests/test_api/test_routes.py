@@ -1,5 +1,7 @@
 import pytest
 
+from tests.helpers import STUDENT
+
 
 @pytest.mark.asyncio
 async def test_health(client):
@@ -11,7 +13,7 @@ async def test_health(client):
 
 @pytest.mark.asyncio
 async def test_chat_empty_message(client):
-    response = await client.post("/api/v1/chat", json={"message": ""})
+    response = await client.post("/api/v1/chat", json={"message": ""}, headers=STUDENT)
     assert response.status_code == 422  # Validation error
 
 

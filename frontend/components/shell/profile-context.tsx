@@ -7,7 +7,7 @@ import type { Role, UserProfile } from "@/lib/types"
 import { useApi } from "@/lib/use-api"
 
 const ProfileContext = createContext<UserProfile | undefined>(undefined)
-const ReloadProfileContext = createContext<() => void>(() => {})
+const ReloadProfileContext = createContext<() => void>(() => { })
 
 /** Tải hồ sơ người dùng một lần cho cả khung giao diện. */
 export function ProfileProvider({ role, children }: { role: Role; children: ReactNode }) {

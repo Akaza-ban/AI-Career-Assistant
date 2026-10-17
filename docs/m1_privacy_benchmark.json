@@ -1,0 +1,1481 @@
+{
+  "measured_at": "2026-10-14T03:26:10.051660+00:00",
+  "dataset_sha256": "ae3e083b8ea6ee9fa89254fd3439a69aff1b26da4a3bb3f6ea54a805f4fd16b2",
+  "source_sha256": {
+    "src/services/privacy/detectors.py": "225e2a3a5c19caff692623123ce884a0dbfb9e08ebab519d4e1d27eaaa58775a",
+    "src/services/privacy/ner.py": "60d9d7853c5c72ffceac89b4fec5307076ea84650fc3146b69bf9b64faba5845",
+    "src/services/privacy/extract.py": "27b6baea199ad32cfcc564d85ca78e59f00d2ffda0d5071fb3d75afa0516e056",
+    "src/services/privacy/masker.py": "cd4ce80903fe91e4c819648ee8dc6035ee6b82189b3c0a6c7d36cc210c851a74",
+    "eval/pii/run.py": "950313dbaaf605235c162bce07974c6f22d9a916b1e3a89861f8f617ca27eb21"
+  },
+  "review_status": "needs_human_review",
+  "synthetic_cvs": 72,
+  "held_out_real_count": 0,
+  "targets": {
+    "recall": {
+      "EMAIL": 0.99,
+      "PHONE": 0.99,
+      "ID": 0.99,
+      "PERSON": 0.92,
+      "ADDRESS": 0.92
+    },
+    "precision": 0.9,
+    "keep_false_positives_strictly_below": 0.03
+  },
+  "results": {
+    "underthesea": {
+      "status": "measured",
+      "model": {
+        "backend": "underthesea",
+        "version": "9.5.0",
+        "model": "packaged CRF ner_crf_2017_10_12",
+        "device": "cpu"
+      },
+      "ner_only": {
+        "samples": 90,
+        "entities": {
+          "ADDRESS": {
+            "tp": 0,
+            "fp": 811,
+            "fn": 78,
+            "covered": 0,
+            "gold": 78,
+            "recall": 0.0,
+            "precision": 0.0,
+            "coverage_recall": 0.0
+          },
+          "DOB": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 72,
+            "covered": 0,
+            "gold": 72,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          },
+          "EMAIL": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 162,
+            "covered": 0,
+            "gold": 162,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          },
+          "HANDLE": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 72,
+            "covered": 0,
+            "gold": 72,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          },
+          "ID": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 96,
+            "covered": 24,
+            "gold": 96,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.25
+          },
+          "PERSON": {
+            "tp": 179,
+            "fp": 1227,
+            "fn": 55,
+            "covered": 210,
+            "gold": 234,
+            "recall": 0.7649572649572649,
+            "precision": 0.12731152204836416,
+            "coverage_recall": 0.8974358974358975
+          },
+          "PHONE": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 90,
+            "covered": 12,
+            "gold": 90,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.13333333333333333
+          },
+          "URL": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 90,
+            "covered": 0,
+            "gold": 90,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 432,
+            "masked": 432,
+            "false_positive_rate": 1.0
+          },
+          "EMPLOYER": {
+            "total": 78,
+            "masked": 78,
+            "false_positive_rate": 1.0
+          },
+          "SCHOOL": {
+            "total": 78,
+            "masked": 78,
+            "false_positive_rate": 1.0
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 72,
+            "false_positive_rate": 1.0
+          }
+        },
+        "micro_precision": 0.08073973838520523,
+        "failed_inputs": [],
+        "elapsed_seconds": 5.922
+      },
+      "pipeline_raw": {
+        "samples": 90,
+        "entities": {
+          "ADDRESS": {
+            "tp": 78,
+            "fp": 0,
+            "fn": 0,
+            "covered": 78,
+            "gold": 78,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "DOB": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "EMAIL": {
+            "tp": 162,
+            "fp": 0,
+            "fn": 0,
+            "covered": 162,
+            "gold": 162,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "HANDLE": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "ID": {
+            "tp": 96,
+            "fp": 0,
+            "fn": 0,
+            "covered": 96,
+            "gold": 96,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "PERSON": {
+            "tp": 231,
+            "fp": 15,
+            "fn": 3,
+            "covered": 234,
+            "gold": 234,
+            "recall": 0.9871794871794872,
+            "precision": 0.9390243902439024,
+            "coverage_recall": 1.0
+          },
+          "PHONE": {
+            "tp": 90,
+            "fp": 0,
+            "fn": 0,
+            "covered": 90,
+            "gold": 90,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "URL": {
+            "tp": 90,
+            "fp": 0,
+            "fn": 0,
+            "covered": 90,
+            "gold": 90,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 432,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "EMPLOYER": {
+            "total": 78,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "SCHOOL": {
+            "total": 78,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          }
+        },
+        "micro_precision": 0.9834437086092715,
+        "failed_inputs": [],
+        "elapsed_seconds": 6.344
+      },
+      "by_language": {
+        "vi": {
+          "samples": 30,
+          "entities": {
+            "ADDRESS": {
+              "tp": 26,
+              "fp": 0,
+              "fn": 0,
+              "covered": 26,
+              "gold": 26,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "DOB": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "EMAIL": {
+              "tp": 54,
+              "fp": 0,
+              "fn": 0,
+              "covered": 54,
+              "gold": 54,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "HANDLE": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "ID": {
+              "tp": 32,
+              "fp": 0,
+              "fn": 0,
+              "covered": 32,
+              "gold": 32,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "PERSON": {
+              "tp": 78,
+              "fp": 4,
+              "fn": 0,
+              "covered": 78,
+              "gold": 78,
+              "recall": 1.0,
+              "precision": 0.9512195121951219,
+              "coverage_recall": 1.0
+            },
+            "PHONE": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "URL": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            }
+          },
+          "preservation": {
+            "SKILL": {
+              "total": 144,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "EMPLOYER": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "SCHOOL": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "CITY": {
+              "total": 24,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            }
+          },
+          "micro_precision": 0.9867549668874173,
+          "failed_inputs": [],
+          "elapsed_seconds": 2.046
+        },
+        "en": {
+          "samples": 30,
+          "entities": {
+            "ADDRESS": {
+              "tp": 26,
+              "fp": 0,
+              "fn": 0,
+              "covered": 26,
+              "gold": 26,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "DOB": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "EMAIL": {
+              "tp": 54,
+              "fp": 0,
+              "fn": 0,
+              "covered": 54,
+              "gold": 54,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "HANDLE": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "ID": {
+              "tp": 32,
+              "fp": 0,
+              "fn": 0,
+              "covered": 32,
+              "gold": 32,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "PERSON": {
+              "tp": 75,
+              "fp": 7,
+              "fn": 3,
+              "covered": 78,
+              "gold": 78,
+              "recall": 0.9615384615384616,
+              "precision": 0.9146341463414634,
+              "coverage_recall": 1.0
+            },
+            "PHONE": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "URL": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            }
+          },
+          "preservation": {
+            "SKILL": {
+              "total": 144,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "EMPLOYER": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "SCHOOL": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "CITY": {
+              "total": 24,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            }
+          },
+          "micro_precision": 0.9768211920529801,
+          "failed_inputs": [],
+          "elapsed_seconds": 2.047
+        },
+        "mixed": {
+          "samples": 30,
+          "entities": {
+            "ADDRESS": {
+              "tp": 26,
+              "fp": 0,
+              "fn": 0,
+              "covered": 26,
+              "gold": 26,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "DOB": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "EMAIL": {
+              "tp": 54,
+              "fp": 0,
+              "fn": 0,
+              "covered": 54,
+              "gold": 54,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "HANDLE": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "ID": {
+              "tp": 32,
+              "fp": 0,
+              "fn": 0,
+              "covered": 32,
+              "gold": 32,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "PERSON": {
+              "tp": 78,
+              "fp": 4,
+              "fn": 0,
+              "covered": 78,
+              "gold": 78,
+              "recall": 1.0,
+              "precision": 0.9512195121951219,
+              "coverage_recall": 1.0
+            },
+            "PHONE": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "URL": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            }
+          },
+          "preservation": {
+            "SKILL": {
+              "total": 144,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "EMPLOYER": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "SCHOOL": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "CITY": {
+              "total": 24,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            }
+          },
+          "micro_precision": 0.9867549668874173,
+          "failed_inputs": [],
+          "elapsed_seconds": 2.125
+        }
+      },
+      "gate_failures_raw": [],
+      "pipeline_documents": {
+        "samples": 90,
+        "entities": {
+          "ADDRESS": {
+            "tp": 42,
+            "fp": 0,
+            "fn": 36,
+            "covered": 42,
+            "gold": 78,
+            "recall": 0.5384615384615384,
+            "precision": 1.0,
+            "coverage_recall": 0.5384615384615384
+          },
+          "DOB": {
+            "tp": 36,
+            "fp": 0,
+            "fn": 36,
+            "covered": 36,
+            "gold": 72,
+            "recall": 0.5,
+            "precision": 1.0,
+            "coverage_recall": 0.5
+          },
+          "EMAIL": {
+            "tp": 90,
+            "fp": 0,
+            "fn": 72,
+            "covered": 90,
+            "gold": 162,
+            "recall": 0.5555555555555556,
+            "precision": 1.0,
+            "coverage_recall": 0.5555555555555556
+          },
+          "HANDLE": {
+            "tp": 36,
+            "fp": 0,
+            "fn": 36,
+            "covered": 36,
+            "gold": 72,
+            "recall": 0.5,
+            "precision": 1.0,
+            "coverage_recall": 0.5
+          },
+          "ID": {
+            "tp": 60,
+            "fp": 0,
+            "fn": 36,
+            "covered": 60,
+            "gold": 96,
+            "recall": 0.625,
+            "precision": 1.0,
+            "coverage_recall": 0.625
+          },
+          "PERSON": {
+            "tp": 162,
+            "fp": 12,
+            "fn": 72,
+            "covered": 162,
+            "gold": 234,
+            "recall": 0.6923076923076923,
+            "precision": 0.9310344827586207,
+            "coverage_recall": 0.6923076923076923
+          },
+          "PHONE": {
+            "tp": 54,
+            "fp": 0,
+            "fn": 36,
+            "covered": 54,
+            "gold": 90,
+            "recall": 0.6,
+            "precision": 1.0,
+            "coverage_recall": 0.6
+          },
+          "URL": {
+            "tp": 54,
+            "fp": 0,
+            "fn": 36,
+            "covered": 54,
+            "gold": 90,
+            "recall": 0.6,
+            "precision": 1.0,
+            "coverage_recall": 0.6
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 432,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "EMPLOYER": {
+            "total": 78,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "SCHOOL": {
+            "total": 78,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          }
+        },
+        "micro_precision": 0.978021978021978,
+        "failed_inputs": [
+          "cv-001:text",
+          "cv-003:text",
+          "cv-005:text",
+          "cv-007:text",
+          "cv-009:text",
+          "cv-011:text",
+          "cv-013:text",
+          "cv-015:text",
+          "cv-017:text",
+          "cv-019:text",
+          "cv-021:text",
+          "cv-023:text",
+          "cv-025:text",
+          "cv-027:text",
+          "cv-029:text",
+          "cv-031:text",
+          "cv-033:text",
+          "cv-035:text",
+          "cv-037:text",
+          "cv-039:text",
+          "cv-041:text",
+          "cv-043:text",
+          "cv-045:text",
+          "cv-047:text",
+          "cv-049:text",
+          "cv-051:text",
+          "cv-053:text",
+          "cv-055:text",
+          "cv-057:text",
+          "cv-059:text",
+          "cv-061:text",
+          "cv-063:text",
+          "cv-065:text",
+          "cv-067:text",
+          "cv-069:text",
+          "cv-071:text"
+        ],
+        "elapsed_seconds": 3.5
+      },
+      "gate_failures_documents": [
+        "EMAIL recall below 0.99",
+        "PHONE recall below 0.99",
+        "ID recall below 0.99",
+        "PERSON recall below 0.92",
+        "ADDRESS recall below 0.92",
+        "Local detection/extraction failed on one or more inputs"
+      ]
+    },
+    "phobert": {
+      "status": "failed",
+      "error_type": "NerUnavailableError"
+    },
+    "spacy": {
+      "status": "measured",
+      "model": {
+        "backend": "spacy",
+        "version": "3.8.16",
+        "model": "xx_ent_wiki_sm",
+        "model_version": "3.8.0",
+        "device": "cpu"
+      },
+      "ner_only": {
+        "samples": 90,
+        "entities": {
+          "ADDRESS": {
+            "tp": 0,
+            "fp": 203,
+            "fn": 78,
+            "covered": 0,
+            "gold": 78,
+            "recall": 0.0,
+            "precision": 0.0,
+            "coverage_recall": 0.0
+          },
+          "DOB": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 72,
+            "covered": 0,
+            "gold": 72,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          },
+          "EMAIL": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 162,
+            "covered": 0,
+            "gold": 162,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          },
+          "HANDLE": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 72,
+            "covered": 1,
+            "gold": 72,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.013888888888888888
+          },
+          "ID": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 96,
+            "covered": 3,
+            "gold": 96,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.03125
+          },
+          "PERSON": {
+            "tp": 106,
+            "fp": 172,
+            "fn": 128,
+            "covered": 152,
+            "gold": 234,
+            "recall": 0.452991452991453,
+            "precision": 0.381294964028777,
+            "coverage_recall": 0.6495726495726496
+          },
+          "PHONE": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 90,
+            "covered": 0,
+            "gold": 90,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.0
+          },
+          "URL": {
+            "tp": 0,
+            "fp": 0,
+            "fn": 90,
+            "covered": 12,
+            "gold": 90,
+            "recall": 0.0,
+            "precision": null,
+            "coverage_recall": 0.13333333333333333
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 432,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "EMPLOYER": {
+            "total": 78,
+            "masked": 6,
+            "false_positive_rate": 0.07692307692307693
+          },
+          "SCHOOL": {
+            "total": 78,
+            "masked": 6,
+            "false_positive_rate": 0.07692307692307693
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 72,
+            "false_positive_rate": 1.0
+          }
+        },
+        "micro_precision": 0.2203742203742204,
+        "failed_inputs": [],
+        "elapsed_seconds": 2.875
+      },
+      "pipeline_raw": {
+        "samples": 90,
+        "entities": {
+          "ADDRESS": {
+            "tp": 49,
+            "fp": 29,
+            "fn": 29,
+            "covered": 78,
+            "gold": 78,
+            "recall": 0.6282051282051282,
+            "precision": 0.6282051282051282,
+            "coverage_recall": 1.0
+          },
+          "DOB": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "EMAIL": {
+            "tp": 162,
+            "fp": 0,
+            "fn": 0,
+            "covered": 162,
+            "gold": 162,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "HANDLE": {
+            "tp": 72,
+            "fp": 0,
+            "fn": 0,
+            "covered": 72,
+            "gold": 72,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "ID": {
+            "tp": 93,
+            "fp": 3,
+            "fn": 3,
+            "covered": 96,
+            "gold": 96,
+            "recall": 0.96875,
+            "precision": 0.96875,
+            "coverage_recall": 1.0
+          },
+          "PERSON": {
+            "tp": 198,
+            "fp": 37,
+            "fn": 36,
+            "covered": 229,
+            "gold": 234,
+            "recall": 0.8461538461538461,
+            "precision": 0.8425531914893617,
+            "coverage_recall": 0.9786324786324786
+          },
+          "PHONE": {
+            "tp": 90,
+            "fp": 0,
+            "fn": 0,
+            "covered": 90,
+            "gold": 90,
+            "recall": 1.0,
+            "precision": 1.0,
+            "coverage_recall": 1.0
+          },
+          "URL": {
+            "tp": 88,
+            "fp": 2,
+            "fn": 2,
+            "covered": 90,
+            "gold": 90,
+            "recall": 0.9777777777777777,
+            "precision": 0.9777777777777777,
+            "coverage_recall": 1.0
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 432,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "EMPLOYER": {
+            "total": 78,
+            "masked": 6,
+            "false_positive_rate": 0.07692307692307693
+          },
+          "SCHOOL": {
+            "total": 78,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          }
+        },
+        "micro_precision": 0.9206703910614525,
+        "failed_inputs": [],
+        "elapsed_seconds": 3.093
+      },
+      "by_language": {
+        "vi": {
+          "samples": 30,
+          "entities": {
+            "ADDRESS": {
+              "tp": 24,
+              "fp": 2,
+              "fn": 2,
+              "covered": 26,
+              "gold": 26,
+              "recall": 0.9230769230769231,
+              "precision": 0.9230769230769231,
+              "coverage_recall": 1.0
+            },
+            "DOB": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "EMAIL": {
+              "tp": 54,
+              "fp": 0,
+              "fn": 0,
+              "covered": 54,
+              "gold": 54,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "HANDLE": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "ID": {
+              "tp": 30,
+              "fp": 2,
+              "fn": 2,
+              "covered": 32,
+              "gold": 32,
+              "recall": 0.9375,
+              "precision": 0.9375,
+              "coverage_recall": 1.0
+            },
+            "PERSON": {
+              "tp": 74,
+              "fp": 3,
+              "fn": 4,
+              "covered": 75,
+              "gold": 78,
+              "recall": 0.9487179487179487,
+              "precision": 0.961038961038961,
+              "coverage_recall": 0.9615384615384616
+            },
+            "PHONE": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "URL": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            }
+          },
+          "preservation": {
+            "SKILL": {
+              "total": 144,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "EMPLOYER": {
+              "total": 26,
+              "masked": 2,
+              "false_positive_rate": 0.07692307692307693
+            },
+            "SCHOOL": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "CITY": {
+              "total": 24,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            }
+          },
+          "micro_precision": 0.9764309764309764,
+          "failed_inputs": [],
+          "elapsed_seconds": 1.079
+        },
+        "en": {
+          "samples": 30,
+          "entities": {
+            "ADDRESS": {
+              "tp": 1,
+              "fp": 25,
+              "fn": 25,
+              "covered": 26,
+              "gold": 26,
+              "recall": 0.038461538461538464,
+              "precision": 0.038461538461538464,
+              "coverage_recall": 1.0
+            },
+            "DOB": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "EMAIL": {
+              "tp": 54,
+              "fp": 0,
+              "fn": 0,
+              "covered": 54,
+              "gold": 54,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "HANDLE": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "ID": {
+              "tp": 32,
+              "fp": 0,
+              "fn": 0,
+              "covered": 32,
+              "gold": 32,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "PERSON": {
+              "tp": 61,
+              "fp": 19,
+              "fn": 17,
+              "covered": 78,
+              "gold": 78,
+              "recall": 0.782051282051282,
+              "precision": 0.7625,
+              "coverage_recall": 1.0
+            },
+            "PHONE": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "URL": {
+              "tp": 28,
+              "fp": 2,
+              "fn": 2,
+              "covered": 30,
+              "gold": 30,
+              "recall": 0.9333333333333333,
+              "precision": 0.9333333333333333,
+              "coverage_recall": 1.0
+            }
+          },
+          "preservation": {
+            "SKILL": {
+              "total": 144,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "EMPLOYER": {
+              "total": 26,
+              "masked": 2,
+              "false_positive_rate": 0.07692307692307693
+            },
+            "SCHOOL": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "CITY": {
+              "total": 24,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            }
+          },
+          "micro_precision": 0.8466666666666667,
+          "failed_inputs": [],
+          "elapsed_seconds": 0.984
+        },
+        "mixed": {
+          "samples": 30,
+          "entities": {
+            "ADDRESS": {
+              "tp": 24,
+              "fp": 2,
+              "fn": 2,
+              "covered": 26,
+              "gold": 26,
+              "recall": 0.9230769230769231,
+              "precision": 0.9230769230769231,
+              "coverage_recall": 1.0
+            },
+            "DOB": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "EMAIL": {
+              "tp": 54,
+              "fp": 0,
+              "fn": 0,
+              "covered": 54,
+              "gold": 54,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "HANDLE": {
+              "tp": 24,
+              "fp": 0,
+              "fn": 0,
+              "covered": 24,
+              "gold": 24,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "ID": {
+              "tp": 31,
+              "fp": 1,
+              "fn": 1,
+              "covered": 32,
+              "gold": 32,
+              "recall": 0.96875,
+              "precision": 0.96875,
+              "coverage_recall": 1.0
+            },
+            "PERSON": {
+              "tp": 63,
+              "fp": 15,
+              "fn": 15,
+              "covered": 76,
+              "gold": 78,
+              "recall": 0.8076923076923077,
+              "precision": 0.8076923076923077,
+              "coverage_recall": 0.9743589743589743
+            },
+            "PHONE": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            },
+            "URL": {
+              "tp": 30,
+              "fp": 0,
+              "fn": 0,
+              "covered": 30,
+              "gold": 30,
+              "recall": 1.0,
+              "precision": 1.0,
+              "coverage_recall": 1.0
+            }
+          },
+          "preservation": {
+            "SKILL": {
+              "total": 144,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "EMPLOYER": {
+              "total": 26,
+              "masked": 2,
+              "false_positive_rate": 0.07692307692307693
+            },
+            "SCHOOL": {
+              "total": 26,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            },
+            "CITY": {
+              "total": 24,
+              "masked": 0,
+              "false_positive_rate": 0.0
+            }
+          },
+          "micro_precision": 0.9395973154362416,
+          "failed_inputs": [],
+          "elapsed_seconds": 1.062
+        }
+      },
+      "gate_failures_raw": [
+        "ID recall below 0.99",
+        "PERSON recall below 0.92",
+        "ADDRESS recall below 0.92",
+        "ADDRESS precision below 0.9",
+        "PERSON precision below 0.9",
+        "EMPLOYER false positives not below 0.03"
+      ],
+      "pipeline_documents": {
+        "samples": 90,
+        "entities": {
+          "ADDRESS": {
+            "tp": 24,
+            "fp": 18,
+            "fn": 54,
+            "covered": 42,
+            "gold": 78,
+            "recall": 0.3076923076923077,
+            "precision": 0.5714285714285714,
+            "coverage_recall": 0.5384615384615384
+          },
+          "DOB": {
+            "tp": 36,
+            "fp": 0,
+            "fn": 36,
+            "covered": 36,
+            "gold": 72,
+            "recall": 0.5,
+            "precision": 1.0,
+            "coverage_recall": 0.5
+          },
+          "EMAIL": {
+            "tp": 90,
+            "fp": 0,
+            "fn": 72,
+            "covered": 90,
+            "gold": 162,
+            "recall": 0.5555555555555556,
+            "precision": 1.0,
+            "coverage_recall": 0.5555555555555556
+          },
+          "HANDLE": {
+            "tp": 36,
+            "fp": 0,
+            "fn": 36,
+            "covered": 36,
+            "gold": 72,
+            "recall": 0.5,
+            "precision": 1.0,
+            "coverage_recall": 0.5
+          },
+          "ID": {
+            "tp": 57,
+            "fp": 3,
+            "fn": 39,
+            "covered": 60,
+            "gold": 96,
+            "recall": 0.59375,
+            "precision": 0.95,
+            "coverage_recall": 0.625
+          },
+          "PERSON": {
+            "tp": 154,
+            "fp": 11,
+            "fn": 80,
+            "covered": 159,
+            "gold": 234,
+            "recall": 0.6581196581196581,
+            "precision": 0.9333333333333333,
+            "coverage_recall": 0.6794871794871795
+          },
+          "PHONE": {
+            "tp": 54,
+            "fp": 0,
+            "fn": 36,
+            "covered": 54,
+            "gold": 90,
+            "recall": 0.6,
+            "precision": 1.0,
+            "coverage_recall": 0.6
+          },
+          "URL": {
+            "tp": 54,
+            "fp": 0,
+            "fn": 36,
+            "covered": 54,
+            "gold": 90,
+            "recall": 0.6,
+            "precision": 1.0,
+            "coverage_recall": 0.6
+          }
+        },
+        "preservation": {
+          "SKILL": {
+            "total": 432,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "EMPLOYER": {
+            "total": 78,
+            "masked": 6,
+            "false_positive_rate": 0.07692307692307693
+          },
+          "SCHOOL": {
+            "total": 78,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          },
+          "CITY": {
+            "total": 72,
+            "masked": 0,
+            "false_positive_rate": 0.0
+          }
+        },
+        "micro_precision": 0.9404096834264432,
+        "failed_inputs": [
+          "cv-001:text",
+          "cv-003:text",
+          "cv-005:text",
+          "cv-007:text",
+          "cv-009:text",
+          "cv-011:text",
+          "cv-013:text",
+          "cv-015:text",
+          "cv-017:text",
+          "cv-019:text",
+          "cv-021:text",
+          "cv-023:text",
+          "cv-025:text",
+          "cv-027:text",
+          "cv-029:text",
+          "cv-031:text",
+          "cv-033:text",
+          "cv-035:text",
+          "cv-037:text",
+          "cv-039:text",
+          "cv-041:text",
+          "cv-043:text",
+          "cv-045:text",
+          "cv-047:text",
+          "cv-049:text",
+          "cv-051:text",
+          "cv-053:text",
+          "cv-055:text",
+          "cv-057:text",
+          "cv-059:text",
+          "cv-061:text",
+          "cv-063:text",
+          "cv-065:text",
+          "cv-067:text",
+          "cv-069:text",
+          "cv-071:text"
+        ],
+        "elapsed_seconds": 1.829
+      },
+      "gate_failures_documents": [
+        "EMAIL recall below 0.99",
+        "PHONE recall below 0.99",
+        "ID recall below 0.99",
+        "PERSON recall below 0.92",
+        "ADDRESS recall below 0.92",
+        "ADDRESS precision below 0.9",
+        "EMPLOYER false positives not below 0.03",
+        "Local detection/extraction failed on one or more inputs"
+      ]
+    }
+  },
+  "document_extraction": {
+    "count": 72,
+    "failed_count": 36
+  },
+  "selected_backend": "underthesea",
+  "shipping_gate_passed": false
+}

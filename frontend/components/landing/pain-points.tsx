@@ -10,17 +10,17 @@ const ROWS = [
   {
     task: "Biết CV còn thiếu gì",
     alone: "Đọc lại JD và tự đoán, hoặc chờ phản hồi từ nhà tuyển dụng.",
-    careerx: "Mỗi yêu cầu trong JD được đối chiếu với câu trích từ CV: đã đáp ứng, chỉ liệt kê hay còn thiếu.",
+    careerv: "Mỗi yêu cầu trong JD được đối chiếu với câu trích từ CV: đã đáp ứng, chỉ liệt kê hay còn thiếu.",
   },
   {
     task: "Sửa CV cho đúng vị trí",
     alone: "Sửa theo mẫu CV chung, không chắc câu nào cần viết lại.",
-    careerx: "Gợi ý sửa từng câu kèm lý do. Bạn áp dụng, sửa hoặc bỏ qua; chỗ cần số liệu để trống cho bạn tự điền.",
+    careerv: "Gợi ý sửa từng câu kèm lý do. Bạn áp dụng, sửa hoặc bỏ qua; chỗ cần số liệu để trống cho bạn tự điền.",
   },
   {
     task: "Luyện phỏng vấn",
     alone: "Tự hỏi tự trả lời, không biết câu trả lời đã đủ ý chưa.",
-    careerx: "5 câu theo vị trí, mỗi câu có đồng hồ. Báo cáo chấm theo STAR và chỉ ra phần còn yếu.",
+    careerv: "5 câu theo vị trí, mỗi câu có đồng hồ. Báo cáo chấm theo STAR và chỉ ra phần còn yếu.",
   },
 ]
 
@@ -71,7 +71,7 @@ export function PainPoints() {
                   <Check className="mt-[5px] size-4 shrink-0 text-good" strokeWidth={2.25} aria-hidden />
                   <span>
                     <span className="mb-0.5 block text-[13px] font-semibold text-ink md:hidden">Với CareerV</span>
-                    {r.careerx}
+                    {r.careerv}
                   </span>
                 </span>
               </div>

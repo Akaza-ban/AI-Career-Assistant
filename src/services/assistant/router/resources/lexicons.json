@@ -1,0 +1,308 @@
+{
+  "language": {
+    "vi": [
+      "mo",
+      "trang",
+      "toi",
+      "minh",
+      "cua",
+      "di",
+      "o",
+      "dau",
+      "cam",
+      "on",
+      "xin",
+      "chao",
+      "nut",
+      "cach",
+      "huong",
+      "dan",
+      "diem",
+      "qua",
+      "ngay",
+      "phong",
+      "van"
+    ],
+    "en": [
+      "open",
+      "the",
+      "my",
+      "where",
+      "how",
+      "is",
+      "are",
+      "do",
+      "go",
+      "show",
+      "please",
+      "thanks",
+      "thank",
+      "hello",
+      "hi",
+      "it",
+      "score",
+      "status",
+      "yesterday",
+      "latest",
+      "greetings",
+      "appreciate",
+      "your",
+      "you",
+      "good",
+      "morning",
+      "afternoon",
+      "evening",
+      "nice",
+      "pleased",
+      "meet",
+      "bye",
+      "goodbye"
+    ],
+    "vi_characters": "[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]"
+  },
+  "families": {
+    "locate": [
+      "o dau",
+      "where is",
+      "where are",
+      "where can i find",
+      "chi cho minh",
+      "chi toi",
+      "chi vi tri",
+      "point to",
+      "highlight",
+      "point out",
+      "which part",
+      "nam cho nao",
+      "chi cho toi",
+      "hay chi"
+    ],
+    "navigate": [
+      "mo",
+      "di toi",
+      "chuyen toi",
+      "chuyen sang",
+      "cho xem",
+      "xem lai",
+      "open",
+      "go to",
+      "show me",
+      "show",
+      "take me"
+    ],
+    "result": [
+      "diem",
+      "ket qua",
+      "dat bao nhieu",
+      "thieu ky nang",
+      "trang thai",
+      "score",
+      "result",
+      "results",
+      "status",
+      "how many",
+      "bao nhieu",
+      "missing skills",
+      "count",
+      "number of",
+      "ngay nao",
+      "when was",
+      "what date"
+    ],
+    "howto": [
+      "lam sao",
+      "cach",
+      "huong dan",
+      "how do i",
+      "how to",
+      "how can i",
+      "which steps",
+      "cac buoc",
+      "what steps"
+    ]
+  },
+  "entities": {
+    "analysis": [
+      "phan tich",
+      "analysis",
+      "analyses",
+      "match score"
+    ],
+    "report": [
+      "bao cao",
+      "report"
+    ],
+    "interview": [
+      "phong van",
+      "interview",
+      "interviews",
+      "session"
+    ],
+    "cv": [
+      "cv",
+      "ho so"
+    ],
+    "jd": [
+      "jd",
+      "job description"
+    ]
+  },
+  "pages": [
+    "lich su",
+    "history",
+    "thu vien",
+    "library",
+    "cai dat",
+    "settings",
+    "dashboard",
+    "analytics",
+    "students",
+    "reviews",
+    "student list"
+  ],
+  "latest": [
+    "moi nhat",
+    "gan nhat",
+    "latest",
+    "newest",
+    "most recent"
+  ],
+  "relative_dates": [
+    "hom nay",
+    "hom qua",
+    "hom kia",
+    "tuan truoc",
+    "thang truoc",
+    "today",
+    "yesterday",
+    "last week",
+    "last month"
+  ],
+  "metrics": {
+    "score": [
+      "diem",
+      "score"
+    ],
+    "status": [
+      "trang thai",
+      "status"
+    ],
+    "count": [
+      "bao nhieu",
+      "how many",
+      "count",
+      "number of"
+    ],
+    "date": [
+      "ngay nao",
+      "when was",
+      "what date"
+    ]
+  },
+  "patterns": {
+    "locate_button": "\\bnut\\b.{0,100}\\bdau\\b",
+    "result_went": "\\bhow did\\b.{0,200}\\b(?:go|turn out)\\b",
+    "date_vi": "\\b(?:ngay\\s+)?\\d{1,2}\\s+thang\\s+\\d{1,2}(?:\\s+nam\\s+\\d{4})?\\b",
+    "date_en": "\\b\\d{1,2}(?:st|nd|rd|th)?\\s+(?:january|february|march|april|may|june|july|august|september|october|november|december)(?:\\s+\\d{4})?\\b",
+    "date_numeric": "(?<![\\w/.-])\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{4})?(?![\\w/.-])",
+    "generic_page": "\\b(?:trang(?!\\s+thai)|page)\\b",
+    "ui_words": "\\b(?:nut|button|control|menu|vi tri)\\b",
+    "bare_open": "^(?:(?:hay|vui long|please)\\s+)?(?:mo(?:\\s+(?:di|trang do|no|cai do))?|open(?:\\s+(?:it|that|that page))?)(?:\\s+(?:please|nhe|giup))?[.!?]*$",
+    "deictic": "\\b(?:that one|that page|that item|the previous one|the one before|earlier items|whichever|cai do|cai kia|trang do|trang kia|lan nao do|viec do)\\b",
+    "imperative_boundary": "(?:[.!?;]|\\b(?:and|va)\\b)\\s*(?:please\\s+|hay\\s+)?$",
+    "ref_marker": "\\b(?P<kind>cv|jd)\\b\\s*(?:(?:ten|named|called)\\s+)?",
+    "ref_stop": "\\b(?:dang|thieu|dien ra|voi|against|for|cho|with|cua toi|cua minh|of mine|receive|received|duoc|la bao nhieu|la gi|co bao nhieu|ngay|from|on)\\b",
+    "free_qualifier": "\\b(?:compare with the previous one|cung lan truoc|alongside the previous session|with the (?:preceding|previous) session|voi phien truoc|so voi lan truoc|compared (?:to|with) .+|(?:last|next|this) (?:spring|summer|autumn|winter|year|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:after|before|sau|truoc) .+|when the .+|whenever .+)\\b",
+    "strip_articles": "^(?:(?:the|my|toi|minh|cua toi|cua minh)\\s+)+",
+    "terminal_qualifier": "\\b(?:cua toi|cua minh|of mine)\\b.*$",
+    "compound_join": "\\b(?:and|va)\\b",
+    "unparsed_qualifier": "\\b(?:(?:on|from)\\s+(?!(?:my|the)\\s+(?:analysis|interview|report)\\b)|ngay\\s+(?!(?:cua|nao)\\b)).+$",
+    "qualifier_noise": "^(?:(?:duoc|match|been|completed|the|my|of|from|on|ngay|receive|received|did|cua|toi|minh|buoi|phien|session|history|histories|score|status|result|results|diem|ket qua|trang thai|go|turn out|have|la gi|the nao|ra sao|co|how many|number of|count|skills?|are|is|missing|preferred|required|ky nang|uu tien|con thieu|thieu|duoc bao nhieu|bao nhieu|points?|ngay nao|what date|when was)\\b[\\s?!.,]*)+$",
+    "suffix_ref": "\\b(?:for|to)\\s+(?:the\\s+)?(?P<value>[^?!,;]+?)\\s+(?P<kind>jd|cv)\\b",
+    "role_page_prefix": "\\b(?:advisor|student)\\s+$"
+  },
+  "templates": {
+    "clarify": {
+      "vi": "Bạn muốn mở hoặc tìm mục nào?",
+      "en": "Which item would you like to open or find?"
+    },
+    "open": {
+      "vi": "Mở",
+      "en": "Open"
+    },
+    "guide": {
+      "vi": "Hướng dẫn",
+      "en": "How to use"
+    }
+  },
+  "chip_defaults": {
+    "student": [
+      {
+        "vi": "CV",
+        "en": "CV",
+        "target": "cv"
+      },
+      {
+        "vi": "Phân tích",
+        "en": "Analysis",
+        "target": "analysis"
+      },
+      {
+        "vi": "Lịch sử phỏng vấn",
+        "en": "Interview history",
+        "target": "interview"
+      }
+    ],
+    "advisor": [
+      {
+        "vi": "Tổng quan",
+        "en": "Dashboard",
+        "target": "page"
+      },
+      {
+        "vi": "Danh sách sinh viên",
+        "en": "Students",
+        "target": "page"
+      },
+      {
+        "vi": "Thống kê",
+        "en": "Analytics",
+        "target": "page"
+      }
+    ],
+    "admin": [
+      {
+        "vi": "Hướng dẫn",
+        "en": "Guide",
+        "target": "page"
+      },
+      {
+        "vi": "Cài đặt",
+        "en": "Settings",
+        "target": "page"
+      }
+    ]
+  },
+  "partial_terms": [
+    "du lieu",
+    "data",
+    "something",
+    "mot thu",
+    "phan do",
+    "that section",
+    "remaining",
+    "muc con lai",
+    "relevant section",
+    "muc lien quan",
+    "results section",
+    "muc ket qua",
+    "ban ay",
+    "version i mean",
+    "chua vua noi",
+    "cho vua noi"
+  ],
+  "profile_terms": [
+    "ho so",
+    "profile"
+  ]
+}

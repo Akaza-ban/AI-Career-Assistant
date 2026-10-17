@@ -12,6 +12,9 @@ from src.agents.interview.graph import interview_agent
 
 
 async def run_interview_demo():
+    from src.services.providers.gateway import initialize_gateway_runtime
+
+    initialize_gateway_runtime()
     print("=" * 70)
     print("DEMO MOCK INTERVIEW AGENT (CHẤM ĐIỂM THEO RUBRIC STAR)")
     print("=" * 70)

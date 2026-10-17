@@ -1,0 +1,147 @@
+{
+  "provenance": "Synthetic provider-shaped protocol example; not captured live; not model-quality evidence.",
+  "exchanges": [
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "reasoning_content": "Read stage 1.",
+              "tool_calls": [
+                {
+                  "id": "stage-1",
+                  "type": "function",
+                  "function": {
+                    "name": "get_stage",
+                    "arguments": "{\"stage\": 1}"
+                  }
+                }
+              ],
+              "content": "Checking"
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    },
+    {
+      "chunks": [
+        {
+          "id": "protocol-example",
+          "object": "chat.completion.chunk",
+          "created": 0,
+          "model": "deepseek-flash",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "role": "assistant",
+                "reasoning_content": "Read "
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        {
+          "id": "protocol-example",
+          "object": "chat.completion.chunk",
+          "created": 0,
+          "model": "deepseek-flash",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "reasoning_content": "stage 1.",
+                "content": "Checking"
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        {
+          "id": "protocol-example",
+          "object": "chat.completion.chunk",
+          "created": 0,
+          "model": "deepseek-flash",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "id": "stage-1",
+                    "type": "function",
+                    "function": {
+                      "name": "get_stage",
+                      "arguments": "{\"stage\":"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        {
+          "id": "protocol-example",
+          "object": "chat.completion.chunk",
+          "created": 0,
+          "model": "deepseek-flash",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "tool_calls": [
+                  {
+                    "index": 0,
+                    "function": {
+                      "arguments": " 1}"
+                    }
+                  }
+                ]
+              },
+              "finish_reason": null
+            }
+          ]
+        },
+        {
+          "id": "protocol-example",
+          "object": "chat.completion.chunk",
+          "created": 0,
+          "model": "deepseek-flash",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": "tool_calls"
+            }
+          ]
+        },
+        {
+          "id": "protocol-example",
+          "object": "chat.completion.chunk",
+          "created": 0,
+          "model": "deepseek-flash",
+          "choices": [],
+          "usage": {
+            "prompt_tokens": 100,
+            "completion_tokens": 20,
+            "total_tokens": 120
+          }
+        }
+      ]
+    }
+  ]
+}

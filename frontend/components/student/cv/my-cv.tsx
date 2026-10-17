@@ -163,7 +163,7 @@ export function MyCv() {
             aside={<CvToolbar query={query} onQueryChange={setQuery} sort={sort} onSortChange={setSort} />}
           >
             {visible.length > 0 ? (
-              <div data-agent-target="cv-list" className={GRID}>
+              <div data-agent-target="cv-list" data-assistant-id="cv-list" className={GRID}>
                 {visible.map((cv) => (
                   <CvCard
                     key={cv.id}

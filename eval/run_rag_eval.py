@@ -25,6 +25,7 @@ from src.models.assistant import AssistantResponse, ClientPageContext, route_all
 from src.services.assistant.agent import AssistantAgent, AssistantState
 from src.services.assistant.embedding import AssistantEmbeddingService
 from src.services.assistant.hybrid_search import AssistantHybridRetriever
+from src.services.benchmark import calculate_ndcg_at_k, calculate_precision_at_k, calculate_recall_at_k
 from src.services.llm import llm_configured
 
 EVAL_DIR = Path(__file__).resolve().parent
@@ -131,6 +132,34 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
     return max(0.0, min(1.0, sum(a * b for a, b in zip(left, right)) / denominator))
 
 
+def guide_rank_metrics(
+    sample: GoldenSample, chunks: list[dict[str, Any]], corpus: list[dict[str, Any]]
+) -> dict[str, float]:
+    """Binary keyword/route relevance, using the existing rank metric utilities.
+
+    These deterministic labels measure retrieval regression, not human-judged
+    semantic relevance. Unlike the historical context_precision, these are true
+    rank metrics with a fixed denominator (including missing result slots).
+    """
+    relevant = [
+        chunk["chunk_id"]
+        for chunk in corpus
+        if chunk["role"] in (sample.role, "all")
+        and chunk["route"] == sample.expected_route
+        and any(keyword_present(key, chunk["content"]) for key in sample.gold_context_keywords)
+    ]
+    retrieved = [chunk["chunk_id"] for chunk in chunks]
+    return {
+        f"{name}@{k}": metric(retrieved, relevant, k)
+        for k in (1, 3)
+        for name, metric in (
+            ("Recall", calculate_recall_at_k),
+            ("Precision", calculate_precision_at_k),
+            ("NDCG", calculate_ndcg_at_k),
+        )
+    }
+
+
 class RecordingRetriever(AssistantHybridRetriever):
     """Record the exact retrieval performed inside the agent, without a second query."""
 
@@ -197,12 +226,20 @@ async def _judge_answer_once(
         "retrieved_context": context,
         "expected_points": sample.expected_points,
     }
-    raw = await asyncio.wait_for(
-        llm.with_structured_output(AnswerJudgment, method="function_calling").ainvoke(
-            [SystemMessage(content=JUDGE_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))]
-        ),
-        timeout=timeout,
-    )
+    from src.services.providers.gateway import provider_scope, wrap_chat
+
+    with provider_scope() as scope:
+        raw = (
+            await wrap_chat(llm, timeout=timeout)
+            .with_structured_output(AnswerJudgment, method="function_calling")
+            .ainvoke(
+                [SystemMessage(content=JUDGE_PROMPT), HumanMessage(content=json.dumps(payload, ensure_ascii=False))]
+            )
+        )
+        if isinstance(raw, AnswerJudgment):
+            raw = AnswerJudgment.model_validate(scope.restore_business(raw.model_dump()))
+        else:
+            raw = scope.restore_business(raw)
     result = raw if isinstance(raw, AnswerJudgment) else AnswerJudgment.model_validate(raw)
     if [item.statement for item in result.expected_points] != sample.expected_points:
         raise ValueError("Judge changed, reordered or omitted reference points")
@@ -345,6 +382,9 @@ async def run_evaluation(
     samples: list[GoldenSample], top_k: int | None, judge_model: str | None = None, request_delay: float = 0.0
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     settings = get_settings()
+    from src.services.providers.gateway import initialize_gateway_runtime
+
+    initialize_gateway_runtime()
     configured = llm_configured()
     retriever = RecordingRetriever(top_k)
     if not retriever.chunks:

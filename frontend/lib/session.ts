@@ -12,7 +12,7 @@ export interface AuthMode {
 
 const ROLES: readonly Role[] = ["student", "advisor", "admin"]
 
-const KEY = "careerx.auth"
+const KEY = "careerv.auth"
 
 export function getAuthMode(): AuthMode | null {
   if (typeof window === "undefined") return null
@@ -52,7 +52,7 @@ export const landingOf = (mode: AuthMode) => (mode.mustChangePassword ? "/change
 /** Các tài khoản demo có sẵn (dữ liệu mẫu ở backend: src/db/seed.py; ở mock: lib/mocks/handlers.ts). */
 export const DEMO_ACCOUNTS: { role: Role; title: string; text: string; email: string }[] = [
   { role: "student", title: "Sinh viên", text: "Tài khoản mới, chưa có CV hay buổi phỏng vấn nào", email: "minhanh.nguyen@gmail.com" },
-  { role: "advisor", title: "Cố vấn", text: "Phụ trách sẵn một nhóm sinh viên mẫu", email: "nam.tran@careerx.vn" },
-  { role: "admin", title: "Quản trị viên", text: "Thống kê hệ thống, tài khoản cố vấn, phân công", email: "admin@careerx.vn" },
+  { role: "advisor", title: "Cố vấn", text: "Phụ trách sẵn một nhóm sinh viên mẫu", email: "nam.tran@careerv.vn" },
+  { role: "admin", title: "Quản trị viên", text: "Thống kê hệ thống, tài khoản cố vấn, phân công", email: "admin@careerv.vn" },
 ]
-export const DEMO_PASSWORD = "careerx123"
+export const DEMO_PASSWORD = "careerv123"

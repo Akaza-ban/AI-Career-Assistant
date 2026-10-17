@@ -4,9 +4,9 @@ import { ArrowRight, ArrowUpRight, Crosshair, RotateCcw, type LucideIcon } from 
 
 import { useAssistant } from "@/components/assistant/assistant-provider"
 import { getBreadcrumb, shellOf } from "@/components/shell/nav-config"
-import { resolveAssistantRoute } from "@/lib/assistant-navigation"
+import { resolveAssistantRoute, resolveUIRoute } from "@/lib/assistant-navigation"
 import { cn } from "@/lib/utils"
-import type { AgentAction, UserRole } from "@/types/assistant"
+import type { AgentAction, UIAction, UserRole } from "@/types/assistant"
 
 /** Nhãn ngắn theo loại hành động; trang đích lấy tên từ thanh điều hướng (vd. "Mở Phân tích CV & JD"). */
 function describe(action: AgentAction, role: UserRole): { icon: LucideIcon; label: string } {
@@ -27,16 +27,27 @@ function describe(action: AgentAction, role: UserRole): { icon: LucideIcon; labe
   }
 }
 
-export function ActionBadges({ actions }: { actions: AgentAction[] }) {
+export function ActionBadges({ actions, uiActions = [] }: { actions: AgentAction[]; uiActions?: UIAction[] }) {
   const { executeAction, activeAction, isThinking, isExecutingAction, userRole, pathname } = useAssistant()
   // Bỏ nút "Mở …" khi đang ở chính trang đó
   const shown = actions.filter(
     (action) => action.action_type !== "NAVIGATE_PAGE" || resolveAssistantRoute(action.params.route, userRole) !== pathname,
   )
-  if (!shown.length) return null
+  const links = uiActions.flatMap((action) => {
+    if (action.type !== "navigate") return []
+    const href = resolveUIRoute(action, userRole)
+    return href ? [{ href, label: getBreadcrumb(shellOf(userRole), href).at(-1)?.label ?? "trang" }] : []
+  })
+  if (!shown.length && !links.length) return null
 
   return (
     <div className="flex flex-wrap gap-2" aria-label="Hành động được đề xuất">
+      {links.map(({ href, label }) => (
+        <a key={href} href={href} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-card px-3 text-[13px] font-semibold text-ink shadow-[inset_0_0_0_1px_var(--line-strong)] hover:bg-panel">
+          <ArrowUpRight className="size-[15px]" aria-hidden />
+          Mở {label}
+        </a>
+      ))}
       {shown.map((action) => {
         const { icon: Icon, label } = describe(action, userRole)
         return (

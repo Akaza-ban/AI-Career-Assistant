@@ -4,12 +4,13 @@ import Link from "next/link"
 import { useCallback, useEffect, useRef, type KeyboardEvent } from "react"
 import { Check, ChevronRight, Info, Loader2, Mic, Square, TimerOff } from "lucide-react"
 
+import { plainText } from "@/components/common/interview-feedback"
 import { UserAvatar } from "@/components/shell/user-avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { MAX_ANSWER_CHARS, MIN_ANSWER_CHARS } from "@/lib/interview"
 import type { InterviewQuestion, InterviewTurn } from "@/lib/types"
-import { useSonioxStt } from "@/lib/use-soniox-stt"
+import { useGroqWhisper } from "@/lib/use-groq-whisper"
 import { cn } from "@/lib/utils"
 
 // S6: khung hội thoại phỏng vấn (bản vẽ "Phòng phỏng vấn"). Logic đồng hồ / nộp bài nằm ở InterviewRoom;
@@ -58,18 +59,22 @@ export function InterviewChat(props: InterviewChatProps) {
     },
     [onDraftChange],
   )
-  const stt = useSonioxStt({ sessionId, onTranscriptUpdate })
-  const { stop: stopRecording } = stt
+  const stt = useGroqWhisper({ sessionId, onTranscript: onTranscriptUpdate })
+  const { stop: stopRecording, cancel: cancelRecording } = stt
+  // Tạm dừng: dừng ghi và vẫn chuyển phần đã nói thành chữ; buổi kết thúc: bỏ đoạn đang ghi
   useEffect(() => {
-    if (paused || finished) stopRecording()
-  }, [paused, finished, stopRecording])
+    if (finished) cancelRecording()
+    else if (paused) stopRecording()
+  }, [paused, finished, stopRecording, cancelRecording])
+  const voiceBusy = stt.isRecording || stt.isTranscribing
+  const clock = `${String(Math.floor(stt.recordSeconds / 60)).padStart(2, "0")}:${String(stt.recordSeconds % 60).padStart(2, "0")}`
 
   const length = draft.trim().length
-  const canSend = !sending && !paused && !stt.isRecording && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
+  const canSend = !sending && !paused && !voiceBusy && length >= MIN_ANSWER_CHARS && length <= MAX_ANSWER_CHARS
   const last = current?.index === total
 
   function toggleRecording() {
-    if (!stt.isRecording && !stt.isConnecting) typedBeforeRef.current = draft
+    if (!voiceBusy) typedBeforeRef.current = draft
     stt.toggle()
   }
 
@@ -154,15 +159,17 @@ export function InterviewChat(props: InterviewChatProps) {
               onKeyDown={onKeyDown}
               maxLength={MAX_ANSWER_CHARS}
               disabled={paused || sending}
-              readOnly={stt.isRecording}
+              readOnly={voiceBusy}
               placeholder={
                 paused
                   ? "Đang tạm dừng…"
                   : stt.isRecording
                     ? "Đang nghe…"
-                    : voiceInput
-                      ? "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả, gõ hoặc bấm Nói câu trả lời…"
-                      : "Trả lời theo trình tự Bối cảnh → Nhiệm vụ → Hành động → Kết quả…"
+                    : stt.isTranscribing
+                      ? "Đang chuyển giọng nói thành chữ…"
+                      : voiceInput
+                        ? "Gõ câu trả lời hoặc bấm Nói câu trả lời…"
+                        : "Gõ câu trả lời của bạn…"
               }
               className="block min-h-32 w-full resize-y rounded-xl border border-line-strong bg-card px-4 py-3.5 text-base leading-[26px] text-ink transition-[border-color,box-shadow] outline-none placeholder:text-ink-3 focus:border-ink focus:shadow-[0_0_0_4px_var(--surface)] disabled:bg-panel disabled:opacity-70"
             />
@@ -172,7 +179,16 @@ export function InterviewChat(props: InterviewChatProps) {
                   <span className="absolute inline-flex size-full rounded-full bg-bad opacity-60 motion-safe:animate-ping" />
                   <span className="relative inline-flex size-2.5 rounded-full bg-bad" />
                 </span>
-                Đang nghe. Nói tự nhiên bằng tiếng Việt, có thể xen thuật ngữ tiếng Anh; bấm Dừng nói khi xong.
+                <span>
+                  Đang nghe <span className="font-semibold tabular-nums">{clock}</span>. Nói tự nhiên bằng tiếng Việt,
+                  có thể xen thuật ngữ tiếng Anh; chữ hiện sau mỗi lần bạn ngừng nói, bấm Dừng nói khi xong.
+                </span>
+              </p>
+            )}
+            {stt.isTranscribing && (
+              <p role="status" className="flex items-center gap-2 text-[13px] text-ink-2">
+                <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                Đang chuyển nốt đoạn cuối thành chữ…
               </p>
             )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -188,18 +204,18 @@ export function InterviewChat(props: InterviewChatProps) {
                 variant="outline"
                 size="brand"
                 onClick={toggleRecording}
-                disabled={paused || sending || stt.isConnecting}
+                disabled={paused || sending || stt.isTranscribing}
                 aria-pressed={stt.isRecording}
                 className={cn(stt.isRecording && "border-bad text-bad hover:bg-bad-soft hover:text-bad")}
               >
-                {stt.isConnecting ? (
+                {stt.isTranscribing ? (
                   <Loader2 className="animate-spin" aria-hidden />
                 ) : stt.isRecording ? (
                   <Square aria-hidden />
                 ) : (
                   <Mic aria-hidden />
                 )}
-                {stt.isConnecting ? "Đang bật micro…" : stt.isRecording ? "Dừng nói" : "Nói câu trả lời"}
+                {stt.isTranscribing ? "Đang chuyển thành chữ…" : stt.isRecording ? "Dừng nói" : "Nói câu trả lời"}
               </Button>
               )}
               <Button size="brand" onClick={props.onSend} disabled={!canSend}>
@@ -241,7 +257,7 @@ function QuestionBubble({ index, total, theme, text }: { index: number; total: n
           <p className="text-[13px] font-semibold text-ink-3">
             Câu {index} / {total} · {theme}
           </p>
-          <p className="text-lg leading-7 font-semibold tracking-[-0.01em] text-ink">{text}</p>
+          <p className="text-lg leading-7 font-semibold tracking-[-0.01em] text-ink">{plainText(text)}</p>
         </div>
       </div>
     </div>
