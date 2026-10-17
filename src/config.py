@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     result_facts_max_field_chars: int = Field(default=80, ge=1, le=500)
     demo_login_enabled: bool = False
     demo_account_password: str = "careerx123"
+    # Tài khoản quản trị khi deploy (APP_ENV=production không tạo tài khoản demo): khởi động mà chưa có tài khoản với
+    # email này thì tạo admin; đã có thì giữ nguyên (không đổi mật khẩu). Để trống = không tạo.
+    admin_email: str = ""
+    admin_password: SecretStr = SecretStr("")
 
     @property
     def session_cookie_secure(self) -> bool:

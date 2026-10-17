@@ -106,7 +106,7 @@ def init_db() -> None:
     from src.db.migrations.assistant_runs import upgrade as upgrade_assistant_runs
     from src.db.migrations.auth import upgrade as upgrade_auth
     from src.db.migrations.pii_vault import upgrade as upgrade_pii_vault
-    from src.db.seed import fail_interrupted_analyses, seed_demo_users, seed_jd_library
+    from src.db.seed import ensure_admin_account, fail_interrupted_analyses, seed_demo_users, seed_jd_library
     from src.services.cv_versions import backfill as backfill_cv_versions
     from src.services.cv_versions import backfill_ocr_flags
 
@@ -118,6 +118,7 @@ def init_db() -> None:
     _add_missing_columns()
     with SessionLocal() as db:
         seed_demo_users(db)
+        ensure_admin_account(db)
         seed_jd_library(db)
         if get_settings().app_env != "production" and get_settings().seed_demo_cohort:
             seed_demo_cohort(db)

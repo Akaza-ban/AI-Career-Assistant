@@ -47,6 +47,6 @@ def test_deepseek_chat_model_sends_thinking_flag(thinking, expected):
 
 def test_deepseek_default_model_is_valid_when_model_name_is_another_provider():
     settings = Settings(_env_file=None, llm_provider="deepseek", model_name="openai/gpt-oss-120b")
-    assert settings.get_chat_model().options["model"] == "deepseek-flash"
+    assert settings.get_chat_model().options["model"] == "deepseek-chat"
     groq = Settings(_env_file=None, llm_provider="groq", model_name="openai/gpt-oss-120b")
     assert "extra_body" not in groq.get_chat_model().options
