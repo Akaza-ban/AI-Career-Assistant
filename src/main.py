@@ -35,14 +35,19 @@ async def lifespan(app: FastAPI):
 
     init_db()
 
-    # Tự động nạp thư viện JD vào ChromaDB document store
-    try:
-        from src.db.seed import seed_vector_store
+    # Tự động nạp thư viện JD vào ChromaDB document store (bỏ qua ở production để tiết kiệm RAM dưới 512MB)
+    if settings.app_env != "production":
+        try:
+            from src.db.seed import seed_vector_store
 
-        indexed_count = seed_vector_store()
-        print(f"✅ Đã index {indexed_count} JD vào ChromaDB document store.")
-    except Exception:
-        print("⚠️ Indexing ChromaDB unavailable")
+            indexed_count = seed_vector_store()
+            print(f"✅ Đã index {indexed_count} JD vào ChromaDB document store.")
+        except Exception:
+            print("⚠️ Indexing ChromaDB unavailable")
+
+    import gc
+
+    gc.collect()
 
     print("=" * 60)
     print(f"🚀 {settings.app_name} starting in [{settings.app_env}] mode")
