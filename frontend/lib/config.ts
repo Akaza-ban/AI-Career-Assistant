@@ -1,7 +1,14 @@
 import { features } from "@/lib/features"
 
-// Bỏ dấu / ở cuối để không thành "//api/v1/..." khi NEXT_PUBLIC_API_URL kết thúc bằng "/"
-export const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "")
+const rawApiUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/+$/, "")
+
+// Khi chạy trên browser tại môi trường đã deploy (không phải localhost), dùng relative path ""
+// để request đi qua Next.js rewrites proxy. Điều này biến cookie thành First-Party Cookie,
+// giúp Safari / iOS Messenger / Chrome không bao giờ chặn cookie phiên đăng nhập.
+export const API_BASE_URL =
+  typeof window !== "undefined" && rawApiUrl.startsWith("http") && !rawApiUrl.includes("localhost")
+    ? ""
+    : rawApiUrl
 
 /**
  * Nhóm API trong lib/api.ts. Mỗi nhóm được chuyển từ mock sang backend thật độc lập,
