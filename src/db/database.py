@@ -13,10 +13,12 @@ class Base(DeclarativeBase):
 
 
 def _create_engine(database_url: str):
-    # Dịch vụ Cloud (Neon, Render) thường trả URL bắt đầu bằng postgres://
-    # SQLAlchemy 2.0 yêu cầu postgresql://
+    # Dịch vụ Cloud (Neon, Render) thường trả URL bắt đầu bằng postgres:// hoặc postgresql://
+    # SQLAlchemy 2.0 ưu tiên tìm psycopg (v3). Ta ép dùng driver postgresql+psycopg2:// để tương thích psycopg2-binary
     if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
+        database_url = database_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg2://", 1)
     url = make_url(database_url)
     connect_args = {}
     if url.get_backend_name() == "sqlite":
