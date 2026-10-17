@@ -1,0 +1,29 @@
+{
+  "provenance": "Synthetic provider-shaped protocol example; not captured live; not model-quality evidence.",
+  "exchanges": [
+    {
+      "delay_s": 1,
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "unused"
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    }
+  ]
+}

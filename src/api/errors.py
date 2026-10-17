@@ -57,7 +57,16 @@ async def _validation_error_handler(_: Request, exc: RequestValidationError) -> 
     return _error_response(422, detail, "validation_error", errors=jsonable_encoder(errors))
 
 
+async def _provider_error_handler(_: Request, exc: Exception) -> JSONResponse:
+    return _error_response(503, "Không thể xử lý an toàn lúc này. Vui lòng thử lại sau.", "provider_unavailable")
+
+
 def register_error_handlers(app: FastAPI) -> None:
+    from src.services.privacy.types import PrivacyError
+    from src.services.providers.gateway import GatewayError
+
     app.add_exception_handler(AppError, _app_error_handler)
     app.add_exception_handler(StarletteHTTPException, _http_error_handler)
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
+    app.add_exception_handler(PrivacyError, _provider_error_handler)
+    app.add_exception_handler(GatewayError, _provider_error_handler)

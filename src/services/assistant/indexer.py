@@ -1,6 +1,7 @@
 """Run from the repository root: python -m src.services.assistant.indexer."""
 
 import argparse
+import hashlib
 import logging
 from pathlib import Path
 
@@ -27,6 +28,10 @@ def build_assistant_index(docs_dir: str | None = None) -> int:
             chunks.extend(document_chunks)
         except ValueError as exc:
             raise ValueError(f"Invalid Assistant document {path}: {exc}") from exc
+    # One corpus stamp invalidates shared answers even when an unrelated guide
+    # changes. Include action metadata as well as text; never use file mtimes.
+    version = hashlib.sha256("\n".join(chunk.model_dump_json() for chunk in chunks).encode("utf-8")).hexdigest()
+    chunks = [chunk.model_copy(update={"docs_version": version}) for chunk in chunks]
     # Validate every document before modifying the existing collection.
     store = AssistantVectorStore()
     store.replace_chunks(chunks)
@@ -42,9 +47,12 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     try:
+        from src.services.providers.gateway import initialize_gateway_runtime
+
+        initialize_gateway_runtime()
         build_assistant_index(args.docs_dir)
-    except (OSError, ValueError, RuntimeError) as exc:
-        parser.exit(1, f"Assistant indexing failed: {exc}\n")
+    except (OSError, ValueError, RuntimeError):
+        parser.exit(1, "Assistant indexing unavailable\n")
 
 
 if __name__ == "__main__":

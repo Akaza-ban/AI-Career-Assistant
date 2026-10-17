@@ -326,9 +326,13 @@ async def test_finalize_creates_one_new_version(client):
 
     file = await client.get(f"/api/v1/cv/{new['id']}/file", headers=STUDENT)
     assert file.status_code == 200
-    paragraphs = [p.text for p in Document(io.BytesIO(file.content)).paragraphs]
+    docx_paragraphs = Document(io.BytesIO(file.content)).paragraphs
+    paragraphs = [p.text for p in docx_paragraphs]
     assert paragraphs[0] == "Nguyễn Minh Anh"
-    assert UAT_REWRITE in paragraphs and "KỸ NĂNG ĐANG PHÁT TRIỂN" in paragraphs
+    # Tiêu đề mục giữ chữ gốc, in hoa bằng định dạng (mẫu CV gọn kiểu Harvard)
+    assert UAT_REWRITE in paragraphs and "Kỹ năng đang phát triển" in paragraphs
+    heading = next(p for p in docx_paragraphs if p.text == "Kỹ năng đang phát triển")
+    assert heading.runs[0].bold and heading.runs[0].font.all_caps
     assert "Power BI: Đang học khoá Power BI" in paragraphs
     text = (await client.get(f"/api/v1/cv/{new['id']}/text", headers=STUDENT)).json()["text"]
     assert "Kỹ năng đang phát triển" in text and "Power BI: Đang học khoá Power BI" in text
@@ -427,3 +431,286 @@ async def test_suggestion_with_placeholder_asks_for_context(client):
     assert (await decide(client, analysis_id, "sg_num", "accept")).status_code == 200
     [s] = (await client.get(url(analysis_id), headers=STUDENT)).json()["suggestions"]
     assert s["final_text"] == "Làm việc theo Scrum với 5 thành viên, sprint 2 tuần."
+
+
+# ---------- Kỹ năng còn thiếu: "Có, đã dùng" → câu cho CV để SV duyệt ----------
+
+
+def test_cv_entries_and_insertions():
+    from src.services.cv_optimizer import cv_entries
+    from src.services.skill_matching import split_cv_lines
+
+    lines = split_cv_lines(
+        "DỰ ÁN\nMaintenance Platform 07/2023 - 11/2023\nTechnologies: Python, Redis\n- Cache trạng thái bằng Redis.\n"
+        "Smart Factory 03/2023 - 06/2023\n- Giám sát thiết bị.\nKINH NGHIỆM\n- Thực tập tại công ty ABC.\nKỸ NĂNG\nGit"
+    )
+    entries = cv_entries(lines)
+    assert [(e["label"], e["after_line_no"]) for e in entries] == [
+        ("Dự án · Maintenance Platform", 4),
+        ("Dự án · Smart Factory", 6),
+        ("Kinh nghiệm (cuối mục)", 8),
+    ]
+    text = "DỰ ÁN\nMaintenance Platform 07/2023 - 11/2023\n• Cache trạng thái bằng Redis.\nKỸ NĂNG\nGit"
+    assert (
+        apply_changes(text, {}, {3: ["Quản lý mã nguồn bằng Git."]}).splitlines()[3] == "• Quản lý mã nguồn bằng Git."
+    )
+    # Dòng không có gạch đầu dòng: câu mới cũng không có
+    assert apply_changes("A\nB", {}, {2: ["C"]}) == "A\nB\nC"
+
+
+async def draft(client, analysis_id: str, rid: str, **body):
+    return await client.post(url(analysis_id, f"/capability-checks/{rid}/draft"), json=body, headers=STUDENT)
+
+
+async def decide_line(client, analysis_id: str, rid: str, decision: str, text: str | None = None):
+    body = {"decision": decision, **({"edited_text": text} if text is not None else {})}
+    return await client.post(url(analysis_id, f"/capability-checks/{rid}/decision"), json=body, headers=STUDENT)
+
+
+@pytest.mark.asyncio
+async def test_capability_line_draft_decide_and_finalize(client):
+    cv_id, analysis_id = await setup_analysis(client)
+    session = (await client.get(url(analysis_id), headers=STUDENT)).json()
+    entries = {e["label"]: e["id"] for e in session["entries"]}
+    assert set(entries) == {"Kinh nghiệm (cuối mục)", "Dự án (cuối mục)"}
+
+    # Test không có LLM: dùng chính câu SV kể (làm gọn), chờ SV duyệt
+    res = await draft(
+        client, analysis_id, "r4", context="  dùng JIRA quản lý backlog đồ án  ", entry_id=entries["Dự án (cuối mục)"]
+    )
+    check = {c["id"]: c for c in res.json()["capability_checks"]}["r4"]
+    assert (check["status"], check["line_status"]) == ("has_experience", "pending")
+    assert check["draft_text"] == "Dùng JIRA quản lý backlog đồ án." and check["final_text"] is None
+
+    res = await decide_line(client, analysis_id, "r4", "edit", "Quản lý backlog đồ án bằng JIRA.")
+    check = {c["id"]: c for c in res.json()["capability_checks"]}["r4"]
+    assert (check["line_status"], check["final_text"]) == ("edited", "Quản lý backlog đồ án bằng JIRA.")
+    res = await decide_line(client, analysis_id, "r4", "undo")
+    assert {c["id"]: c for c in res.json()["capability_checks"]}["r4"]["line_status"] == "pending"
+    await decide_line(client, analysis_id, "r4", "accept")
+    assert [a.suggestion_id for a in audit_rows(analysis_id)] == ["cap:r4"] * 3
+
+    # Chỉ riêng câu kinh nghiệm cũng đủ để Hoàn tất; câu vào đúng cuối mục Dự án
+    res = await client.post(url(analysis_id, "/finalize"), headers=STUDENT)
+    assert res.status_code == 200
+    with SessionLocal() as db:
+        new = db.get(CvVersion, res.json()["result_cv"]["id"])
+        lines = new.content_text.splitlines()
+    assert lines[lines.index(TEAM_LINE) + 1] == "Dùng JIRA quản lý backlog đồ án."
+
+
+@pytest.mark.asyncio
+async def test_capability_line_validation(client):
+    _, analysis_id = await setup_analysis(client)
+    entry = (await client.get(url(analysis_id), headers=STUDENT)).json()["entries"][0]["id"]
+    res = await draft(client, analysis_id, "r4", context=" ", entry_id=entry)
+    assert res.json()["code"] == "context_required"
+    res = await draft(client, analysis_id, "r4", context="Dùng JIRA.", entry_id="l999")
+    assert res.json()["code"] == "entry_required"
+    res = await draft(client, analysis_id, "r1", context="Dùng SQL.", entry_id=entry)
+    assert res.json()["code"] == "check_not_found"
+    res = await decide_line(client, analysis_id, "r3", "accept")
+    assert res.json()["code"] == "draft_not_found"
+    # Đổi sang "Đang học" thì bỏ câu đề xuất
+    await draft(client, analysis_id, "r4", context="Dùng JIRA.", entry_id=entry)
+    res = await answer(client, analysis_id, "r4", has_experience=False, learning_note="Đang học JIRA")
+    check = {c["id"]: c for c in res.json()["capability_checks"]}["r4"]
+    assert check["draft_text"] is None and check["status"] == "no_experience"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("ai_text", "expected"),
+    [
+        ("Quản lý backlog đồ án bằng JIRA cùng nhóm.", "Quản lý backlog đồ án bằng JIRA cùng nhóm."),
+        # Thêm số không có trong lời kể → dùng câu của SV
+        ("Quản lý 120 đầu việc bằng JIRA.", "Dùng JIRA quản lý backlog đồ án cùng nhóm."),
+        # Không nhắc tới kỹ năng → dùng câu của SV
+        ("Quản lý backlog đồ án cùng nhóm.", "Dùng JIRA quản lý backlog đồ án cùng nhóm."),
+    ],
+)
+async def test_capability_line_ai_is_grounded(client, ai_text, expected):
+    from unittest.mock import AsyncMock, patch
+
+    _, analysis_id = await setup_analysis(client)
+    entry = (await client.get(url(analysis_id), headers=STUDENT)).json()["entries"][0]["id"]
+    with (
+        patch("src.services.llm.llm_configured", return_value=True),
+        patch("src.services.llm.invoke_json", new=AsyncMock(return_value={"text": ai_text})),
+    ):
+        res = await draft(
+            client, analysis_id, "r4", context="Dùng JIRA quản lý backlog đồ án cùng nhóm", entry_id=entry
+        )
+    assert {c["id"]: c for c in res.json()["capability_checks"]}["r4"]["draft_text"] == expected
+
+
+# ---------- Gợi ý soạn riêng khi mở Trình tối ưu ----------
+
+
+def line_numbers(cv_id: str) -> dict[str, int]:
+    from src.services.skill_matching import split_cv_lines
+
+    with SessionLocal() as db:
+        text = db.get(CvVersion, cv_id).content_text
+    return {line["text"]: line["line_no"] for line in split_cv_lines(text)}
+
+
+def drafted(no: dict[str, int]) -> dict:
+    return {
+        "rewrites": [
+            # Công cụ Draw.io nằm trong cùng mục Kinh nghiệm → giữ; chỗ trống đúng mẫu → hỏi số liệu
+            {
+                "line": no[DIAGRAM_LINE],
+                "skill": "UAT",
+                "rewrite": "Vẽ sơ đồ chức năng hệ thống quản lý thư viện bằng Draw.io, đạt [kết quả đo được].",
+                "reason": "Nêu rõ công cụ đã dùng.",
+            },
+            # JIRA không có trong mục này (kỹ năng CV chưa có) → bỏ
+            {"line": no[TEAM_LINE], "skill": "JIRA", "rewrite": "Quản lý sprint 2 tuần bằng JIRA, đúng hạn."},
+            # Làm mất số thật 150 → bỏ
+            {"line": no[UAT_LINE], "skill": "UAT", "rewrite": "Thu thập phản hồi người dùng thử nghiệm."},
+            # Dòng liệt kê kỹ năng → bỏ
+            {"line": no["SQL, Excel"], "skill": "SQL", "rewrite": "Viết truy vấn SQL và báo cáo bằng Excel."},
+        ],
+        "kept": [no[UAT_LINE]],
+    }
+
+
+@pytest.mark.asyncio
+async def test_optimizer_drafts_its_own_suggestions_once(client):
+    from unittest.mock import AsyncMock, patch
+
+    cv_id, analysis_id = await setup_analysis(client)
+    no = line_numbers(cv_id)
+    ai = AsyncMock(return_value=drafted(no))
+    with patch("src.services.llm.llm_configured", return_value=True), patch("src.services.llm.invoke_json", new=ai):
+        first = (await client.get(url(analysis_id), headers=STUDENT)).json()
+        assert first["suggestions_state"] == "pending" and first["suggestions"] == []
+        res = await client.post(url(analysis_id, "/prepare"), headers=STUDENT)
+        assert res.status_code == 200
+        body = res.json()
+        # Mở lại / bấm lại không gọi LLM thêm
+        await client.post(url(analysis_id, "/prepare"), headers=STUDENT)
+        again = (await client.get(url(analysis_id), headers=STUDENT)).json()
+    assert ai.await_count == 1
+    assert body["suggestions_state"] == "ready" and body["kept_count"] == 1 and body["suggestions_attempted_at"]
+    [only] = body["suggestions"]
+    assert only["id"].startswith("rw_") and only["line_id"] == f"l{no[DIAGRAM_LINE]}"
+    assert only["skill"] == "UAT" and only["needs_context"] is True
+    assert [s["id"] for s in again["suggestions"]] == [only["id"]]
+
+    # Gợi ý soạn riêng được duyệt và đưa vào phiên bản mới như gợi ý thường
+    with patch("src.services.llm.llm_configured", return_value=True):
+        await decide(client, analysis_id, only["id"], "edit", "Vẽ sơ đồ chức năng hệ thống thư viện bằng Draw.io.")
+        res = await client.post(url(analysis_id, "/finalize"), headers=STUDENT)
+    assert res.status_code == 200
+    doc = res.json()["result_document"]
+    lines = [line["text"] for section in doc["sections"] for line in section["lines"]]
+    assert "Vẽ sơ đồ chức năng hệ thống thư viện bằng Draw.io." in lines
+
+
+@pytest.mark.asyncio
+async def test_optimizer_draft_failure_can_be_retried(client):
+    from unittest.mock import AsyncMock, patch
+
+    cv_id, analysis_id = await setup_analysis(client)
+    with (
+        patch("src.services.llm.llm_configured", return_value=True),
+        patch("src.services.llm.invoke_json", new=AsyncMock(side_effect=RuntimeError("429 rate limit"))),
+    ):
+        body = (await client.post(url(analysis_id, "/prepare"), headers=STUDENT)).json()
+    assert body["suggestions_state"] == "failed" and body["suggestions"] == []
+    # Phần kỹ năng còn thiếu vẫn dùng được
+    assert {c["id"] for c in body["capability_checks"]} == {"r3", "r4"}
+
+    ai = AsyncMock(return_value=drafted(line_numbers(cv_id)))
+    with patch("src.services.llm.llm_configured", return_value=True), patch("src.services.llm.invoke_json", new=ai):
+        body = (await client.post(url(analysis_id, "/prepare"), headers=STUDENT)).json()
+    assert body["suggestions_state"] == "ready" and len(body["suggestions"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_session_with_earlier_decisions_keeps_analysis_suggestions(client):
+    from unittest.mock import AsyncMock, patch
+
+    _, analysis_id = await setup_analysis(client)
+    # Phiên tạo trước khi có bước soạn riêng (không có LLM): SV đã duyệt gợi ý của lượt phân tích
+    await decide(client, analysis_id, "sg_uat", "accept")
+    ai = AsyncMock()
+    with patch("src.services.llm.llm_configured", return_value=True), patch("src.services.llm.invoke_json", new=ai):
+        body = (await client.post(url(analysis_id, "/prepare"), headers=STUDENT)).json()
+    assert ai.await_count == 0
+    assert body["suggestions_state"] == "ready"
+    assert {s["id"]: s["status"] for s in body["suggestions"]}["sg_uat"] == "accepted"
+
+
+@pytest.mark.asyncio
+async def test_wrapped_bullet_is_replaced_as_a_whole(client):
+    from unittest.mock import AsyncMock, patch
+
+    wrapped = [
+        "Nguyễn Minh Anh",
+        "KINH NGHIỆM LÀM VIỆC",
+        "Công ty ABC 06/2024 - 08/2024",
+        "• Thu thập phản hồi của 150 người dùng thử nghiệm và tổng hợp thành báo cáo cho",
+        "nhóm phát triển sản phẩm.",
+        "• Vẽ sơ đồ chức năng hệ thống quản lý thư viện.",
+    ]
+    res = await upload_cv(client, "CV_Wrapped.docx", make_docx(wrapped))
+    cv_id = res.json()["id"]
+    with SessionLocal() as db:
+        analysis = GapAnalysis(
+            id=f"ga_{uuid.uuid4().hex[:8]}",
+            owner_id=DEMO_STUDENT_ID,
+            cv_version_id=cv_id,
+            cv_file_name="CV_Wrapped.docx",
+            cv_label="v1.0",
+            jd_id=JD_ID,
+            status="completed",
+            match_score=50,
+            result={"requirements": [requirement("r1", "UAT", "preferred", "partial")], "suggestions": []},
+        )
+        db.add(analysis)
+        db.commit()
+        analysis_id = analysis.id
+    no = line_numbers(cv_id)
+    first = no["Thu thập phản hồi của 150 người dùng thử nghiệm và tổng hợp thành báo cáo cho"]
+    rewrite = "Tổ chức thu thập phản hồi của 150 người dùng thử nghiệm và tổng hợp thành báo cáo cho nhóm phát triển sản phẩm."
+    ai = AsyncMock(
+        return_value={"rewrites": [{"line": first, "skill": "UAT", "rewrite": rewrite, "reason": "Rõ hơn."}]}
+    )
+    with patch("src.services.llm.llm_configured", return_value=True), patch("src.services.llm.invoke_json", new=ai):
+        body = (await client.post(url(analysis_id, "/prepare"), headers=STUDENT)).json()
+        [only] = body["suggestions"]
+        # AI nhận cả gạch ý (hai dòng gộp lại), không phải từng mẩu
+        assert "tổng hợp thành báo cáo cho nhóm phát triển sản phẩm." in ai.await_args.args[0]
+        assert only["original_text"].endswith("cho nhóm phát triển sản phẩm.")
+        assert only["extra_line_ids"] == [f"l{no['nhóm phát triển sản phẩm.']}"]
+        await decide(client, analysis_id, only["id"], "accept")
+        res = await client.post(url(analysis_id, "/finalize"), headers=STUDENT)
+    doc = res.json()["result_document"]
+    texts = [line["text"] for section in doc["sections"] for line in section["lines"]]
+    assert rewrite in texts and "nhóm phát triển sản phẩm." not in texts
+
+
+@pytest.mark.asyncio
+async def test_prepare_in_two_tabs_keeps_the_first_result(client):
+    """Tab khác soạn xong trước (SV có thể đã duyệt gợi ý): lần soạn về sau không ghi đè."""
+    from unittest.mock import AsyncMock, patch
+
+    cv_id, analysis_id = await setup_analysis(client)
+    await client.get(url(analysis_id), headers=STUDENT)
+    first = {"status": "ready", "items": [], "kept": 3, "attempted_at": "2026-10-17T08:00:00"}
+
+    async def slow_ai(*args, **kwargs):
+        with SessionLocal() as db:
+            db.scalar(select(CvOptimization).where(CvOptimization.analysis_id == analysis_id)).rewrites = first
+            db.commit()
+        return drafted(line_numbers(cv_id))
+
+    with (
+        patch("src.services.llm.llm_configured", return_value=True),
+        patch("src.services.llm.invoke_json", new=AsyncMock(side_effect=slow_ai)),
+    ):
+        body = (await client.post(url(analysis_id, "/prepare"), headers=STUDENT)).json()
+    assert body["kept_count"] == 3 and body["suggestions"] == []

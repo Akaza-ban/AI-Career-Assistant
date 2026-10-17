@@ -117,7 +117,7 @@ export function StudentList({ initialStatus }: { initialStatus: StatusFilter }) 
   const search = (
     <div className="relative w-[calc(100vw-32px)] sm:w-[300px]">
       <Search className="pointer-events-none absolute top-1/2 left-4 z-[1] size-4 -translate-y-1/2 text-ink-3" strokeWidth={1.75} aria-hidden />
-      <Input
+      <Input data-assistant-id="advisor-student-search"
         type="search"
         value={query}
         onChange={(e) => {

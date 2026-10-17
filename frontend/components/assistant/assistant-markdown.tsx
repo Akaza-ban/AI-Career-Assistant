@@ -115,6 +115,8 @@ function blockMarkdown(lines: string[], role: UserRole): ReactNode[] {
 }
 
 /** Supports the assistant's text Markdown: emphasis, lists, code, headings, quotes and links. */
-export function AssistantMarkdown({ content, userRole }: { content: string; userRole: UserRole }) {
+export function AssistantMarkdown({ content, userRole, isStreaming = false }: { content: string; userRole: UserRole; isStreaming?: boolean }) {
+  // Partial constructs stay escaped text until complete; links activate after final.
+  if (isStreaming) return <div className="assistant-markdown whitespace-pre-wrap">{content}</div>
   return <div className="assistant-markdown">{blockMarkdown(content.replace(/\r\n?/g, "\n").split("\n"), userRole)}</div>
 }

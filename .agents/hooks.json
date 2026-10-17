@@ -3,7 +3,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "python -u ../scripts/log_antigravity.py --hook 2>nul || python -u scripts/log_antigravity.py --hook 2>/dev/null || true",
+        "command": "..\\.venv\\Scripts\\python.exe -u ../scripts/log_antigravity.py --hook 2>nul || python -u ../scripts/log_antigravity.py --hook 2>nul || py -3 -u ../scripts/log_antigravity.py --hook 2>nul || python -u scripts/log_antigravity.py --hook 2>/dev/null || true",
         "timeout": 15
       }
     ]

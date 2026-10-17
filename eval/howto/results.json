@@ -1,0 +1,62 @@
+[
+  {
+    "embedding_id": "hashing-sha256-v1:384",
+    "negative_count": 40,
+    "positive_count": 15,
+    "true_abstentions": 39,
+    "false_abstentions": 1,
+    "abstention_precision": 0.975,
+    "abstention_recall": 0.975,
+    "model_calls": 0,
+    "retrieval_before": {
+      "context_recall": 0.8888888888888888,
+      "context_precision": 0.9,
+      "Recall@1": 0.2475091575091575,
+      "Recall@3": 0.3608424908424908,
+      "Precision@1": 0.9333333333333333,
+      "Precision@3": 0.4888888888888889,
+      "NDCG@1": 0.9333333333333333,
+      "NDCG@3": 0.6387355328750107
+    },
+    "retrieval_after": {
+      "context_recall": 0.8888888888888888,
+      "context_precision": 0.9,
+      "Recall@1": 0.2475091575091575,
+      "Recall@3": 0.3608424908424908,
+      "Precision@1": 0.9333333333333333,
+      "Precision@3": 0.4888888888888889,
+      "NDCG@1": 0.9333333333333333,
+      "NDCG@3": 0.6387355328750107
+    }
+  },
+  {
+    "embedding_id": "e5:intfloat/multilingual-e5-small:384",
+    "negative_count": 40,
+    "positive_count": 15,
+    "true_abstentions": 40,
+    "false_abstentions": 0,
+    "abstention_precision": 1,
+    "abstention_recall": 1,
+    "model_calls": 0,
+    "retrieval_before": {
+      "context_recall": 1,
+      "context_precision": 0.8555555555555555,
+      "Recall@1": 0.1975091575091575,
+      "Recall@3": 0.5680830280830281,
+      "Precision@1": 0.9333333333333333,
+      "Precision@3": 0.8444444444444444,
+      "NDCG@1": 0.9333333333333333,
+      "NDCG@3": 0.9
+    },
+    "retrieval_after": {
+      "context_recall": 1,
+      "context_precision": 0.8555555555555555,
+      "Recall@1": 0.1975091575091575,
+      "Recall@3": 0.5680830280830281,
+      "Precision@1": 0.9333333333333333,
+      "Precision@3": 0.8444444444444444,
+      "NDCG@1": 0.9333333333333333,
+      "NDCG@3": 0.9
+    }
+  }
+]

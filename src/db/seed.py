@@ -1,35 +1,49 @@
 import json
-from datetime import date
 from pathlib import Path
 
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from src.config import get_settings
 from src.db.models import AdvisorAssignment, GapAnalysis, JobDescription, User, utcnow
+from src.services.auth import hash_password
 
-# Người dùng demo cho giai đoạn chưa có đăng nhập thật.
-# Trùng id/tên với dữ liệu mock của frontend (frontend/lib/mocks/data.ts) để giao diện nhất quán
-# khi một số nhóm API gọi backend thật còn các nhóm khác vẫn dùng mock.
+# Individual development accounts. IDs are retained for existing records; these
+# accounts now require their own credentials and are never selected by role.
 DEMO_STUDENT_ID = "sv-0142"
+SECOND_STUDENT_ID = "sv-0143"
 DEMO_ADVISOR_ID = "cv-007"
 DEMO_ADMIN_ID = "qt-001"
+
+# Public development-only passwords, never used to provision production accounts.
+DEV_PASSWORDS = {
+    DEMO_STUDENT_ID: "Student-A-dev-only!",
+    SECOND_STUDENT_ID: "Student-B-dev-only!",
+    DEMO_ADVISOR_ID: "Advisor-dev-only!",
+    DEMO_ADMIN_ID: "careerx123",
+}
 
 DEMO_USERS = [
     {
         "id": DEMO_STUDENT_ID,
         "role": "student",
         "full_name": "Nguyễn Minh Anh",
-        "subtitle": "minhanh.nguyen@gmail.com",
-        "email": "minhanh.nguyen@gmail.com",
-        "phone": "0912 345 678",
-        "date_of_birth": date(2003, 5, 14),
+        "subtitle": "KDQT - K2021",
+        "email": "minhanh.k21@student.university.edu.vn",
+    },
+    {
+        "id": SECOND_STUDENT_ID,
+        "role": "student",
+        "full_name": "Lê Thu Hà",
+        "subtitle": "HTTT - K2022",
+        "email": "thuha.k22@student.university.edu.vn",
     },
     {
         "id": DEMO_ADVISOR_ID,
         "role": "advisor",
         "full_name": "ThS. Trần Hoàng Nam",
         "subtitle": "Cố vấn hướng nghiệp",
-        "email": "nam.tran@careerx.vn",
+        "email": "nam.tran@careerv.vn",
         "title": "Cố vấn hướng nghiệp",
         "office": "Trực tuyến qua Google Meet",
         "office_hours": "Thứ 3 & Thứ 5 (14:00 – 16:30)",
@@ -39,42 +53,77 @@ DEMO_USERS = [
         "role": "admin",
         "full_name": "Quản trị CareerV",
         "subtitle": "Quản trị hệ thống",
-        "email": "admin@careerx.vn",
+        "email": "admin@careerv.vn",
     },
 ]
 
 
 def seed_demo_users(db: Session) -> None:
-    """
-    Thêm người dùng demo nếu chưa có và phân công SV demo cho cố vấn demo. Bản ghi đã có chỉ được bổ sung
-    các trường còn trống (ví dụ trường hồ sơ mới thêm), không ghi đè.
-    """
+    """Seed individual development accounts; preserve existing passwords and assignments."""
+    settings = get_settings()
+    if settings.app_env == "production":
+        return
+    passwords = {
+        DEMO_STUDENT_ID: settings.seed_student_a_password.get_secret_value() or DEV_PASSWORDS[DEMO_STUDENT_ID],
+        SECOND_STUDENT_ID: settings.seed_student_b_password.get_secret_value() or DEV_PASSWORDS[SECOND_STUDENT_ID],
+        DEMO_ADVISOR_ID: settings.seed_advisor_password.get_secret_value() or DEV_PASSWORDS[DEMO_ADVISOR_ID],
+        DEMO_ADMIN_ID: DEV_PASSWORDS[DEMO_ADMIN_ID],
+    }
     for data in DEMO_USERS:
         user = db.get(User, data["id"])
         if user is None:
-            db.add(User(**data))
-            continue
-        migrate_school_profile(user, data)
-        for key, value in data.items():
-            if getattr(user, key) is None:
-                setattr(user, key, value)
+            user = User(**data)
+            db.add(user)
+        else:
+            for key, value in data.items():
+                if getattr(user, key) is None:
+                    setattr(user, key, value)
+        if not user.password_hash:
+            user.password_hash = hash_password(passwords[data["id"]])
     db.flush()
+    migrate_brand_domain(db)
     _set_demo_passwords(db)
     assign(db, DEMO_ADVISOR_ID, DEMO_STUDENT_ID)
+    assign(db, DEMO_ADVISOR_ID, SECOND_STUDENT_ID)
     db.commit()
+
+
+# Đổi tên CareerX → CareerV: email tài khoản demo và mật khẩu demo cũ
+LEGACY_EMAIL_DOMAIN = "@careerx.vn"
+BRAND_EMAIL_DOMAIN = "@careerv.vn"
+LEGACY_DEMO_PASSWORD = "careerx123"
+
+
+def migrate_brand_domain(db: Session) -> None:
+    """Email "@careerx.vn" (cố vấn, quản trị demo tạo trước khi đổi tên) đổi sang "@careerv.vn" nếu chưa ai dùng."""
+    from sqlalchemy import select
+
+    for user in db.scalars(select(User).where(User.email.like(f"%{LEGACY_EMAIL_DOMAIN}"))):
+        old, new = user.email, user.email[: -len(LEGACY_EMAIL_DOMAIN)] + BRAND_EMAIL_DOMAIN
+        if db.scalars(select(User.id).where(User.email == new)).first() is None:
+            user.email = new
+            if user.subtitle == old:
+                user.subtitle = new
+    db.flush()
 
 
 def _set_demo_passwords(db: Session) -> None:
     """Đặt mật khẩu DEMO_ACCOUNT_PASSWORD cho tài khoản demo chưa có mật khẩu (để thử trang Đăng nhập)."""
     from src.config import get_settings
-    from src.services.auth import hash_password
+    from src.services.auth import hash_password, verify_password
 
     password = get_settings().demo_account_password
     if not password:
         return
     for user_id in (DEMO_STUDENT_ID, DEMO_ADVISOR_ID, DEMO_ADMIN_ID):
         user = db.get(User, user_id)
-        if user is not None and user.password_hash is None:
+        # Chưa có mật khẩu, hoặc vẫn là mật khẩu demo cũ "careerx123" (người dùng chưa tự đổi) → mật khẩu demo hiện tại
+        legacy = (
+            password != LEGACY_DEMO_PASSWORD and verify_password(LEGACY_DEMO_PASSWORD, user.password_hash)
+            if user
+            else False
+        )
+        if user is not None and (user.password_hash is None or legacy):
             user.password_hash = hash_password(password)
             if user.role == "student" and user.consent_accepted_at is None:
                 user.consent_accepted_at = utcnow()
@@ -166,3 +215,10 @@ def seed_vector_store() -> int:
 
         logging.getLogger(__name__).warning("Không thể nạp JD Vector Store: %s", e)
         return 0
+
+
+if __name__ == "__main__":
+    # Run from the repository root: python -m src.db.seed.
+    from src.db.database import init_db
+
+    init_db()

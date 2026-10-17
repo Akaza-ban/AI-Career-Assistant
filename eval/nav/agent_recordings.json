@@ -1,0 +1,20 @@
+{
+  "find_jd": {
+    "role": "assistant",
+    "content": null,
+    "tool_calls": [
+      {
+        "id": "find-jd",
+        "type": "function",
+        "function": {
+          "name": "find_jd",
+          "arguments": "{\"name\":\"{{query}}\"}"
+        }
+      }
+    ]
+  },
+  "closing": {
+    "role": "assistant",
+    "content": "I found one matching record."
+  }
+}

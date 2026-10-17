@@ -1,0 +1,128 @@
+{
+  "provenance": "Synthetic provider-shaped protocol example; not captured live; not model-quality evidence.",
+  "exchanges": [
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "reasoning_content": "Read stage 1.",
+              "tool_calls": [
+                {
+                  "id": "stage-1",
+                  "type": "function",
+                  "function": {
+                    "name": "get_stage",
+                    "arguments": "{\"stage\": 1}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "reasoning_content": "Read stage 2.",
+              "tool_calls": [
+                {
+                  "id": "stage-2",
+                  "type": "function",
+                  "function": {
+                    "name": "get_stage",
+                    "arguments": "{\"stage\": 2}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "reasoning_content": "Read stage 3.",
+              "tool_calls": [
+                {
+                  "id": "stage-3",
+                  "type": "function",
+                  "function": {
+                    "name": "get_stage",
+                    "arguments": "{\"stage\": 3}"
+                  }
+                }
+              ]
+            },
+            "finish_reason": "tool_calls"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    },
+    {
+      "response": {
+        "id": "protocol-example",
+        "object": "chat.completion",
+        "created": 0,
+        "model": "deepseek-flash",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "Complete",
+              "reasoning_content": "All stages read."
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 100,
+          "completion_tokens": 20,
+          "total_tokens": 120
+        }
+      }
+    }
+  ]
+}

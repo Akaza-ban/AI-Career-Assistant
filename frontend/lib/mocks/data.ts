@@ -389,7 +389,7 @@ export const mockGapAnalysis: GapAnalysis = {
       match: 0.5,
       status: "partial",
       evidence: { line_no: 33, text: "Draw.io, BPMN, Excel, SQL", section: "skills", section_label: "Kỹ năng" },
-      note: "Chỉ được liệt kê, chưa có dự án hoặc kinh nghiệm mô tả việc sử dụng",
+      note: "Chỉ có trong danh sách kỹ năng, chưa có câu nào trong Kinh nghiệm hoặc Dự án mô tả bạn đã dùng BPMN làm gì",
     },
     {
       id: "r5",
@@ -431,7 +431,7 @@ export const mockGapAnalysis: GapAnalysis = {
       match: 0.5,
       status: "partial",
       evidence: { line_no: 36, text: "IELTS 7.0", section: "certifications", section_label: "Chứng chỉ & giải thưởng" },
-      note: "Chỉ được liệt kê, chưa có dự án hoặc kinh nghiệm mô tả việc sử dụng",
+      note: "Chỉ có trong danh sách kỹ năng, chưa có câu nào trong Kinh nghiệm hoặc Dự án mô tả bạn đã dùng Tiếng Anh làm gì",
     },
   ],
   suggestions: [

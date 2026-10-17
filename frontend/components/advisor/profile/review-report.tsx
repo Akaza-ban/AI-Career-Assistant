@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { AlertCircle, ChevronDown, TimerOff } from "lucide-react"
 
+import { InterviewFeedback, plainText } from "@/components/common/interview-feedback"
 import { OutOfFive, ThinBar, score1 } from "@/components/advisor/profile/profile-bits"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -110,7 +111,7 @@ function TurnAccordion({ turns }: { turns: InterviewTurn[] }) {
               className="-mx-2.5 flex w-[calc(100%+20px)] items-center gap-3.5 rounded-lg px-2.5 py-4 text-left transition-colors hover:bg-panel"
             >
               <span className="w-5 shrink-0 text-sm font-semibold text-ink-3 tabular-nums">{turn.index}</span>
-              <span className="min-w-0 flex-1 font-medium text-ink">{turn.question}</span>
+              <span className="min-w-0 flex-1 font-medium text-ink">{plainText(turn.question)}</span>
               <span className="shrink-0 font-semibold text-ink tabular-nums">{turn.score === null ? "—" : score1(turn.score)}</span>
               <ChevronDown
                 className={cn("size-4 shrink-0 text-ink-3 transition-transform duration-200", expanded && "rotate-180")}
@@ -142,7 +143,7 @@ function TurnAccordion({ turns }: { turns: InterviewTurn[] }) {
                 {turn.feedback && (
                   <div>
                     <p className="mb-1 text-[13px] text-ink-3">Nhận xét AI</p>
-                    <p className="leading-6 text-ink-2">{turn.feedback}</p>
+                    <InterviewFeedback text={turn.feedback} />
                   </div>
                 )}
               </div>

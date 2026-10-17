@@ -5,6 +5,7 @@ from src.agents.interview.nodes import (
     score_answer_node,
 )
 from src.agents.interview.state import InterviewState
+from src.services.providers.gateway import UntracedGraph
 
 
 def route_interview_entry(state: InterviewState) -> str:
@@ -47,7 +48,7 @@ def build_interview_graph():
     workflow.add_edge("score_answer", "ask_question")
     workflow.add_edge("ask_question", END)
 
-    return workflow.compile()
+    return UntracedGraph(workflow.compile())
 
 
 interview_agent = build_interview_graph()

@@ -35,6 +35,8 @@ import type {
   AppNotification,
   AssignedStudent,
   CapabilityAnswerRequest,
+  CapabilityDraftRequest,
+  CapabilityLineDecisionRequest,
   ChangePasswordRequest,
   LoginRequest,
   LoginResponse,
@@ -50,6 +52,7 @@ import type {
   CreateGapAnalysisRequest,
   CreateInterviewRequest,
   CreatePastedJdRequest,
+  CvPreviewInfo,
   CvVersion,
   ExportCvRequest,
   ExportCvResponse,
@@ -103,6 +106,9 @@ async function send(path: string, init?: RequestInit): Promise<Response> {
     throw new ApiError(0, "Không kết nối được máy chủ. Hãy kiểm tra backend đang chạy.", "network_error")
   }
   if (!res.ok) {
+    if (res.status === 401 && typeof window !== "undefined" && window.location.pathname !== "/login") {
+      window.location.replace("/login")
+    }
     let body: Partial<ApiErrorBody> | null = null
     try {
       body = (await res.json()) as Partial<ApiErrorBody>
@@ -154,7 +160,7 @@ export const api = {
   confirmPasswordReset: (body: PasswordResetConfirmRequest): Promise<LoginResponse> =>
     via("auth", () => mockApi.confirmPasswordReset(body), () => request("/auth/password-reset/confirm", json(body))),
   /** Kết thúc phiên đăng nhập (cookie); không lỗi nếu phiên đã hết. */
-  logout: (): Promise<void> => via("auth", async () => {}, () => request("/auth/logout", { method: "POST" })),
+  logout: (): Promise<void> => via("auth", async () => { }, () => request("/auth/logout", { method: "POST" })),
   /** Đặt mật khẩu mới thay mật khẩu tạm ở lần đăng nhập đầu. Lỗi 400 "wrong_password" khi mật khẩu tạm không đúng. */
   changeTemporaryPassword: (body: ChangePasswordRequest): Promise<ChangePasswordResponse> =>
     via("auth", () => mockApi.changeTemporaryPassword(body), () => request("/auth/change-password", json(body))),
@@ -243,6 +249,12 @@ export const api = {
   /** File gốc của một phiên bản CV; null ở chế độ mock (không có file thật). */
   getCvFile: (id: string): Promise<Blob | null> =>
     via("cv", async () => null, async () => (await send(`/cv/${encodeURIComponent(id)}/file`)).blob()),
+  /** Cách xem CV trong app (ảnh trang PDF / nội dung theo mẫu CV); null ở chế độ mock. */
+  getCvPreview: (id: string): Promise<CvPreviewInfo | null> =>
+    via("cv", async () => null, () => request<CvPreviewInfo>(`/cv/${encodeURIComponent(id)}/preview`)),
+  /** Ảnh PNG một trang của CV PDF (đếm từ 1); null ở chế độ mock. */
+  getCvPage: (id: string, page: number): Promise<Blob | null> =>
+    via("cv", async () => null, async () => (await send(`/cv/${encodeURIComponent(id)}/pages/${page}`)).blob()),
   /** Văn bản đã trích từ CV, dùng xem nhanh file DOCX (và PDF khi không có file, ví dụ ở chế độ mock). */
   getCvText: (id: string): Promise<string | null> =>
     via(
@@ -307,6 +319,16 @@ export const api = {
       () => mockApi.getOptimizerSession(analysisId),
       () => request(optimizerPath(analysisId)),
     ),
+  /**
+   * Soạn gợi ý viết lại riêng cho phiên (lần đầu mở, hoặc Thử lại sau khi lỗi): một lần gọi AI, thường 10–20 giây.
+   * Đã có gợi ý thì backend trả về luôn, không gọi lại.
+   */
+  prepareOptimizerSuggestions: (analysisId: string): Promise<OptimizerSession> =>
+    via(
+      "optimizer",
+      () => mockApi.getOptimizerSession(analysisId),
+      () => request(`${optimizerPath(analysisId)}/prepare`, { method: "POST" }),
+    ),
   /** Quyết định nằm trong bản nháp, chưa tạo phiên bản CV mới; trả về trạng thái trình tối ưu sau khi lưu. */
   decideSuggestion: (analysisId: string, id: string, body: SuggestionDecisionRequest): Promise<OptimizerSession> =>
     via(
@@ -326,6 +348,19 @@ export const api = {
       "optimizer",
       () => mockApi.answerCapabilityCheck(analysisId, id, body),
       () => request(`${optimizerPath(analysisId)}/capability-checks/${encodeURIComponent(id)}`, json(body)),
+    ),
+  /** "Có, đã dùng": AI viết lời kể của SV thành một câu cho CV (chưa thêm, chờ SV duyệt). */
+  draftCapabilityLine: (analysisId: string, id: string, body: CapabilityDraftRequest): Promise<OptimizerSession> =>
+    via(
+      "optimizer",
+      () => mockApi.draftCapabilityLine(analysisId, id, body),
+      () => request(`${optimizerPath(analysisId)}/capability-checks/${encodeURIComponent(id)}/draft`, json(body)),
+    ),
+  decideCapabilityLine: (analysisId: string, id: string, body: CapabilityLineDecisionRequest): Promise<OptimizerSession> =>
+    via(
+      "optimizer",
+      () => mockApi.decideCapabilityLine(analysisId, id, body),
+      () => request(`${optimizerPath(analysisId)}/capability-checks/${encodeURIComponent(id)}/decision`, json(body)),
     ),
   /** "Hoàn tất": tạo đúng một phiên bản CV mới từ bản nháp rồi khoá trình tối ưu. */
   finalizeOptimization: (analysisId: string): Promise<OptimizerSession> =>
@@ -381,6 +416,20 @@ export const api = {
       "interview",
       () => mockApi.getInterviewReport(sessionId),
       () => request(`/interviews/${encodeURIComponent(sessionId)}/report`),
+    ),
+  /** Trả lời phỏng vấn bằng giọng nói: đoạn ghi âm → văn bản (Groq Whisper, src/services/groq_stt.py). */
+  transcribeAudio: (file: Blob, sessionId?: string, previous?: string): Promise<{ text: string }> =>
+    via(
+      "interview",
+      () => mockApi.transcribeAudio(),
+      () => {
+        const form = new FormData()
+        form.append("file", file, file.type.includes("mp4") ? "recording.mp4" : "recording.webm")
+        // Chữ của các đoạn trước trong cùng lần nói: Whisper nối câu liền mạch giữa các đoạn
+        if (previous) form.append("previous", previous.slice(-500))
+        const url = sessionId ? `/interviews/transcribe?session_id=${encodeURIComponent(sessionId)}` : "/interviews/transcribe"
+        return request<{ text: string }>(url, { method: "POST", body: form })
+      },
     ),
 
   // ---- Phản hồi (B3) ----
@@ -480,6 +529,17 @@ export const api = {
       "advisor",
       () => mockApi.getAdvisorCvText(studentId, cvId),
       async () => (await request<{ text: string }>(`${advisorStudentPath(studentId)}/cvs/${encodeURIComponent(cvId)}/text`)).text,
+    ),
+  /** Cách xem CV SV đã chia sẻ trong app; null ở chế độ mock. */
+  getAdvisorCvPreview: (studentId: string, cvId: string): Promise<CvPreviewInfo | null> =>
+    via("advisor", async () => null, () =>
+      request<CvPreviewInfo>(`${advisorStudentPath(studentId)}/cvs/${encodeURIComponent(cvId)}/preview`),
+    ),
+  getAdvisorCvPage: (studentId: string, cvId: string, page: number): Promise<Blob | null> =>
+    via(
+      "advisor",
+      async () => null,
+      async () => (await send(`${advisorStudentPath(studentId)}/cvs/${encodeURIComponent(cvId)}/pages/${page}`)).blob(),
     ),
   /** File phiên bản CV SV đã chia sẻ; null ở chế độ mock. */
   getAdvisorCvFile: (studentId: string, cvId: string): Promise<Blob | null> =>

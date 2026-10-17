@@ -13,6 +13,9 @@ from src.db.database import SessionLocal
 from src.db.models import CvVersion, GapAnalysis, JobDescription, User, utcnow
 from src.models.schemas import CreateGapAnalysisRequest, GapAnalysisResponse
 from src.services import cv_versions, notifications
+from src.services.jd_requirements import has_trusted_skills
+from src.services.llm import llm_configured
+from src.services.providers.gateway import provider_scope
 from src.services.roadmap import get_roadmap_info
 from src.services.skill_matching import match_label
 
@@ -22,8 +25,6 @@ logger = logging.getLogger(__name__)
 STEPS = ["parse", "retrieve", "compare", "generate", "verify_grounding"]
 ANALYSIS_TIMEOUT_SECONDS = 150
 # Khớp JD_MIN_WORDS ở frontend/lib/types.ts (US-SV-02 AC2)
-# Nguồn mức quan trọng của kỹ năng JD tự dán đủ tin để không cần AI trích lại khi phân tích
-TRUSTED_SKILLS = ("ai", "analysis", "admin")
 JD_MIN_WORDS = 50
 
 
@@ -150,6 +151,7 @@ def _build_result(final: dict[str, Any]) -> dict[str, Any]:
         "pending_review_count": len(final.get("manual_review_items", [])),
         "breakdown": final.get("score_breakdown", []),
         "summary": final.get("gap_summary"),
+        "interview_focus": final.get("interview_focus"),
         "llm_used": bool(final.get("llm_used")),
     }
 
@@ -170,25 +172,30 @@ async def run_analysis(analysis_id: str) -> None:
             "jd_raw": jd.content,
             # JD thư viện (và JD tự dán đã có mức quan trọng từ AI / lượt phân tích trước) dùng thẳng yêu cầu đã có;
             # còn lại trích bằng AI ở bước retrieve
-            "requirements": jd.skills if jd.source == "library" or jd.skills_source in TRUSTED_SKILLS else [],
+            "requirements": jd.skills if has_trusted_skills(jd) else [],
             "llm_calls": 0,
         }
         jd_source, jd_id = jd.source, jd.id
+        owner_id, cv_id = analysis.owner_id, cv.id
 
     final = dict(state)
     try:
-        async with asyncio.timeout(ANALYSIS_TIMEOUT_SECONDS):
-            async for update in gap_analysis_agent.astream(state, stream_mode="updates"):
-                for node, delta in update.items():
-                    final.update(delta or {})
-                    index = STEPS.index(node) if node in STEPS else -1
-                    if 0 <= index < len(STEPS) - 1:
-                        _update(analysis_id, current_step=STEPS[index + 1])
+        with provider_scope(user_id=owner_id, origins=(f"cv:{cv_id}", f"jd:{jd_id}")) as scope:
+            if llm_configured():
+                scope.prime(state["cv_raw"], f"cv:{cv_id}")
+                scope.prime(state["jd_raw"], f"jd:{jd_id}")
+            async with asyncio.timeout(ANALYSIS_TIMEOUT_SECONDS):
+                async for update in gap_analysis_agent.astream(state, stream_mode="updates", config={"callbacks": []}):
+                    for node, delta in update.items():
+                        final.update(delta or {})
+                        index = STEPS.index(node) if node in STEPS else -1
+                        if 0 <= index < len(STEPS) - 1:
+                            _update(analysis_id, current_step=STEPS[index + 1])
     except TimeoutError:
         _fail(analysis_id, "Phân tích mất quá nhiều thời gian. Hãy thử lại sau ít phút.")
         return
     except Exception:
-        logger.exception("Phân tích %s thất bại", analysis_id)
+        logger.error("Phân tích thất bại")
         _fail(analysis_id, "Có lỗi xảy ra trong lúc phân tích. Hãy thử lại.")
         return
 
@@ -208,7 +215,10 @@ async def run_analysis(analysis_id: str) -> None:
                     {"name": r["name"], "importance": r["importance"], "aliases": r.get("aliases", [])}
                     for r in final["requirements"]
                 ]
-                jd.skills_source = "analysis"
+                # AI trích lỗi thì danh sách chỉ từ từ điển (thiếu kỹ năng, mọi mục đều Bắt buộc): giữ "dictionary"
+                # để lần sau trích lại, không dùng mãi danh sách kém
+                trusted = final.get("requirements_source") != "dictionary"
+                jd.skills_source = "analysis" if trusted else "dictionary"
         analysis = db.get(GapAnalysis, analysis_id)
         if analysis is not None:
             analysis.status = "completed"
@@ -272,5 +282,6 @@ def to_response(analysis: GapAnalysis, jd: JobDescription) -> GapAnalysisRespons
         suggestions=result.get("suggestions", []),
         pending_review_count=result.get("pending_review_count", 0),
         summary=result.get("summary"),
+        interview_focus=result.get("interview_focus"),
         llm_used=result.get("llm_used", False),
     )

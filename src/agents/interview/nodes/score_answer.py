@@ -1,5 +1,3 @@
-import asyncio
-import json
 import logging
 import re
 from typing import Any
@@ -8,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.agents.interview.state import InterviewState
 from src.config import get_settings
+from src.services.llm import invoke_json
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +37,29 @@ class STARScoreOutput(BaseModel):
         except (ValueError, TypeError):
             return 3.0
 
+    @field_validator("feedback_text")
+    @classmethod
+    def plain_feedback(cls, v: str) -> str:
+        """Nhận xét hiển thị dạng văn bản thường: bỏ markdown (**, `), giữ xuống dòng giữa các phần."""
+        lines = (" ".join(re.sub(r"\*\*|__|`", "", line).split()).lstrip("-• ") for line in v.splitlines())
+        return "\n".join(line for line in lines if line)
+
+
+# Chủ ngữ ngôi thứ nhất số ít ("tôi", "em", "mình"), không tính "nhóm em", "chúng tôi", "anh em"
+_FIRST_PERSON = re.compile(r"(?<!nhóm )(?<!team )(?<!chúng )(?<!anh )(?<!các )\b(?:tôi|em|mình|i|my)\b", re.IGNORECASE)
+_YEAR = re.compile(r"\b(?:19|20)\d{2}\b")
+_TEAM = re.compile(r"\b(?:nhóm (?:em|tôi|mình)|chúng (?:em|tôi|mình)|team (?:em|tôi|mình)|we|our)\b", re.IGNORECASE)
+TEAM_ONLY_CAP = 3.0
+
+
+def team_only(text: str) -> bool:
+    """Câu trả lời chỉ kể việc của cả nhóm ("nhóm em", "chúng em"), không có chỗ nào nói phần việc của riêng mình."""
+    return bool(_TEAM.search(text)) and not _FIRST_PERSON.search(text)
+
+
+def _sentences(text: str) -> list[str]:
+    return [s for s in re.split(r"[.!?;\n]+", text) if len(s.split()) >= 3]
+
 
 def evaluate_answer_fallback(
     user_answer: str,
@@ -46,55 +68,68 @@ def evaluate_answer_fallback(
     total_rounds: int,
 ) -> STARScoreOutput:
     """
-    Quy tắc chấm điểm dự phòng (Rule-based Fallback):
-    Được kích hoạt khi LLM lỗi mạng hoặc không có API key.
-    Phân tích độ dài câu trả lời và từ khóa STAR để ước tính điểm số khách quan trên thang 0-5.
+    Chấm dự phòng khi LLM lỗi hoặc không có API key. Không đếm từ khoá (dễ bị nhồi từ, lệch theo ngành), chỉ dùng
+    tín hiệu khách quan áp dụng cho mọi vị trí: có con số → Kết quả, có vai trò cá nhân → Nhiệm vụ,
+    kể đủ nhiều bước (≥ 4 câu) → Hành động; câu trả lời chủ yếu là danh sách từ khoá → điểm thấp.
+    Điểm tối đa 4,0 vì đây chỉ là ước lượng (không hiểu nghĩa nên không nhận ra câu lạc đề).
     """
-    ans_lower = user_answer.lower()
     words = user_answer.split()
-    word_count = len(words)
+    sentences = _sentences(user_answer)
+    has_numbers = bool(re.search(r"\d", _YEAR.sub(" ", user_answer)))
+    personal = bool(_FIRST_PERSON.search(user_answer))
+    detailed = len(sentences) >= 4
+    # Danh sách kỹ năng / công cụ ("Python, Docker, Redis, ..."): cứ khoảng 5 từ lại có một dấu phân cách
+    keyword_list = len(re.findall(r"[,/;]", user_answer)) >= 0.2 * max(len(words), 1)
 
-    # Heuristic cho Situation (bối cảnh dự án, công ty, vấn đề)
-    sit_keywords = ["dự án", "project", "hệ thống", "bối cảnh", "công ty", "khi", "lúc", "khách hàng"]
-    sit_matches = sum(1 for k in sit_keywords if k in ans_lower)
-    sit_score = min(5.0, 2.5 + (0.5 * sit_matches) + (0.5 if word_count > 30 else 0.0))
+    if len(words) < 15:
+        # Quá ngắn để có câu chuyện STAR
+        sit = task = action = result = 1.0
+    elif keyword_list:
+        sit = task = action = result = 1.5
+    else:
+        base = 2.5 if len(words) >= 40 else 2.0
+        sit = base + (0.5 if len(sentences) >= 2 else 0.0)
+        task = base + (1.0 if personal else 0.0)
+        action = base + (1.0 if detailed else 0.0) + (0.5 if len(words) >= 90 else 0.0)
+        result = base - 0.5 + (1.5 if has_numbers else 0.0)
+    scores = [min(4.0, x) for x in (sit, task, action, result)]
 
-    # Heuristic cho Task (mục tiêu, nhiệm vụ, yêu cầu)
-    task_keywords = ["nhiệm vụ", "mục tiêu", "yêu cầu", "task", "trách nhiệm", "cần phải", "deadline"]
-    task_matches = sum(1 for k in task_keywords if k in ans_lower)
-    task_score = min(5.0, 2.5 + (0.5 * task_matches) + (0.5 if word_count > 40 else 0.0))
-
-    # Heuristic cho Action (hành động cụ thể, kỹ thuật đã làm)
-    action_keywords = ["tôi đã", "sử dụng", "triển khai", "tối ưu", "xây dựng", "viết", "cấu hình", "debug", "refactor"]
-    action_matches = sum(1 for k in action_keywords if k in ans_lower)
-    action_score = min(5.0, 2.5 + (0.5 * action_matches) + (0.5 if word_count > 50 else 0.0))
-
-    # Heuristic cho Result (kết quả, con số, %)
-    has_numbers = bool(re.search(r"\d+%|\d+\s*(ms|s|req|ccu|user|người|lần)", ans_lower))
-    result_keywords = ["kết quả", "giúp", "hoàn thành", "thành công", "cải thiện", "đạt"]
-    result_matches = sum(1 for k in result_keywords if k in ans_lower)
-    result_score = min(5.0, 2.0 + (1.5 if has_numbers else 0.5) + (0.5 * result_matches))
-
-    feedback = (
-        f"Đánh giá sơ bộ vòng {current_round}/{total_rounds} cho vị trí {job_role}: "
-        f"Câu trả lời dài {word_count} từ. "
-        + (
-            "Bạn đã nêu được các con số minh chứng định lượng. "
-            if has_numbers
-            else "Nên bổ sung thêm số liệu cụ thể (%) để làm nổi bật kết quả (Result). "
-        )
-        + "Cần nhấn mạnh rõ hơn các hành động kỹ thuật cá nhân (Action) đã thực hiện để giải quyết bài toán."
+    if keyword_list:
+        good = f"Bạn đã nêu các kỹ năng, công cụ liên quan tới vị trí {job_role}."
+    elif has_numbers:
+        good = "Bạn đã nêu con số cụ thể cho kết quả."
+    elif personal:
+        good = "Bạn đã nói về phần việc của chính mình."
+    else:
+        good = f"Bạn đã kể một trải nghiệm có liên quan tới vị trí {job_role}."
+    if keyword_list:
+        improve = "Câu trả lời mới liệt kê kỹ năng, chưa kể một việc cụ thể bạn đã làm theo đúng câu hỏi."
+    elif not personal:
+        improve = "Chưa rõ phần việc của riêng bạn (Nhiệm vụ, Hành động); tránh chỉ nói chung về cả nhóm."
+    elif not detailed:
+        improve = "Các bước bạn đã làm còn ít chi tiết (Hành động)."
+    elif not has_numbers:
+        improve = "Phần Kết quả chưa có con số hoặc bài học cụ thể."
+    else:
+        improve = "Nêu rõ hơn bối cảnh và khó khăn lúc đầu (Tình huống)."
+    feedback = "\n".join(
+        [
+            f"Điểm tốt: {good}",
+            f"Cần cải thiện: {improve}",
+            "Gợi ý trả lời: Nói rõ vai trò của riêng bạn, các bước đã làm theo thứ tự và kết quả thật (con số hoặc "
+            "điều bạn rút ra được).",
+        ]
     )
 
     next_q = None
     if current_round < total_rounds:
-        next_q = f"Vòng {current_round + 1}: Hãy chia sẻ về một tình huống bạn gặp mâu thuẫn kỹ thuật với đồng đội và cách bạn giải quyết?"
+        next_q = f"Vòng {current_round + 1}: Hãy kể về một lần bạn bất đồng ý kiến với đồng đội và cách bạn xử lý."
 
     return STARScoreOutput(
-        situation_score=round(sit_score, 2),
-        task_score=round(task_score, 2),
-        action_score=round(action_score, 2),
-        result_score=round(result_score, 2),
+        situation_score=scores[0],
+        task_score=scores[1],
+        action_score=scores[2],
+        result_score=scores[3],
         feedback_text=feedback,
         next_question=next_q,
     )
@@ -114,15 +149,7 @@ async def call_llm_for_scoring(
     if not api_key or is_placeholder:
         return None
 
-    llm = settings.get_chat_model(temperature=0.2)
-    response = await asyncio.wait_for(llm.ainvoke(prompt), timeout=timeout)
-    content = response.content.strip()
-
-    json_match = re.search(r"\{.*\}", content, re.DOTALL)
-    if not json_match:
-        raise ValueError(f"LLM không trả về JSON hợp lệ: {content[:100]}")
-
-    return json.loads(json_match.group(0))
+    return await invoke_json(prompt, temperature=0.0, timeout=timeout)
 
 
 async def score_answer_with_llm(
@@ -133,42 +160,52 @@ async def score_answer_with_llm(
     total_rounds: int,
 ) -> STARScoreOutput:
     """
-    Chấm điểm câu trả lời phỏng vấn theo phương pháp STAR bằng LLM:
-    - Thang điểm: 0.0 đến 5.0 cho từng tiêu chí.
+    Chấm điểm câu trả lời phỏng vấn theo phương pháp STAR Kỹ thuật (Technical STAR) bằng LLM:
+    - Thang điểm: 0.0 đến 5.0 cho từng tiêu chí S, T, A, R.
+    - Tiêu chí Action (A) đào sâu vào Technical Decision Making & Trade-offs (Tại sao dùng, ưu điểm so với phương án khác).
+    - Tiêu chí Result (R) linh hoạt công nhận cả số liệu định lượng lẫn bài học kinh nghiệm sâu sắc.
     - Validate JSON đầu ra qua Pydantic STARScoreOutput.
-    - Retry tối đa 1 lần nếu LLM trả về JSON lỗi hoặc sai định dạng (do dùng model free-tier).
+    - Retry tối đa 1 lần nếu LLM trả về JSON lỗi hoặc sai định dạng.
     """
-    is_last_round = current_round >= total_rounds
-
-    example_next_q = "null" if is_last_round else '"Câu hỏi cho vòng kế tiếp..."'
+    question = current_question or f"Hãy chia sẻ một trải nghiệm liên quan đến vị trí {job_role}."
 
     base_prompt = (
-        "Bạn là Chuyên gia Tuyển dụng Kỹ thuật Cấp cao (Senior Technical Interviewer & STAR Assessor).\n"
-        "Hãy đánh giá câu trả lời của ứng viên cho vị trí tuyển dụng theo phương pháp STAR.\n\n"
+        f"Bạn là người phỏng vấn tuyển dụng cho vị trí {job_role}, chấm câu trả lời của một sinh viên theo phương "
+        "pháp STAR. Chấm theo những gì ứng viên thực sự kể, không suy đoán thêm.\n\n"
         "=== THÔNG TIN PHỎNG VẤN ===\n"
-        f"- Vị trí ứng tuyển: {job_role}\n"
-        f"- Vòng hiện tại: Vòng {current_round} / Tổng số {total_rounds} vòng\n"
-        f"- Câu hỏi phỏng vấn: {current_question or f'Hãy chia sẻ kinh nghiệm kỹ thuật liên quan đến vị trí {job_role}.'}\n"
+        f"- Vòng hiện tại: {current_round} / {total_rounds}\n"
+        f"- Câu hỏi: {question}\n"
         f"- Câu trả lời của ứng viên:\n{user_answer}\n\n"
-        "=== THANG ĐIỂM CHẤM (TỪ 0.0 ĐẾN 5.0 CHO MỖI TIÊU CHÍ) ===\n"
-        "1. situation_score (0.0 - 5.0): Bối cảnh dự án, quy mô bài toán, khó khăn thực tế có rõ ràng không?\n"
-        "2. task_score (0.0 - 5.0): Trách nhiệm cá nhân và mục tiêu cần giải quyết có rành mạch không?\n"
-        "3. action_score (0.0 - 5.0): Các giải pháp kỹ thuật, công nghệ đã sử dụng và tư duy xử lý có chi tiết không?\n"
-        "4. result_score (0.0 - 5.0): Kết quả đạt được có đo lường được bằng số liệu định lượng (%, ms, throughput) không?\n\n"
-        "=== YÊU CẦU CÂU HỎI TIẾP THEO ===\n"
-        + (
-            "Đây là vòng cuối cùng (Vòng kết thúc), trường 'next_question' BẮT BUỘC là null.\n"
-            if is_last_round
-            else f"Vì chưa phải vòng cuối, hãy gợi ý 1 câu hỏi phỏng vấn chuyên sâu kế tiếp (Vòng {current_round + 1}) phù hợp với vị trí {job_role}.\n"
-        )
-        + "\n=== ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ) ===\n"
+        "=== THANG ĐIỂM (0.0–5.0 cho mỗi tiêu chí) ===\n"
+        "Mức chung: 0–1 = không có hoặc không liên quan; 2–3 = có nhưng chung chung; 4 = rõ và cụ thể; "
+        "5 = rất cụ thể, thuyết phục.\n"
+        "1. situation_score: bối cảnh (dự án, môn học, công việc, câu lạc bộ...) và khó khăn lúc đó có rõ không.\n"
+        "2. task_score: mục tiêu và phần việc của RIÊNG ứng viên có rõ không.\n"
+        "3. action_score: các bước ứng viên đã làm và lý do chọn cách làm đó. Tuỳ vị trí, ví dụ: kỹ thuật = giải "
+        "pháp, công cụ đã dùng; phân tích = dữ liệu nào, phân tích ra sao; marketing = kênh, nội dung, cách theo "
+        "dõi hiệu quả.\n"
+        "4. result_score: kết quả đạt được. Con số đo được (thời gian, %, số người, doanh số...) hoặc phản hồi cụ "
+        "thể được 4–5; chưa có kết quả đo được nhưng nêu rõ bài học rút ra được tối đa 3.\n\n"
+        "=== QUY TẮC BẮT BUỘC ===\n"
+        "- Câu trả lời lạc đề, không trả lời câu hỏi, hoặc chỉ liệt kê từ khoá / công cụ mà không kể việc đã làm: "
+        "MỌI tiêu chí tối đa 2.0.\n"
+        '- Chỉ nói "nhóm em / chúng em" mà không nêu phần việc của riêng ứng viên: task_score và action_score '
+        "tối đa 3.0.\n"
+        "- Không cộng điểm vì câu dài hay dùng nhiều thuật ngữ.\n\n"
+        "=== YÊU CẦU NHẬN XÉT (feedback_text) ===\n"
+        "Viết bằng tiếng Việt, văn bản thường (KHÔNG markdown: không **, không `, không gạch đầu dòng), "
+        "tối đa khoảng 120 từ, đúng 3 dòng ngăn bằng ký tự xuống dòng \\n, mỗi dòng bắt đầu bằng nhãn sau:\n"
+        "Điểm tốt: <điều ứng viên đã làm tốt, cụ thể theo câu trả lời>\n"
+        "Cần cải thiện: <phần STAR còn thiếu hoặc yếu nhất, nói rõ thiếu gì>\n"
+        "Gợi ý trả lời: <2–3 ý cụ thể nên kể thêm cho ĐÚNG câu hỏi này, ví dụ vai trò cá nhân, "
+        "các bước đã làm, kết quả đo được; chỉ gợi ý, không viết sẵn câu trả lời, không bịa sự việc thay ứng viên>\n\n"
+        "=== ĐỊNH DẠNG ĐẦU RA (CHỈ TRẢ VỀ DUY NHẤT CHUỖI JSON HỢP LỆ) ===\n"
         "{\n"
-        '  "situation_score": 4.0,\n'
-        '  "task_score": 3.5,\n'
-        '  "action_score": 4.5,\n'
-        '  "result_score": 3.0,\n'
-        '  "feedback_text": "Nhận xét chi tiết điểm mạnh và điểm cần cải thiện theo từng tiêu chí STAR...",\n'
-        f'  "next_question": {example_next_q}\n'
+        '  "situation_score": 3.5,\n'
+        '  "task_score": 3.0,\n'
+        '  "action_score": 3.5,\n'
+        '  "result_score": 2.5,\n'
+        '  "feedback_text": "Điểm tốt: ...\\nCần cải thiện: ...\\nGợi ý trả lời: ..."\n'
         "}"
     )
 
@@ -177,12 +214,11 @@ async def score_answer_with_llm(
         raw_json = await call_llm_for_scoring(base_prompt)
         if raw_json:
             validated = STARScoreOutput.model_validate(raw_json)
-            # Ràng buộc vòng cuối
-            if is_last_round:
-                validated.next_question = None
+            # Câu hỏi kế tiếp do ask_question chọn từ ngân hàng câu hỏi, không lấy câu LLM tự nghĩ
+            validated.next_question = None
             return validated
-    except Exception as e:
-        logger.warning(f"Lần 1 chấm điểm LLM thất bại: {e}. Đang thực hiện RETRY lần 1...")
+    except Exception:
+        logger.warning("Lần 1 chấm điểm LLM thất bại. Đang thực hiện RETRY lần 1...")
 
     # Retry 1 lần (theo yêu cầu đề bài do dùng model free-tier)
     try:
@@ -194,11 +230,10 @@ async def score_answer_with_llm(
         raw_json = await call_llm_for_scoring(retry_prompt, timeout=15.0)
         if raw_json:
             validated = STARScoreOutput.model_validate(raw_json)
-            if is_last_round:
-                validated.next_question = None
+            validated.next_question = None
             return validated
-    except Exception as e:
-        logger.error(f"Retry lần 1 vẫn thất bại: {e}. Kích hoạt Rule-based Fallback.")
+    except Exception:
+        logger.error("Retry lần 1 vẫn thất bại. Kích hoạt Rule-based Fallback.")
 
     # Fallback an toàn nếu cả 2 lần đều không thành công
     return evaluate_answer_fallback(
@@ -228,6 +263,9 @@ async def score_answer_node(state: InterviewState) -> dict[str, Any]:
         current_round=current_round,
         total_rounds=total_rounds,
     )
+    if team_only(user_answer):
+        score_result.task_score = min(score_result.task_score, TEAM_ONLY_CAP)
+        score_result.action_score = min(score_result.action_score, TEAM_ONLY_CAP)
 
     is_finished = current_round >= total_rounds
     next_q = None if is_finished else score_result.next_question

@@ -607,7 +607,7 @@ export function DataSection({
         const href = URL.createObjectURL(file)
         const a = document.createElement("a")
         a.href = href
-        a.download = "careerx-du-lieu-cua-toi.json"
+        a.download = "careerv-du-lieu-cua-toi.json"
         a.click()
         URL.revokeObjectURL(href)
       } else toast.success("Đã tạo gói dữ liệu. Bản demo không có file thật để tải.")

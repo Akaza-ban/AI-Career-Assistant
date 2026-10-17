@@ -69,11 +69,12 @@ def test_apply_taxonomy_matching_list():
 
 
 @pytest.mark.asyncio
-async def test_gap_analysis_graph_4_nodes_flow():
+async def test_gap_analysis_graph_4_nodes_flow(monkeypatch):
     """
     Kiểm thử luồng chạy tuần tự 4 node của Gap Analysis Agent:
     parse -> retrieve -> compare -> generate
     """
+    monkeypatch.setattr(compare_gap, "llm_configured", lambda: False)
     cv_text = """
     # Nguyễn Văn A - Software Engineer
     - Kỹ năng: Python, Flask, Django, Docker, PostgreSQL, Git
@@ -159,6 +160,24 @@ def test_inline_listing_inside_entry_keeps_section():
     assert assess_by_rules(python, lines)["match"] == 1
 
 
+def test_listing_note_says_where_the_skill_is_listed():
+    """Mức 0,5: ghi chú nói rõ kỹ năng nằm ở dòng công nghệ của mục nào và cần thêm câu mô tả gì."""
+    lines = split_cv_lines(
+        "PROJECTS\nMaintenance Platform\nTechnologies: Python, FastAPI, Redis\n"
+        "Sử dụng Redis để cache dữ liệu trạng thái thiết bị.\nSKILLS\nPython, FastAPI, Git"
+    )
+    fastapi, git = (
+        assess_by_rules(r, lines)
+        for r in normalize_requirements([{"name": "FastAPI", "importance": "preferred"}, {"name": "Git"}])
+    )
+    assert fastapi["match"] == 0.5
+    # Dòng công nghệ của dự án hiện "Mục Dự án", không phải "Mục Kỹ năng"
+    assert fastapi["evidence"]["section_label"] == "Dự án"
+    assert fastapi["note"] == "Có trong dòng công nghệ nhưng chưa có câu mô tả bạn đã dùng FastAPI làm gì"
+    assert git["match"] == 0.5 and git["evidence"]["section_label"] == "Kỹ năng"
+    assert git["note"].startswith("Chỉ có trong danh sách kỹ năng")
+
+
 def test_rule_anchor_levels():
     lines = split_cv_lines(CV_DATA_ANALYST)
     reqs = normalize_requirements(
@@ -195,9 +214,24 @@ def test_score_formula_matches_prd_example():
     assert [b["weight"] for b in breakdown] == [3, 2, 1]
 
 
+def test_score_can_reach_zero_and_hundred_unclamped():
+    """Kiểm tra điểm phản ánh 100% đánh giá thực tế (có thể đạt 100.0 hoặc 0.0, không bị clamp cố định)."""
+    # 1. Trường hợp CV hoàn hảo (match = 1 cho tất cả) -> đạt 100.0%
+    perfect_rows = [("SQL", "required", 1), ("Python", "required", 1), ("Git", "additional", 1)]
+    perfect_items = [{"importance": imp, "match": m, "status": "matched"} for _, imp, m in perfect_rows]
+    perf_score, _ = compute_score(perfect_items)
+    assert perf_score == 100.0
+
+    # 2. Trường hợp CV không khớp kỹ năng nào (match = 0 cho tất cả) -> đạt 0.0%
+    zero_rows = [("SQL", "required", 0), ("Python", "required", 0), ("Git", "additional", 0)]
+    zero_items = [{"importance": imp, "match": m, "status": "missing"} for _, imp, m in zero_rows]
+    zero_score, _ = compute_score(zero_items)
+    assert zero_score == 0.0
+
+
 @pytest.mark.asyncio
 async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
-    """Kết quả LLM được kiểm tra chéo bằng quy tắc anchor và guardrail trước khi hiển thị."""
+    """Kết quả LLM đánh giá 100% và guardrail kiểm tra chéo rewrite trước khi hiển thị."""
     requirements = [
         {"name": "Power BI", "importance": "required"},
         {"name": "Excel", "importance": "required"},
@@ -209,11 +243,9 @@ async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
         calls.append(1)
         return {
             "requirements": [
-                {"id": "r1", "match": 1, "evidence_lines": [4], "note": ""},
-                # Excel chỉ nằm ở mục Kỹ năng → phải hạ xuống 0.5 dù LLM chấm 1
-                {"id": "r2", "match": 1, "evidence_lines": [7], "note": ""},
-                # LLM khẳng định có nhưng không chỉ ra dòng bằng chứng → bỏ, dùng kết quả quy tắc (0)
-                {"id": "r3", "match": 1, "evidence_lines": [], "note": ""},
+                {"id": "r1", "match": 1, "evidence_lines": [4], "note": "Power BI thành thạo"},
+                {"id": "r2", "match": 0.5, "evidence_lines": [7], "note": "Excel chỉ mới liệt kê"},
+                {"id": "r3", "match": 0, "evidence_lines": [], "note": "Chưa thấy kinh nghiệm Thống kê"},
             ],
             "suggestions": [
                 {
@@ -226,7 +258,7 @@ async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
                 {
                     "requirement_id": "r1",
                     "line": 5,
-                    "rewrite": "Viết truy vấn SQL giúp giảm 30% thời gian làm báo cáo",
+                    "rewrite": "Viết truy vấn SQL tổng hợp dữ liệu đơn hàng cho báo cáo tháng, giúp giảm 30% thời gian làm báo cáo",
                     "reason": "Định lượng",
                 },
                 # Dòng chỉ liệt kê kỹ năng → không viết lại
@@ -258,9 +290,10 @@ async def test_llm_batch_scoring_is_cross_checked(monkeypatch, tmp_path):
     by_skill = {a["skill"]: a for a in result["assessments"]}
     assert by_skill["Power BI"]["match"] == 1
     assert (by_skill["Excel"]["match"], by_skill["Excel"]["source"]) == (0.5, "llm")
-    assert (by_skill["Thống kê"]["match"], by_skill["Thống kê"]["source"]) == (0, "rule")
+    assert (by_skill["Thống kê"]["match"], by_skill["Thống kê"]["source"]) == (0, "llm")
     assert [s["skill"] for s in result["suggestions"]] == ["Power BI"]
     assert len(result["manual_review_items"]) == 1
-    assert result["match_score"] == round((3 * 1 + 3 * 0.5 + 0) / 8 * 100, 1)
+    assert result["match_score"] == round((3 * 1 + 3 * 0.5 + 2 * 0) / 8 * 100, 1)
+    # Nhận xét 100% từ AI summary
     assert result["gap_summary"] == "CV có bằng chứng tốt cho Power BI."
     assert len(calls) == 1 and result["llm_calls"] == 1

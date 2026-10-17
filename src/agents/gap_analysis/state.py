@@ -22,11 +22,15 @@ class GapAnalysisState(TypedDict, total=False):
     cv_lines: list[dict[str, Any]]
     # Yêu cầu của JD: [{"id", "name", "importance", "aliases"}]; JD thư viện truyền sẵn, JD tự dán thì trích ở node retrieve
     requirements: list[dict[str, Any]]
+    # given: có sẵn (JD thư viện / đã trích trước); llm: vừa trích bằng AI; dictionary: AI lỗi, dùng từ điển kỹ năng
+    requirements_source: str
     # Kết quả chấm từng yêu cầu: [{"id", "skill", "importance", "weight", "match", "status", "evidence", "note", "source"}]
     assessments: list[dict[str, Any]]
     # Gợi ý viết lại thô từ LLM trước khi chuẩn hoá: [{"requirement_id", "line", "rewrite", "reason"}]
     raw_suggestions: list[dict[str, Any]]
     llm_summary: str | None
+    # Một kỹ năng của JD có trong CV mà nhà tuyển dụng nhiều khả năng hỏi sâu (đã kiểm tra nhắc đúng kỹ năng)
+    interview_focus: str | None
     match_score: float | None
     score_breakdown: list[dict[str, Any]]
     # PRD mục 5.2: tối đa 2 lệnh gọi LLM mỗi lượt phân tích

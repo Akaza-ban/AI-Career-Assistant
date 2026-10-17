@@ -1,0 +1,522 @@
+[
+  {
+    "question": "Ở trang CV, định dạng và dung lượng nào được chấp nhận? A. PDF hoặc DOCX, tối đa 5 MB. B. Chỉ ảnh JPG. C. DOC không giới hạn dung lượng.",
+    "chunk_ids": [
+      "f96f7f38117798bf19156fcfc6817eacd0282c836b4ba39b32f1c6d1c57d2bab",
+      "28df98abd73bcb390a9f30055b45f0dfcd52accacf887e89241a15437336560e",
+      "c66162abede2f78287df8c6277cc9a76c7ce2cbbb75426f561a04e8c31c47c7b"
+    ],
+    "scores": [
+      1.0233197275429002,
+      1.0193119063012062,
+      0.9749472139373656
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 0.5,
+      "best_evidence_rank": 2,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "PDF",
+        "DOCX",
+        "5 MB"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.16666666666666666,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.3333333333333333,
+      "Precision@3": 0.6666666666666666,
+      "NDCG@3": 0.7653606369886217
+    }
+  },
+  {
+    "question": "Muốn tải CV và chọn đúng phiên bản trước khi phân tích, tôi làm thế nào? A. Chỉ đổi tên tệp. B. Bấm Chọn file hoặc kéo thả tệp, rồi kiểm tra phiên bản trong danh sách Tất cả CV. C. Tải lên là tự chạy phân tích.",
+    "chunk_ids": [
+      "693ded47dad91e929a023ef1be882b04840c4caf77af2b98b27f09093e862a00",
+      "79f69ca8d7548d16fda0ecc8d46131f18b82a9dbd45d82a5473251a468f3a42c",
+      "877c63a787a43c9a74b1629435d8ea0344b7989eefb74e4ce6943f90b408265a"
+    ],
+    "scores": [
+      1.0186242243905466,
+      0.9820551471330472,
+      0.9592550482856693
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 0.6666666666666666,
+      "found_keywords": [
+        "Chọn file",
+        "Tất cả CV",
+        "phiên bản"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.14285714285714285,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.42857142857142855,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "CV PDF tải lên thành công nhưng thiếu nội dung vì là ảnh quét, tôi nên làm gì? A. Chỉ đổi đuôi sang DOCX. B. Giữ nguyên vì hệ thống luôn đọc được ảnh. C. Kiểm tra chi tiết và xuất lại bản có văn bản từ tài liệu gốc.",
+    "chunk_ids": [
+      "8277859bb7bae5573d620049269357b98251f198e589686205b3fbde3e67e68b",
+      "28df98abd73bcb390a9f30055b45f0dfcd52accacf887e89241a15437336560e",
+      "c66162abede2f78287df8c6277cc9a76c7ce2cbbb75426f561a04e8c31c47c7b"
+    ],
+    "scores": [
+      1.0677949428558349,
+      1.022079843632911,
+      0.995115234514857
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "chi tiết",
+        "ảnh quét",
+        "văn bản",
+        "phiên bản mới"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.25,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.5,
+      "Precision@3": 0.6666666666666666,
+      "NDCG@3": 0.7653606369886217
+    }
+  },
+  {
+    "question": "Match Score 70% trong Gap Analysis có nghĩa gì? A. CV được đánh giá phù hợp khoảng 70% với yêu cầu JD. B. Chắc chắn có 70% khả năng được tuyển. C. Điểm STAR là 70 trên 100.",
+    "chunk_ids": [
+      "39c71fc2301bc18eb4fac84d9192ea3e4fde456a3e59edf314a9eeb7f9d6ac91",
+      "f330f05de45ea14a033418cc7f716fa3fad65d7adfa036c0b4553382f960b933",
+      "a2c8f38a0c116498ec1727fe540410950c3d2538acddf6af9351c8a5dbecfc07"
+    ],
+    "scores": [
+      1.0726742058992385,
+      1.0140093502670113,
+      0.9413525255347465
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "Match Score",
+        "70%",
+        "JD",
+        "xác suất"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.1,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.3,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Tôi dán JD nhưng nút Bắt đầu phân tích chưa khả dụng. Điều kiện nào cần kiểm tra? A. Chỉ cần tên công ty. B. Có tên vị trí, mô tả công việc, yêu cầu ứng viên và tổng cộng ít nhất 50 từ, đồng thời không đang gửi yêu cầu. C. Chỉ cần dán một dòng bất kỳ.",
+    "chunk_ids": [
+      "86ddf4b3d6e98bb37b6b59d40a34a3c0f51f0b1be931b4e2a5544cdf5c3c9883",
+      "be934174747d4330a751ecc8680b252eebb2a2d7269e67ff4902d9e49b987a74",
+      "739990b206815b1b8116826fca2af4c41ade214d33e0dcd6b85b1b26ff1074b9"
+    ],
+    "scores": [
+      1.0983037889003753,
+      1.0143597417285724,
+      0.9733017478264989
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "tên vị trí",
+        "mô tả công việc",
+        "yêu cầu ứng viên",
+        "50 từ",
+        "đang gửi"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.3333333333333333,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 1.0,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Sau Gap Analysis, cách nào cải thiện CV và theo dõi tiến bộ đúng? A. Thêm mọi kỹ năng còn thiếu dù chưa biết. B. So điểm với hai JD bất kỳ. C. Bổ sung kinh nghiệm thật có minh chứng, học kỹ năng thiếu rồi phân tích lại cùng JD.",
+    "chunk_ids": [
+      "de18a419f03f97380bcced53e8a592bbadd849186eb91dfdbc5b297363dbc6e5",
+      "7616294c469f9075dff349e59041eaed99be1a516c4abf0be2169bfe4ff8e884",
+      "fea3dd9cbe8005a498a710c23444b4fe5f4cc3772d54f54fbe359b2d8e42ce86"
+    ],
+    "scores": [
+      1.0384841754071175,
+      1.033593809510034,
+      1.0160825210988245
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 0.6666666666666666,
+      "found_keywords": [
+        "minh chứng",
+        "kỹ năng",
+        "cùng JD"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.14285714285714285,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.42857142857142855,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Trong Mock Interview, STAR gồm những phần nào? A. Situation, Task, Action, Result. B. Skill, Test, Award, Rank. C. Chỉ cần kể thành tích của cả nhóm.",
+    "chunk_ids": [
+      "68ffce9b7d84515c67fd3a76792c3b90b06f01d671580d7be7bc765a8b12dcf4",
+      "113c5a3ed4454b764069f9e28788eb847052fe74fa42f62e41fd8fc25db46bc0",
+      "731f812823af49fbfa8172cdcd46db99495d7245ee6b7b214bdbb27c3340e88b"
+    ],
+    "scores": [
+      1.0408523738384245,
+      1.00947073553839,
+      0.9161421509962233
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "STAR",
+        "Situation",
+        "Task",
+        "Action",
+        "Result"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.25,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.5,
+      "Precision@3": 0.6666666666666666,
+      "NDCG@3": 0.7653606369886217
+    }
+  },
+  {
+    "question": "Quy trình bắt đầu Mock Interview đúng là gì? A. Không cần CV hay vị trí. B. Chọn CV và vị trí, còn lượt luyện, bấm Vào phòng chờ rồi Sẵn sàng. C. Chỉ mở báo cáo cũ.",
+    "chunk_ids": [
+      "309e55a844420c32196694f755999bb75b9442bb5d6d47b585bd213af77f799a",
+      "2120150ffeb3465ee434dcf1b92a7b59e1d5c6ce62ad7ca3917fb3a0ec94d1ff",
+      "f4c18e8c3fbeefbf99286c84c751ac8b29797f58716169ae658e9144f180216c"
+    ],
+    "scores": [
+      1.0316700973818378,
+      0.9927128077762446,
+      0.9860099711921065
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "CV",
+        "vị trí",
+        "Vào phòng chờ",
+        "Sẵn sàng"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.07692307692307693,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.23076923076923078,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Điểm STAR và Match Score có cùng thang đo không? A. Cả hai đều 0–100%. B. Cả hai đều 0–5. C. STAR là 0–5, còn Match Score là 0–100%.",
+    "chunk_ids": [
+      "e36d497cdf263a627e61e58181a0a77b05fad4a3423da609ea9921ded044d2f3",
+      "694cbc494a5622ffcdca513017bdd1ac11fb663e26bd5d68138f326abea65bef",
+      "f4c18e8c3fbeefbf99286c84c751ac8b29797f58716169ae658e9144f180216c"
+    ],
+    "scores": [
+      1.076591283611713,
+      0.8800533025983781,
+      0.8705679355780866
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "STAR",
+        "0–5",
+        "Match Score",
+        "0–100%"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.2,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.4,
+      "Precision@3": 0.6666666666666666,
+      "NDCG@3": 0.7039180890341347
+    }
+  },
+  {
+    "question": "Ở trang Lịch sử & tiến bộ, có thể lọc dòng thời gian theo gì? A. Tất cả, Phỏng vấn hoặc Phân tích CV. B. Chỉ hôm nay. C. Luôn phải chọn riêng ngày bắt đầu và kết thúc.",
+    "chunk_ids": [
+      "bd0d02a55381b9770f4d9b0c5554b9ff705bbed8fa82a81895ed5dbd840d4800",
+      "0a7b31dea0d61370cf080bb3483013bdb3556264c02f4f5cc3c43ceaa4880dbf",
+      "8dcb44dda21c902b041ad0846d85790d51cb7a1150f85d6b5cac7c26eb3ab0aa"
+    ],
+    "scores": [
+      1.066228339076042,
+      1.0185998171477786,
+      1.0159805585872008
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "Tất cả",
+        "Phỏng vấn",
+        "Phân tích CV",
+        "Dòng thời gian"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.1,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.3,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Lịch sử trống dù tôi muốn xem các buổi cũ, nên xử lý thế nào? A. Chỉ đổi tên CV. B. Chọn bộ lọc Tất cả, kiểm tra đã có hoạt động hay chưa. C. Chỉ xem mục Phỏng vấn.",
+    "chunk_ids": [
+      "adaad2d75064842007e3a72e6e489c5b8485a56b2d9a464bdf22735c4043fea9",
+      "8dcb44dda21c902b041ad0846d85790d51cb7a1150f85d6b5cac7c26eb3ab0aa",
+      "bd0d02a55381b9770f4d9b0c5554b9ff705bbed8fa82a81895ed5dbd840d4800"
+    ],
+    "scores": [
+      1.071659117937088,
+      1.043010124611476,
+      1.0080420408397912
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "Tất cả",
+        "chưa có hoạt động"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.25,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.75,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Muốn mở chi tiết phiên cũ ở History, chọn đường dẫn nào? A. Cả hai loại phiên đều mở trang CV. B. Chỉ xem được biểu đồ. C. Phỏng vấn mở /student/interview/{id}/report, phân tích mở /student/analysis/{id}.",
+    "chunk_ids": [
+      "8dcb44dda21c902b041ad0846d85790d51cb7a1150f85d6b5cac7c26eb3ab0aa",
+      "467f53f4fdb380fd9a90f1a4178e7abac804108cf86f0415e27b137d02663db9",
+      "bc4d7e1fa5a7e4e61483a12f6a67a3396c8efb056c1ee82cb51dc5b5778c6618"
+    ],
+    "scores": [
+      1.0280552482412706,
+      0.9319230960599106,
+      0.9257240624932495
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 0.3333333333333333,
+      "best_evidence_rank": 3,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "/student/interview/{id}/report",
+        "/student/analysis/{id}"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.0,
+      "Precision@1": 0.0,
+      "NDCG@1": 0.0,
+      "Recall@3": 1.0,
+      "Precision@3": 0.3333333333333333,
+      "NDCG@3": 0.5
+    }
+  },
+  {
+    "question": "Trong Dashboard Cố vấn, at-risk có ý nghĩa gì và xem nhóm này ở đâu? A. Nhóm cần chú ý, xem lý do cảnh báo và danh sách status=flagged. B. Chắc chắn không đáp ứng công việc. C. Tất cả sinh viên đã sẵn sàng.",
+    "chunk_ids": [
+      "c914097e171461d757bbb55460d097f9fe639b14040ef22b8f1ff47a74a9b1c7",
+      "510caf795b33e990cbfdafc3c3ad02542564ba75667db8f2b92e1e71f1da405c",
+      "c8dd6b834187d08fa1f2c85513e6dcb31d6e915e08145554ba4208b1ea715fca"
+    ],
+    "scores": [
+      1.0458171726234498,
+      1.0390840258863236,
+      0.9952825701548023
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 0.5,
+      "best_evidence_rank": 2,
+      "best_evidence_keyword_coverage": 0.75,
+      "found_keywords": [
+        "at-risk",
+        "cần chú ý",
+        "lý do cảnh báo",
+        "status=flagged"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.2,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.6,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Tỷ lệ hoạt động 30 ngày qua trên Dashboard Cố vấn nên được hiểu thế nào? A. Xác suất mỗi sinh viên được tuyển dụng. B. Tỷ trọng sinh viên trong nhóm có hoạt động trong 30 ngày qua, cần xem cùng tổng số và mục tiêu. C. Điểm STAR trung bình.",
+    "chunk_ids": [
+      "79ec61a9fe1282a9c602771edf57a9af111e38fb4baf53c0c07c2d359364d34f",
+      "4847a3e12e05f451c2892847f475d537633c4c9d6ffe3d1b00b57681f331ad00",
+      "a628b5bee78de9cdd3b5128937fac300843f44bdcf817efc67b23235ceb17c41"
+    ],
+    "scores": [
+      1.0624436644296493,
+      1.0569151896622875,
+      1.0193821896163242
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 0.5,
+      "best_evidence_rank": 2,
+      "best_evidence_keyword_coverage": 1.0,
+      "found_keywords": [
+        "tỷ trọng",
+        "30 ngày",
+        "tổng số",
+        "mục tiêu"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.5,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 1.0,
+      "Precision@3": 0.6666666666666666,
+      "NDCG@3": 1.0
+    }
+  },
+  {
+    "question": "Cố vấn muốn tìm buổi phỏng vấn chờ nhận xét nhưng không mở được nội dung chi tiết, cần làm gì? A. Chỉ nhìn điểm là được quyền đọc CV. B. Đổi sang tài khoản sinh viên bất kỳ. C. Xem nhóm status=pending và cần sinh viên bật quyền chia sẻ nội dung.",
+    "chunk_ids": [
+      "be8dfc2bfdf18eeaa54b51de6c8a3439a3a97bb9c8cbb656c3f16ad440d56916",
+      "dc0e8f5fed641c421d1edcfd339b73e8ca7ea7acd2211d7e47388a49400d5029",
+      "cc9eb39e4312c3ef0ced1080a88585f02475466c1d4751439481a9cc136b6381"
+    ],
+    "scores": [
+      1.0794668436050414,
+      1.0387032120634028,
+      1.0194538404595932
+    ],
+    "metrics": {
+      "context_recall": 1.0,
+      "context_precision": 1.0,
+      "best_evidence_rank": 1,
+      "best_evidence_keyword_coverage": 0.5,
+      "found_keywords": [
+        "Chờ nhận xét",
+        "status=pending",
+        "quyền chia sẻ",
+        "/student/share"
+      ],
+      "missing_keywords": [],
+      "expected_route_found": true
+    },
+    "rank_metrics": {
+      "Recall@1": 0.25,
+      "Precision@1": 1.0,
+      "NDCG@1": 1.0,
+      "Recall@3": 0.75,
+      "Precision@3": 1.0,
+      "NDCG@3": 1.0
+    }
+  }
+]

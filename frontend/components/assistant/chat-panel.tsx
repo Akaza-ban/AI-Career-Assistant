@@ -12,6 +12,7 @@ import {
   MessageCircleQuestion,
   RotateCw,
   Sparkles,
+  Square,
   SquarePen,
   ThumbsDown,
   ThumbsUp,
@@ -21,6 +22,7 @@ import { toast } from "sonner"
 
 import { ActionBadges } from "@/components/assistant/action-badges"
 import { AssistantMarkdown } from "@/components/assistant/assistant-markdown"
+import { AssistantCards, AssistantChips } from "@/components/assistant/assistant-cards"
 import { useAssistant } from "@/components/assistant/assistant-provider"
 import { targetLabel } from "@/components/assistant/element-highlighter"
 import { SourceAccordion } from "@/components/assistant/source-accordion"
@@ -145,7 +147,7 @@ function PointingCard({ selector, onClose, onReopen }: { selector: string; onClo
 export function ChatPanel() {
   const {
     isOpen, messages, isThinking, isExecutingAction, activeAction, pathname, userRole, error, highlightSelector,
-    sendMessage, retryLast, clearChat, closeChat, dismissHighlight,
+    sendMessage, stop, retryLast, clearChat, closeChat, dismissHighlight,
   } = useAssistant()
   const profile = useProfile()
   const busy = isThinking || isExecutingAction || activeAction !== null
@@ -266,10 +268,14 @@ export function ChatPanel() {
                 <article key={message.id} className="grid gap-2.5">
                   <div className="text-sm leading-[22px] text-ink wrap-anywhere">
                     <span className="sr-only">Trợ lý: </span>
-                    <AssistantMarkdown content={message.content} userRole={userRole} />
+                    <AssistantMarkdown content={message.content} userRole={userRole} isStreaming={message.is_streaming} />
                   </div>
-                  {message.actions && <ActionBadges actions={message.actions} />}
+                  {(message.actions || message.ui_actions) && <ActionBadges actions={message.actions ?? []} uiActions={message.ui_actions} />}
                   {message.sources && !isAssistantRefusal(message.content) && <SourceAccordion sources={message.sources} userRole={userRole} />}
+                  {message.cards && <AssistantCards cards={message.cards} role={userRole} />}
+                  {message.chips && <AssistantChips chips={message.chips} role={userRole} disabled={busy || message !== messages.at(-1)} onSelect={(chip) => { void sendMessage(chip.label, chip) }} />}
+                  {message.notices?.map((notice, index) => <p key={index} className="text-xs text-ink-3">{notice}</p>)}
+                  {message.interrupted && <p className="text-xs text-ink-3">Câu trả lời đã bị gián đoạn.</p>}
                   {!message.is_streaming && (
                     <div role="group" aria-label="Đánh giá câu trả lời" className="-ml-1.5 flex items-center gap-0.5">
                       {([1, -1] as const).map((value) => {
@@ -346,14 +352,17 @@ export function ChatPanel() {
             placeholder="Hỏi trợ lý…"
             className="field-sizing-content max-h-32 min-h-8 flex-1 resize-none bg-transparent py-1 text-sm leading-6 outline-none placeholder:text-ink-3"
           />
-          <button
+          {isThinking ? <button type="button" onClick={stop} aria-label="Dừng trả lời"
+            className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-on-ink">
+            <Square className="size-3.5" aria-hidden />
+          </button> : <button
             type="submit"
             disabled={!draft.trim() || busy}
             aria-label="Gửi câu hỏi"
             className="grid size-8 shrink-0 place-items-center rounded-full bg-ink text-on-ink transition-colors disabled:bg-surface disabled:text-ink-3"
           >
             <ArrowUp className="size-4" strokeWidth={2} aria-hidden />
-          </button>
+          </button>}
         </div>
         {messages.length === 0 && (
           <p className="text-xs leading-[18px] text-ink-3">Trợ lý trả lời theo hướng dẫn sử dụng và có thể chưa đúng. Trợ lý chỉ thao tác khi bạn bấm.</p>

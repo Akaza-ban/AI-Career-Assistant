@@ -78,8 +78,8 @@ def record_audit_log(
             )
             conn.commit()
             return cursor.lastrowid or 0
-    except Exception as e:
-        logger.warning(f"Lỗi ghi bảng audit_log: {e}")
+    except Exception:
+        logger.warning("Lỗi ghi bảng audit_log")
         return -1
 
 
@@ -103,8 +103,8 @@ def get_audit_logs(limit: int = 50, db_path: Path = DEFAULT_AUDIT_DB_PATH) -> li
             )
             rows = cursor.fetchall()
             return [dict(row) for row in rows]
-    except Exception as e:
-        logger.warning(f"Lỗi đọc bảng audit_log: {e}")
+    except Exception:
+        logger.warning("Lỗi đọc bảng audit_log")
         return []
 
 

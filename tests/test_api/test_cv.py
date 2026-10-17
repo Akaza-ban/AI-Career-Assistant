@@ -253,6 +253,27 @@ async def test_file_and_text_preview(client):
 
 
 @pytest.mark.asyncio
+async def test_in_app_preview_pages_for_pdf_and_template_for_docx(client):
+    """Xem CV trong app: PDF → ảnh từng trang (không dùng trình xem PDF của trình duyệt); DOCX → mẫu CV."""
+    cv = (await upload(client, "cv.pdf", make_pdf(CV_TEXT))).json()
+    preview = (await client.get(f"/api/v1/cv/{cv['id']}/preview", headers=STUDENT)).json()
+    assert preview["kind"] == "pages" and preview["page_count"] == 1 and preview["document"] is None
+    page = await client.get(f"/api/v1/cv/{cv['id']}/pages/1", headers=STUDENT)
+    assert page.status_code == 200 and page.headers["content-type"] == "image/png"
+    assert page.content.startswith(b"\x89PNG")
+    missing = await client.get(f"/api/v1/cv/{cv['id']}/pages/2", headers=STUDENT)
+    assert missing.status_code == 404 and missing.json()["code"] == "cv_page_not_found"
+
+    docx = (await upload(client, "cv.docx", make_docx(["Nguyễn Minh Anh", "KỸ NĂNG", CV_TEXT]))).json()
+    preview = (await client.get(f"/api/v1/cv/{docx['id']}/preview", headers=STUDENT)).json()
+    assert preview["kind"] == "document" and preview["page_count"] is None
+    assert preview["document"]["header"][0]["text"] == "Nguyễn Minh Anh"
+    assert preview["document"]["header"][0]["kind"] == "name"
+    no_pages = await client.get(f"/api/v1/cv/{docx['id']}/pages/1", headers=STUDENT)
+    assert no_pages.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_advisor_cannot_use_student_cv_endpoints(client):
     response = await client.get("/api/v1/cv", headers=ADVISOR)
     assert response.status_code == 403
@@ -300,6 +321,62 @@ async def test_upload_scanned_pdf_triggers_ocr(client):
     text_res = await client.get(f"/api/v1/cv/{data['id']}/text", headers=STUDENT)
     assert text_res.status_code == 200
     assert "Python" in text_res.json()["text"]
+
+    # Cờ "đọc bằng OCR" được lưu lại (Trình tối ưu dùng để nhắc sinh viên kiểm tra chữ), PDF có chữ thì không
+    listed = {c["id"]: c for c in (await client.get("/api/v1/cv", headers=STUDENT)).json()}
+    assert listed[data["id"]]["read_by_ocr"] is True
+    text_pdf = (await upload(client, "text_cv.pdf", make_pdf(CV_TEXT))).json()
+    assert text_pdf["read_by_ocr"] is False
+
+
+def test_backfill_ocr_flags_for_old_versions():
+    """CV tạo trước khi có cờ: PDF không có lớp chữ là bản OCR, bản khôi phục theo bản gốc, DOCX thì không."""
+    from src.services.cv_versions import backfill_ocr_flags
+
+    with SessionLocal() as db:
+        scan = CvVersion(
+            id="cv_scan_cu",
+            owner_id=DEMO_STUDENT_ID,
+            version=901,
+            file_name="scan.pdf",
+            file_type="pdf",
+            size_bytes=1,
+            content_text=CV_TEXT,
+            uploaded_at=utcnow(),
+            read_by_ocr=None,
+        )
+        restored = CvVersion(
+            id="cv_scan_khoi_phuc",
+            owner_id=DEMO_STUDENT_ID,
+            version=902,
+            file_name="scan_v2.pdf",
+            file_type="pdf",
+            size_bytes=1,
+            content_text=CV_TEXT,
+            origin="restored",
+            restored_from_id="cv_scan_cu",
+            uploaded_at=utcnow(),
+            read_by_ocr=None,
+        )
+        docx = CvVersion(
+            id="cv_docx_cu",
+            owner_id=DEMO_STUDENT_ID,
+            version=903,
+            file_name="cv.docx",
+            file_type="docx",
+            size_bytes=1,
+            content_text=CV_TEXT,
+            uploaded_at=utcnow(),
+            read_by_ocr=None,
+        )
+        db.add_all([scan, restored, docx])
+        db.commit()
+        cv_files.save_file(DEMO_STUDENT_ID, "cv_scan_cu", "pdf", make_scanned_pdf(CV_TEXT))
+        try:
+            backfill_ocr_flags(db)
+            assert (scan.read_by_ocr, restored.read_by_ocr, docx.read_by_ocr) == (True, True, False)
+        finally:
+            cv_files.delete_file(DEMO_STUDENT_ID, "cv_scan_cu", "pdf")
 
 
 @pytest.mark.asyncio

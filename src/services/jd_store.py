@@ -1,74 +1,30 @@
 """Quản lý Vector Document Store cho dữ liệu Job Description (JD)."""
 
 import json
-import logging
 from pathlib import Path
 from typing import Any
 
+from chromadb.config import Settings as ChromaSettings
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
-from langchain_openai import OpenAIEmbeddings
 
 from src.config import get_settings
-
-logger = logging.getLogger(__name__)
-
-
-class LocalChromaEmbeddings(Embeddings):
-    """
-    Embedding function cục bộ sử dụng FastEmbed (BAAI/bge-small-en-v1.5) hoặc Chromadb Default.
-    Chạy offline 100%, tốc độ cao trên CPU, không tốn chi phí API và không bị chậm tải mạng.
-    """
-
-    def __init__(self):
-        try:
-            from fastembed import TextEmbedding
-
-            self._model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-            self._is_fastembed = True
-        except Exception:
-            from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-
-            self._ef = DefaultEmbeddingFunction()
-            self._is_fastembed = False
-
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        if self._is_fastembed:
-            return [vec.tolist() for vec in self._model.embed(texts)]
-        return self._ef(texts)
-
-    def embed_query(self, text: str) -> list[float]:
-        if self._is_fastembed:
-            return list(self._model.embed([text]))[0].tolist()
-        return self._ef([text])[0]
+from src.services.providers.gateway import GatewayEmbeddings, LocalChromaEmbeddings, provider_scope
 
 
 def _get_embedding_function() -> Embeddings:
-    """
-    Khởi tạo embedding model tối ưu cho Chroma:
-    1. Ưu tiên OpenAIEmbeddings nếu có OPENAI_API_KEY hợp lệ.
-    2. Fallback tự động sang LocalChromaEmbeddings (sẵn có trong chromadb).
-    """
+    """Use gateway-owned OpenAI embeddings or local inference with the same privacy boundary."""
     settings = get_settings()
     openai_key = settings.openai_api_key
 
     # Kiểm tra nếu có API key OpenAI hợp lệ (không phải giá trị placeholder)
     is_valid_openai = bool(
-        openai_key
-        and not openai_key.startswith("sk-your_")
-        and not openai_key.startswith("sk-dummy")
+        openai_key and not openai_key.startswith("sk-your_") and not openai_key.startswith("sk-dummy")
     )
 
     if is_valid_openai:
-        try:
-            return OpenAIEmbeddings(
-                model="text-embedding-3-small",
-                api_key=openai_key,
-                base_url=settings.llm_base_url if "openai.com" in (settings.llm_base_url or "") else None,
-            )
-        except Exception as e:
-            logger.warning("Không thể khởi tạo OpenAIEmbeddings, chuyển sang LocalChromaEmbeddings: %s", e)
+        return GatewayEmbeddings()
 
     return LocalChromaEmbeddings()
 
@@ -83,7 +39,7 @@ class JDDocumentStore:
         self.collection_name = collection_name
         self.persist_dir = self.settings.chroma_persist_dir
 
-        self.embeddings = embeddings or _get_embedding_function()
+        self.embeddings = GatewayEmbeddings(embeddings) if embeddings is not None else _get_embedding_function()
         self._vector_store: Chroma | None = None
 
     def _get_vector_store(self) -> Chroma:
@@ -94,6 +50,7 @@ class JDDocumentStore:
                 collection_name=self.collection_name,
                 embedding_function=self.embeddings,
                 persist_directory=self.persist_dir,
+                client_settings=ChromaSettings(anonymized_telemetry=False),
             )
         return self._vector_store
 
@@ -133,7 +90,10 @@ class JDDocumentStore:
 
         store = self._get_vector_store()
         # Thêm documents với ID cố định để tránh duplicate khi re-index
-        store.add_documents(documents=docs, ids=ids)
+        with provider_scope(origins=tuple(f"jd:{item['id']}" for item in jds)) as scope:
+            for item, doc in zip(jds, docs, strict=True):
+                scope.prime(doc.page_content, f"jd:{item['id']}")
+            store.add_documents(documents=docs, ids=ids)
         return len(docs)
 
     def index_items(self, items: list[dict[str, Any]]) -> int:

@@ -46,13 +46,13 @@ export function AdvisorStatusBadge({ status }: { status: AdvisorAccountStatus })
 // Không có 0/O, 1/I/l để đọc qua điện thoại không nhầm
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
-/** Mật khẩu tạm dạng "Careerx-7Q4M2": đủ quy tắc mật khẩu (≥ 8 ký tự, có chữ và số, không khoảng trắng). */
+/** Mật khẩu tạm dạng "Careerv-7Q4M2": đủ quy tắc mật khẩu (≥ 8 ký tự, có chữ và số, không khoảng trắng). */
 export function generateTempPassword(): string {
   const bytes = new Uint8Array(5)
   crypto.getRandomValues(bytes)
   const chars = Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length])
   if (!chars.some((c) => /\d/.test(c))) chars[1] = String(2 + (bytes[1] % 8))
-  return `Careerx-${chars.join("")}`
+  return `Careerv-${chars.join("")}`
 }
 
 export function Stars({ value }: { value: number }) {

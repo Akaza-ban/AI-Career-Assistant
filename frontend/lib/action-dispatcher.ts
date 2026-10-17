@@ -3,9 +3,9 @@ import { toast } from "sonner"
 
 import { api } from "@/lib/api"
 import { confirmAction } from "@/lib/assistant-api"
-import { resolveAssistantRoute } from "@/lib/assistant-navigation"
+import { resolveAssistantRoute, resolveUIElement, resolveUIRoute } from "@/lib/assistant-navigation"
 import type { AgentPageEventDetail } from "@/lib/use-agent-actions"
-import type { AgentAction, UserRole } from "@/types/assistant"
+import type { AgentAction, UIAction, UserRole } from "@/types/assistant"
 
 interface DispatchOptions {
   role?: UserRole
@@ -56,17 +56,12 @@ async function dispatchPageEvent(name: string, params: Omit<AgentPageEventDetail
 
 /** Execute only after the confirmation flow grants consent for state-changing actions. */
 export async function dispatchAgentAction(
-  action: AgentAction,
+  action: AgentAction | UIAction,
   router: AppRouterInstance,
   setHighlightSelector: (selector: string | null, tooltip?: string, durationMs?: number) => void,
   options: DispatchOptions = {},
 ): Promise<boolean> {
   const role = options.role ?? (window.location.pathname.startsWith("/advisor") ? "advisor" : "student")
-  // Pending confirmation is not an execution failure and must not be logged as one.
-  if ((action.requires_confirmation || action.action_type === "START_ANALYSIS") && !options.confirmed) {
-    toast.info("Vui lòng xác nhận trước khi thực hiện hành động này.")
-    return false
-  }
   const navigate = async (route: string, query?: unknown) => {
     const safeRoute = resolveAssistantRoute(route, role)
     if (!safeRoute) throw new Error("Trang được đề xuất chưa khả dụng cho vai trò hiện tại.")
@@ -83,6 +78,33 @@ export async function dispatchAgentAction(
     await waitUntil(() => window.location.pathname === safeRoute && window.location.search === (search.size ? `?${search}` : "") ? true : null, options.signal)
   }
 
+  if ("type" in action) {
+    try {
+      options.signal?.throwIfAborted()
+      if (action.type === "navigate") {
+        const route = resolveUIRoute(action, role)
+        if (!route) throw new Error("Trang không hợp lệ cho vai trò hiện tại.")
+        await navigate(route)
+      } else if (action.type === "highlight") {
+        const target = resolveUIElement(action.element_id, role)
+        if (!target || window.location.pathname !== target.route) throw new Error("Thành phần chưa khả dụng trên trang này.")
+        await findHighlightElement(target.selector, options.signal)
+        setHighlightSelector(target.selector)
+      } else {
+        throw new Error("Loại hành động không được hỗ trợ.")
+      }
+      return true
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Không thể hiển thị vị trí cần tìm.")
+      return false
+    }
+  }
+
+  // Pending confirmation is not an execution failure and must not be logged as one.
+  if ((action.requires_confirmation || action.action_type === "START_ANALYSIS") && !options.confirmed) {
+    toast.info("Vui lòng xác nhận trước khi thực hiện hành động này.")
+    return false
+  }
   try {
     options.signal?.throwIfAborted()
     switch (action.action_type) {
@@ -168,3 +190,16 @@ export async function dispatchAgentAction(
 }
 
 export const executeAgentAction = dispatchAgentAction
+
+/** Reuse the dispatcher waits; stop before highlight if navigation fails. No acknowledgements. */
+export async function dispatchUIActions(
+  actions: UIAction[],
+  router: AppRouterInstance,
+  setHighlightSelector: (selector: string | null, tooltip?: string, durationMs?: number) => void,
+  options: DispatchOptions = {},
+): Promise<boolean> {
+  for (const action of actions) {
+    if (!await dispatchAgentAction(action, router, setHighlightSelector, options)) return false
+  }
+  return true
+}

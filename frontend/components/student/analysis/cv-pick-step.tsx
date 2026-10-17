@@ -31,7 +31,7 @@ export function CvZone({ cvs, selected, onSelect }: CvZoneProps) {
 
   return (
     <Zone id="cv-zone-title" title="CV">
-      <div data-agent-target="select-cv" className="-mt-3 flex items-center gap-3.5 border-b border-line py-4">
+      <div data-agent-target="select-cv" data-assistant-id="analysis-select-cv" className="-mt-3 flex items-center gap-3.5 border-b border-line py-4">
         <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-surface text-ink-2">
           <FileText className="size-[18px]" strokeWidth={1.75} aria-hidden />
         </span>

@@ -16,6 +16,9 @@ from src.agents.gap_analysis.graph import gap_analysis_agent
 
 
 async def main():
+    from src.services.providers.gateway import initialize_gateway_runtime
+
+    initialize_gateway_runtime()
     print("=" * 70)
     print("🎯 CHẠY THỬ NGHIỆM CV GAP-ANALYSIS AGENT (TÍCH HỢP LLM)")
     print("=" * 70)

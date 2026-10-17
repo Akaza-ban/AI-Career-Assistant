@@ -24,6 +24,7 @@ from src.db.models import User
 from src.models.schemas import AgentStatusResponse, ChatRequest, ChatResponse, UserProfile
 
 router = APIRouter()
+router.include_router(auth_routes.router)
 router.include_router(cv_routes.router)
 router.include_router(analysis_routes.router)
 router.include_router(feedback_routes.router)
@@ -70,7 +71,7 @@ def get_me(user: CurrentUser) -> User:
 
 
 @router.post("/chat", response_model=ChatResponse, tags=["General Chat"])
-async def chat(request: ChatRequest) -> ChatResponse:
+async def chat(request: ChatRequest, user: CurrentUser) -> ChatResponse:
     """Chat với AI agent hỗ trợ định hướng chung."""
     try:
         result = await agent.ainvoke({"query": request.message})

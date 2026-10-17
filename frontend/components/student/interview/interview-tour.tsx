@@ -23,7 +23,7 @@ const MINUTES = (QUESTION_COUNT * SECONDS_PER_QUESTION) / 60
 
 // ---------- "Không hiển thị lại" (chỉ lưu trên trình duyệt này) ----------
 
-const INTRO_HIDDEN_KEY = "careerx:interview-intro-hidden"
+const INTRO_HIDDEN_KEY = "careerv:interview-intro-hidden"
 
 export function interviewIntroHidden(): boolean {
   try {

@@ -9,6 +9,8 @@ from src.api.deps import CurrentStudent, DbSession
 from src.db.models import User, utcnow
 from src.models.schemas import (
     CapabilityAnswerRequest,
+    CapabilityDraftRequest,
+    CapabilityLineDecisionRequest,
     OptimizerSessionResponse,
     SuggestionContextRequest,
     SuggestionDecisionRequest,
@@ -33,6 +35,16 @@ def get_optimizer(analysis_id: str, user: CurrentStudent, db: DbSession) -> dict
     Nội dung CV, các gợi ý diễn đạt lại (kèm quyết định hiện tại) và các kỹ năng thiếu cần SV tự xác nhận.
     Chỉ mở được khi lượt phân tích đã hoàn tất và phiên bản CV đó còn tồn tại.
     """
+    return _response(db, user, analysis_id)
+
+
+@router.post("/prepare", response_model=OptimizerSessionResponse)
+async def prepare_suggestions(analysis_id: str, user: CurrentStudent, db: DbSession) -> dict[str, Any]:
+    """
+    Soạn gợi ý viết lại riêng cho phiên (suggestions_state = pending, hoặc failed khi SV bấm Thử lại): một lần gọi LLM
+    chỉ để viết lại mọi câu mô tả trong CV, lưu lại cho các lần mở sau. Đã có gợi ý thì trả về luôn, không gọi lại.
+    """
+    await cv_optimizer.prepare_suggestions(db, user, analysis_id, utcnow())
     return _response(db, user, analysis_id)
 
 
@@ -70,6 +82,31 @@ def answer_capability_check(
     """
     cv_optimizer.answer_check(
         db, user, analysis_id, requirement_id, body.has_experience, body.context, body.learning_note, utcnow()
+    )
+    return _response(db, user, analysis_id)
+
+
+@router.post("/capability-checks/{requirement_id}/draft", response_model=OptimizerSessionResponse)
+async def draft_capability_line(
+    analysis_id: str, requirement_id: str, body: CapabilityDraftRequest, user: CurrentStudent, db: DbSession
+) -> dict[str, Any]:
+    """
+    SV chọn "Có, đã dùng" cho kỹ năng còn thiếu, kể kinh nghiệm và chọn chỗ thêm: AI viết thành một câu cho CV chỉ từ
+    lời kể (không thêm số hay công cụ mới; không đạt thì dùng chính câu SV kể). Câu chỉ vào CV khi SV áp dụng.
+    """
+    await cv_optimizer.draft_capability_line(
+        db, user, analysis_id, requirement_id, body.context, body.entry_id, utcnow()
+    )
+    return _response(db, user, analysis_id)
+
+
+@router.post("/capability-checks/{requirement_id}/decision", response_model=OptimizerSessionResponse)
+def decide_capability_line(
+    analysis_id: str, requirement_id: str, body: CapabilityLineDecisionRequest, user: CurrentStudent, db: DbSession
+) -> dict[str, Any]:
+    """Áp dụng / sửa / bỏ qua câu kinh nghiệm đề xuất, hoặc hoàn tác; ghi Audit Trail."""
+    cv_optimizer.decide_capability_line(
+        db, user, analysis_id, requirement_id, body.decision, body.edited_text, utcnow()
     )
     return _response(db, user, analysis_id)
 

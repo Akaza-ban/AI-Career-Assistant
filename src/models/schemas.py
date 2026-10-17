@@ -29,7 +29,7 @@ class AgentStatusResponse(BaseModel):
     agent: str = Field(default="LangGraph Agent v1.0", description="Tên agent")
     llm_provider: str = Field(default="groq", description="Provider đang kích hoạt (groq / openrouter / openai)")
     model_name: str = Field(default="openai/gpt-oss-120b", description="Tên model đang dùng")
-    langsmith_tracing: bool = Field(default=True, description="Trạng thái LangSmith tracing")
+    langsmith_tracing: bool = Field(default=False, description="Trạng thái LangSmith tracing")
 
 
 class UserProfile(BaseModel):
@@ -107,7 +107,8 @@ class CvVersionResponse(BaseModel):
     size_bytes: int = Field(..., description="Dung lượng file (byte)")
     page_count: int | None = Field(default=None, description="Số trang (chỉ có với PDF)")
     read_by_ocr: bool = Field(
-        default=False, description="Chỉ có ở phản hồi tải lên: chữ được đọc bằng OCR vì file là PDF scan"
+        default=False,
+        description="Chữ được đọc bằng OCR vì file gốc là PDF scan (bản tối ưu / khôi phục thừa hưởng từ bản gốc)",
     )
     uploaded_at: UtcDatetime = Field(..., description="Thời điểm tải lên / tạo phiên bản")
     status: Literal["processing", "ready", "failed"] = Field(default="ready", description="Trạng thái xử lý")
@@ -230,6 +231,13 @@ class JDRecommendationItem(BaseModel):
     breakdown: list[dict[str, Any]] = Field(
         default_factory=list, description="Phân rã điểm theo Required/Preferred/Additional"
     )
+    score_source: Literal["analysis", "estimate"] = Field(
+        default="estimate",
+        description="analysis: lấy từ lượt phân tích đã có của CV này; estimate: ước tính nhanh bằng quy tắc",
+    )
+    analysis_id: str | None = Field(
+        default=None, description="Lượt phân tích dùng làm điểm khi score_source = analysis"
+    )
 
 
 class CareerAdvice(BaseModel):
@@ -278,6 +286,11 @@ class JDComparisonItem(BaseModel):
     )
     llm_summary: str | None = Field(default=None, description="Nhận xét tổng quan của LLM cho vị trí này")
     llm_used: bool = Field(default=False, description="Xác nhận đối soát kỹ năng đã gọi qua LLM")
+    requirement_count: int = Field(default=0, description="Số yêu cầu kỹ năng trích được từ JD")
+    requirements_source: Literal["given", "llm", "dictionary"] = Field(
+        default="given",
+        description="given: có sẵn; llm: vừa trích bằng AI; dictionary: AI lỗi, chỉ có kỹ năng theo từ điển",
+    )
 
 
 class CompareJDsRequest(BaseModel):
@@ -433,6 +446,9 @@ class GapAnalysisResponse(BaseModel):
     suggestions: list[AnalysisSuggestion] = Field(default_factory=list)
     pending_review_count: int = Field(default=0, description="Số gợi ý không qua guardrail, chờ cố vấn xem lại")
     summary: str | None = None
+    interview_focus: str | None = Field(
+        default=None, description="Một kỹ năng của JD có trong CV mà nhà tuyển dụng nhiều khả năng hỏi sâu"
+    )
     llm_used: bool = Field(default=False, description="False khi chấm bằng quy tắc dự phòng (không có LLM)")
 
 
@@ -452,6 +468,13 @@ class CvDocLine(BaseModel):
     id: str = Field(..., description="Mã dòng, dạng 'l{line_no}'")
     line_no: int = Field(..., description="Số dòng trong CV (đếm các dòng không rỗng), khớp Evidence.line_no")
     text: str
+    kind: Literal["name", "contact", "text", "entry", "role", "tech", "label", "bullet"] = Field(
+        default="bullet", description="Cách trình bày dòng trong mẫu CV (src/services/cv_layout.py)"
+    )
+    date: str | None = Field(default=None, description="Thời gian của dòng entry, căn phải; tên là phần còn lại")
+    cont: bool = Field(
+        default=False, description="Nửa sau của câu bị xuống dòng khi trích PDF/OCR, ghép vào dòng trước"
+    )
 
 
 class CvDocSection(BaseModel):
@@ -466,6 +489,18 @@ class CvDocument(BaseModel):
     header: list[CvDocLine] = Field(default_factory=list, description="Các dòng trước mục đầu tiên (họ tên, liên hệ)")
     sections: list[CvDocSection] = Field(default_factory=list)
     developing_skills: list[DevelopingSkill] = Field(default_factory=list)
+    lang: Literal["vi", "en"] = Field(default="vi", description="Ngôn ngữ CV, đặt tiêu đề mục do hệ thống thêm")
+
+
+class CvPreviewResponse(BaseModel):
+    """
+    Cách xem một phiên bản CV: "pages" = PDF gốc, tải từng trang dạng ảnh (GET .../pages/{n});
+    "document" = DOCX / bản đã tối ưu, trình bày theo mẫu CV (giống trang Xuất CV và file DOCX).
+    """
+
+    kind: Literal["pages", "document"]
+    page_count: int | None = Field(default=None, description="Số trang hiển thị (kind = pages)")
+    document: CvDocument | None = None
 
 
 class EvidenceSpan(BaseModel):
@@ -485,6 +520,9 @@ class OptimizerSuggestion(BaseModel):
     )
     skill: str
     line_id: str = Field(..., description="Dòng trong CvDocument mà gợi ý thay thế")
+    extra_line_ids: list[str] = Field(
+        default_factory=list, description="Dòng nối của gạch ý bị ngắt dòng; câu thay thế gộp luôn các dòng này"
+    )
     original_text: str
     proposed_text: str = Field(..., description="Nội dung AI đề xuất")
     final_text: str | None = Field(
@@ -509,6 +547,19 @@ class CapabilityCheck(BaseModel):
     status: Literal["pending", "has_experience", "no_experience"]
     context: str | None = Field(default=None, description="Mô tả kinh nghiệm SV cung cấp khi chọn 'đã có'")
     learning_note: str | None = Field(default=None, description="Ghi chú đang học khi chọn 'chưa có'")
+    entry_id: str | None = Field(default=None, description="Phần CV sẽ thêm câu kinh nghiệm (một mục trong entries)")
+    draft_text: str | None = Field(default=None, description="Câu cho CV viết từ lời kể của SV, chờ SV duyệt")
+    final_text: str | None = Field(default=None, description="Câu sẽ thêm vào CV khi Hoàn tất (đã áp dụng / sửa)")
+    line_status: Literal["pending", "accepted", "edited", "rejected"] = "pending"
+    roadmap_url: str | None = Field(default=None, description="Lộ trình học trên roadmap.sh (kỹ năng CNTT)")
+
+
+class CvEntry(BaseModel):
+    """Một chỗ có thể thêm câu kinh nghiệm mới: dự án / công việc trong CV, hoặc cuối một mục."""
+
+    id: str
+    label: str
+    after_line_id: str = Field(..., description="Câu mới chèn ngay sau dòng này (id dòng trong document)")
 
 
 class OptimizerSessionResponse(BaseModel):
@@ -530,7 +581,14 @@ class OptimizerSessionResponse(BaseModel):
         default=None, description="Nội dung phiên bản tạo ra khi 'Hoàn tất' (đúng như file DOCX)"
     )
     suggestions: list[OptimizerSuggestion]
+    suggestions_state: Literal["pending", "ready", "failed"] = Field(
+        default="ready",
+        description="pending: chưa soạn gợi ý riêng (gọi POST .../prepare); failed: soạn lỗi, SV bấm Thử lại",
+    )
+    kept_count: int = Field(default=0, description="Số câu AI xem xét và cho là đã rõ, không cần sửa")
+    suggestions_attempted_at: UtcDatetime | None = Field(default=None, description="Lần soạn gợi ý gần nhất")
     capability_checks: list[CapabilityCheck]
+    entries: list[CvEntry] = Field(default_factory=list, description="Chỗ có thể thêm câu kinh nghiệm mới")
     finalized_at: UtcDatetime | None = None
 
 
@@ -539,6 +597,16 @@ class SuggestionDecisionRequest(BaseModel):
 
     decision: Literal["accept", "edit", "reject", "undo"]
     edited_text: str | None = None
+
+
+class CapabilityDraftRequest(BaseModel):
+    context: str = Field(..., description="SV kể đã dùng kỹ năng ở đâu, làm những gì")
+    entry_id: str = Field(..., description="Phần CV sẽ thêm câu (id trong entries)")
+
+
+class CapabilityLineDecisionRequest(BaseModel):
+    decision: Literal["accept", "edit", "reject", "undo"]
+    edited_text: str | None = Field(default=None, description="Bắt buộc khi decision = edit")
 
 
 class CapabilityAnswerRequest(BaseModel):
@@ -624,9 +692,7 @@ class InterviewSessionResponse(BaseModel):
     pause_seconds_left: int | None = Field(default=None, description="Thời gian tạm dừng còn lại (giây)")
     turns: list[InterviewTurnOut] = Field(default_factory=list, description="Các câu đã trả lời, theo thứ tự")
     created_at: UtcDatetime
-    voice_input: bool = Field(
-        default=False, description="Server đã cấu hình SONIOX_API_KEY: cho trả lời bằng giọng nói"
-    )
+    voice_input: bool = Field(default=False, description="Server có GROQ_API_KEY: cho trả lời bằng giọng nói")
 
 
 class CreateInterviewRequest(BaseModel):
@@ -786,6 +852,11 @@ class InterviewRow(BaseModel):
     label: InterviewLabel
     star: StarScores
     timed_out_count: int
+    interview_mode: Literal["jd_only", "with_cv"] = Field(default="with_cv", description="Có dùng CV khi hỏi không")
+    cv_file_name: str | None = Field(default=None, description="Tên file CV đã dùng (with_cv)")
+    cv_label: str | None = Field(
+        default=None, description="Phiên bản CV đã dùng, ví dụ 'v1.0'; null nếu bản đó đã bị xoá"
+    )
 
 
 class ScorePoint(BaseModel):

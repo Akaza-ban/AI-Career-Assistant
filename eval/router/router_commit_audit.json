@@ -1,0 +1,314 @@
+{
+  "scope": "Historical original five commits; targeted pytest scopes, not the full repository test suite. Source snapshots include src/tests/scripts/eval Python modules and Ruff config, excluding all heldout/context data.",
+  "commits": [
+    {
+      "sha": "14fa40e",
+      "results": [
+        {
+          "args": [
+            "-m",
+            "ruff",
+            "check",
+            "src",
+            "tests",
+            "eval",
+            "--output-format",
+            "json"
+          ],
+          "returncode": 1,
+          "stderr": "",
+          "findings": [
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 41,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 349,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F401",
+              "path": "src/db/seed.py",
+              "line": 2,
+              "message": "`datetime.date` imported but unused"
+            }
+          ],
+          "expected_baseline_only": true
+        },
+        {
+          "args": [
+            "-m",
+            "pytest",
+            "tests/test_assistant_text.py",
+            "tests/test_assistant_guardrails.py",
+            "-q"
+          ],
+          "returncode": 0,
+          "stdout": "........................................................................ [ 61%]\n..............................................                           [100%]\n118 passed in 18.85s\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "sha": "be58af9",
+      "results": [
+        {
+          "args": [
+            "-m",
+            "ruff",
+            "check",
+            "src",
+            "tests",
+            "eval",
+            "--output-format",
+            "json"
+          ],
+          "returncode": 1,
+          "stderr": "",
+          "findings": [
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 41,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 349,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F401",
+              "path": "src/db/seed.py",
+              "line": 2,
+              "message": "`datetime.date` imported but unused"
+            }
+          ],
+          "expected_baseline_only": true
+        },
+        {
+          "args": [
+            "-m",
+            "pytest",
+            "tests/test_assistant_text.py",
+            "tests/test_assistant_guardrails.py",
+            "tests/test_assistant_router_models.py",
+            "-q"
+          ],
+          "returncode": 0,
+          "stdout": "........................................................................ [ 55%]\n..........................................................               [100%]\n130 passed in 19.07s\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "sha": "5461768",
+      "results": [
+        {
+          "args": [
+            "-m",
+            "ruff",
+            "check",
+            "src",
+            "tests",
+            "eval",
+            "--output-format",
+            "json"
+          ],
+          "returncode": 1,
+          "stderr": "",
+          "findings": [
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 41,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 349,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F401",
+              "path": "src/db/seed.py",
+              "line": 2,
+              "message": "`datetime.date` imported but unused"
+            }
+          ],
+          "expected_baseline_only": true
+        },
+        {
+          "args": [
+            "-m",
+            "pytest",
+            "tests/test_assistant_text.py",
+            "tests/test_assistant_guardrails.py",
+            "tests/test_assistant_router_models.py",
+            "tests/test_assistant_router_cache.py",
+            "-q"
+          ],
+          "returncode": 0,
+          "stdout": "........................................................................ [ 44%]\n........................................................................ [ 88%]\n...................                                                      [100%]\n163 passed in 19.89s\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "sha": "ce55ae2",
+      "results": [
+        {
+          "args": [
+            "-m",
+            "ruff",
+            "check",
+            "src",
+            "tests",
+            "eval",
+            "--output-format",
+            "json"
+          ],
+          "returncode": 1,
+          "stderr": "",
+          "findings": [
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 41,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 349,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F401",
+              "path": "src/db/seed.py",
+              "line": 2,
+              "message": "`datetime.date` imported but unused"
+            }
+          ],
+          "expected_baseline_only": true
+        },
+        {
+          "args": [
+            "-m",
+            "pytest",
+            "tests/test_assistant_text.py",
+            "tests/test_assistant_guardrails.py",
+            "tests/test_assistant_router_models.py",
+            "tests/test_assistant_router_cache.py",
+            "tests/test_assistant_router_rules.py",
+            "-q"
+          ],
+          "returncode": 0,
+          "stdout": "........................................................................ [ 18%]\n........................................................................ [ 36%]\n........................................................................ [ 55%]\n........................................................................ [ 73%]\n........................................................................ [ 92%]\n..............................                                           [100%]\n390 passed in 21.94s\n",
+          "stderr": ""
+        }
+      ]
+    },
+    {
+      "sha": "5ae51f4",
+      "results": [
+        {
+          "args": [
+            "-m",
+            "ruff",
+            "check",
+            "src",
+            "tests",
+            "eval",
+            "--output-format",
+            "json"
+          ],
+          "returncode": 1,
+          "stderr": "",
+          "findings": [
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 41,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F821",
+              "path": "src/api/analysis.py",
+              "line": 349,
+              "message": "Undefined name `get_roadmap_info`"
+            },
+            {
+              "code": "F401",
+              "path": "src/db/seed.py",
+              "line": 2,
+              "message": "`datetime.date` imported but unused"
+            }
+          ],
+          "expected_baseline_only": true
+        },
+        {
+          "args": [
+            "-m",
+            "pytest",
+            "tests/test_assistant_text.py",
+            "tests/test_assistant_guardrails.py",
+            "tests/test_assistant_router_models.py",
+            "tests/test_assistant_router_cache.py",
+            "tests/test_assistant_router_rules.py",
+            "eval/test_router_rules_backend.py",
+            "-q"
+          ],
+          "returncode": 0,
+          "stdout": "........................................................................ [ 18%]\n........................................................................ [ 36%]\n........................................................................ [ 55%]\n........................................................................ [ 73%]\n........................................................................ [ 91%]\n................................                                         [100%]\n392 passed in 18.37s\n",
+          "stderr": ""
+        }
+      ]
+    }
+  ],
+  "final_validation": {
+    "source_commits": [
+      "21a0d73",
+      "7a8e266"
+    ],
+    "pytest": {
+      "args": [
+        "-m",
+        "pytest",
+        "tests/test_assistant_router_stage0_train.py",
+        "tests/test_assistant_guardrails.py",
+        "tests/test_assistant_text.py",
+        "tests/test_assistant_router_models.py",
+        "tests/test_assistant_router_cache.py",
+        "tests/test_assistant_router_rules.py",
+        "eval/test_router_diagnostics.py",
+        "eval/test_router_rules_backend.py",
+        "eval/test_router_runner.py::test_confusion_precision_recall_and_directional_pairs",
+        "eval/test_router_runner.py::test_slot_exact_match_counts_wrong_route_missing_and_spurious_qualifiers",
+        "eval/test_router_runner.py::test_safety_recall_uses_only_unsafe_and_injection_gold_denominator",
+        "eval/test_router_runner.py::test_nearest_rank_latency_and_empty_metrics",
+        "eval/test_router_runner.py::test_exact_threshold_boundaries",
+        "eval/test_router_runner.py::test_cache_cleared_before_each_call_and_only_predict_is_timed",
+        "eval/test_router_runner.py::test_bad_outputs_remain_in_denominators_and_fail",
+        "eval/test_router_runner.py::test_cache_clear_error_is_counted_and_never_timed",
+        "eval/test_router_runner.py::test_backend_can_return_plain_mapping_or_production_model",
+        "eval/test_router_runner.py::test_pluggable_backend_name_module_and_entry_point",
+        "eval/test_router_runner.py::test_inference_input_rejects_gold_annotations",
+        "-q"
+      ],
+      "returncode": 0,
+      "stdout": "........................................................................ [ 13%]\n........................................................................ [ 26%]\n........................................................................ [ 40%]\n........................................................................ [ 53%]\n........................................................................ [ 66%]\n........................................................................ [ 80%]\n........................................................................ [ 93%]\n..................................                                       [100%]\n538 passed in 19.93s\n",
+      "stderr": ""
+    },
+    "scoped_ruff": "passed",
+    "scoped_format": "10 task-owned Python files passed",
+    "repository_ruff": "same three baseline findings",
+    "heldout_accessed": false
+  }
+}

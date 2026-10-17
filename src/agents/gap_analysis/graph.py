@@ -8,6 +8,7 @@ from src.agents.gap_analysis.nodes import (
     verify_grounding_node,
 )
 from src.agents.gap_analysis.state import GapAnalysisState
+from src.services.providers.gateway import UntracedGraph
 
 
 def build_gap_analysis_graph():
@@ -34,7 +35,7 @@ def build_gap_analysis_graph():
     workflow.add_edge("generate", "verify_grounding")
     workflow.add_edge("verify_grounding", END)
 
-    return workflow.compile()
+    return UntracedGraph(workflow.compile())
 
 
 gap_analysis_agent = build_gap_analysis_graph()

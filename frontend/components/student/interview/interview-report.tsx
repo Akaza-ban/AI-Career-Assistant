@@ -4,6 +4,7 @@ import Link from "next/link"
 import { useCallback, useEffect, useState } from "react"
 import { AlertCircle, ChevronDown, ChevronRight, TimerOff, UserPlus } from "lucide-react"
 
+import { InterviewFeedback, plainText } from "@/components/common/interview-feedback"
 import { FeedbackWidget } from "@/components/FeedbackWidget"
 import { EmptyState } from "@/components/common/empty-state"
 import { PageHeader } from "@/components/common/page-header"
@@ -298,7 +299,7 @@ function TurnItem({ turn, open, onToggle }: { turn: InterviewTurn; open: boolean
           className="-mx-2.5 flex w-[calc(100%+20px)] items-center gap-3.5 rounded-lg px-2.5 py-4 text-left transition-colors hover:bg-panel"
         >
           <span className="w-5 shrink-0 text-sm font-semibold text-ink-3 tabular-nums">{turn.index}</span>
-          <span className="min-w-0 flex-1 font-medium text-ink">{turn.question}</span>
+          <span className="min-w-0 flex-1 font-medium text-ink">{plainText(turn.question)}</span>
           {turn.timed_out && (
             <Badge variant="warn" className="hidden sm:inline-flex">
               <TimerOff aria-hidden />
@@ -325,7 +326,7 @@ function TurnItem({ turn, open, onToggle }: { turn: InterviewTurn; open: boolean
           </div>
           <div className="min-w-0">
             <p className="mb-2 text-[13px] text-ink-3">Nhận xét</p>
-            {turn.feedback && <p className="mb-3.5 text-ink-2">{turn.feedback}</p>}
+            {turn.feedback && <InterviewFeedback text={turn.feedback} className="mb-3.5" />}
             {turn.star && (
               <div className="flex flex-wrap gap-2">
                 {STAR_ORDER.map((key) => (

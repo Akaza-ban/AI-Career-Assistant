@@ -44,8 +44,13 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
       return selector === "#missing" || (delayMount && !mounted) ? null : element
     },
   }
-  const navigation = load("lib/assistant-navigation.ts")
-  const { dispatchAgentAction } = load("lib/action-dispatcher.ts", {
+  const navigation = load("lib/assistant-navigation.ts", {
+    "@/resources/routes.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/routes.json"), "utf8")) },
+    "@/resources/ui_registry.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/ui_registry.json"), "utf8")) },
+    "../../src/services/assistant/resources/routes.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/routes.json"), "utf8")) },
+    "../../src/services/assistant/resources/ui_registry.json": { default: JSON.parse(readFileSync(path.join(testDirectory, "../resources/ui_registry.json"), "utf8")) },
+  })
+  const { dispatchAgentAction, dispatchUIActions } = load("lib/action-dispatcher.ts", {
     "sonner": { toast: { error() {}, info() {}, success() {} } },
     "@/lib/api": { api: {
       createGapAnalysis: async (body) => { requests.push({ ...body }); return { id: "analysis-1" } },
@@ -67,7 +72,7 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
     mounted = false
   } }
   return {
-    reports, pushes, highlights, events, requests, scrolls, window, router, dispatchAgentAction,
+    reports, pushes, highlights, events, requests, scrolls, window, router, dispatchAgentAction, dispatchUIActions, navigation,
     delayMount: () => { delayMount = true },
     run: (type, params = {}, options = {}, requires_confirmation = false) => dispatchAgentAction(
       { id: "action-1", action_type: type, params, requires_confirmation, description_vi: "Hướng dẫn" },
@@ -78,8 +83,9 @@ function fixture({ role = "student", acknowledge = true, loggingFails = false } 
 
 // A small hook harness exercises the provider's state/callback integration. Browser
 // layout and portal behavior are covered separately by the highlighter checks.
-function hooksFixture() {
+function hooksFixture({ runEffects = false } = {}) {
   const cells = []
+  const effects = []
   let cursor = 0
   const memoize = (factory, deps) => {
     const index = cursor++
@@ -90,7 +96,14 @@ function hooksFixture() {
     createContext: () => ({ Provider: "context-provider" }),
     useMemo: memoize, useCallback: (callback, deps) => memoize(() => callback, deps),
     useRef: (value) => memoize(() => ({ current: value }), []),
-    useEffect() {}, useContext() {},
+    useEffect(effect, deps) {
+      if (!runEffects) return
+      const index = cursor++
+      if (!cells[index] || deps.some((value, i) => !Object.is(value, cells[index].deps[i]))) {
+        cells[index] = { deps }
+        effects.push(effect)
+      }
+    }, useContext() {},
     useSyncExternalStore: (subscribe, snapshot) => snapshot(),
     useState: (initial) => {
       const index = cursor++
@@ -99,33 +112,45 @@ function hooksFixture() {
     },
   }
   const jsx = (type, props) => ({ type, props })
-  return { react, jsxRuntime: { jsx, jsxs: jsx }, render: (callback) => { cursor = 0; return callback() } }
+  return { react, jsxRuntime: { jsx, jsxs: jsx }, render: (callback) => {
+    cursor = 0
+    const tree = callback()
+    effects.splice(0).forEach((effect) => effect())
+    return tree
+  } }
 }
 
-function providerFixture(actions) {
+function providerFixture(actions, ui_actions = [], options = {}) {
   const f = fixture()
-  const hooks = hooksFixture()
-  f.window.localStorage = { getItem: () => null, setItem() {}, removeItem() {} }
+  const hooks = hooksFixture({ runEffects: options.hydrate })
+  f.window.localStorage = { getItem: () => options.conversationId ?? null, setItem() {}, removeItem() {} }
   const { AgentActionRunner } = load("lib/agent-action-runner.ts", {}, { AbortController })
   const inputs = []
+  const animationFrames = []
   const { AssistantProvider } = load("components/assistant/assistant-provider.tsx", {
     react: hooks.react, "react/jsx-runtime": hooks.jsxRuntime,
     "next/navigation": { usePathname: () => f.window.location.pathname, useRouter: () => f.router },
     "sonner": { toast: { error() {} } },
     "@/lib/agent-action-runner": { AgentActionRunner },
-    "@/lib/action-dispatcher": { dispatchAgentAction: f.dispatchAgentAction },
+    "@/lib/action-dispatcher": { dispatchAgentAction: f.dispatchAgentAction, dispatchUIActions: f.dispatchUIActions },
     "@/lib/assistant-api": {
-      sendMessage: async (input) => { inputs.push(input); return { conversation_id: "conv-1", turn_id: "turn-1", message: "Hướng dẫn", actions, sources: [] } },
+      streamMessage: async (input, onEvent, signal) => {
+        inputs.push(input)
+        if (options.stream) return options.stream(input, onEvent, signal)
+        return { conversation_id: "conv-1", turn_id: "turn-1", message: "Saved guide", actions, ui_actions, sources: [] }
+      },
+      cancelRun: async (id) => { f.requests.push({ cancel: id }); return { id, status: "cancelled" } },
+      getConversationHistory: async () => options.history ?? [],
       confirmAction: async (id, status) => { f.reports.push([id, status]) },
     },
     "@/components/assistant/action-confirmation-dialog": { ActionConfirmationDialog: "confirmation-dialog" },
     "@/components/assistant/element-highlighter": { ElementHighlighter: "highlighter" },
-  }, { window: f.window, AbortController, crypto: { randomUUID }, CustomEvent: class { constructor(type, { detail }) { this.type = type; this.detail = detail } } })
+  }, { requestAnimationFrame: (callback) => { animationFrames.push(callback); return animationFrames.length }, window: f.window, AbortController, crypto: { randomUUID }, CustomEvent: class { constructor(type, { detail }) { this.type = type; this.detail = detail } } })
   const render = () => hooks.render(() => {
     const session = AssistantProvider({ children: null })
     return session.type(session.props)
   })
-  return { ...f, inputs, render }
+  return { ...f, inputs, render, animationFrames, flushFrame: () => { const callbacks = animationFrames.splice(0); callbacks.forEach((callback) => callback()) } }
 }
 
 test("analysis start button carries the agent target and reports the selection without submitting a job", () => {
@@ -178,36 +203,18 @@ test("analysis start button carries the agent target and reports the selection w
   assert.equal(jobs, 0)
 })
 
-test("chat provider navigates and mounts the start-button spotlight from a two-action response", async () => {
-  const selector = '[data-agent-target="btn-start-analysis"]'
+test("v2 provider ignores legacy automatic actions and never starts an analysis", async () => {
   const f = providerFixture([
-    { id: "nav-1", action_type: "NAVIGATE_PAGE", params: { route: "/student/analysis" }, requires_confirmation: false, description_vi: "Mở phân tích" },
-    { id: "highlight-1", action_type: "HIGHLIGHT_ELEMENT", params: { selector }, requires_confirmation: false, description_vi: "Nút bắt đầu" },
+    { id: "nav", action_type: "NAVIGATE_PAGE", params: { route: "/student/analysis" } },
+    { id: "start", action_type: "START_ANALYSIS", params: { cv_id: "cv-1", jd_id: "jd-1" } },
   ])
-  await f.render().props.value.sendMessage("Mở trang phân tích CV và chỉ tôi nút bắt đầu")
-  const tree = f.render()
-  assert.equal(f.inputs[0].message, "Mở trang phân tích CV và chỉ tôi nút bắt đầu")
-  assert.equal(f.window.location.pathname, "/student/analysis/new")
-  assert.equal(tree.props.children[1].type, "highlighter")
-  assert.equal(tree.props.children[1].props.selector, selector)
+  await f.render().props.value.sendMessage("Open analysis")
+  f.flushFrame()
   assert.equal(f.requests.length, 0)
-  assert.deepEqual(f.reports, [["nav-1", "executed"], ["highlight-1", "executed"]])
-})
-
-test("provider dialog approval persists consent before analysis, while cancellation never starts it", async () => {
-  const action = { id: "start-1", action_type: "START_ANALYSIS", params: { cv_id: "cv-1", jd_id: "jd-1" }, requires_confirmation: true, description_vi: "Phân tích CV" }
-  for (const accept of [true, false]) {
-    const f = providerFixture([action])
-    await f.render().props.value.sendMessage("Hãy bắt đầu phân tích CV")
-    const dialog = f.render().props.children[2]
-    assert.equal(dialog.type, "confirmation-dialog")
-    assert.equal(dialog.props.action.id, "start-1")
-    assert.equal(f.requests.length, 0)
-    await (accept ? dialog.props.onConfirm() : dialog.props.onReject())
-    assert.equal(f.render().props.value.activeAction, null)
-    assert.deepEqual(f.reports, accept ? [["start-1", "confirmed"], ["start-1", "executed"]] : [["start-1", "rejected"]])
-    assert.equal(f.requests.length, accept ? 1 : 0)
-  }
+  assert.equal(f.pushes.length, 0)
+  assert.equal(f.reports.length, 0)
+  assert.equal(f.render().props.value.activeAction, null)
+  assert.equal(f.render().props.children.length, 2)
 })
 
 test("confirmation dialog exposes confirm/cancel, fallback description and busy dismissal guards", () => {
@@ -499,4 +506,145 @@ test("spotlight scrolls offscreen targets, dismisses on click/5s, and releases r
   assert.equal(f.listeners.size, 0)
   assert.equal(f.elementListeners.size, 0)
   assert.equal(f.observerDisconnected(), true)
+})
+
+
+test("v2 provider navigates then highlights a registered target without acknowledgement", async () => {
+  const f = providerFixture([], [
+    { type: "navigate", route_id: "analysis_new", params: {} },
+    { type: "highlight", element_id: "btn-start-analysis" },
+  ])
+  f.delayMount()
+  await f.render().props.value.sendMessage("Nút bắt đầu phân tích ở đâu?")
+  assert.equal(f.window.location.pathname, "/student/analysis/new")
+  assert.equal(f.render().props.children[1].props.selector, '[data-assistant-id="btn-start-analysis"]')
+  assert.equal(f.reports.length, 0)
+  assert.equal(f.requests.length, 0)
+})
+
+test("v2 rejects unknown IDs, bad params, and targets outside the role without acknowledgements", async () => {
+  for (const action of [
+    { type: "highlight", element_id: "unknown" },
+    { type: "highlight", element_id: "advisor-student-search" },
+    { type: "navigate", route_id: "advisor_students", params: {} },
+    { type: "navigate", route_id: "cv_list", params: { url: "https://evil.test" } },
+    { type: "navigate", route_id: "cv_detail", params: { cv_id: "../other" } },
+    { type: "navigate", route_id: "__proto__", params: {} },
+  ]) {
+    const f = fixture()
+    assert.equal(await f.dispatchAgentAction(action, f.router, (...args) => f.highlights.push(args), { role: "student" }), false)
+    assert.equal(f.reports.length, 0)
+    assert.equal(f.pushes.length, 0)
+    assert.equal(f.highlights.length, 0)
+  }
+})
+
+test("v2 stops before highlight when navigation fails and honours cancellation", async () => {
+  const f = fixture()
+  const actions = [{ type: "navigate", route_id: "advisor_students", params: {} }, { type: "highlight", element_id: "btn-upload-cv" }]
+  assert.equal(await f.dispatchUIActions(actions, f.router, (...args) => f.highlights.push(args), { role: "student" }), false)
+  assert.equal(f.highlights.length, 0)
+  const controller = new AbortController()
+  controller.abort()
+  assert.equal(await f.dispatchUIActions([{ type: "navigate", route_id: "cv_list", params: {} }], f.router, () => {}, { role: "student", signal: controller.signal }), false)
+  assert.equal(f.pushes.length, 0)
+  assert.equal(f.reports.length, 0)
+})
+
+
+test("v2 navigation card retains a manual link on the destination page", () => {
+  const f = fixture()
+  const jsx = (type, props) => ({ type, props })
+  const { ActionBadges } = load("components/assistant/action-badges.tsx", {
+    "react/jsx-runtime": { jsx, jsxs: jsx },
+    "lucide-react": {},
+    "@/components/assistant/assistant-provider": { useAssistant: () => ({ userRole: "student", pathname: "/student/cv" }) },
+    "@/components/shell/nav-config": { shellOf: () => "student", getBreadcrumb: () => [{ label: "CV" }] },
+    "@/lib/assistant-navigation": f.navigation,
+    "@/lib/utils": { cn: () => "" },
+  })
+  const tree = ActionBadges({ actions: [], uiActions: [{ type: "navigate", route_id: "cv_list", params: {} }] })
+  const link = tree.props.children[0][0]
+  assert.equal(link.type, "a")
+  assert.equal(link.props.href, "/student/cv")
+})
+
+
+test("streamed tokens batch per animation frame and final uses the saved turn", async () => {
+  let finish
+  const gate = new Promise((resolve) => { finish = resolve })
+  const f = providerFixture([], [], { stream: async (_, onEvent) => {
+    for (let i = 0; i < 500; i++) onEvent({ event: "token", data: { run_id: "run", conversation_id: "conv-1", text: "x" } })
+    await gate
+    return { run_id: "run", conversation_id: "conv-1", turn_id: "saved-turn", message: "x".repeat(500), actions: [], sources: [] }
+  } })
+  const sending = f.render().props.value.sendMessage("How to upload?")
+  assert.equal(f.animationFrames.length, 1)
+  assert.equal(f.render().props.value.messages.at(-1).content, "")
+  f.flushFrame()
+  assert.equal(f.render().props.value.messages.at(-1).content, "x".repeat(500))
+  assert.equal(f.render().props.value.messages.at(-1).is_streaming, true)
+  finish()
+  await sending
+  assert.equal(f.animationFrames.length, 1)
+  f.flushFrame()
+  assert.equal(f.render().props.value.messages.at(-1).id, "saved-turn")
+  assert.equal(f.render().props.value.messages.at(-1).is_streaming, false)
+  assert.ok(f.inputs[0].client_request_id)
+})
+
+test("Stop cancels the known run and keeps partial text", async () => {
+  const f = providerFixture([], [], { stream: async (_, onEvent, signal) => {
+    onEvent({ event: "token", data: { run_id: "run", conversation_id: "conv-1", text: "partial" } })
+    await new Promise((_, reject) => signal.addEventListener("abort", () => reject(new Error("Aborted")), { once: true }))
+  } })
+  const sending = f.render().props.value.sendMessage("How to upload?")
+  f.render().props.value.stop()
+  await sending
+  f.flushFrame()
+  assert.equal(f.requests[0].cancel, "run")
+  assert.equal(f.render().props.value.messages.at(-1).content, "partial")
+  assert.equal(f.render().props.value.messages.at(-1).interrupted, true)
+  assert.equal(f.render().props.value.isThinking, false)
+})
+
+test("cards use role-checked registry links and chips retain structured payloads", () => {
+  const hooks = hooksFixture()
+  const { AssistantCards, AssistantChips } = load("components/assistant/assistant-cards.tsx", {
+    "react/jsx-runtime": hooks.jsxRuntime,
+    "next/link": { default: "link" },
+    "lucide-react": { ArrowUpRight: "arrow" },
+    "@/lib/assistant-navigation": fixture().navigation,
+  })
+  const cards = AssistantCards({ role: "student", cards: [
+    { ref: "cv", label: "CV", route_id: "cv_list", params: {} },
+    { ref: "forbidden", label: "Advisor", route_id: "advisor_home", params: {} },
+    { ref: "invalid", label: "Unknown", route_id: "javascript:alert(1)", params: {} },
+  ] }).props.children.filter(Boolean)
+  assert.equal(cards.length, 1)
+  assert.equal(cards[0].props.href, "/student/cv")
+  const chip = { label: "CV", route: "navigate", slots: { target: "cv" } }
+  let selected
+  const chips = AssistantChips({ chips: [chip], disabled: false, onSelect: (value) => { selected = value } })
+  chips.props.children[0].props.onClick()
+  assert.equal(selected, chip)
+  assert.equal(AssistantChips({ chips: [chip], disabled: true }).props.children[0].props.disabled, true)
+})
+
+test("restoring a conversation loads saved messages without replaying UI actions", async () => {
+  const f = providerFixture([], [], { hydrate: true, conversationId: "saved-conversation", history: [
+    { id: "turn:user", sender: "user", content: "Previous question" },
+    { id: "turn:assistant", turn_id: "turn", sender: "assistant", content: "Saved partial", interrupted: true,
+      ui_actions: [{ type: "navigate", route_id: "cv_list", params: {} }] },
+  ] })
+  f.render()
+  await new Promise(setImmediate)
+  const value = f.render().props.value
+  assert.equal(value.conversationId, "saved-conversation")
+  assert.equal(value.messages.length, 2)
+  assert.equal(value.messages[1].content, "Saved partial")
+  assert.equal(value.messages[1].id, "turn")
+  assert.equal(value.messages[1].interrupted, true)
+  assert.equal(f.pushes.length, 0)
+  assert.equal(f.requests.length, 0)
 })

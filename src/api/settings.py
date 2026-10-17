@@ -43,7 +43,7 @@ def download_data_export(user: CurrentStudent, db: DbSession) -> Response:
     return Response(
         content=payload,
         media_type="application/json",
-        headers={"Content-Disposition": 'attachment; filename="careerx-du-lieu-cua-toi.json"'},
+        headers={"Content-Disposition": 'attachment; filename="careerv-du-lieu-cua-toi.json"'},
     )
 
 

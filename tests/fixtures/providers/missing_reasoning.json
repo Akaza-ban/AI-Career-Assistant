@@ -1,0 +1,14 @@
+{
+  "provenance": "Synthetic provider-shaped protocol example; not captured live; not model-quality evidence.",
+  "exchanges": [
+    {
+      "status": 400,
+      "response": {
+        "error": {
+          "message": "The reasoning_content must be passed back in thinking mode.",
+          "type": "invalid_request_error"
+        }
+      }
+    }
+  ]
+}
