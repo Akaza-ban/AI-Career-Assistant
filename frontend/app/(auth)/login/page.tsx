@@ -4,8 +4,9 @@ import { LoginForm } from "@/components/auth/login-form"
 
 export const metadata: Metadata = { title: "Đăng nhập" }
 
-export default async function Page({ searchParams }: PageProps<"/login">) {
-  // ?expired=1: bị chuyển về vì phiên đăng nhập đã hết.
-  const { expired } = await searchParams
-  return <LoginForm expired={expired === "1"} />
+export default async function Page(props: {
+  searchParams: Promise<{ expired?: string }>
+}) {
+  const searchParams = await props.searchParams
+  return <LoginForm expired={searchParams?.expired === "1"} />
 }
